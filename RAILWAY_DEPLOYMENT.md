@@ -194,25 +194,30 @@ change is intentionally outside this staging-readiness task.
 
 ## Safe staging/demo setup
 
-Public registration is disabled, and the repository has no safe idempotent
-initial-admin/demo seed command. `backend/scripts/cleanup_core_database.sql` is
-a destructive local cleanup utility and must **not** be used on Railway.
+Public registration is disabled. For a brand-new staging database, configure
+all three variables below on the backend service for one deployment:
 
-Recommended staging process:
+```text
+BOOTSTRAP_ADMIN_EMAIL
+BOOTSTRAP_ADMIN_PASSWORD
+BOOTSTRAP_ADMIN_FULL_NAME
+```
 
-1. Decide on a controlled one-time initial Administrator bootstrap procedure
-   before opening staging externally.
-2. Keep Administrator credentials private.
-3. Through the existing authenticated Admin UI/API, create a dedicated demo
-   Owner, Project Manager, architect/consultant, Engineers, and Workers.
-4. Create a dedicated demo project and example tasks through normal workflows.
-5. Give the external architect only their dedicated consultant credentials.
-6. Require the temporary password change on first login.
-7. Never copy real customer/project data or expose Super Admin credentials.
+The Docker startup runs `python -m app.db.bootstrap_admin --if-configured`
+after Alembic. The bootstrap creates one initial Administrator only when the
+users table is empty, verifies credentials on an identical rerun, and refuses
+to alter privileges or passwords in a populated database. The temporary
+password must contain 12-128 characters with uppercase, lowercase, and digits.
+The Administrator must change it after first login.
 
-The missing initial-admin bootstrap is the only application-data preparation
-decision that must be resolved before using a brand-new empty Railway database.
-It is not a container or networking blocker.
+After the successful login and password change, remove all three bootstrap
+variables from the deployment environment. Through the authenticated Admin
+UI/API, create dedicated demo Owners, Project Managers, Consultants, Engineers,
+and Workers, then create the demo project and workflow data normally.
+
+There is no general project/demo data seed. `backend/scripts/cleanup_core_database.sql`
+is a destructive local cleanup utility and must **not** be used on staging.
+Never copy real customer/project data or expose Administrator credentials.
 
 ## Deployment-relevant host audit
 
