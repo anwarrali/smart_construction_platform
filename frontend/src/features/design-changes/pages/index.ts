@@ -1,0 +1,1 @@
+export { DesignChangesPage } from "./DesignChangesPage";

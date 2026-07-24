@@ -1,0 +1,99 @@
+/* ============================================================
+   Construction Platform – Design Tokens
+   Palette: Cool Slate (light) / Deep Slate (dark) + Bronze accent
+   ============================================================ */
+
+:root {
+  /* ── Typography ── */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --font-arabic: "Cairo", "Tajawal", sans-serif;
+
+  /* ── Border Radius ── */
+  --radius: 0.5rem;
+
+  /* ── Light Mode Tokens ── */
+
+  /* Page surfaces */
+  --background:       215 25% 97%;   /* near-white cool slate */
+  --foreground:       220 20% 12%;   /* dark charcoal */
+
+  /* Card / popover surfaces */
+  --card:             0 0% 100%;
+  --card-foreground:  220 20% 12%;
+  --popover:          0 0% 100%;
+  --popover-foreground: 220 20% 12%;
+
+  /* Primary — deep slate-blue (professional, trustworthy) */
+  --primary:          221 39% 22%;
+  --primary-foreground: 210 40% 98%;
+
+  /* Secondary — light gray surface */
+  --secondary:        214 20% 93%;
+  --secondary-foreground: 221 39% 22%;
+
+  /* Muted — subtle fills and placeholders */
+  --muted:            214 18% 90%;
+  --muted-foreground: 215 15% 48%;
+
+  /* Accent — warm bronze/brass (construction-inspired, subtle) */
+  --accent:           34 70% 52%;
+  --accent-foreground: 0 0% 100%;
+
+  /* Destructive */
+  --destructive:      0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Form elements */
+  --border:           214 20% 88%;
+  --input:            214 20% 88%;
+  --ring:             221 39% 35%;
+
+  /* Sidebar */
+  --sidebar:          222 28% 16%;
+  --sidebar-foreground:         210 30% 88%;
+  --sidebar-border:             222 25% 22%;
+  --sidebar-accent:             222 25% 24%;
+  --sidebar-accent-foreground:  210 30% 95%;
+}
+
+/* ── Dark Mode ── */
+.dark {
+  --background:       222 28% 9%;
+  --foreground:       210 30% 92%;
+
+  --card:             222 26% 12%;
+  --card-foreground:  210 30% 92%;
+  --popover:          222 26% 11%;
+  --popover-foreground: 210 30% 92%;
+
+  --primary:          210 40% 70%;
+  --primary-foreground: 222 28% 9%;
+
+  --secondary:        222 22% 18%;
+  --secondary-foreground: 210 30% 82%;
+
+  --muted:            222 22% 16%;
+  --muted-foreground: 215 15% 55%;
+
+  --accent:           34 65% 50%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive:      0 65% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border:           222 22% 20%;
+  --input:            222 22% 20%;
+  --ring:             210 40% 60%;
+
+  --sidebar:          222 30% 7%;
+  --sidebar-foreground:         210 25% 72%;
+  --sidebar-border:             222 25% 13%;
+  --sidebar-accent:             222 25% 16%;
+  --sidebar-accent-foreground:  210 30% 90%;
+}
+
+/* ── RTL Font Override ── */
+[dir="rtl"] {
+  --font-sans: "Cairo", "Tajawal", sans-serif;
+}

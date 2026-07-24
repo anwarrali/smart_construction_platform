@@ -1,0 +1,14 @@
+SMART CONSTRUCTION MANAGEMENT PLATFORM
+
+Do not double-click index.html. React/Vite websites must be opened through a
+local web address rather than the file: protocol.
+
+To open the presentation:
+
+1. Double-click OPEN_PRESENTATION.cmd
+2. Your browser opens http://127.0.0.1:4173/
+3. Keep the small server window open while presenting.
+4. Close that window when finished.
+
+No backend, login, internet connection, or package installation is required
+for the presentation page.

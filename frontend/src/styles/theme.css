@@ -1,0 +1,240 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  [dir="rtl"] body {
+    font-family: "Tajawal", "Noto Naskh Arabic", sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold tracking-tight;
+  }
+
+  h1 {
+    @apply text-3xl md:text-4xl;
+  }
+  h2 {
+    @apply text-2xl md:text-3xl;
+  }
+  h3 {
+    @apply text-xl md:text-2xl;
+  }
+  h4 {
+    @apply text-lg md:text-xl;
+  }
+}
+
+@layer components {
+  .page-container {
+    @apply container mx-auto px-4 py-6 md:px-6 lg:px-8 max-w-7xl;
+  }
+
+  .card {
+    @apply bg-card rounded-lg border shadow-sm p-6;
+  }
+
+  .card-hover {
+    @apply card transition-shadow hover:shadow-md;
+  }
+
+  .stat-card {
+    @apply card flex flex-col gap-2;
+  }
+
+  .stat-value {
+    @apply text-2xl md:text-3xl font-bold;
+  }
+
+  .stat-label {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+  }
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
+  }
+  .badge-danger {
+    @apply badge bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+  }
+  .badge-info {
+    @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
+  }
+  .badge-neutral {
+    @apply badge bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200;
+  }
+
+  .skeleton {
+    @apply animate-pulse bg-muted rounded;
+  }
+
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 text-center;
+  }
+
+  .empty-state-icon {
+    @apply text-6xl mb-4 text-muted-foreground;
+  }
+
+  .empty-state-title {
+    @apply text-lg font-semibold mb-2;
+  }
+
+  .empty-state-description {
+    @apply text-sm text-muted-foreground max-w-md;
+  }
+
+  .table-responsive {
+    @apply w-full overflow-x-auto;
+  }
+
+  .table-container {
+    @apply bg-card rounded-lg border;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .sidebar-link-active {
+    @apply sidebar-link bg-accent text-accent-foreground font-medium;
+  }
+
+  .form-group {
+    @apply space-y-2 mb-4;
+  }
+
+  .form-label {
+    @apply text-sm font-medium;
+  }
+
+  .form-error {
+    @apply text-xs text-destructive mt-1;
+  }
+
+  .input {
+    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 gap-2;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+  .btn-secondary {
+    @apply btn bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+  .btn-destructive {
+    @apply btn bg-destructive text-destructive-foreground hover:bg-destructive/90;
+  }
+  .btn-outline {
+    @apply btn border border-input bg-background hover:bg-accent hover:text-accent-foreground;
+  }
+  .btn-ghost {
+    @apply btn hover:bg-accent hover:text-accent-foreground;
+  }
+  .btn-link {
+    @apply btn underline-offset-4 hover:underline text-primary;
+  }
+  .btn-sm {
+    @apply h-9 rounded-md px-3 text-xs;
+  }
+  .btn-lg {
+    @apply h-11 rounded-md px-8;
+  }
+  .btn-icon {
+    @apply h-10 w-10 p-0;
+  }
+
+  .dialog-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/50 p-2 backdrop-blur-[1px] sm:p-4;
+    animation: fade-in 0.2s ease-out;
+  }
+
+  .dialog-content {
+    @apply relative z-50 flex w-full min-w-0 flex-col overflow-hidden rounded-lg border bg-background shadow-xl outline-none duration-200;
+    max-height: calc(100dvh - 1rem);
+    animation: scale-in 0.2s ease-out;
+  }
+
+  .dialog-header {
+    @apply flex shrink-0 items-center justify-between border-b bg-background px-4 py-3 sm:px-6 sm:py-4;
+  }
+
+  .dialog-body {
+    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5;
+    scrollbar-gutter: stable;
+  }
+
+  .dialog-body .form-group {
+    @apply mb-0 min-w-0;
+  }
+
+  .dialog-footer,
+  .modal-actions {
+    @apply flex shrink-0 flex-col gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:px-6;
+  }
+
+  .modal-actions {
+    @apply sticky bottom-0 z-10 -mx-4 mt-5 sm:-mx-6 sm:mt-6;
+    box-shadow: 0 -8px 16px -16px rgb(0 0 0 / 0.45);
+  }
+
+  .dialog-footer .btn,
+  .modal-actions .btn {
+    @apply w-full sm:w-auto;
+  }
+
+  @media (min-width: 640px) {
+    .dialog-content {
+      max-height: calc(100dvh - 2rem);
+    }
+  }
+
+  .dropdown-content {
+    @apply z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md;
+  }
+
+  .dropdown-item {
+    @apply relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .progress-bar {
+    @apply h-2 rounded-full bg-secondary overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full bg-primary transition-all duration-300;
+  }
+
+  .progress-fill-success {
+    @apply progress-fill bg-green-500;
+  }
+  .progress-fill-warning {
+    @apply progress-fill bg-yellow-500;
+  }
+  .progress-fill-danger {
+    @apply progress-fill bg-red-500;
+  }
+}

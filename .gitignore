@@ -1,0 +1,10 @@
+.env
+backend/.env
+backend/uploads/
+frontend/dist/
+frontend/node_modules/
+__pycache__/
+*.py[cod]
+*.log
+.agents/
+.vscode/

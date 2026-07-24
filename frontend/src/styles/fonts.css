@@ -1,0 +1,22 @@
+/*
+  Fonts are loaded from Google Fonts CDN when internet is available.
+  System font stacks are used as fallbacks when offline.
+  The @import lines below will silently no-op if the CDN is unreachable —
+  the font-family declarations in variables.css will fall back to the system stack.
+*/
+
+/* Load when online */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
+
+html[lang="en"] {
+  /* Inter → system-ui chain as fallback */
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+}
+
+html[lang="ar"] {
+  /* Cairo → common Arabic system fonts as fallback */
+  font-family: "Cairo", "Segoe UI", Tahoma, Arial, sans-serif;
+}
