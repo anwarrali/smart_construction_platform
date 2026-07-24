@@ -74,12 +74,17 @@ def get_current_user(
 
     if user.must_change_password:
         path = request.url.path.rstrip("/")
-        allowed_paths = (
-            "/auth/me",
-            "/users/change-password",
-            "/auth/logout",
+        method = request.method.upper()
+        allowed_requests = (
+            ("GET", "/auth/me"),
+            ("GET", "/users/profile"),
+            ("PUT", "/users/change-password"),
+            ("POST", "/auth/logout"),
         )
-        if not any(path.endswith(p) for p in allowed_paths):
+        if not any(
+            method == allowed_method and path.endswith(allowed_path)
+            for allowed_method, allowed_path in allowed_requests
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="PASSWORD_CHANGE_REQUIRED",

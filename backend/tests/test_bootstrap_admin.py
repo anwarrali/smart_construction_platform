@@ -3,9 +3,11 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 from sqlalchemy import func
 
 from app.api.auth import login
+from app.core.deps import get_current_user
 from app.core.security import verify_password
 from app.db.bootstrap_admin import BootstrapConfig, bootstrap_admin
 from app.models.audit_log import AuditLog
@@ -64,7 +66,8 @@ class BootstrapSession:
         self.commits += 1
 
     def refresh(self, entity):
-        return None
+        if isinstance(entity, User) and entity.id is None:
+            entity.id = uuid.uuid4()
 
 
 class AuthSession:
@@ -135,6 +138,29 @@ def test_fresh_bootstrap_hash_authenticates_and_wrong_password_is_rejected(migra
             AuthSession(user),
         )
     assert exc.value.status_code == 401
+
+
+def test_pending_bootstrap_admin_can_read_profile_but_cannot_edit_it(migration_head):
+    db = BootstrapSession()
+    bootstrap_admin(db, config())
+    user = next(entity for entity in db.added if isinstance(entity, User))
+    token = login(
+        SimpleNamespace(username=user.email, password="SafeStagePass12345"),
+        AuthSession(user),
+    )["access_token"]
+
+    read_request = Request(
+        {"type": "http", "method": "GET", "path": "/api/v1/users/profile", "headers": []}
+    )
+    assert get_current_user(read_request, token, AuthSession(user)) is user
+
+    write_request = Request(
+        {"type": "http", "method": "PUT", "path": "/api/v1/users/profile", "headers": []}
+    )
+    with pytest.raises(HTTPException) as exc:
+        get_current_user(write_request, token, AuthSession(user))
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "PASSWORD_CHANGE_REQUIRED"
 
 
 def test_password_mismatch_does_not_reset_without_explicit_recovery(migration_head):
