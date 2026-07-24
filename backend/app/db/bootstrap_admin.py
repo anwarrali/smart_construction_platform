@@ -17,7 +17,9 @@ import app.models  # noqa: F401 - configure all SQLAlchemy relationships
 from app.core.security import hash_password, verify_password
 from app.db.database import SessionLocal
 from app.models.enums import UserRole, UserStatus
+from app.models.audit_log import AuditLog
 from app.models.user import User
+from app.services.audit_service import record_audit
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,16 @@ class BootstrapConfig:
     email: str
     password: str
     full_name: str
+    recover_password: bool = False
+
+
+def _load_boolean(name: str) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    if value in {"", "false", "0", "no"}:
+        return False
+    if value in {"true", "1", "yes"}:
+        return True
+    raise ValueError(f"{name} must be true or false")
 
 
 def _load_config(*, if_configured: bool) -> BootstrapConfig | None:
@@ -33,8 +45,9 @@ def _load_config(*, if_configured: bool) -> BootstrapConfig | None:
         "BOOTSTRAP_ADMIN_PASSWORD": os.getenv("BOOTSTRAP_ADMIN_PASSWORD", ""),
         "BOOTSTRAP_ADMIN_FULL_NAME": os.getenv("BOOTSTRAP_ADMIN_FULL_NAME", "").strip(),
     }
+    recover_password = _load_boolean("BOOTSTRAP_ADMIN_RECOVER_PASSWORD")
     configured = [name for name, value in values.items() if value]
-    if not configured and if_configured:
+    if not configured and not recover_password and if_configured:
         print("Initial administrator bootstrap skipped: no bootstrap variables are configured.")
         return None
 
@@ -55,6 +68,10 @@ def _load_config(*, if_configured: bool) -> BootstrapConfig | None:
         raise ValueError("BOOTSTRAP_ADMIN_EMAIL must contain at most 255 characters")
     if len(full_name) > 150:
         raise ValueError("BOOTSTRAP_ADMIN_FULL_NAME must contain at most 150 characters")
+    if password != password.strip():
+        raise ValueError(
+            "BOOTSTRAP_ADMIN_PASSWORD must not contain leading or trailing whitespace"
+        )
     if not 12 <= len(password) <= 128 or not all(
         (
             any(character.islower() for character in password),
@@ -71,6 +88,7 @@ def _load_config(*, if_configured: bool) -> BootstrapConfig | None:
         email=email,
         password=password,
         full_name=full_name,
+        recover_password=recover_password,
     )
 
 
@@ -102,14 +120,53 @@ def bootstrap_admin(db: Session, config: BootstrapConfig) -> str:
                 "The bootstrap email already belongs to an account that is not an "
                 "active initial administrator; refusing to change its privileges"
             )
-        if not verify_password(config.password, existing.hashed_password):
+        if verify_password(config.password, existing.hashed_password):
+            return (
+                f"Initial administrator already exists and credentials verified "
+                f"(email={existing.email}, migration={migration})."
+            )
+
+        if not config.recover_password:
             raise RuntimeError(
                 "The initial administrator already exists, but the supplied password "
-                "does not match; refusing to reset it"
+                "does not match; set BOOTSTRAP_ADMIN_RECOVER_PASSWORD=true for the "
+                "guarded one-time recovery path"
             )
+
+        user_count = db.query(func.count(User.id)).scalar() or 0
+        is_lone_bootstrap_admin = (
+            user_count == 1
+            and len(admins) == 1
+            and admins[0].id == existing.id
+            and existing.status == UserStatus.PENDING
+            and existing.must_change_password
+            and not existing.invitation_accepted
+            and existing.is_email_verified
+        )
+        if not is_lone_bootstrap_admin:
+            raise RuntimeError(
+                "Password recovery is allowed only for the lone, pending, "
+                "never-activated bootstrap administrator"
+            )
+
+        replacement_hash = hash_password(config.password)
+        if not verify_password(config.password, replacement_hash):
+            raise RuntimeError("Replacement administrator credential verification failed")
+
+        existing.hashed_password = replacement_hash
+        record_audit(
+            db,
+            actor_id=existing.id,
+            action="bootstrap_password_recovery",
+            entity_type="user",
+            entity_id=existing.id,
+            details={"email": existing.email, "source": "bootstrap_admin"},
+        )
+        db.commit()
         return (
-            f"Initial administrator already exists and credentials verified "
-            f"(email={existing.email}, migration={migration})."
+            f"Recovered initial administrator password (email={existing.email}, "
+            f"migration={migration}, audit=bootstrap_password_recovery). "
+            "Disable recovery and remove all bootstrap variables immediately."
         )
 
     if admins:

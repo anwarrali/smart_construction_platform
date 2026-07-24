@@ -195,12 +195,13 @@ change is intentionally outside this staging-readiness task.
 ## Safe staging/demo setup
 
 Public registration is disabled. For a brand-new staging database, configure
-all three variables below on the backend service for one deployment:
+the bootstrap variables below on the backend service for one deployment:
 
 ```text
 BOOTSTRAP_ADMIN_EMAIL
 BOOTSTRAP_ADMIN_PASSWORD
 BOOTSTRAP_ADMIN_FULL_NAME
+BOOTSTRAP_ADMIN_RECOVER_PASSWORD=false
 ```
 
 The Docker startup runs `python -m app.db.bootstrap_admin --if-configured`
@@ -210,10 +211,18 @@ to alter privileges or passwords in a populated database. The temporary
 password must contain 12-128 characters with uppercase, lowercase, and digits.
 The Administrator must change it after first login.
 
-After the successful login and password change, remove all three bootstrap
+After the successful login and password change, remove all four bootstrap
 variables from the deployment environment. Through the authenticated Admin
 UI/API, create dedicated demo Owners, Project Managers, Consultants, Engineers,
 and Workers, then create the demo project and workflow data normally.
+
+If the lone bootstrap Administrator is still pending and the original
+credential was entered incorrectly, set `BOOTSTRAP_ADMIN_RECOVER_PASSWORD=true`
+and replace `BOOTSTRAP_ADMIN_PASSWORD` for one deployment. Recovery refuses
+active Administrators, ordinary users, populated databases, or privilege
+changes, and records `bootstrap_password_recovery` in `audit_logs`. Remove all
+four bootstrap variables immediately after recovery and the required password
+change.
 
 There is no general project/demo data seed. `backend/scripts/cleanup_core_database.sql`
 is a destructive local cleanup utility and must **not** be used on staging.
