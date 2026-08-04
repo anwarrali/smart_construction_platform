@@ -41,6 +41,7 @@ class VoiceViewModel {
   String? transcription;
   String? transcriptionLanguage;
   VoiceAnalysis? analysis;
+  String? _requestId;
   final List<double> amplitudeSamples = [];
 
   Future<void> start() async {
@@ -50,6 +51,8 @@ class VoiceViewModel {
     final directory = await getTemporaryDirectory();
     path =
         '${directory.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    _requestId =
+        'mobile-${DateTime.now().microsecondsSinceEpoch}-${projectId.replaceAll('-', '')}';
     await _recorder.start(
       const RecordConfig(encoder: AudioEncoder.aacLc),
       path: path!,
@@ -131,6 +134,8 @@ class VoiceViewModel {
         taskId: taskId,
         filePath: path!,
         duration: duration,
+        requestId: _requestId ??=
+            'mobile-${DateTime.now().microsecondsSinceEpoch}-${projectId.replaceAll('-', '')}',
         onSendProgress: (sent, total) {
           if (total > 0 && sent >= total) {
             status = VoiceDraftStatus.transcribing;
@@ -170,7 +175,22 @@ class VoiceViewModel {
   ) {
     final current = analysis;
     if (current == null) throw StateError('No analysis to confirm.');
-    return _processing.confirmActions(current.id, actions);
+    return _processing.confirmActions(current.id, actions, current);
+  }
+
+  Future<VoiceAnalysis> answerClarification(
+    String clarificationId,
+    String answer,
+  ) async {
+    final current = analysis;
+    if (current == null) throw StateError('No analysis to clarify.');
+    final updated = await _processing.answerClarification(
+      analysis: current,
+      clarificationId: clarificationId,
+      answer: answer,
+    );
+    analysis = updated;
+    return updated;
   }
 
   Future<void> play() async {

@@ -53,6 +53,7 @@ import type {
   RecipientOptions,
 } from "../types/message";
 import type { ConsultantDashboardData, ConsultantReviewDetail, ConsultantReviewSummary } from "../types/consultant";
+import type { VoiceCommand } from "../types/voice";
 import type { FieldSubmission } from "../types/fieldSubmission";
 import type {
   EvidencePhotoArchiveItem,
@@ -60,6 +61,9 @@ import type {
   EvidencePhotoFilters,
   PhotoCategory,
 } from "../types/photoArchive";
+import type { IFCComparison, IFCElement, IFCFinding, IFCModelGroup, IFCSpatialDetails, IFCSpatialNode, IFCSuggestion, IFCVersion } from "../types/ifc";
+import type { AIActionPage, AIActionVersion } from "../types/aiAction";
+import type { AIInsight, AIInsightSource, AIIntelligenceOverview } from "../types/aiInsight";
 
 const api = {
   auth: {
@@ -319,6 +323,17 @@ const api = {
       axiosInstance.get<FieldSubmission>(ENDPOINTS.FIELD_SUBMISSIONS.BY_ID(id)).then((res) => res.data),
     verify: (id: string, comment?: string) =>
       axiosInstance.put<FieldSubmission>(ENDPOINTS.FIELD_SUBMISSIONS.VERIFY(id), { comment }).then((res) => res.data),
+    verifyAndApply: (
+      id: string,
+      data: {
+        progressPercentage: number;
+        expectedTaskUpdatedAt: string;
+        comment?: string;
+        correctionConfirmed?: boolean;
+      },
+    ) => axiosInstance.put<FieldSubmission>(
+      ENDPOINTS.FIELD_SUBMISSIONS.VERIFY_AND_APPLY(id), data,
+    ).then((res) => res.data),
     reject: (id: string, reason: string) =>
       axiosInstance.put<FieldSubmission>(ENDPOINTS.FIELD_SUBMISSIONS.REJECT(id), { reason }).then((res) => res.data),
     replacePhotoCategories: (photoId: string, categoryIds: string[]) =>
@@ -326,6 +341,14 @@ const api = {
         ENDPOINTS.FIELD_SUBMISSIONS.PHOTO_CATEGORIES(photoId),
         { categoryIds },
       ).then((res) => res.data),
+  },
+
+  voice: {
+    getCommand: (id: string) =>
+      axiosInstance.get<VoiceCommand>(ENDPOINTS.VOICE.COMMAND(id)).then((res) => res.data),
+    getAudio: (id: string) =>
+      axiosInstance.get<Blob>(ENDPOINTS.VOICE.AUDIO(id), { responseType: "blob" })
+        .then((res) => res.data),
   },
 
   photoArchive: {
@@ -642,6 +665,59 @@ const api = {
       axiosInstance
         .put(ENDPOINTS.SETTINGS.GENERAL, data)
         .then((res) => res.data),
+  },
+
+  ifc: {
+    models: (projectId: string) => axiosInstance.get<IFCModelGroup[]>(ENDPOINTS.IFC.MODELS(projectId)).then((res) => res.data),
+    createModel: (projectId: string, data: { name: string; discipline?: string; description?: string }) =>
+      axiosInstance.post<IFCModelGroup>(ENDPOINTS.IFC.MODELS(projectId), data).then((res) => res.data),
+    versions: (projectId: string, modelId: string) => axiosInstance.get<IFCVersion[]>(ENDPOINTS.IFC.VERSIONS(projectId, modelId)).then((res) => res.data),
+    version: (projectId: string, versionId: string) => axiosInstance.get<IFCVersion>(ENDPOINTS.IFC.VERSION(projectId, versionId)).then((res) => res.data),
+    retryVersion: (projectId: string, versionId: string) => axiosInstance.post<IFCVersion>(`${ENDPOINTS.IFC.VERSION(projectId, versionId)}/retry`).then((res) => res.data),
+    uploadVersion: (projectId: string, modelId: string, file: File, data: { title: string; revisionCode?: string; versionType: string; discipline?: string }, onProgress?: (percentage: number) => void) => {
+      const form = new FormData(); form.append("file", file); form.append("title", data.title);
+      if (data.revisionCode) form.append("revision_code", data.revisionCode);
+      form.append("version_type", data.versionType);
+      if (data.discipline) form.append("discipline", data.discipline);
+      return axiosInstance.post<IFCVersion>(ENDPOINTS.IFC.VERSIONS(projectId, modelId), form, { headers: { "Content-Type": "multipart/form-data" }, onUploadProgress: (event) => onProgress?.(event.total ? Math.round(event.loaded * 100 / event.total) : 0) }).then((res) => res.data);
+    },
+    hierarchy: (projectId: string, versionId: string) => axiosInstance.get<IFCSpatialNode[]>(ENDPOINTS.IFC.HIERARCHY(projectId, versionId)).then((res) => res.data),
+    spatialDetails: (projectId: string, nodeId: string) => axiosInstance.get<IFCSpatialDetails>(ENDPOINTS.IFC.SPATIAL_DETAILS(projectId, nodeId)).then((res) => res.data),
+    spatialProjectData: (projectId: string, nodeId: string) => axiosInstance.get<{projectData:Array<{entity:{id:string;type:string;title?:string;status?:string}}> }>(ENDPOINTS.IFC.SPATIAL_PROJECT_DATA(projectId, nodeId)).then((res) => res.data),
+    geometryStatus: (projectId: string, versionId: string) => axiosInstance.get<{versionId:string; status:string; assetReady:boolean; error?:string; stats:Record<string,unknown>; generatedAt?:string}>(ENDPOINTS.IFC.GEOMETRY_STATUS(projectId, versionId)).then((res) => res.data),
+    generateGeometry: (projectId: string, versionId: string) => axiosInstance.post<{status:string;message:string}>(ENDPOINTS.IFC.GEOMETRY_GENERATE(projectId, versionId)).then((res) => res.data),
+    geometryAsset: (projectId: string, versionId: string) => axiosInstance.get<ArrayBuffer>(ENDPOINTS.IFC.GEOMETRY_ASSET(projectId, versionId), { responseType: "arraybuffer" }).then((res) => res.data),
+    geometryMapping: (projectId: string, versionId: string) => axiosInstance.get<{versionId:string;items:Record<string,{id:string;globalId:string;name:string;entityType:string;kind?:"ELEMENT"|"SPATIAL";nodeType?:string;buildingNodeId?:string;storeyNodeId?:string;spaceNodeId?:string;discipline?:string;systemName?:string;category?:string}>}>(ENDPOINTS.IFC.GEOMETRY_MAPPING(projectId, versionId)).then((res) => res.data),
+    elements: (projectId: string, versionId: string, filters: Record<string, unknown> = {}) => axiosInstance.get<{items: IFCElement[]; total: number}>(`${ENDPOINTS.IFC.ELEMENTS(projectId, versionId)}?${parseQueryParams(filters)}`).then((res) => res.data),
+    element: (projectId: string, versionId: string, elementId: string) => axiosInstance.get<IFCElement>(`${ENDPOINTS.IFC.ELEMENTS(projectId, versionId)}/${elementId}`).then((res) => res.data),
+    elementProjectData: (projectId: string, elementId: string) => axiosInstance.get<{projectData:Array<{entity:{id:string;type:string;title?:string;status?:string}}> }>(ENDPOINTS.IFC.ELEMENT_PROJECT_DATA(projectId, elementId)).then((res) => res.data),
+    comparisons: (projectId: string) => axiosInstance.get<IFCComparison[]>(ENDPOINTS.IFC.COMPARISONS(projectId)).then((res) => res.data),
+    compare: (projectId: string, baseVersionId: string, targetVersionId: string) => axiosInstance.post<IFCComparison>(ENDPOINTS.IFC.COMPARISONS(projectId), { baseVersionId, targetVersionId }).then((res) => res.data),
+    comparisonChanges: (projectId: string, comparisonId: string, filters: Record<string, unknown> = {}) => axiosInstance.get<any[]>(`${ENDPOINTS.IFC.COMPARISONS(projectId)}/${comparisonId}/changes?${parseQueryParams(filters)}`).then((res) => res.data),
+    suggestions: (projectId: string, versionId?: string) => axiosInstance.get<IFCSuggestion[]>(`${ENDPOINTS.IFC.SUGGESTIONS(projectId)}?${parseQueryParams(versionId ? { versionId } : {})}`).then((res) => res.data),
+    reviewSuggestion: (projectId: string, id: string, status: "ACCEPTED" | "REJECTED", editedPayload?: Record<string, unknown>) => axiosInstance.patch(`${ENDPOINTS.IFC.SUGGESTIONS(projectId)}/${id}`, { status, editedPayload }).then((res) => res.data),
+    findings: (projectId: string) => axiosInstance.get<IFCFinding[]>(ENDPOINTS.IFC.FINDINGS(projectId)).then((res) => res.data),
+  },
+  aiIntelligence: {
+    overview: (projectId:string) => axiosInstance.get<AIIntelligenceOverview>(ENDPOINTS.AI_INTELLIGENCE.OVERVIEW(projectId)).then(res=>res.data),
+    insights: (projectId:string,filters:Record<string,unknown>={}) => axiosInstance.get<AIInsight[]>(`${ENDPOINTS.AI_INTELLIGENCE.INSIGHTS(projectId)}?${parseQueryParams(filters)}`).then(res=>res.data),
+    sources: (projectId:string,id:string) => axiosInstance.get<AIInsightSource[]>(`${ENDPOINTS.AI_INTELLIGENCE.INSIGHT(projectId,id)}/sources`).then(res=>res.data),
+    run: (projectId:string,versionId?:string) => axiosInstance.post(ENDPOINTS.AI_INTELLIGENCE.RUN(projectId),null,{params:versionId?{version_id:versionId}:undefined}).then(res=>res.data),
+    review: (projectId:string,id:string,status:string,note?:string) => axiosInstance.patch<AIInsight>(ENDPOINTS.AI_INTELLIGENCE.INSIGHT(projectId,id),{status,note}).then(res=>res.data),
+    createIssue: (projectId:string,id:string) => axiosInstance.post(`${ENDPOINTS.AI_INTELLIGENCE.INSIGHT(projectId,id)}/create-issue`).then(res=>res.data),
+    createTask: (projectId:string,id:string,data:Record<string,unknown>={}) => axiosInstance.post(`${ENDPOINTS.AI_INTELLIGENCE.INSIGHT(projectId,id)}/create-task`,data).then(res=>res.data),
+  },
+  aiActions: {
+    list: (projectId:string,page=1,pageSize=25) => axiosInstance
+      .get<AIActionPage>(ENDPOINTS.AI_ACTIONS.BASE,{params:{project_id:projectId,page,page_size:pageSize}})
+      .then(res=>res.data),
+    get: (id:string) => axiosInstance.get<AIActionVersion>(ENDPOINTS.AI_ACTIONS.ACTION(id)).then(res=>res.data),
+    revert: (id:string,requestId:string,reason:string) => axiosInstance
+      .post<{action:AIActionVersion;message:string}>(ENDPOINTS.AI_ACTIONS.REVERT(id),{requestId,reason})
+      .then(res=>res.data),
+    revertLast: (projectId:string,requestId:string,reason:string) => axiosInstance
+      .post<{action:AIActionVersion;message:string}>(ENDPOINTS.AI_ACTIONS.REVERT_LAST,{requestId,reason},{params:{project_id:projectId}})
+      .then(res=>res.data),
   },
 
   upload: {

@@ -22,6 +22,9 @@ class DesignChange(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
     )
+    owner_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("owner_requests.id", ondelete="SET NULL"), nullable=True, unique=True
+    )
 
     title: Mapped[str] = mapped_column(String(250), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

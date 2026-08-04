@@ -1,0 +1,62 @@
+# syntax=docker/dockerfile:1
+
+ARG FLUTTER_VERSION=3.32.2
+FROM ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION}
+
+ARG ANDROID_NDK_VERSION=27.0.12077973
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+USER root
+
+# Support HTTPS-inspecting proxies without committing machine-specific CAs or
+# exposing their contents through a build argument.
+RUN --mount=type=secret,id=additional_ca,required=false \
+    if [ -s /run/secrets/additional_ca ]; then \
+      install -m 0644 /run/secrets/additional_ca /usr/local/share/ca-certificates/flutter-ci-additional-ca.crt; \
+      update-ca-certificates; \
+    fi
+
+# The Cirrus Labs image includes the Android SDK. Accept its licenses before
+# dropping privileges so Android builds remain non-interactive in CI.
+RUN set +o pipefail; yes | flutter doctor --android-licenses >/dev/null
+RUN sdkmanager "ndk;${ANDROID_NDK_VERSION}"
+RUN sdkmanager "build-tools;34.0.0"
+RUN sdkmanager "platforms;android-34"
+RUN sdkmanager "cmake;3.22.1"
+
+RUN groupadd --system flutterci \
+    && useradd --system --create-home --gid flutterci --shell /bin/bash flutterci \
+    && flutter_bin="$(readlink -f "$(command -v flutter)")" \
+    && flutter_root="$(dirname "$(dirname "${flutter_bin}")")" \
+    && chown -R flutterci:flutterci "${flutter_root}" \
+    && install -d -o flutterci -g flutterci /app /home/flutterci/.pub-cache /home/flutterci/.gradle
+
+COPY docker/flutter-ci-entrypoint.sh /usr/local/bin/flutter-ci-entrypoint
+RUN chmod 0755 /usr/local/bin/flutter-ci-entrypoint
+
+ENV HOME=/home/flutterci \
+    PUB_CACHE=/home/flutterci/.pub-cache \
+    GRADLE_USER_HOME=/home/flutterci/.gradle \
+    CI=true
+
+USER flutterci
+
+RUN git config --global --add safe.directory '*' \
+    && flutter config --no-analytics \
+    && flutter --version \
+    && dart --version
+
+# Resolve dependency metadata before copying application sources. This layer is
+# reused while Dart source files change but pubspec files stay unchanged.
+WORKDIR /opt/mobile-dependencies
+COPY --chown=flutterci:flutterci pubspec.yaml pubspec.lock ./
+RUN flutter pub get
+
+WORKDIR /app
+COPY --chown=flutterci:flutterci . .
+RUN mkdir -p /app/.dart_tool /app/android/.gradle
+RUN flutter pub get
+
+ENTRYPOINT ["/usr/local/bin/flutter-ci-entrypoint"]
+CMD ["flutter", "--version"]

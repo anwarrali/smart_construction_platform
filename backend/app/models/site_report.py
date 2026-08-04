@@ -44,6 +44,9 @@ class SiteReport(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     voice_recording_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("voice_recordings.id", ondelete="SET NULL"), nullable=True
     )
+    site_visit_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("site_visits.id", ondelete="SET NULL"), nullable=True, unique=True, index=True
+    )
     voice_analysis_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("voice_analyses.id", ondelete="SET NULL"), nullable=True
     )

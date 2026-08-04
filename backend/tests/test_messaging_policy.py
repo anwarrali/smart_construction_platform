@@ -80,6 +80,10 @@ class MessagingPolicyTests(unittest.TestCase):
     def test_11_context_supports_issue(self):
         self.assertTrue(context_is_supported("ISSUE"))
 
+    def test_11b_context_supports_accountable_project_entities(self):
+        for value in ("OWNER_REQUEST", "SITE_VISIT", "DESIGN_CHANGE", "DOCUMENT", "ROOM", "FLOOR", "IFC_ELEMENT", "SITE_REPORT"):
+            self.assertTrue(context_is_supported(value))
+
     def test_12_cross_project_context_search_is_hidden(self):
         self.assertFalse(conversation_search_visible(
             conversation_project_id="a", requested_project_id="b",

@@ -560,10 +560,10 @@ class _QuickActions extends StatelessWidget {
       'consultant' => const [
         ('Reviews', Icons.fact_check_outlined, '/reviews'),
         ('Documents', Icons.folder_outlined, '/documents'),
-        ('Reports', Icons.description_outlined, '/reports'),
+        ('IFC Models', Icons.view_in_ar_outlined, '/ifc'),
       ],
       'owner' => const [
-        ('Reports', Icons.description_outlined, '/reports'),
+        ('My Actions', Icons.checklist_rounded, '/actions'),
         ('Projects', Icons.apartment_rounded, '/projects'),
         ('Messages', Icons.forum_outlined, '/messages'),
       ],
@@ -573,13 +573,13 @@ class _QuickActions extends StatelessWidget {
         ('Profile', Icons.person_outline, '/profile'),
       ],
       'manager' => const [
-        ('Tasks', Icons.task_alt_outlined, '/tasks'),
-        ('Reports', Icons.description_outlined, '/reports'),
+        ('My Actions', Icons.checklist_rounded, '/actions'),
+        ('IFC Models', Icons.view_in_ar_outlined, '/ifc'),
         ('Issues', Icons.report_problem_outlined, '/issues'),
       ],
       _ => const [
-        ('My Tasks', Icons.task_alt_outlined, '/tasks'),
-        ('Reports', Icons.description_outlined, '/reports'),
+        ('My Actions', Icons.checklist_rounded, '/actions'),
+        ('IFC Models', Icons.view_in_ar_outlined, '/ifc'),
         ('Messages', Icons.forum_outlined, '/messages'),
       ],
     };

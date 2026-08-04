@@ -23,6 +23,7 @@ from app.models.site_report import SiteReport
 from app.models.task import Task, TaskReview
 from app.models.user import User
 from app.models.enums import UserRole, TaskStatus
+from app.models.collaboration import OwnerRequest
 from app.schemas.attachment import AttachmentOut
 from app.services.audit_service import record_audit
 from app.services.file_storage import delete_upload, save_upload
@@ -34,6 +35,7 @@ ENTITY_MODELS = {
     "DESIGN_CHANGE": DesignChange,
     "TASK": Task,
     "TASK_REVIEW": TaskReview,
+    "OWNER_REQUEST": OwnerRequest,
 }
 
 

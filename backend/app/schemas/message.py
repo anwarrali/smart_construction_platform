@@ -41,6 +41,11 @@ class ProjectAnnouncementCreate(CamelModel):
 
 class MessageSend(CamelModel):
     content: str = Field(min_length=1, max_length=4000)
+    priority: str = Field(default="NORMAL", max_length=20)
+    requires_acknowledgement: bool = False
+    requires_response: bool = False
+    response_due_at: Optional[datetime] = None
+    responded_to_message_id: Optional[UUID] = None
 
 
 class MessageOut(CamelModel):
@@ -48,6 +53,11 @@ class MessageOut(CamelModel):
     conversation_id: UUID
     sender_id: UUID
     content: str
+    priority: str = "NORMAL"
+    requires_acknowledgement: bool = False
+    requires_response: bool = False
+    response_due_at: Optional[datetime] = None
+    responded_to_message_id: Optional[UUID] = None
     sender: UserOut
     created_at: datetime
     updated_at: datetime

@@ -20,6 +20,11 @@ from app.api.consultant_reviews import router as consultant_reviews_router
 from app.api.ai import router as ai_router
 from app.api.field_submissions import router as field_submissions_router
 from app.api.photo_archive import router as photo_archive_router
+from app.api.voice import router as voice_router
+from app.api.ifc import router as ifc_router
+from app.api.ai_intelligence import router as ai_intelligence_router
+from app.api.ai_actions import router as ai_actions_router
+from app.api.collaboration import router as collaboration_router
 
 api_router = APIRouter()
 
@@ -44,3 +49,8 @@ api_router.include_router(consultant_reviews_router)
 api_router.include_router(ai_router)
 api_router.include_router(field_submissions_router)
 api_router.include_router(photo_archive_router)
+api_router.include_router(voice_router)
+api_router.include_router(ifc_router)
+api_router.include_router(ai_intelligence_router)
+api_router.include_router(ai_actions_router)
+api_router.include_router(collaboration_router)

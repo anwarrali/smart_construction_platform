@@ -217,3 +217,7 @@ class OwnerDashboardOut(CamelModel):
     design_changes: List[dict] = []
     consultant_approvals: dict = {}
     latest_executive_updates: List[dict] = []
+    pending_owner_requests: List[dict] = []
+    upcoming_site_visits: List[dict] = []
+    recent_verified_site_reports: List[dict] = []
+    since_last_visit: dict = {}

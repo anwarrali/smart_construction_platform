@@ -191,7 +191,9 @@ class ProfileScreen extends ConsumerWidget {
                     side: const BorderSide(color: AppColors.danger),
                   ),
                   onPressed: () async {
-                    ref.read(projectContextProvider.notifier).clear();
+                    await ref
+                        .read(projectContextProvider.notifier)
+                        .clearForLogout();
                     await ref.read(sessionProvider.notifier).logout();
                   },
                   icon: const Icon(Icons.logout_rounded),

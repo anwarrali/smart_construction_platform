@@ -17,6 +17,11 @@ import {
   MessageSquare,
   Building2,
   Images,
+  Mic2,
+  Boxes,
+  BrainCircuit,
+  ListChecks,
+  CalendarDays,
 } from "lucide-react";
 import { useRole } from "../../../hooks/useRole";
 import { ROUTES } from "../../../utils/constants";
@@ -52,6 +57,9 @@ const adminLinks: NavItem[] = [
 ];
 
 const bottomLinks: NavItem[] = [
+  { to: ROUTES.MY_ACTIONS, label: "My Actions", icon: ListChecks },
+  { to: ROUTES.REQUESTS, label: "Requests", icon: MessageSquare },
+  { to: ROUTES.SCHEDULE, label: "Schedule", icon: CalendarDays },
   { to: ROUTES.MESSAGES, label: "Messages", icon: MessageSquare },
   { to: ROUTES.NOTIFICATIONS, label: "Notifications", icon: Bell     },
   { to: ROUTES.SETTINGS,      label: "Settings",      icon: Settings },
@@ -79,6 +87,8 @@ export const Sidebar = () => {
     { to: workspace.path("dashboard"), label: "Project Dashboard", icon: LayoutDashboard },
     { to: workspace.path("tasks"), label: "Tasks", icon: CheckSquare },
     { to: workspace.path("documents"), label: "Documents", icon: FileText },
+    { to: workspace.path("ifc"), label: "IFC Intelligence", icon: Boxes },
+    { to: workspace.path("ai-intelligence"), label: "AI Intelligence", icon: BrainCircuit },
     { to: workspace.path("evidence"), label: "Evidence Photos", icon: Images },
     { to: workspace.path("site-reports"), label: "Site Reports", icon: ClipboardCheck },
     { to: workspace.path("issues"), label: "Issues", icon: AlertTriangle },
@@ -87,6 +97,7 @@ export const Sidebar = () => {
     { to: workspace.path("schedule"), label: "Schedule / Gantt", icon: CalendarRange },
     { to: workspace.path("milestones"), label: "Milestones", icon: Flag },
     { to: workspace.path("messages"), label: "Messages", icon: MessageSquare },
+    { to: ROUTES.MY_ACTIONS, label: "My Actions", icon: ListChecks },
   ] : [];
   const engineerProjectLinks: NavItem[] = workspace.projectId ? [
     { to: workspace.path("dashboard"), label: "Dashboard", icon: LayoutDashboard },
@@ -94,14 +105,21 @@ export const Sidebar = () => {
     { to: workspace.path("site-reports"), label: "Site Reports", icon: ClipboardCheck },
     { to: workspace.path("issues"), label: "Issues", icon: AlertTriangle },
     { to: workspace.path("documents"), label: "Documents", icon: FileText },
+    { to: workspace.path("ifc"), label: "IFC Intelligence", icon: Boxes },
+    { to: workspace.path("ai-intelligence"), label: "AI Intelligence", icon: BrainCircuit },
     { to: workspace.path("evidence"), label: "Evidence Photos", icon: Images },
+    { to: workspace.path("voice-reports"), label: "Voice Reports", icon: Mic2 },
     { to: workspace.path("notifications"), label: "Notifications", icon: Bell },
+    { to: ROUTES.MY_ACTIONS, label: "My Actions", icon: ListChecks },
+    { to: ROUTES.SCHEDULE, label: "Schedule", icon: CalendarDays },
   ] : [];
   const consultantProjectLinks: NavItem[] = workspace.projectId ? [
     { to: workspace.path("dashboard"), label: "Dashboard", icon: LayoutDashboard },
     { to: workspace.path("reviews"), label: "Pending Reviews", icon: ClipboardCheck },
     { to: workspace.path("history"), label: "Review History", icon: CalendarRange },
     { to: workspace.path("documents"), label: "Documents", icon: FileText },
+    { to: workspace.path("ifc"), label: "IFC Intelligence", icon: Boxes },
+    { to: workspace.path("ai-intelligence"), label: "AI Intelligence", icon: BrainCircuit },
     { to: workspace.path("evidence"), label: "Evidence Photos", icon: Images },
     { to: workspace.path("site-reports"), label: "Site Reports", icon: CheckSquare },
     { to: workspace.path("issues"), label: "Issues", icon: AlertTriangle },
@@ -124,6 +142,10 @@ export const Sidebar = () => {
     if (role === "consultant") return ([ROUTES.ISSUES, ROUTES.DESIGN_CHANGES] as string[]).includes(to);
     if (role !== "project_manager" && to === ROUTES.TEAM) return false;
     if (role === "engineer") return ([ROUTES.ISSUES, ROUTES.SITE_REPORTS] as string[]).includes(to);
+    return true;
+  });
+  const visibleBottomLinks = bottomLinks.filter(({ to }) => {
+    if (role === "worker") return ([ROUTES.MESSAGES, ROUTES.NOTIFICATIONS, ROUTES.SETTINGS] as string[]).includes(to);
     return true;
   });
 
@@ -246,7 +268,7 @@ export const Sidebar = () => {
 
       {/* ── Bottom links ── */}
       {!isAdmin && role !== "engineer" && <div className="px-3 py-3 border-t border-sidebar-border space-y-0.5">
-        {bottomLinks.map(({ to, label, icon: Icon }) => (
+        {visibleBottomLinks.map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={role === "project_manager" && workspace.projectId && to === ROUTES.NOTIFICATIONS ? workspace.path("notifications") : role === "project_manager" && workspace.projectId && to === ROUTES.MESSAGES ? workspace.path("messages") : to} className={linkClass}>
             {({ isActive }) => (
               <>

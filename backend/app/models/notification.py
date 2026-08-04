@@ -46,6 +46,9 @@ class Notification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     related_entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     related_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    category: Mapped[str] = mapped_column(String(40), nullable=False, default="SYSTEM", server_default="SYSTEM", index=True)
+    requires_action: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false", index=True)
+    action_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     user: Mapped["User"] = relationship(foreign_keys=[user_id])
     project: Mapped["Project"] = relationship()

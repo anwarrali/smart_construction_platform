@@ -46,6 +46,9 @@ from app.services.voice_analysis_authorization import (
     can_create_voice_analysis,
     can_view_voice_analysis,
 )
+from app.services.voice_command_service import build_action_drafts, transition
+from app.services.voice_context_builder import VoiceContextBuilder
+from app.services.voice_action_policy import user_facing_error
 
 router = APIRouter(prefix="/ai", tags=["AI Voice Foundation"])
 
@@ -100,7 +103,8 @@ async def create_voice_analysis(
         id=analysis_id, project_id=project_id, user_id=current_user.id,
         task_id=task.id if task else None, field_submission_id=field_submission_id,
         duration_seconds=duration_seconds, status=VoiceAnalysisStatus.UPLOADED,
-        retention_policy=settings.VOICE_AUDIO_RETENTION_POLICY,
+        role_at_recording_time=current_user.role.value,
+        retention_policy=f"{settings.VOICE_AUDIO_RETENTION_DAYS}_DAYS",
     )
     db.add_all([attachment, analysis])
     db.flush()
@@ -198,7 +202,10 @@ def confirm_voice_analysis(
     current_user: User = Depends(get_current_user),
 ):
     analysis = _analysis_or_404(db, current_user, analysis_id)
-    if analysis.status != VoiceAnalysisStatus.COMPLETED:
+    if analysis.status not in {
+        VoiceAnalysisStatus.COMPLETED,
+        VoiceAnalysisStatus.READY_FOR_CONFIRMATION,
+    }:
         raise HTTPException(status_code=409, detail="Analysis is not ready for confirmation")
     return execute_confirmed_actions(
         db, analysis=analysis, current_user=current_user, requested=request.actions,
@@ -290,7 +297,7 @@ async def _process_analysis(
     content: bytes,
 ) -> None:
     try:
-        analysis.status = VoiceAnalysisStatus.TRANSCRIBING
+        transition(analysis, VoiceAnalysisStatus.TRANSCRIBING)
         db.commit()
         transcription = await run_in_threadpool(
             TranscriptionService().transcribe,
@@ -299,42 +306,90 @@ async def _process_analysis(
         analysis = db.get(VoiceAnalysis, analysis.id)
         analysis.raw_transcript = transcription.transcript
         analysis.detected_language = transcription.language
-        analysis.status = VoiceAnalysisStatus.ANALYZING
+        transition(analysis, VoiceAnalysisStatus.TRANSCRIBED)
+        record_audit(
+            db, actor_id=current_user.id, action="voice_transcription_completed",
+            entity_type="voice_analysis", entity_id=analysis.id,
+            project_id=analysis.project_id,
+            details={"model": transcription.model, "language": transcription.language},
+        )
+        transition(analysis, VoiceAnalysisStatus.ANALYZING)
         db.commit()
-        tasks = authorized_voice_tasks(db, current_user, analysis.project_id)
-        if analysis.task_id:
-            tasks = [task for task in tasks if task.id == analysis.task_id]
-        task_context = [
-            {
-                "id": str(task.id), "taskCode": task.task_code,
-                "title": task.name, "description": task.description,
-                "discipline": task.discipline,
-            }
-            for task in tasks
-        ]
+        context = VoiceContextBuilder().build(
+            db, user=current_user, project_id=analysis.project_id,
+            task_id=analysis.task_id,
+        )
+        task_context = context["tasks"]
         result = await run_in_threadpool(
             ConstructionVoiceAnalysisService().analyze,
             transcript=transcription.transcript,
-            user_role="worker" if is_worker(current_user) else "contractor_engineer",
+            user_role=(
+                "worker"
+                if is_worker(current_user)
+                else "external_consultant"
+                if getattr(current_user, "engineer_affiliation", None) == "external_consultant"
+                else "contractor_engineer"
+                if current_user.role.value == "engineer"
+                else current_user.role.value
+            ),
             authorized_tasks=task_context,
+            application_context=context,
         )
         analysis = db.get(VoiceAnalysis, analysis.id)
-        analysis.structured_result = result.model_dump(mode="json", by_alias=True)
+        analysis.structured_result = result.model_dump(
+            mode="json", by_alias=True, exclude_none=True
+        )
         analysis.provider_metadata = {
             "transcriptionProvider": "openai",
             "transcriptionModel": transcription.model,
             "analysisProvider": "openai",
-            "analysisModel": settings.OPENAI_ACTION_MODEL,
+            "analysisModel": settings.OPENAI_ANALYSIS_MODEL,
         }
-        analysis.status = VoiceAnalysisStatus.COMPLETED
+        build_action_drafts(
+            db, command=analysis, result=result, user=current_user,
+        )
         analysis.completed_at = datetime.now(timezone.utc)
+        record_audit(
+            db, actor_id=current_user.id, action="voice_interpretation_completed",
+            entity_type="voice_analysis", entity_id=analysis.id,
+            project_id=analysis.project_id,
+            details={
+                "analysis_model": settings.OPENAI_ANALYSIS_MODEL,
+                "action_count": len(result.suggested_actions),
+            },
+        )
         db.commit()
     except (AIConfigurationError, AIProviderTimeoutError, AIProviderError, ValueError) as exc:
         db.rollback()
         analysis = db.get(VoiceAnalysis, analysis.id)
-        analysis.status = VoiceAnalysisStatus.FAILED
-        analysis.error_code = type(exc).__name__
-        analysis.error_detail = str(exc)
+        if analysis.status != VoiceAnalysisStatus.FAILED:
+            try:
+                transition(analysis, VoiceAnalysisStatus.FAILED)
+            except HTTPException:
+                analysis.status = VoiceAnalysisStatus.FAILED
+        support_log_id = uuid4().hex
+        if isinstance(exc, AIProviderTimeoutError):
+            analysis.error_code = "VOICE_TIMEOUT"
+        else:
+            analysis.error_code = "VOICE_PROCESSING_FAILED"
+        friendly = user_facing_error(analysis.error_code)
+        analysis.error_detail = friendly["description"]
+        analysis.provider_metadata = {
+            **(analysis.provider_metadata or {}),
+            "supportLogId": support_log_id,
+            "retryable": friendly["retryable"],
+            "suggestedAction": friendly["suggestedAction"],
+        }
+        record_audit(
+            db, actor_id=current_user.id, action="voice_ai_processing_failed",
+            entity_type="voice_analysis", entity_id=analysis.id,
+            project_id=analysis.project_id,
+            details={
+                "error_code": analysis.error_code,
+                "support_log_id": support_log_id,
+                "exception_type": type(exc).__name__,
+            },
+        )
         db.commit()
 
 

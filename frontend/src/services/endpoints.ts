@@ -53,8 +53,13 @@ export const ENDPOINTS = {
     MINE: "/field-submissions/mine",
     PENDING: "/field-submissions/pending",
     VERIFY: (id: string) => `/field-submissions/${id}/verify`,
+    VERIFY_AND_APPLY: (id: string) => `/field-submissions/${id}/verify-and-apply`,
     REJECT: (id: string) => `/field-submissions/${id}/reject`,
     PHOTO_CATEGORIES: (photoId: string) => `/field-submissions/photos/${photoId}/categories`,
+  },
+  VOICE: {
+    COMMAND: (id: string) => `/voice/commands/${id}`,
+    AUDIO: (id: string) => `/ai/voice-analyses/${id}/audio`,
   },
   PHOTO_ARCHIVE: {
     LIST: (projectId: string) => `/projects/${projectId}/evidence-photos`,
@@ -187,6 +192,38 @@ export const ENDPOINTS = {
     NOTIFICATIONS: "/settings/notifications",
     SECURITY: "/settings/security",
     SYSTEM: "/settings/system",
+  },
+
+  IFC: {
+    BASE: (projectId: string) => `/projects/${projectId}/ifc`,
+    MODELS: (projectId: string) => `/projects/${projectId}/ifc/models`,
+    VERSIONS: (projectId: string, modelId: string) => `/projects/${projectId}/ifc/models/${modelId}/versions`,
+    VERSION: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}`,
+    HIERARCHY: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/hierarchy`,
+    SPATIAL_DETAILS: (projectId: string, nodeId: string) => `/projects/${projectId}/ifc/spatial/${nodeId}/details`,
+    SPATIAL_PROJECT_DATA: (projectId: string, nodeId: string) => `/projects/${projectId}/ifc/spatial/${nodeId}/project-data`,
+    GEOMETRY_STATUS: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/geometry/status`,
+    GEOMETRY_ASSET: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/geometry/asset`,
+    GEOMETRY_MAPPING: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/geometry/mapping`,
+    GEOMETRY_GENERATE: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/geometry/generate`,
+    ELEMENTS: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/elements`,
+    ELEMENT_PROJECT_DATA: (projectId: string, elementId: string) => `/projects/${projectId}/ifc/elements/${elementId}/project-data`,
+    COMPARISONS: (projectId: string) => `/projects/${projectId}/ifc/comparisons`,
+    SUGGESTIONS: (projectId: string) => `/projects/${projectId}/ifc/suggestions`,
+    FINDINGS: (projectId: string) => `/projects/${projectId}/ifc/findings`,
+  },
+  AI_INTELLIGENCE: {
+    BASE: (projectId:string) => `/projects/${projectId}/ai-intelligence`,
+    OVERVIEW: (projectId:string) => `/projects/${projectId}/ai-intelligence/overview`,
+    RUN: (projectId:string) => `/projects/${projectId}/ai-intelligence/run`,
+    INSIGHTS: (projectId:string) => `/projects/${projectId}/ai-intelligence/insights`,
+    INSIGHT: (projectId:string,id:string) => `/projects/${projectId}/ai-intelligence/insights/${id}`,
+  },
+  AI_ACTIONS: {
+    BASE: "/ai/actions",
+    ACTION: (id:string) => `/ai/actions/${id}`,
+    REVERT: (id:string) => `/ai/actions/${id}/revert`,
+    REVERT_LAST: "/ai/actions/revert-last",
   },
 
   UPLOAD: {

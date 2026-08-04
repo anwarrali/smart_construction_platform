@@ -20,6 +20,8 @@ def list_notifications(
     project_id: Optional[uuid.UUID] = None,
     unread: Optional[bool] = None,
     notification_type: Optional[NotificationType] = None,
+    category: Optional[str] = None,
+    requires_action: Optional[bool] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -40,6 +42,10 @@ def list_notifications(
         query = query.filter(Notification.is_read == (not unread))
     if notification_type:
         query = query.filter(Notification.type == notification_type)
+    if category:
+        query = query.filter(Notification.category == category.upper())
+    if requires_action is not None:
+        query = query.filter(Notification.requires_action == requires_action)
     if search and search.strip():
         term = f"%{search.strip()}%"
         query = query.filter(or_(

@@ -213,6 +213,10 @@ export interface OwnerDashboardData {
     entityType: string;
     timestamp: string;
   }>;
+  pendingOwnerRequests: Array<{ id: string; title: string; status: string; priority: string; discipline?: string; needsOwnerInput: boolean }>;
+  upcomingSiteVisits: Array<{ id: string; title: string; scheduledStart: string; visitType: string; status: string; location?: string }>;
+  recentVerifiedSiteReports: Array<{ id: string; reportDate: string; summary?: string; reviewStatus: string }>;
+  sinceLastVisit: { periodDays: number; verifiedTasks: number; approvedDesignChanges: number; verifiedSiteReports: number; requestsAwaitingClarification: number; nextEngineerVisit?: string; officialInformationOnly: boolean };
 }
 
 export interface CostSummary {

@@ -53,6 +53,13 @@ class FieldSubmissionReview(CamelModel):
     comment: Optional[str] = Field(default=None, max_length=2000)
 
 
+class FieldSubmissionVerifyAndApply(CamelModel):
+    progress_percentage: float = Field(ge=0, le=100)
+    expected_task_updated_at: datetime
+    comment: Optional[str] = Field(default=None, max_length=2000)
+    correction_confirmed: bool = False
+
+
 class FieldSubmissionRejection(CamelModel):
     reason: str = Field(min_length=3, max_length=2000)
 

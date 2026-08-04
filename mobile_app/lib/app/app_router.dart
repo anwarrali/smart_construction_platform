@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/auth/session_manager.dart';
@@ -22,8 +23,11 @@ import '../features/site_reports/create_site_report_screen.dart';
 import '../features/tasks/task_detail_screen.dart';
 import '../features/tasks/tasks_screen.dart';
 import '../features/voice_command/voice_screen.dart';
+import '../features/voice_command/ai_diagnostics_screen.dart';
 import '../features/field_evidence/worker_field_submission_screen.dart';
 import '../features/field_evidence/worker_submissions_screen.dart';
+import '../features/ifc/ifc_models_screen.dart';
+import '../features/collaboration/collaboration_screen.dart';
 import '../core/constants/api_endpoints.dart';
 import '../models/notification_item.dart';
 import '../models/chat_message.dart';
@@ -91,11 +95,26 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ]
               : user?.isWorker == true
               ? const [
-                  NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-                  NavigationDestination(icon: Icon(Icons.task_outlined), label: 'My Tasks'),
-                  NavigationDestination(icon: Icon(Icons.photo_camera_back_outlined), label: 'Evidence'),
-                  NavigationDestination(icon: Icon(Icons.message_outlined), label: 'Messages'),
-                  NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    label: 'Home',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.task_outlined),
+                    label: 'My Tasks',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.photo_camera_back_outlined),
+                    label: 'Evidence',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.message_outlined),
+                    label: 'Messages',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person_outline),
+                    label: 'Profile',
+                  ),
                 ]
               : user?.isOwner == true
               ? const [
@@ -243,8 +262,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/messages',
             builder: (_, __) => const MessagesScreen(),
           ),
+          GoRoute(path: '/actions', builder: (_, __) => const CollaborationScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
-          GoRoute(path: '/evidence', builder: (_, __) => const WorkerSubmissionsScreen()),
+          GoRoute(
+            path: '/evidence',
+            builder: (_, __) => const WorkerSubmissionsScreen(),
+          ),
+          GoRoute(path: '/ifc', builder: (_, __) => const IfcModelsScreen()),
         ],
       ),
       GoRoute(
@@ -270,6 +294,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/voice',
         builder: (_, state) =>
             VoiceScreen(taskId: state.uri.queryParameters['taskId']),
+      ),
+      GoRoute(
+        path: '/dev/ai-diagnostics',
+        builder: (_, __) => const AiDiagnosticsScreen(),
       ),
       GoRoute(
         path: '/issues/new',
@@ -326,14 +354,33 @@ Widget _projectCollection(
 
 class _RouterRefresh extends ChangeNotifier {
   _RouterRefresh(this.ref) {
-    _session = ref.listen(sessionProvider, (_, __) => notifyListeners());
-    _project = ref.listen(projectContextProvider, (_, __) => notifyListeners());
+    _session = ref.listen(sessionProvider, (_, __) => _requestRefresh());
+    _project = ref.listen(projectContextProvider, (_, __) => _requestRefresh());
   }
   final Ref ref;
   late final ProviderSubscription _session;
   late final ProviderSubscription _project;
+  bool _refreshPending = false;
+  bool _disposed = false;
+
+  void _requestRefresh() {
+    if (_disposed || _refreshPending) return;
+
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      notifyListeners();
+      return;
+    }
+
+    _refreshPending = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _refreshPending = false;
+      if (!_disposed) notifyListeners();
+    });
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _session.close();
     _project.close();
     super.dispose();

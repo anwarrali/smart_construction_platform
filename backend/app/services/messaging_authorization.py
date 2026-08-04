@@ -14,6 +14,12 @@ from app.core.deps import (
 )
 from app.models.enums import ConversationType, UserRole, UserStatus
 from app.models.issue import Issue
+from app.models.design_change import DesignChange
+from app.models.document import Document
+from app.models.site_report import SiteReport
+from app.models.field_submission import FieldSubmission
+from app.models.ifc import IFCElement, IFCSpatialNode
+from app.models.collaboration import OwnerRequest, SiteVisit
 from app.models.message import Conversation, ConversationParticipant
 from app.models.project import Project, ProjectMember
 from app.models.task import Task
@@ -167,6 +173,20 @@ def can_access_context(
     if normalized == "ISSUE":
         issue = db.get(Issue, context_id)
         return bool(issue and issue.project_id == project_id and not is_worker(user))
+    model_map = {
+        "DESIGN_CHANGE": DesignChange, "DOCUMENT": Document, "SITE_REPORT": SiteReport,
+        "FIELD_SUBMISSION": FieldSubmission, "OWNER_REQUEST": OwnerRequest, "SITE_VISIT": SiteVisit,
+        "IFC_ELEMENT": IFCElement, "ROOM": IFCSpatialNode, "FLOOR": IFCSpatialNode,
+    }
+    if normalized == "PROJECT":
+        return context_id == project_id
+    model = model_map.get(normalized)
+    if model:
+        entity = db.get(model, context_id)
+        entity_project_id = getattr(entity, "project_id", None) if entity else None
+        if entity and normalized in {"IFC_ELEMENT", "ROOM", "FLOOR"}:
+            entity_project_id = entity.version.project_id
+        return bool(entity and entity_project_id == project_id and not is_worker(user))
     return False
 
 

@@ -12,7 +12,7 @@ from app.ai.exceptions import (
 )
 from app.core.config import settings
 
-MAX_AUDIO_BYTES = 25 * 1024 * 1024
+MAX_AUDIO_BYTES = settings.VOICE_MAX_FILE_MB * 1024 * 1024
 SUPPORTED_EXTENSIONS = {".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"}
 SUPPORTED_MIME_TYPES = {
     "audio/mpeg",
@@ -106,4 +106,8 @@ class TranscriptionService:
             raise AIConfigurationError(
                 "Voice transcription is not configured. Set OPENAI_API_KEY on the backend."
             )
-        return OpenAI(api_key=settings.OPENAI_API_KEY, timeout=60.0, max_retries=2)
+        return OpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=settings.OPENAI_TIMEOUT_SECONDS,
+            max_retries=2,
+        )

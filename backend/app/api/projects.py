@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import String, cast, func, or_
 from typing import List, Optional
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 from app.db.database import get_db
 from app.models.user import User, EngineerProfile
@@ -20,6 +20,8 @@ from app.models.document import MediaAsset
 from app.models.issue import Issue
 from app.models.design_change import DesignChange
 from app.models.audit_log import AuditLog
+from app.models.collaboration import OwnerRequest, SiteVisit
+from app.models.site_report import SiteReport
 from app.schemas.project import (
     ProjectOut, ProjectCreate, ProjectUpdate, ProjectMemberOut,
     ProjectSummary, ProjectsListResponse, OwnerDashboardOut, CostSummaryOut,
@@ -1040,6 +1042,26 @@ def get_owner_dashboard(
             uploaded_at=asset.created_at,
         ))
 
+    pending_owner_requests = db.query(OwnerRequest).filter(
+        OwnerRequest.project_id == project_id,
+        OwnerRequest.status.in_(["SUBMITTED", "ASSIGNED", "UNDER_REVIEW", "NEEDS_CLARIFICATION", "ACCEPTED", "CONVERTED_TO_DESIGN_CHANGE"]),
+    ).order_by(OwnerRequest.created_at.desc()).limit(10).all()
+    upcoming_site_visits = db.query(SiteVisit).filter(
+        SiteVisit.project_id == project_id, SiteVisit.scheduled_start >= datetime.now(timezone.utc),
+        SiteVisit.status.notin_(["CANCELLED", "COMPLETED"]),
+    ).order_by(SiteVisit.scheduled_start).limit(8).all()
+    verified_reports = db.query(SiteReport).filter(
+        SiteReport.project_id == project_id, SiteReport.review_status == "approved",
+    ).order_by(SiteReport.report_date.desc()).limit(8).all()
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+    verified_tasks_since = db.query(Task).filter(
+        Task.project_id == project_id, Task.status == TaskStatus.DONE,
+        Task.review_status == "approved", Task.updated_at >= since,
+    ).count()
+    approved_changes_since = db.query(DesignChange).filter(
+        DesignChange.project_id == project_id, DesignChange.status == DesignChangeStatus.APPROVED,
+        DesignChange.updated_at >= since,
+    ).count()
     return OwnerDashboardOut(
         project_summary=project_summary,
         cost_summary=cost_summary,
@@ -1076,4 +1098,17 @@ def get_owner_dashboard(
             AuditLog.project_id == project_id,
             AuditLog.entity_type.in_(["project", "milestone", "design_change", "site_report", "issue", "task"]),
         ).order_by(AuditLog.created_at.desc()).limit(8).all()],
+        pending_owner_requests=[{"id": str(item.id), "title": item.title, "status": item.status,
+                                 "priority": item.priority, "discipline": item.discipline,
+                                 "needsOwnerInput": item.status == "NEEDS_CLARIFICATION"} for item in pending_owner_requests],
+        upcoming_site_visits=[{"id": str(item.id), "title": item.title, "scheduledStart": item.scheduled_start,
+                               "visitType": item.visit_type, "status": item.status, "location": item.location} for item in upcoming_site_visits],
+        recent_verified_site_reports=[{"id": str(item.id), "reportDate": item.report_date,
+                                       "summary": item.summary_text, "reviewStatus": item.review_status} for item in verified_reports],
+        since_last_visit={"periodDays": 7, "verifiedTasks": verified_tasks_since,
+                          "approvedDesignChanges": approved_changes_since,
+                          "verifiedSiteReports": sum(item.created_at >= since for item in verified_reports),
+                          "requestsAwaitingClarification": sum(item.status == "NEEDS_CLARIFICATION" for item in pending_owner_requests),
+                          "nextEngineerVisit": upcoming_site_visits[0].scheduled_start if upcoming_site_visits else None,
+                          "officialInformationOnly": True},
     )

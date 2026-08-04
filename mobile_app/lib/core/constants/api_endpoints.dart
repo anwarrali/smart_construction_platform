@@ -58,13 +58,33 @@ abstract final class ApiEndpoints {
   static const workerDashboard = '/field-submissions/worker-dashboard';
   static String photoCategories(String projectId) =>
       '/projects/$projectId/photo-categories';
+  static String ifcModels(String projectId) => '/projects/$projectId/ifc/models';
+  static String ifcVersions(String projectId, String modelId) =>
+      '/projects/$projectId/ifc/models/$modelId/versions';
   static const fieldContext = '/field/context';
   static const validateProposal = '/field/action-proposals/validate';
   static const confirmProposal = '/field/action-proposals/confirm';
   static const aiTranscribe = '/ai/transcribe';
   static const aiAnalyzeCommand = '/ai/analyze-command';
   static const voiceAnalyses = '/ai/voice-analyses';
+  static const voiceCommands = '/voice/commands';
+  static const aiActions = '/ai/actions';
+  static String revertAiAction(String id) => '/ai/actions/$id/revert';
+  static String voiceCommand(String id) => '/voice/commands/$id';
+  static String voiceDraft(String commandId, String draftId) =>
+      '/voice/commands/$commandId/draft-actions/$draftId';
+  static String voiceClarifications(String id) =>
+      '/voice/commands/$id/clarifications';
+  static String confirmVoiceCommand(String id) =>
+      '/voice/commands/$id/confirm';
+  static String executeVoiceCommand(String id) =>
+      '/voice/commands/$id/execute';
   static String voiceAnalysis(String id) => '/ai/voice-analyses/$id';
+  static const ownerRequests = '/owner-requests';
+  static String ownerRequest(String id) => '/owner-requests/$id';
+  static const siteVisits = '/site-visits';
+  static const myActionCenter = '/my-action-center';
+  static String projectActivity(String id) => '/projects/$id/activity';
   static String retryVoiceAnalysis(String id) =>
       '/ai/voice-analyses/$id/retry';
   static String confirmVoiceAnalysis(String id) =>

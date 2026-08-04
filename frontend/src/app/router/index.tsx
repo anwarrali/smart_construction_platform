@@ -44,6 +44,10 @@ import { ProjectTeamPage } from "../../features/projects/pages/ProjectTeamPage";
 import { MilestonesPage } from "../../features/milestones/pages/MilestonesPage";
 import { MessagesPage } from "../../features/messages/pages/MessagesPage";
 import { EvidencePhotoArchivePage } from "../../features/photo-archive/pages/EvidencePhotoArchivePage";
+import { VoiceReportsPage } from "../../features/voice/pages/VoiceReportsPage";
+import { IFCWorkspacePage } from "../../features/ifc/pages/IFCWorkspacePage";
+import { AIIntelligencePage } from "../../features/ai-intelligence/pages/AIIntelligencePage";
+import { CollaborationPage } from "../../features/collaboration/pages/CollaborationPage";
 
 export const Router = () => {
   return (
@@ -98,6 +102,8 @@ export const Router = () => {
               <Route path={ROUTES.PM_PROJECT_MESSAGES} element={<MessagesPage />} />
               <Route path={ROUTES.PM_PROJECT_NOTIFICATIONS} element={<NotificationsPage />} />
               <Route path={ROUTES.PM_PROJECT_EVIDENCE} element={<EvidencePhotoArchivePage />} />
+              <Route path={ROUTES.PM_PROJECT_IFC} element={<IFCWorkspacePage />} />
+              <Route path={ROUTES.PM_PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
             </Route>
             <Route element={<MainContractorEngineerGuard />}>
               <Route path={ROUTES.ENGINEER_PROJECTS} element={<ProjectsPage />} />
@@ -109,6 +115,9 @@ export const Router = () => {
               <Route path={ROUTES.ENGINEER_PROJECT_DOCUMENTS} element={<DocumentsPage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_NOTIFICATIONS} element={<NotificationsPage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_EVIDENCE} element={<EvidencePhotoArchivePage />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_VOICE_REPORTS} element={<VoiceReportsPage />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_IFC} element={<IFCWorkspacePage />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
             </Route>
             <Route element={<ConsultantEngineerGuard />}>
               <Route path={ROUTES.CONSULTANT_PROJECTS} element={<ProjectsPage />} />
@@ -122,6 +131,8 @@ export const Router = () => {
               <Route path={ROUTES.CONSULTANT_PROJECT_DESIGN_CHANGES} element={<DesignChangesPage />} />
               <Route path={ROUTES.CONSULTANT_PROJECT_NOTIFICATIONS} element={<NotificationsPage />} />
               <Route path={ROUTES.CONSULTANT_PROJECT_EVIDENCE} element={<EvidencePhotoArchivePage />} />
+              <Route path={ROUTES.CONSULTANT_PROJECT_IFC} element={<IFCWorkspacePage />} />
+              <Route path={ROUTES.CONSULTANT_PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
             </Route>
             <Route element={<RoleGuard allowedRoles={["admin", "project_manager", "consultant"]} />}>
               <Route path={ROUTES.PROJECT_SCHEDULE} element={<ProjectSchedulePage />} />
@@ -135,8 +146,14 @@ export const Router = () => {
             </Route>
             <Route element={<RoleGuard allowedRoles={["admin", "owner", "project_manager", "engineer", "consultant"]} />}>
               <Route path={ROUTES.PROJECT_EVIDENCE} element={<EvidencePhotoArchivePage />} />
+              <Route path={ROUTES.PROJECT_IFC} element={<IFCWorkspacePage />} />
+              <Route path={ROUTES.PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
             </Route>
             <Route path={ROUTES.MESSAGES}        element={<MessagesPage />} />
+            <Route path={ROUTES.MY_ACTIONS} element={<CollaborationPage initialTab="actions" />} />
+            <Route path={ROUTES.REQUESTS} element={<CollaborationPage initialTab="requests" />} />
+            <Route path={ROUTES.SCHEDULE} element={<CollaborationPage initialTab="schedule" />} />
+            <Route path={ROUTES.PROJECT_COLLABORATION} element={<CollaborationPage />} />
             <Route path={ROUTES.SETTINGS}        element={<ProfilePage />} />
             <Route path={ROUTES.CHANGE_PASSWORD} element={<ProfilePage />} />
 

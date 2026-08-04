@@ -143,6 +143,7 @@ async def submit_site_report(
     report_type: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
     task_id: Optional[str] = Form(None),
+    site_visit_id: Optional[str] = Form(None),
     weather_conditions: Optional[str] = Form(None),
     workers_count: Optional[int] = Form(None),
     equipment: Optional[str] = Form(None),
@@ -159,6 +160,7 @@ async def submit_site_report(
     try:
         proj_uuid = uuid.UUID(project_id)
         task_uuid = uuid.UUID(task_id) if task_id else None
+        visit_uuid = uuid.UUID(site_visit_id) if site_visit_id else None
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid projectId")
     if current_user.role not in {UserRole.ENGINEER, UserRole.PROJECT_MANAGER}:
@@ -191,9 +193,19 @@ async def submit_site_report(
     except ValueError:
         raise HTTPException(status_code=400, detail="reportDate must use YYYY-MM-DD format")
         
+    if visit_uuid:
+        from app.models.collaboration import SiteVisit
+        visit = db.query(SiteVisit).filter(SiteVisit.id == visit_uuid, SiteVisit.project_id == proj_uuid).first()
+        if not visit:
+            raise HTTPException(status_code=400, detail="siteVisitId must belong to the selected project")
+        if current_user.role == UserRole.ENGINEER and visit.engineer_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only the scheduled engineer can report this visit")
+        if db.query(SiteReport).filter(SiteReport.site_visit_id == visit_uuid).first():
+            raise HTTPException(status_code=409, detail="This site visit already has a site report")
     new_report = SiteReport(
         project_id=proj_uuid,
         task_id=task_uuid,
+        site_visit_id=visit_uuid,
         submitted_by_id=current_user.id,
         report_date=parsed_date,
         summary_text=content,

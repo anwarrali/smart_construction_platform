@@ -62,4 +62,9 @@ class ProjectContextViewModel extends StateNotifier<ProjectContextState> {
   }
 
   void clear() => state = const ProjectContextState();
+
+  Future<void> clearForLogout() async {
+    await _preferences.clearProject();
+    state = const ProjectContextState();
+  }
 }

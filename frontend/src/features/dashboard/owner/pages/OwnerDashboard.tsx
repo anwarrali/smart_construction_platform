@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Building2, CheckCircle2, Clock, Flag, Wallet } from "lucide-react";
+import { AlertTriangle, Building2, CalendarDays, CheckCircle2, Clock, Flag, MessageSquareText, Wallet } from "lucide-react";
 import { Card } from "../../../../components/ui/Card";
 import { Select } from "../../../../components/ui/Select";
 import { Loader } from "../../../../components/ui/Loader";
@@ -80,6 +80,16 @@ export const OwnerDashboard = () => {
 
       {error && <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
+      <Card className="border-primary/20 bg-primary/5 p-5">
+        <div className="flex items-start gap-3"><CheckCircle2 className="mt-1 text-primary" /><div className="flex-1"><h2 className="font-semibold">Since your last visit</h2><p className="text-xs text-muted-foreground">Verified and approved project information from the last {data.sinceLastVisit.periodDays} days.</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div><p className="text-2xl font-bold">{data.sinceLastVisit.verifiedTasks}</p><p className="text-xs text-muted-foreground">tasks verified</p></div>
+          <div><p className="text-2xl font-bold">{data.sinceLastVisit.verifiedSiteReports}</p><p className="text-xs text-muted-foreground">verified site reports</p></div>
+          <div><p className="text-2xl font-bold">{data.sinceLastVisit.approvedDesignChanges}</p><p className="text-xs text-muted-foreground">design changes approved</p></div>
+          <div><p className="text-2xl font-bold">{data.sinceLastVisit.requestsAwaitingClarification}</p><p className="text-xs text-muted-foreground">requests need clarification</p></div>
+          <div><p className="text-sm font-bold">{data.sinceLastVisit.nextEngineerVisit ? new Date(data.sinceLastVisit.nextEngineerVisit).toLocaleString() : "Not scheduled"}</p><p className="text-xs text-muted-foreground">next engineer visit</p></div>
+        </div></div></div>
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">Project progress</p><p className="mt-2 text-3xl font-bold">{summary.completionPercentage}%</p><p className="text-xs text-muted-foreground">{summary.currentPhase}</p></div><Building2 className="text-primary" /></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${summary.completionPercentage}%` }} /></div></Card>
         <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">Project status</p><span className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${health.className}`}>{health.label}</span><p className="mt-2 text-xs text-muted-foreground">{summary.daysRemaining >= 0 ? `${summary.daysRemaining} days remaining` : `${Math.abs(summary.daysRemaining)} days past planned finish`}</p></div><CheckCircle2 className="text-emerald-600" /></div></Card>
@@ -108,6 +118,8 @@ export const OwnerDashboard = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="p-5"><div className="flex items-center gap-2"><MessageSquareText size={18} /><h2 className="font-semibold">Your requests</h2></div><div className="mt-4 space-y-3">{data.pendingOwnerRequests.map((item) => <div key={item.id} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><p className="text-sm font-semibold">{item.title}</p><span className="text-xs font-medium capitalize">{item.status.replaceAll("_", " ").toLowerCase()}</span></div>{item.needsOwnerInput && <p className="mt-1 text-xs font-semibold text-amber-700">Your clarification is required.</p>}</div>)}{!data.pendingOwnerRequests.length && <p className="text-sm text-muted-foreground">No active owner requests. New client requests and their engineering responses will appear here.</p>}</div><a className="mt-3 inline-flex text-sm font-medium text-primary" href="/requests">Open requests →</a></Card>
+        <Card className="p-5"><div className="flex items-center gap-2"><CalendarDays size={18} /><h2 className="font-semibold">Upcoming engineer visits</h2></div><div className="mt-4 space-y-3">{data.upcomingSiteVisits.map((visit) => <div key={visit.id} className="rounded-lg border p-3"><p className="text-sm font-semibold">{visit.title}</p><p className="text-xs text-muted-foreground">{new Date(visit.scheduledStart).toLocaleString()} · {visit.location || "Project site"}</p></div>)}{!data.upcomingSiteVisits.length && <p className="text-sm text-muted-foreground">No engineer visits are currently scheduled.</p>}</div><a className="mt-3 inline-flex text-sm font-medium text-primary" href="/schedule">Open schedule →</a></Card>
         <Card className="p-5">
           <div className="flex items-center gap-2"><Flag size={18} /><h2 className="font-semibold">Project timeline</h2></div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-lg bg-muted/50 p-3"><p className="text-xs text-muted-foreground">Current milestone</p><p className="font-semibold">{currentMilestone?.name || "No active milestone"}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-xs text-muted-foreground">Upcoming milestone</p><p className="font-semibold">{upcomingMilestone?.name || "No upcoming milestone"}</p></div></div>

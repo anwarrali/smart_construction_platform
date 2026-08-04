@@ -73,7 +73,7 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
             pinned: true,
             expandedHeight: 176,
             backgroundColor: AppColors.navy,
-            title: const Text('Voice Work Update'),
+            title: const Text('Construction Voice Assistant'),
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
@@ -98,7 +98,7 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
                           ),
                           const SizedBox(height: 5),
                           const Text(
-                            'Capture now. Review before anything is submitted.',
+                            'Speak naturally about work, issues, or project updates.',
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
@@ -189,9 +189,12 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
                   ),
                   const SizedBox(height: 7),
                   const Text(
-                    'Submitting creates suggestions only. No project data changes yet.',
+                    'Your recording is used to prepare this project action and is stored according to the project data policy.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
                 if (_error != null) ...[
@@ -230,6 +233,15 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
                     analysis: _analysis!,
                     onCancel: _cancelTranscript,
                     onConfirm: _confirm,
+                  ),
+                ],
+                if (_analysis?.needsClarification == true &&
+                    _analysis!.clarifications.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  _ClarificationCard(
+                    clarification: _analysis!.clarifications.first,
+                    onAnswer: _answerClarification,
+                    onCancel: _cancelTranscript,
                   ),
                 ],
                 if (_analysis?.failed == true) ...[
@@ -398,14 +410,25 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
       final results = await _viewModel!.confirm(actions);
       if (!mounted) return;
       final succeeded = results.where((item) => item['success'] == true).length;
+      final workerReport = results.any(
+        (item) =>
+            item['type'] == 'CREATE_FIELD_SUBMISSION' &&
+            item['success'] == true,
+      );
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          icon: const Icon(Icons.verified_user_outlined, color: AppColors.success),
-          title: const Text('Confirmation results'),
+          icon: const Icon(
+            Icons.verified_user_outlined,
+            color: AppColors.success,
+          ),
+          title: Text(workerReport ? 'Report sent' : 'Action completed'),
           content: Text(
-            '$succeeded of ${results.length} selected actions succeeded.\n\n'
-            '${results.map((item) => '• ${item['message']}').join('\n')}',
+            workerReport
+                ? 'Your report was sent to the responsible engineer for review.'
+                : '$succeeded of ${results.length} selected actions succeeded.\n\n'
+                      '${results.map((item) => '• ${item['message']}').join('\n')}',
+            textDirection: TextDirection.ltr,
           ),
           actions: [
             FilledButton(
@@ -415,6 +438,26 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
           ],
         ),
       );
+    } catch (error) {
+      _error = '$error';
+    } finally {
+      _analyzing = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _answerClarification(
+    String clarificationId,
+    String answer,
+  ) async {
+    setState(() => _analyzing = true);
+    try {
+      final updated = await _viewModel!.answerClarification(
+        clarificationId,
+        answer,
+      );
+      if (!mounted) return;
+      setState(() => _analysis = updated);
     } catch (error) {
       _error = '$error';
     } finally {
@@ -679,6 +722,111 @@ class _SmallAction extends StatelessWidget {
   );
 }
 
+class _ClarificationCard extends StatefulWidget {
+  const _ClarificationCard({
+    required this.clarification,
+    required this.onAnswer,
+    required this.onCancel,
+  });
+
+  final VoiceClarificationItem clarification;
+  final Future<void> Function(String, String) onAnswer;
+  final VoidCallback onCancel;
+
+  @override
+  State<_ClarificationCard> createState() => _ClarificationCardState();
+}
+
+class _ClarificationCardState extends State<_ClarificationCard> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    decoration: BoxDecoration(
+      color: AppColors.warningSoft,
+      borderRadius: BorderRadius.circular(AppRadius.large),
+      border: Border.all(color: AppColors.warning.withValues(alpha: .35)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'معلومة إضافية مطلوبة',
+          textDirection: TextDirection.rtl,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.clarification.questionAr,
+          textDirection: TextDirection.rtl,
+          style: const TextStyle(fontSize: 16, height: 1.5),
+        ),
+        Text(
+          widget.clarification.questionEn,
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        if (widget.clarification.options.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: widget.clarification.options
+                .map(
+                  (option) => ActionChip(
+                    label: Text('${option['label'] ?? option['value']}'),
+                    onPressed: () =>
+                        setState(() => _controller.text = '${option['value']}'),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+        const SizedBox(height: 12),
+        TextField(
+          controller: _controller,
+          textDirection: TextDirection.rtl,
+          keyboardType: widget.clarification.expectedAnswerType == 'NUMBER'
+              ? TextInputType.number
+              : TextInputType.text,
+          decoration: const InputDecoration(
+            labelText: 'الإجابة',
+            hintText: 'اكتب إجابة قصيرة ومحددة',
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onCancel,
+                child: const Text('إلغاء'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: () {
+                  final answer = _controller.text.trim();
+                  if (answer.isNotEmpty) {
+                    widget.onAnswer(widget.clarification.id, answer);
+                  }
+                },
+                child: const Text('متابعة'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
 class _AnalysisReviewCard extends StatefulWidget {
   const _AnalysisReviewCard({
     required this.analysis,
@@ -696,6 +844,7 @@ class _AnalysisReviewCard extends StatefulWidget {
 class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
   late final List<bool> _selected;
   late final List<TextEditingController> _editors;
+  bool _highRiskAcknowledged = false;
 
   @override
   void initState() {
@@ -724,8 +873,6 @@ class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
   Widget build(BuildContext context) {
     final analysis = widget.analysis;
     final result = analysis.result!;
-    final taskConfidence =
-        (result.detectedTask['confidence'] as num?)?.toDouble() ?? 0;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -742,7 +889,7 @@ class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
               SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  'AI suggestions — review required',
+                  'Review what I understood',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
               ),
@@ -750,7 +897,7 @@ class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Nothing below has been applied to the project.',
+            'Choose and edit the actions you want to confirm.',
             style: TextStyle(
               color: AppColors.warning,
               fontWeight: FontWeight.w700,
@@ -760,8 +907,7 @@ class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
           _section('AI SUMMARY', result.summary),
           _section(
             'TASK',
-            '${result.detectedTask['taskTitle'] ?? 'Select an authorized task'} '
-            '(${(taskConfidence * 100).round()}% confidence)',
+            '${result.detectedTask['taskTitle'] ?? 'Select a task'}',
           ),
           if (result.progress['mentioned'] == true)
             _section(
@@ -774,7 +920,10 @@ class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
             _section(
               'PROBLEMS / BLOCKERS',
               result.problems
-                  .map((problem) => '${problem['type']}: ${problem['description']}')
+                  .map(
+                    (problem) =>
+                        '${problem['type']}: ${problem['description']}',
+                  )
                   .join('\n'),
             ),
           const SizedBox(height: AppSpacing.lg),
@@ -820,7 +969,9 @@ class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
                           keyboardType: action.type == 'UPDATE_TASK_PROGRESS'
                               ? TextInputType.number
                               : TextInputType.multiline,
-                          maxLines: action.type == 'UPDATE_TASK_PROGRESS' ? 1 : 3,
+                          maxLines: action.type == 'UPDATE_TASK_PROGRESS'
+                              ? 1
+                              : 3,
                           decoration: InputDecoration(
                             labelText: action.type == 'UPDATE_TASK_PROGRESS'
                                 ? 'Confirmed progress (0–100)'
@@ -832,6 +983,21 @@ class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
                 ),
               );
             }),
+          if (_selected.asMap().entries.any(
+            (entry) =>
+                entry.value &&
+                entry.key < analysis.actionDrafts.length &&
+                analysis.actionDrafts[entry.key].riskLevel == 'HIGH',
+          ))
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _highRiskAcknowledged,
+              onChanged: (value) =>
+                  setState(() => _highRiskAcknowledged = value ?? false),
+              title: const Text(
+                'I reviewed the affected task, recipients, and workflow impact.',
+              ),
+            ),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
@@ -844,7 +1010,18 @@ class _AnalysisReviewCardState extends State<_AnalysisReviewCard> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  onPressed: _selected.any((value) => value)
+                  onPressed:
+                      _selected.any((value) => value) &&
+                          (!_selected.asMap().entries.any(
+                                (entry) =>
+                                    entry.value &&
+                                    entry.key < analysis.actionDrafts.length &&
+                                    analysis
+                                            .actionDrafts[entry.key]
+                                            .riskLevel ==
+                                        'HIGH',
+                              ) ||
+                              _highRiskAcknowledged)
                       ? () => widget.onConfirm(_confirmedActions())
                       : null,
                   child: const Text('Confirm selected'),
@@ -931,7 +1108,7 @@ class _SafetyNotice extends StatelessWidget {
         SizedBox(width: 10),
         Expanded(
           child: Text(
-            'Audio is sent only to the authenticated backend for transcription. AI creates a preview only; no project data changes without deterministic rules, RBAC, and explicit confirmation.',
+            'Your recording is used to prepare this project action and is stored according to the project data policy.',
             style: TextStyle(fontSize: 12, height: 1.45),
           ),
         ),

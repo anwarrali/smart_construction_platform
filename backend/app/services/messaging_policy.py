@@ -42,7 +42,10 @@ def user_specific_unread(
 
 
 def context_is_supported(context_type: str | None) -> bool:
-    return context_type is None or context_type.upper() in {"TASK", "ISSUE"}
+    return context_type is None or context_type.upper() in {
+        "PROJECT", "TASK", "ISSUE", "DESIGN_CHANGE", "DOCUMENT", "ROOM", "FLOOR",
+        "IFC_ELEMENT", "SITE_REPORT", "APPROVAL", "FIELD_SUBMISSION", "OWNER_REQUEST", "SITE_VISIT",
+    }
 
 
 def conversation_search_visible(

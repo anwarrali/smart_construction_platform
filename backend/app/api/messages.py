@@ -13,6 +13,7 @@ from app.db.database import get_db
 from app.models.enums import ConversationType, NotificationType, UserStatus
 from app.models.issue import Issue
 from app.models.message import Conversation, ConversationParticipant, Message
+from app.models.collaboration import MessageRecipientState
 from app.models.notification import Notification
 from app.models.project import Project
 from app.models.task import Task
@@ -86,6 +87,11 @@ def _message_payload(message: Message) -> dict:
         "conversation_id": message.conversation_id,
         "sender_id": message.sender_id,
         "content": message.content,
+        "priority": message.priority,
+        "requires_acknowledgement": message.requires_acknowledgement,
+        "requires_response": message.requires_response,
+        "response_due_at": message.response_due_at,
+        "responded_to_message_id": message.responded_to_message_id,
         "sender": message.sender,
         "created_at": message.created_at,
         "updated_at": message.updated_at,
@@ -171,7 +177,10 @@ def _notify_message_recipients(
 
 
 def _send_message(
-    db: Session, conversation: Conversation, sender: User, content: str
+    db: Session, conversation: Conversation, sender: User, content: str,
+    *, priority: str = "NORMAL", requires_acknowledgement: bool = False,
+    requires_response: bool = False, response_due_at=None,
+    responded_to_message_id=None,
 ) -> Message:
     if not can_send_to_conversation(db, sender, conversation):
         raise HTTPException(status_code=403, detail="You cannot send to this conversation")
@@ -180,9 +189,32 @@ def _send_message(
         conversation_id=conversation.id,
         sender_id=sender.id,
         content=content.strip(),
+        priority=priority.upper(),
+        requires_acknowledgement=requires_acknowledgement,
+        requires_response=requires_response,
+        response_due_at=response_due_at,
+        responded_to_message_id=responded_to_message_id,
     )
     db.add(message)
     db.flush()
+    now = datetime.now(timezone.utc)
+    recipient_ids = db.query(ConversationParticipant.user_id).filter(
+        ConversationParticipant.conversation_id == conversation.id,
+        ConversationParticipant.user_id != sender.id,
+    ).all()
+    for (recipient_id,) in recipient_ids:
+        db.add(MessageRecipientState(
+            message_id=message.id, user_id=recipient_id, delivered_at=now,
+            response_status="NEEDS_RESPONSE" if requires_response else "UNREAD",
+        ))
+    if responded_to_message_id:
+        receipt = db.query(MessageRecipientState).filter(
+            MessageRecipientState.message_id == responded_to_message_id,
+            MessageRecipientState.user_id == sender.id,
+        ).first()
+        if receipt:
+            receipt.responded_at = now
+            receipt.response_status = "RESPONDED"
     conversation.last_activity_at = message.created_at or datetime.now(timezone.utc)
     _notify_message_recipients(db, conversation, message, sender)
     return message
@@ -507,7 +539,12 @@ def send_conversation_message(
     current_user: User = Depends(get_current_user),
 ):
     conversation = _conversation_or_404(db, conversation_id)
-    message = _send_message(db, conversation, current_user, data.content)
+    message = _send_message(
+        db, conversation, current_user, data.content,
+        priority=data.priority, requires_acknowledgement=data.requires_acknowledgement,
+        requires_response=data.requires_response, response_due_at=data.response_due_at,
+        responded_to_message_id=data.responded_to_message_id,
+    )
     db.commit()
     return db.query(Message).options(joinedload(Message.sender)).filter(
         Message.id == message.id
@@ -530,6 +567,21 @@ def mark_conversation_read(
     ).order_by(Message.created_at.desc()).first()
     participant.last_read_message_id = last_message.id if last_message else None
     participant.last_read_at = datetime.now(timezone.utc)
+    unread_receipts = db.query(MessageRecipientState).join(
+        Message, Message.id == MessageRecipientState.message_id
+    ).filter(
+        MessageRecipientState.user_id == current_user.id,
+        Message.conversation_id == conversation.id,
+        MessageRecipientState.read_at.is_(None),
+    ).all()
+    for receipt in unread_receipts:
+        receipt.read_at = participant.last_read_at
+        # Opening a message is not the same as handling it. Preserve the
+        # actionable state until an explicit acknowledgement or response.
+        if receipt.message.requires_response:
+            receipt.response_status = "NEEDS_RESPONSE"
+        else:
+            receipt.response_status = "READ"
     db.commit()
     return _conversation_payload(db, conversation, current_user)
 

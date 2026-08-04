@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,6 +14,9 @@ class VoiceAnalysis(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """Durable AI-assisted field update; AI output is never executable by itself."""
 
     __tablename__ = "voice_analyses"
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_voice_analysis_user_idempotency"),
+    )
 
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"),
@@ -36,7 +39,13 @@ class VoiceAnalysis(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=True, unique=True,
     )
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    role_at_recording_time: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    row_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     raw_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     detected_language: Mapped[str | None] = mapped_column(String(30), nullable=True)
     status: Mapped[VoiceAnalysisStatus] = mapped_column(
         PG_ENUM(VoiceAnalysisStatus, name="voice_analysis_status", create_type=True),
@@ -73,3 +82,18 @@ class VoiceAnalysis(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     field_submission: Mapped["FieldSubmission | None"] = relationship()
     audio_attachment: Mapped["Attachment | None"] = relationship()
     confirmed_by: Mapped["User | None"] = relationship(foreign_keys=[confirmed_by_id])
+    action_drafts: Mapped[list["VoiceActionDraft"]] = relationship(
+        back_populates="voice_analysis",
+        cascade="all, delete-orphan",
+        order_by="VoiceActionDraft.created_at",
+    )
+    clarifications: Mapped[list["VoiceClarification"]] = relationship(
+        back_populates="voice_analysis",
+        cascade="all, delete-orphan",
+        order_by="VoiceClarification.sequence",
+    )
+    execution_logs: Mapped[list["VoiceExecutionLog"]] = relationship(
+        back_populates="voice_analysis",
+        cascade="all, delete-orphan",
+        order_by="VoiceExecutionLog.created_at",
+    )

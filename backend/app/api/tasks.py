@@ -535,6 +535,13 @@ def create_task(
                  project_id=new_task.project_id, details={"task_code": new_task.task_code,
                     "assignee_ids": [str(value) for value in new_task.assignee_ids],
                     "dependency_ids": [str(predecessor.id) for predecessor in predecessors]})
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(
+        db, project_id=new_task.project_id, event_type="TASK_CREATED",
+        entity_type="TASK", entity_id=new_task.id, actor_user_id=current_user.id,
+        payload={"taskCode": new_task.task_code, "status": new_task.status.value},
+        correlation_id=f"task:{new_task.id}", idempotency_key=f"TASK_CREATED:{new_task.id}",
+    )
     db.commit()
     db.refresh(new_task)
     return new_task
@@ -807,6 +814,9 @@ def update_task_progress(
             "note": data.note.strip() if data.note else None,
         },
     )
+    from app.services.ai_traceability_service import invalidate_insights_for_source
+    invalidate_insights_for_source(db, project_id=task.project_id, source_type="TASK", source_id=task.id,
+                                   reason="Task progress or workflow state changed")
     db.commit()
     db.refresh(task)
     return task
@@ -1257,6 +1267,16 @@ def approve_task(
     _refresh_project_progress(db, task.project_id)
     record_audit(db, actor_id=current_user.id, action="approved", entity_type="task_review", entity_id=review.id,
                  project_id=task.project_id, details={"task_id": task.id, "submission_number": review.submission_number})
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(
+        db, project_id=task.project_id, event_type="CONSULTANT_REVIEW_COMPLETED",
+        entity_type="TASK_REVIEW", entity_id=review.id, actor_user_id=current_user.id,
+        payload={"taskId": str(task.id), "decision": "APPROVED", "submissionNumber": review.submission_number},
+        correlation_id=f"review:{review.id}", idempotency_key=f"CONSULTANT_REVIEW_APPROVED:{review.id}",
+    )
+    from app.services.ai_traceability_service import invalidate_insights_for_source
+    invalidate_insights_for_source(db, project_id=task.project_id, source_type="TASK", source_id=task.id,
+                                   reason="Task was completed and verified by an authorized reviewer")
     db.commit()
     db.refresh(task)
     return task
@@ -1311,7 +1331,17 @@ def reject_task(
     record_audit(db, actor_id=current_user.id, action="rework_requested", entity_type="task_review",
                  entity_id=review.id, project_id=task.project_id,
                  details={"task_id": task.id, "reason": task.rejection_reason,
-                          "required_corrections": corrections, "submission_number": review.submission_number})
+                           "required_corrections": corrections, "submission_number": review.submission_number})
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(
+        db, project_id=task.project_id, event_type="CONSULTANT_REVIEW_COMPLETED",
+        entity_type="TASK_REVIEW", entity_id=review.id, actor_user_id=current_user.id,
+        payload={"taskId": str(task.id), "decision": "REJECTED", "submissionNumber": review.submission_number},
+        correlation_id=f"review:{review.id}", idempotency_key=f"CONSULTANT_REVIEW_REJECTED:{review.id}",
+    )
+    from app.services.ai_traceability_service import invalidate_insights_for_source
+    invalidate_insights_for_source(db, project_id=task.project_id, source_type="TASK", source_id=task.id,
+                                   reason="Responsible reviewer rejected the submitted task state", rejected=True)
     db.commit()
     db.refresh(task)
     return task

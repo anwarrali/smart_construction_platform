@@ -5,6 +5,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val androidKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+val androidKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val androidKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val androidKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val ciReleaseSigningAvailable = listOf(
+    androidKeystorePath,
+    androidKeystorePassword,
+    androidKeyAlias,
+    androidKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.example.mobile_app"
     compileSdk = flutter.compileSdkVersion
@@ -32,13 +43,32 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["usesCleartextTraffic"] = "false"
+    }
+
+    val ciReleaseSigning = if (ciReleaseSigningAvailable) {
+        signingConfigs.create("ciRelease") {
+            storeFile = file(androidKeystorePath!!)
+            storePassword = androidKeystorePassword
+            keyAlias = androidKeyAlias
+            keyPassword = androidKeyPassword
+        }
+    } else {
+        null
     }
 
     buildTypes {
+        debug {
+            // Local physical-device testing may use the development computer's
+            // LAN HTTP address. Release builds require HTTPS.
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Local and unsigned-CI workflows retain the existing debug-key
+            // fallback. Store releases can opt in through environment variables
+            // and a separately mounted keystore; no secret is stored here.
+            signingConfig = ciReleaseSigning ?: signingConfigs.getByName("debug")
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
         }
     }
 }

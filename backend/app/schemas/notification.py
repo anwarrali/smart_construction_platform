@@ -17,6 +17,9 @@ class NotificationOut(CamelModel):
     task_id: Optional[UUID] = None
     related_entity_type: Optional[str] = None
     related_entity_id: Optional[UUID] = None
+    category: str = "SYSTEM"
+    requires_action: bool = False
+    action_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

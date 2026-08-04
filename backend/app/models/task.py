@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Table, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID, ENUM as PG_ENUM
+from sqlalchemy.dialects.postgresql import JSONB, UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -74,6 +74,9 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true", index=True)
     review_due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    voice_evidence_requirements: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
 
     submitted_for_review_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)

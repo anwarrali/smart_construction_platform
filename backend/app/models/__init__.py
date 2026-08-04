@@ -70,9 +70,29 @@ from app.models.field_submission import (
 from app.models.site_report import SiteReport
 from app.models.voice_recording import VoiceRecording
 from app.models.voice_analysis import VoiceAnalysis
+from app.models.voice_action import VoiceActionDraft, VoiceClarification, VoiceExecutionLog
+from app.models.ai_governance import AIActionVersion, DomainEvent, AIProviderCall
 
 # Notifications
 from app.models.notification import Notification
 from app.models.audit_log import AuditLog
 from app.models.revoked_token import RevokedToken
+from app.models.ifc import (
+    IFCModelGroup,
+    IFCModelVersion,
+    IFCSpatialNode,
+    IFCElement,
+    IFCEntityLink,
+    IFCComparison,
+    IFCChangeRecord,
+    IFCImpactSuggestion,
+    IFCCoordinationFinding,
+    IFCSuggestion,
+    IFCProcessingJob,
+    AIInsight,
+)
+from app.models.collaboration import (
+    OwnerRequest, MessageRecipientState, ReminderRule, ReminderEvent,
+    SiteVisit, SiteVisitParticipant, AIInsightSource,
+)
 

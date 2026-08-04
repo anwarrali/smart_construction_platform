@@ -11,11 +11,13 @@ from app.models.project import Project
 from app.models.task import Task, TaskComment, TaskDependency
 from app.models.user import User
 from app.services.audit_service import record_audit
+from app.services.domain_event_dispatcher import emit_domain_event
 
 
 def update_task_progress(*, db: Session, current_user: User, task_id: UUID,
                          progress_percentage: float, note: str | None = None,
-                         source: str = "manual", audit_metadata: dict | None = None) -> Task:
+                         source: str = "manual", audit_metadata: dict | None = None,
+                         commit: bool = True) -> Task:
     task = db.query(Task).filter(Task.id == task_id).with_for_update().first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -57,8 +59,26 @@ def update_task_progress(*, db: Session, current_user: User, task_id: UUID,
         details["metadata"] = audit_metadata
     record_audit(db, actor_id=current_user.id, action="progress_updated", entity_type="task",
                  entity_id=task.id, project_id=task.project_id, details=details)
-    db.commit()
-    db.refresh(task)
+    emit_domain_event(
+        db,
+        project_id=task.project_id,
+        event_type="TASK_PROGRESS_CHANGED",
+        entity_type="TASK",
+        entity_id=task.id,
+        actor_user_id=current_user.id,
+        payload=details,
+        correlation_id=str((audit_metadata or {}).get("analysis_id") or f"task:{task.id}"),
+        idempotency_key=(
+            f"TASK_PROGRESS_CHANGED:{task.id}:{(audit_metadata or {}).get('analysis_id')}"
+            if (audit_metadata or {}).get("analysis_id")
+            else None
+        ),
+    )
+    if commit:
+        db.commit()
+        db.refresh(task)
+    else:
+        db.flush()
     return task
 
 

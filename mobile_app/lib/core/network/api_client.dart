@@ -73,16 +73,22 @@ class ApiClient {
   );
   Future<T> put<T>(String path, {Object? data, Map<String, dynamic>? query}) =>
       _request(() => _dio.put<T>(path, data: data, queryParameters: query));
+  Future<T> patch<T>(String path, {Object? data, Map<String, dynamic>? query}) =>
+      _request(() => _dio.patch<T>(path, data: data, queryParameters: query));
   Future<T> upload<T>(
     String path,
     FormData data, {
     ProgressCallback? onSendProgress,
+    Duration? receiveTimeout,
   }) => _request(
     () => _dio.post<T>(
       path,
       data: data,
       onSendProgress: onSendProgress,
-      options: Options(contentType: 'multipart/form-data'),
+      options: Options(
+        contentType: 'multipart/form-data',
+        receiveTimeout: receiveTimeout,
+      ),
     ),
   );
 

@@ -36,7 +36,9 @@ const refreshAccessToken = async (): Promise<string> => {
     throw new Error("No refresh token available");
   }
 
-  const response = await axiosInstance.post("/auth/refresh", {
+  // Use a bare client: sending refresh through axiosInstance would let a 401
+  // from the refresh endpoint recursively invoke this interceptor forever.
+  const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
     refresh_token: tokens.refreshToken,
   });
 

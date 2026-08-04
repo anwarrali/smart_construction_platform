@@ -27,6 +27,7 @@ services:
     restart: always
     volumes:
       - uploads_data:/app/uploads
+      # Private voice and IFC source files; never served by the public upload mount.
       - voice_audio_data:/app/private_uploads
     depends_on:
       db:
@@ -61,6 +62,32 @@ services:
     networks:
       - app-network
 
+  flutter-tools:
+    profiles:
+      - mobile-tools
+    build:
+      context: ./mobile_app
+      dockerfile: Dockerfile.ci
+      args:
+        FLUTTER_VERSION: "3.32.2"
+    working_dir: /app
+    volumes:
+      - ./mobile_app:/app
+      - flutter-pub-cache:/home/flutterci/.pub-cache
+      - flutter-gradle-cache:/home/flutterci/.gradle
+      # Keep Linux package metadata and project Gradle state away from the
+      # developer's host Flutter/Android toolchain.
+      - flutter-dart-tool:/app/.dart_tool
+      - flutter-android-project-cache:/app/android/.gradle
+    environment:
+      PUB_CACHE: /home/flutterci/.pub-cache
+      GRADLE_USER_HOME: /home/flutterci/.gradle
+      ANDROID_KEYSTORE_PATH: ${ANDROID_KEYSTORE_PATH:-}
+      ANDROID_KEYSTORE_PASSWORD: ${ANDROID_KEYSTORE_PASSWORD:-}
+      ANDROID_KEY_ALIAS: ${ANDROID_KEY_ALIAS:-}
+      ANDROID_KEY_PASSWORD: ${ANDROID_KEY_PASSWORD:-}
+    command: flutter --version
+
 networks:
   app-network:
     driver: bridge
@@ -69,3 +96,7 @@ volumes:
   postgres_data:
   uploads_data:
   voice_audio_data:
+  flutter-pub-cache:
+  flutter-gradle-cache:
+  flutter-dart-tool:
+  flutter-android-project-cache:

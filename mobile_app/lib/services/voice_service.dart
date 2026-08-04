@@ -12,6 +12,7 @@ class VoiceProcessingService {
     required String projectId,
     required String filePath,
     required Duration duration,
+    required String requestId,
     String? taskId,
     ProgressCallback? onSendProgress,
   }) async {
@@ -20,6 +21,7 @@ class VoiceProcessingService {
       'project_id': projectId,
       if (taskId != null) 'task_id': taskId,
       'duration_seconds': duration.inSeconds,
+      'idempotency_key': requestId,
       'audio': await MultipartFile.fromFile(
         filePath,
         filename: filename,
@@ -27,12 +29,28 @@ class VoiceProcessingService {
       ),
     });
     final data = await _api.upload<Map<String, dynamic>>(
-      ApiEndpoints.voiceAnalyses,
+      ApiEndpoints.voiceCommands,
       form,
       onSendProgress: onSendProgress,
+      receiveTimeout: const Duration(seconds: 120),
     );
     return VoiceAnalysis.fromJson(data);
   }
+
+  Future<Map<String, dynamic>> actionHistory(String projectId) =>
+      _api.get<Map<String, dynamic>>(
+        ApiEndpoints.aiActions,
+        query: {'project_id': projectId, 'page_size': 50},
+      );
+
+  Future<Map<String, dynamic>> revertAction({
+    required String actionId,
+    required String requestId,
+    required String reason,
+  }) => _api.post<Map<String, dynamic>>(
+    ApiEndpoints.revertAiAction(actionId),
+    data: {'requestId': requestId, 'reason': reason},
+  );
 
   Future<VoiceAnalysis> retryAnalysis(String analysisId) async {
     final data = await _api.post<Map<String, dynamic>>(
@@ -44,14 +62,58 @@ class VoiceProcessingService {
   Future<List<Map<String, dynamic>>> confirmActions(
     String analysisId,
     List<Map<String, dynamic>> actions,
+    VoiceAnalysis analysis,
   ) async {
-    final data = await _api.post<List<dynamic>>(
-      ApiEndpoints.confirmVoiceAnalysis(analysisId),
-      data: {'actions': actions},
+    var current = analysis;
+    final selectedIds = <String>[];
+    for (final edit in actions) {
+      final index = edit['actionIndex'] as int;
+      if (index < 0 || index >= current.actionDrafts.length) {
+        throw StateError('Voice action is no longer available.');
+      }
+      final draft = current.actionDrafts[index];
+      selectedIds.add(draft.id);
+      final data = await _api.put<Map<String, dynamic>>(
+        ApiEndpoints.voiceDraft(analysisId, draft.id),
+        data: {
+          'targetId': edit['targetId'] ?? draft.targetEntityId,
+          'payload': edit['payload'] ?? draft.extractedPayload,
+          'selectedForExecution': true,
+          'rowVersion': current.rowVersion,
+        },
+      );
+      current = VoiceAnalysis.fromJson(data);
+    }
+    final confirmedData = await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.confirmVoiceCommand(analysisId),
+      data: {
+        'selectedDraftIds': selectedIds,
+        'rowVersion': current.rowVersion,
+        'detailedConfirmation': current.actionDrafts.any(
+          (draft) =>
+              selectedIds.contains(draft.id) && draft.riskLevel == 'HIGH',
+        ),
+      },
     );
-    return data
-        .map((value) => Map<String, dynamic>.from(value as Map))
-        .toList();
+    current = VoiceAnalysis.fromJson(confirmedData);
+    final executedData = await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.executeVoiceCommand(analysisId),
+      data: {'rowVersion': current.rowVersion},
+    );
+    current = VoiceAnalysis.fromJson(executedData);
+    return current.actionResults;
+  }
+
+  Future<VoiceAnalysis> answerClarification({
+    required VoiceAnalysis analysis,
+    required String clarificationId,
+    required String answer,
+  }) async {
+    final data = await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.voiceClarifications(analysis.id),
+      data: {'clarificationId': clarificationId, 'answerText': answer},
+    );
+    return VoiceAnalysis.fromJson(data);
   }
 
   Future<VoiceTranscription> transcribe({

@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 SIGNATURE_VERIFIED_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx", ".xls", ".xlsx",
-    ".webp", ".wav", ".ogg", ".m4a", ".mp3", ".dwg",
+    ".webp", ".wav", ".ogg", ".m4a", ".mp3", ".dwg", ".ifc",
 }
 
 UPLOAD_RULES = {
@@ -46,6 +46,9 @@ UPLOAD_RULES = {
         ".mp4": {"audio/mp4", "video/mp4"}, ".webm": {"audio/webm", "video/webm"},
         ".mpeg": {"audio/mpeg"}, ".mpga": {"audio/mpeg"},
     },
+    "ifc": {
+        ".ifc": {"application/x-step", "application/step", "text/plain", "application/octet-stream"},
+    },
 }
 
 
@@ -78,6 +81,9 @@ def _matches_signature(extension: str, content: bytes) -> bool:
         return content.startswith(b"ID3") or (len(content) >= 2 and content[0] == 0xFF and content[1] & 0xE0 == 0xE0)
     if extension == ".dwg":
         return content.startswith(b"AC10")
+    if extension == ".ifc":
+        sample = content[:65536].lstrip(b"\xef\xbb\xbf\x00\t\r\n ").upper()
+        return sample.startswith(b"ISO-10303-21;") and b"HEADER;" in sample and b"DATA;" in sample
     return extension == ".txt"
 
 async def save_upload(file: UploadFile, category: str) -> tuple[str, int]:
@@ -148,8 +154,9 @@ async def save_private_upload(file: UploadFile, category: str) -> tuple[str, int
             chunk = first_chunk
             while chunk:
                 size += len(chunk)
-                if size > MAX_UPLOAD_BYTES:
-                    raise HTTPException(status_code=413, detail="File exceeds the 25 MB limit")
+                limit = settings.IFC_MAX_FILE_MB * 1024 * 1024 if category == "ifc" else MAX_UPLOAD_BYTES
+                if size > limit:
+                    raise HTTPException(status_code=413, detail=f"File exceeds the {limit // (1024 * 1024)} MB limit")
                 output.write(chunk)
                 chunk = await file.read(1024 * 1024)
     except Exception:

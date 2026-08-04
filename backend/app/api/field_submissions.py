@@ -32,6 +32,7 @@ from app.schemas.field_submission import (
     FieldSubmissionRejection,
     FieldSubmissionReview,
     FieldSubmissionPhotoOut,
+    FieldSubmissionVerifyAndApply,
 )
 from app.services.audit_service import record_audit
 from app.services.field_submission_authorization import (
@@ -43,6 +44,7 @@ from app.services.field_submission_authorization import (
 from app.services.file_storage import delete_upload, save_upload
 from app.services.field_submission_policy import AUDIT_ACTIONS
 from app.services.photo_archive_policy import category_belongs_to_project
+from app.services.task_progress_service import update_task_progress
 
 
 router = APIRouter(prefix="/field-submissions", tags=["Field Evidence"])
@@ -414,6 +416,79 @@ def verify_field_submission(
     return submission
 
 
+@router.put("/{submission_id}/verify-and-apply", response_model=FieldSubmissionOut)
+def verify_and_apply_field_submission(
+    submission_id: uuid.UUID,
+    data: FieldSubmissionVerifyAndApply,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    submission = db.query(FieldSubmission).filter(
+        FieldSubmission.id == submission_id
+    ).with_for_update().first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Field submission not found")
+    if not can_engineer_review_field_submission(db, current_user, submission):
+        raise HTTPException(status_code=403, detail="You cannot review this field submission")
+    if submission.status != FieldSubmissionStatus.SUBMITTED:
+        raise HTTPException(status_code=409, detail="This field submission has already been reviewed")
+    task = db.query(Task).filter(Task.id == submission.task_id).with_for_update().first()
+    expected = data.expected_task_updated_at
+    current_updated = task.updated_at
+    if current_updated.tzinfo is None and expected.tzinfo is not None:
+        current_updated = current_updated.replace(tzinfo=expected.tzinfo)
+    if current_updated != expected:
+        raise HTTPException(
+            status_code=409,
+            detail="Task changed after this comparison was shown. Refresh and confirm again.",
+        )
+    current_progress = float(task.progress_percentage or 0)
+    if data.progress_percentage < current_progress and not data.correction_confirmed:
+        raise HTTPException(
+            status_code=409,
+            detail="A progress decrease requires explicit correction confirmation",
+        )
+    update_task_progress(
+        db=db,
+        current_user=current_user,
+        task_id=task.id,
+        progress_percentage=data.progress_percentage,
+        note=data.comment,
+        source="worker_voice_evidence_review",
+        audit_metadata={"field_submission_id": str(submission.id)},
+        commit=False,
+    )
+    submission.status = FieldSubmissionStatus.VERIFIED
+    submission.reviewed_at = datetime.now(timezone.utc)
+    submission.reviewed_by_id = current_user.id
+    submission.review_comment = (data.comment or "").strip() or (
+        f"Evidence verified and official progress updated to {data.progress_percentage:g}%."
+    )
+    _notify(
+        db,
+        submission.worker_id,
+        submission,
+        "Field evidence verified",
+        f"Your evidence for {submission.task.task_code} was verified by the Engineer.",
+    )
+    record_audit(
+        db,
+        actor_id=current_user.id,
+        action="field_submission_verified_and_update_applied",
+        entity_type="field_submission",
+        entity_id=submission.id,
+        project_id=submission.project_id,
+        details={
+            "task_id": submission.task_id,
+            "previous_progress": current_progress,
+            "progress": data.progress_percentage,
+        },
+    )
+    db.commit()
+    db.refresh(submission)
+    return submission
+
+
 @router.put("/{submission_id}/reject", response_model=FieldSubmissionOut)
 def reject_field_submission(
     submission_id: uuid.UUID,
@@ -445,6 +520,9 @@ def reject_field_submission(
         project_id=submission.project_id,
         details={"task_id": submission.task_id, "reason": reason},
     )
+    from app.services.ai_traceability_service import invalidate_insights_for_source
+    invalidate_insights_for_source(db, project_id=submission.project_id, source_type="FIELD_SUBMISSION",
+                                   source_id=submission.id, reason=reason, rejected=True)
     db.commit()
     db.refresh(submission)
     return submission

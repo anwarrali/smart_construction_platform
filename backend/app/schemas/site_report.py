@@ -28,6 +28,7 @@ class VoiceRecordingOut(VoiceRecordingBase):
     updated_at: datetime
 
 class SiteReportBase(CamelModel):
+    site_visit_id: Optional[UUID] = None
     report_date: date
     summary_text: Optional[str] = None
     progress_percentage_reported: Optional[float] = None
@@ -47,6 +48,7 @@ class SiteReportBase(CamelModel):
 class SiteReportCreate(CamelModel):
     project_id: UUID
     task_id: Optional[UUID] = None
+    site_visit_id: Optional[UUID] = None
     report_date: date
     summary_text: Optional[str] = None
     progress_percentage_reported: Optional[float] = None
