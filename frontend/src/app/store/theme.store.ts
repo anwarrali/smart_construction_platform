@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { LANGUAGE_STORAGE_KEY, directionOf } from "../../i18n";
 
 type Theme = "light" | "dark";
 type Dir = "ltr" | "rtl";
@@ -20,10 +21,10 @@ export const useThemeStore = create<ThemeState>((set) => ({
       ? "dark"
       : "light";
   })(),
-  dir: (() => {
-    const stored = localStorage.getItem("scp_dir") as Dir | null;
-    return stored || "ltr";
-  })(),
+  // Direction is a property of the chosen language, not of the theme. Deriving
+  // it from the stored language stops a stale "scp_dir" value from overwriting
+  // the direction i18n already applied to the document.
+  dir: directionOf(localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en"),
 
   toggleTheme: () =>
     set((state) => {
