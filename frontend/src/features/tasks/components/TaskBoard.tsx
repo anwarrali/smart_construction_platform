@@ -2,6 +2,7 @@ import { TaskCard } from "./TaskCard";
 import { Loader } from "../../../components/ui/Loader";
 import type { Task, TaskStatus } from "../../../types/task";
 import { ChevronLeft, ChevronRight, MoveHorizontal } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface TaskBoardProps {
@@ -25,6 +26,7 @@ const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
 const COLUMN_STEP = 336; // one column (w-80) plus the gap
 
 export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps) => {
+  const { t } = useTranslation();
   const boardRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startScroll: number } | null>(null);
@@ -68,7 +70,7 @@ export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps
     };
   }, []);
 
-  if (isLoading) return <Loader text="Loading tasks..." />;
+  if (isLoading) return <Loader text={t("common.loading")} />;
 
   const move = (direction: number) => boardRef.current?.scrollBy({ left: direction * COLUMN_STEP, behavior: "smooth" });
   const maxScroll = Math.max(0, metrics.scrollWidth - metrics.width);
@@ -88,14 +90,14 @@ export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <MoveHorizontal size={15} />
-            <span className="hidden sm:inline">Drag the bar, use the arrows, or hold Shift and scroll to move across workflow stages</span>
-            <span className="sm:hidden">Swipe or use the arrows</span>
+            <span className="hidden sm:inline">{t("task.boardHint")}</span>
+            <span className="sm:hidden">{t("task.boardHintShort")}</span>
           </div>
           <div className="flex items-center gap-2">
-            {overflowing && <span className="hidden text-xs tabular-nums text-muted-foreground md:inline">Stage {visibleColumn} of {COLUMNS.length}</span>}
+            {overflowing && <span className="hidden text-xs tabular-nums text-muted-foreground md:inline">{t("task.stageOf", { current: visibleColumn, total: COLUMNS.length })}</span>}
             <div className="flex gap-1">
-              <button type="button" aria-label="Scroll task board left" disabled={atStart} onClick={() => move(-1)} className={arrowClass(atStart)}><ChevronLeft size={17} /></button>
-              <button type="button" aria-label="Scroll task board right" disabled={atEnd} onClick={() => move(1)} className={arrowClass(atEnd)}><ChevronRight size={17} /></button>
+              <button type="button" aria-label={t("task.scrollLeft")} disabled={atStart} onClick={() => move(-1)} className={arrowClass(atStart)}><ChevronLeft size={17} className="rtl-flip" /></button>
+              <button type="button" aria-label={t("task.scrollRight")} disabled={atEnd} onClick={() => move(1)} className={arrowClass(atEnd)}><ChevronRight size={17} className="rtl-flip" /></button>
             </div>
           </div>
         </div>
@@ -150,7 +152,7 @@ export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps
               className={`flex-none w-80 snap-start bg-muted/30 rounded-lg border-t-2 ${col.color} min-h-[200px]`}
             >
               <div className="p-3 font-medium text-sm flex items-center justify-between">
-                <span>{col.label}</span>
+                <span>{t("task.status." + col.status, { defaultValue: col.label })}</span>
                 <span className="text-muted-foreground">
                   {columnTasks.length}
                 </span>
@@ -161,7 +163,7 @@ export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps
                 ))}
                 {columnTasks.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-8">
-                    No tasks
+                    {t("empty.noTasks")}
                   </p>
                 )}
               </div>

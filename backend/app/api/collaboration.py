@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.core.deps import accessible_project_ids, get_current_user, user_has_project_access
@@ -19,7 +19,7 @@ from app.models.design_change import DesignChange, DesignChangeAffectedDisciplin
 from app.models.enums import DesignChangeStatus, IssueStatus, NotificationType, TaskStatus, UserRole
 from app.models.ifc import AIInsight
 from app.models.issue import Issue
-from app.models.message import Message
+from app.models.message import Conversation, Message
 from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
 from app.models.task import Task
@@ -40,9 +40,46 @@ from app.services.messaging_authorization import active_project_participant_ids
 
 
 router = APIRouter(tags=["Project Collaboration"])
+# A message stops needing a response once it is answered or resolved; an
+# acknowledgement request is additionally closed by acknowledging it.
+RESPONSE_HANDLED_STATUSES = ["RESPONDED", "RESOLVED"]
+ACKNOWLEDGEMENT_HANDLED_STATUSES = ["ACKNOWLEDGED", "RESPONDED", "RESOLVED"]
 ACTIVE_REQUEST_STATUSES = {"SUBMITTED", "ASSIGNED", "UNDER_REVIEW", "NEEDS_CLARIFICATION", "ACCEPTED", "CONVERTED_TO_DESIGN_CHANGE"}
 TERMINAL_REQUEST_STATUSES = {"REJECTED", "COMPLETED"}
 VISIT_STATUSES = {"SCHEDULED", "CONFIRMED", "COMPLETED", "CANCELLED", "RESCHEDULED"}
+
+
+def actionable_message_states(db: Session, *, user_id, project_ids) -> list[MessageRecipientState]:
+    """Messages that genuinely await this person's action.
+
+    A message counts only when the sender explicitly marked it as needing a
+    response or an acknowledgement. Being merely UNREAD or READ is not a task:
+    counting those reported work that nobody had actually asked for.
+
+    Each flag has its own definition of "handled":
+      - requires_response       -> closed by RESPONDED or RESOLVED
+      - requires_acknowledgement-> closed by ACKNOWLEDGED, RESPONDED or RESOLVED
+    """
+    query = db.query(MessageRecipientState).join(
+        Message, Message.id == MessageRecipientState.message_id,
+    ).filter(
+        MessageRecipientState.user_id == user_id,
+        or_(
+            and_(
+                Message.requires_response == True,  # noqa: E712
+                MessageRecipientState.response_status.notin_(RESPONSE_HANDLED_STATUSES),
+            ),
+            and_(
+                Message.requires_acknowledgement == True,  # noqa: E712
+                MessageRecipientState.response_status.notin_(ACKNOWLEDGEMENT_HANDLED_STATUSES),
+            ),
+        ),
+    )
+    # Same project scoping as every other action-center query; without it a user
+    # was counted for conversations outside the projects they can access.
+    if project_ids is not None:
+        query = query.filter(Message.conversation.has(Conversation.project_id.in_(project_ids)))
+    return query.order_by(MessageRecipientState.id).limit(500).all()
 
 
 def _project(db: Session, user: User, project_id: uuid.UUID) -> Project:
@@ -376,8 +413,7 @@ def my_action_center(project_id: uuid.UUID | None = None, priority: str | None =
                                               OwnerRequest.status.in_(ACTIVE_REQUEST_STATUSES))
     if ids is not None: request_q = request_q.filter(OwnerRequest.project_id.in_(ids))
     if priority: request_q = request_q.filter(OwnerRequest.priority == priority.upper())
-    messages = db.query(MessageRecipientState).filter(MessageRecipientState.user_id == current_user.id,
-        MessageRecipientState.response_status.in_(["UNREAD", "READ", "NEEDS_RESPONSE", "ACKNOWLEDGED"])).all()
+    messages = actionable_message_states(db, user_id=current_user.id, project_ids=ids)
     notification_q = db.query(Notification).filter(Notification.user_id == current_user.id, Notification.requires_action == True, Notification.is_read == False)
     if ids is not None: notification_q = notification_q.filter(or_(Notification.project_id.in_(ids), Notification.project_id.is_(None)))
     visits_q = db.query(SiteVisit).filter(SiteVisit.engineer_id == current_user.id, SiteVisit.scheduled_start >= datetime.now(timezone.utc), SiteVisit.status.notin_(["CANCELLED", "COMPLETED"]))

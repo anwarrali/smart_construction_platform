@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../app/store/auth.store";
 import {
   hasPermission,
@@ -9,6 +10,7 @@ import type { UserRole } from "../types/auth";
 import type { PermissionAction } from "../utils/permissions";
 
 export const useRole = () => {
+  const { i18n } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const role: UserRole | undefined = user?.role;
 
@@ -38,7 +40,8 @@ export const useRole = () => {
     && user?.engineerAffiliation === "external_consultant"
     && user?.status === "active";
 
-  const roleLabel = role ? getRoleLabel(role) : "";
+  const locale = (i18n.resolvedLanguage || i18n.language || "en").startsWith("ar") ? "ar" : "en";
+  const roleLabel = role ? getRoleLabel(role, locale) : "";
   const dashboardRoute = role ? getDefaultRoute(role) : "/";
 
   return {
