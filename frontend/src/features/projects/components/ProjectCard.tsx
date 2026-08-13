@@ -3,6 +3,8 @@ import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
 import { formatDate, getDaysRemaining } from "../../../utils/date";
 import type { Project } from "../../../types/project";
+import { useRole } from "../../../hooks/useRole";
+import { projectModulePath } from "../../../utils/projectRoutes";
 
 interface ProjectCardProps {
   project: Project;
@@ -22,13 +24,14 @@ const statusVariant: Record<
 
 export const ProjectCard = ({ project }: ProjectCardProps) => {
   const navigate = useNavigate();
+  const { role, isConsultantEngineer } = useRole();
   const daysRemaining = getDaysRemaining(project.plannedEndDate || "");
 
   return (
     <Card
       isHoverable
       className="cursor-pointer"
-      onClick={() => navigate(`/projects/${project.id}`)}
+      onClick={() => navigate(projectModulePath(project.id, "dashboard", role, isConsultantEngineer ? "external_consultant" : undefined))}
     >
       <div className="space-y-3">
         <div className="flex items-start justify-between">

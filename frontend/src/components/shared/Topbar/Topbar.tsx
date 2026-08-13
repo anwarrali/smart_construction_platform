@@ -10,6 +10,8 @@ import { useNotificationStore } from "../../../app/store/notification.store";
 import { ROUTES } from "../../../utils/constants";
 import api from "../../../services/api";
 import { useProjectWorkspace } from "../../../features/projects/context/ProjectWorkspaceContext";
+import { replaceProjectInPath } from "../../../utils/projectRoutes";
+import { useLocation } from "react-router-dom";
 
 export const Topbar = () => {
   const { user, logout } = useAuth();
@@ -17,6 +19,7 @@ export const Topbar = () => {
   const { unreadCount, setUnreadCount } = useNotificationStore();
   const { roleLabel } = useRole();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const workspace = useProjectWorkspace();
 
@@ -49,8 +52,7 @@ export const Topbar = () => {
           <FolderKanban size={17} className="shrink-0 text-primary" />
           <div className="min-w-0"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Active project</p><p className="truncate text-sm font-semibold">{workspace.project?.name || "Loading project…"}</p></div>
           <select aria-label="Switch active project" value={workspace.projectId} onChange={(event) => {
-            const module = window.location.pathname.split("/")[4] || "dashboard";
-            navigate(`/project-manager/projects/${event.target.value}/${module}`);
+            navigate(`${replaceProjectInPath(location.pathname, event.target.value)}${location.search}`);
           }} className="ml-2 max-w-56 rounded-md border bg-background px-2 py-1.5 text-xs">
             {workspace.assignedProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>

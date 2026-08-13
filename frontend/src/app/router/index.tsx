@@ -104,6 +104,10 @@ export const Router = () => {
               <Route path={ROUTES.PM_PROJECT_EVIDENCE} element={<EvidencePhotoArchivePage />} />
               <Route path={ROUTES.PM_PROJECT_IFC} element={<IFCWorkspacePage />} />
               <Route path={ROUTES.PM_PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
+              <Route path={ROUTES.PM_PROJECT_COLLABORATION} element={<CollaborationPage />} />
+              <Route path={ROUTES.PM_PROJECT_REQUESTS} element={<CollaborationPage initialTab="requests" />} />
+              <Route path={ROUTES.PM_PROJECT_SITE_VISITS} element={<CollaborationPage initialTab="schedule" />} />
+              <Route path={ROUTES.PM_PROJECT_ACTIVITY} element={<CollaborationPage initialTab="activity" />} />
             </Route>
             <Route element={<MainContractorEngineerGuard />}>
               <Route path={ROUTES.ENGINEER_PROJECTS} element={<ProjectsPage />} />
@@ -118,6 +122,11 @@ export const Router = () => {
               <Route path={ROUTES.ENGINEER_PROJECT_VOICE_REPORTS} element={<VoiceReportsPage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_IFC} element={<IFCWorkspacePage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_MESSAGES} element={<MessagesPage />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_COLLABORATION} element={<CollaborationPage />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_REQUESTS} element={<CollaborationPage initialTab="requests" />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_SITE_VISITS} element={<CollaborationPage initialTab="schedule" />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_ACTIVITY} element={<CollaborationPage initialTab="activity" />} />
             </Route>
             <Route element={<ConsultantEngineerGuard />}>
               <Route path={ROUTES.CONSULTANT_PROJECTS} element={<ProjectsPage />} />
@@ -133,6 +142,11 @@ export const Router = () => {
               <Route path={ROUTES.CONSULTANT_PROJECT_EVIDENCE} element={<EvidencePhotoArchivePage />} />
               <Route path={ROUTES.CONSULTANT_PROJECT_IFC} element={<IFCWorkspacePage />} />
               <Route path={ROUTES.CONSULTANT_PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
+              <Route path={ROUTES.CONSULTANT_PROJECT_MESSAGES} element={<MessagesPage />} />
+              <Route path={ROUTES.CONSULTANT_PROJECT_COLLABORATION} element={<CollaborationPage />} />
+              <Route path={ROUTES.CONSULTANT_PROJECT_REQUESTS} element={<CollaborationPage initialTab="requests" />} />
+              <Route path={ROUTES.CONSULTANT_PROJECT_SITE_VISITS} element={<CollaborationPage initialTab="schedule" />} />
+              <Route path={ROUTES.CONSULTANT_PROJECT_ACTIVITY} element={<CollaborationPage initialTab="activity" />} />
             </Route>
             <Route element={<RoleGuard allowedRoles={["admin", "project_manager", "consultant"]} />}>
               <Route path={ROUTES.PROJECT_SCHEDULE} element={<ProjectSchedulePage />} />
@@ -145,9 +159,25 @@ export const Router = () => {
               <Route path={ROUTES.NOTIFICATIONS}   element={<NotificationsPage />} />
             </Route>
             <Route element={<RoleGuard allowedRoles={["admin", "owner", "project_manager", "engineer", "consultant"]} />}>
+              <Route path={ROUTES.PROJECT_DASHBOARD} element={<ProjectDetailPage />} />
               <Route path={ROUTES.PROJECT_EVIDENCE} element={<EvidencePhotoArchivePage />} />
               <Route path={ROUTES.PROJECT_IFC} element={<IFCWorkspacePage />} />
               <Route path={ROUTES.PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
+              <Route path={ROUTES.PROJECT_MESSAGES} element={<MessagesPage />} />
+              <Route path={ROUTES.PROJECT_REQUESTS} element={<CollaborationPage initialTab="requests" />} />
+              <Route path={ROUTES.PROJECT_SITE_VISITS} element={<CollaborationPage initialTab="schedule" />} />
+              <Route path={ROUTES.PROJECT_ACTIVITY} element={<CollaborationPage initialTab="activity" />} />
+            </Route>
+            <Route element={<RoleGuard allowedRoles={["admin"]} />}>
+              <Route path={ROUTES.PROJECT_TASKS} element={<TasksPage />} />
+              <Route path={ROUTES.PROJECT_TASK_DETAIL} element={<TaskDetailPage />} />
+              <Route path={ROUTES.PROJECT_TEAM} element={<ProjectTeamPage />} />
+            </Route>
+            <Route element={<RoleGuard allowedRoles={["admin", "owner"]} />}>
+              <Route path={ROUTES.PROJECT_DOCUMENTS} element={<DocumentsPage />} />
+              <Route path={ROUTES.PROJECT_SITE_REPORTS} element={<SiteReportsPage />} />
+              <Route path={ROUTES.PROJECT_ISSUES} element={<IssuesPage />} />
+              <Route path={ROUTES.PROJECT_DESIGN_CHANGES} element={<DesignChangesPage />} />
             </Route>
             <Route path={ROUTES.MESSAGES}        element={<MessagesPage />} />
             <Route path={ROUTES.MY_ACTIONS} element={<CollaborationPage initialTab="actions" />} />

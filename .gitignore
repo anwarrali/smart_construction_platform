@@ -8,3 +8,5 @@ __pycache__/
 *.log
 .agents/
 .vscode/
+.claude/
+.pytest_cache/

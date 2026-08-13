@@ -66,3 +66,52 @@
 @media (max-width: 900px){.landing-section{padding:4.5rem 0}.hero-system{grid-template-columns:1fr;gap:.7rem;max-width:520px}.hero-connection{height:32px;flex-direction:column}.hero-connection i{width:1px}.hero-device{min-height:120px}.lifecycle-track{grid-template-columns:repeat(3,1fr)}.service-rail{grid-template-columns:1fr}.dependency-flow{flex-direction:column}.dependency-flow>.flow-arrow{flex-direction:column}.dependency-flow>.flow-arrow svg{transform:rotate(90deg)}.comparison-grid{grid-template-columns:1fr}.comparison-middle{flex-direction:row;flex-wrap:wrap;padding:1rem}.comparison-middle svg{transform:rotate(-90deg)}.system-orbit{transform:scale(.88);margin-inline:-7%}.example-grid{grid-template-columns:1fr}.problem-solution{grid-template-columns:1fr}.transformation-arrow svg{transform:rotate(90deg)}}
 @media (max-width: 640px){.hero-section{padding-top:5rem}.hero-copy h1{font-size:2.75rem}.architecture-interface{grid-template-columns:1fr;text-align:center}.browser-mini{width:190px;margin:auto}.hierarchy-split{width:70%}.discipline-grid{grid-template-columns:1fr}.communication-bridge .bridge-line{display:none}.lifecycle-track{grid-template-columns:1fr 1fr}.lifecycle-item>svg{display:none}.outcome-path{justify-content:flex-start}.ai-pipeline{grid-template-columns:1fr 1fr}.validation-flow{align-items:stretch;flex-direction:column}.validation-flow>svg{transform:rotate(90deg);margin:auto}.comparison-side{padding:1.3rem}.dashboard-mockup{grid-template-columns:40px 1fr}.dashboard-sidebar{padding:1rem .4rem}.dashboard-stats{grid-template-columns:1fr 1fr}.dashboard-lower{grid-template-columns:1fr}.system-orbit{height:auto;transform:none;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:.7rem}.system-orbit::before{display:none}.orbit-center{position:static;transform:none;width:auto;height:auto;border-radius:1rem;grid-column:1/-1;padding:1.5rem}.orbit-view{position:static!important;transform:none!important;justify-content:center}.final-flow{flex-direction:column}.final-flow span{flex-direction:column}.final-flow svg{transform:rotate(90deg)}}
 @media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}.hero-connection i::after,.animated-connector::after,.voice-button.recording{animation:none!important}}
+
+/* ── Construction-focused marketing sections (§22–24) ── */
+.hero-scene { position:relative; margin:3.5rem auto 0; display:grid; grid-template-columns:1.15fr .85fr; gap:1rem; align-items:stretch; }
+.hero-panel { border:1px solid hsl(0 0% 100%/.16); background:hsl(0 0% 100%/.06); backdrop-filter:blur(10px); border-radius:1rem; padding:1.25rem; }
+.hero-panel h4 { font-size:.66rem; letter-spacing:.16em; text-transform:uppercase; color:hsl(38 92% 60%); font-weight:800; }
+.hero-plan { position:relative; height:212px; margin-top:.9rem; border-radius:.6rem; border:1px solid hsl(0 0% 100%/.18); background:
+  linear-gradient(hsl(210 60% 80%/.13) 1px,transparent 1px),
+  linear-gradient(90deg,hsl(210 60% 80%/.13) 1px,transparent 1px); background-size:26px 26px; overflow:hidden; }
+.hero-plan i { position:absolute; border:1.5px solid hsl(38 92% 58%/.85); border-radius:2px; }
+.hero-plan i:nth-child(1){left:8%;top:14%;width:38%;height:44%}
+.hero-plan i:nth-child(2){left:8%;top:62%;width:38%;height:26%}
+.hero-plan i:nth-child(3){left:50%;top:14%;width:42%;height:74%;border-style:dashed;border-color:hsl(205 80% 70%/.7)}
+.hero-plan b { position:absolute; right:5%; bottom:6%; font-size:.6rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:hsl(215 25% 84%); }
+.hero-progress { margin-top:.9rem; display:grid; gap:.55rem; }
+.hero-progress > div { display:grid; grid-template-columns:1fr auto; gap:.4rem .6rem; font-size:.72rem; color:hsl(215 25% 84%); }
+.hero-progress u { grid-column:1/-1; height:5px; border-radius:5px; background:hsl(0 0% 100%/.14); text-decoration:none; display:block; }
+.hero-progress u b { display:block; height:100%; border-radius:5px; background:hsl(38 92% 55%); }
+.hero-stack { display:grid; gap:1rem; align-content:start; }
+.hero-evidence { display:flex; gap:.6rem; align-items:flex-start; border-radius:.6rem; padding:.7rem; background:hsl(0 0% 100%/.07); font-size:.74rem; color:hsl(215 25% 86%); }
+.hero-evidence svg { color:hsl(38 92% 58%); flex:none; margin-top:1px; }
+.problem-split { display:grid; grid-template-columns:1fr 92px 1fr; gap:1rem; align-items:center; }
+.problem-col { border:1px solid hsl(var(--border)); border-radius:1rem; padding:1.5rem; background:hsl(var(--card)); }
+.problem-col.scattered { border-style:dashed; }
+.problem-col ul { margin-top:1rem; display:grid; gap:.5rem; }
+.problem-col li { display:flex; align-items:center; gap:.5rem; font-size:.8rem; color:hsl(var(--muted-foreground)); }
+.problem-col.scattered li svg { color:hsl(0 72% 55%); }
+.problem-col.connected li svg { color:hsl(151 55% 40%); }
+.feature-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1rem; }
+.feature-grid .landing-card h3 { font-size:.95rem; }
+.feature-grid .landing-card p { margin-top:.5rem; font-size:.78rem; color:hsl(var(--muted-foreground)); line-height:1.6; }
+.bim-stack { display:grid; grid-template-columns:repeat(5,1fr); gap:.5rem; }
+.bim-input { border:1px solid hsl(var(--border)); border-radius:.7rem; padding:.9rem .7rem; background:hsl(var(--card)); text-align:center; font-size:.74rem; font-weight:750; }
+.bim-input svg { color:hsl(var(--accent)); margin:0 auto .45rem; display:block; }
+.bim-finding { margin-top:1.2rem; border-left:3px solid hsl(38 92% 50%); border-radius:.6rem; background:hsl(38 92% 50%/.08); padding:1.1rem 1.2rem; }
+.bim-finding p { font-size:.85rem; line-height:1.7; }
+.bim-finding small { display:block; margin-top:.6rem; color:hsl(var(--muted-foreground)); font-size:.72rem; }
+.accountability-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:1rem; }
+.accountability-grid > div { border:1px solid hsl(var(--border)); border-radius:.85rem; padding:1.1rem; background:hsl(var(--card)); }
+.accountability-grid strong { display:block; font-size:.85rem; }
+.accountability-grid p { margin-top:.4rem; font-size:.75rem; color:hsl(var(--muted-foreground)); line-height:1.6; }
+.accountability-grid svg { color:hsl(var(--accent)); }
+@media (max-width:900px){
+  .hero-scene,.problem-split,.comparison-grid{grid-template-columns:1fr}
+  .hero-system{grid-template-columns:1fr}
+  .bim-stack{grid-template-columns:1fr 1fr}
+  .lifecycle-track{grid-template-columns:1fr 1fr}
+  .ai-pipeline,.dashboard-stats{grid-template-columns:1fr 1fr}
+  .landing-section{padding:4rem 0}
+}

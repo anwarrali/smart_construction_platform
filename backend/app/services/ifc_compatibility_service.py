@@ -26,6 +26,71 @@ ELEMENT_TERMS = {
     "BEAM": ({"beam", "beams", "كمرة", "كمرات"}, {"IfcBeam"}),
 }
 
+# A discipline is "present in the model" only when the IFC exposes one of its
+# characteristic classes. Absence of the class next to real scheduled work in
+# that discipline is the strongest deterministic mismatch signal available.
+DISCIPLINE_TERMS: dict[str, tuple[set[str], set[str], str]] = {
+    "ELECTRICAL": (
+        {"electrical", "electric", "wiring", "cable", "cabling", "socket", "sockets", "outlet",
+         "outlets", "switchboard", "switchgear", "conduit", "lighting", "luminaire", "busbar",
+         "distribution board", "كهرباء", "كهربائية", "تمديدات", "انارة", "إنارة", "مقبس", "كابل"},
+        {"IfcCableCarrierSegment", "IfcCableCarrierFitting", "IfcCableSegment", "IfcCableFitting",
+         "IfcElectricAppliance", "IfcElectricDistributionBoard", "IfcElectricGenerator",
+         "IfcElectricMotor", "IfcElectricFlowStorageDevice", "IfcLightFixture", "IfcOutlet",
+         "IfcSwitchingDevice", "IfcJunctionBox", "IfcProtectiveDevice", "IfcTransformer"},
+        "electrical installation",
+    ),
+    "MECHANICAL_HVAC": (
+        {"hvac", "duct", "ducting", "ductwork", "air handling", "ahu", "chiller", "fan coil",
+         "ventilation", "air conditioning", "diffuser", "تكييف", "تهوية", "مجاري هواء"},
+        {"IfcDuctSegment", "IfcDuctFitting", "IfcAirTerminal", "IfcAirTerminalBox",
+         "IfcAirToAirHeatRecovery", "IfcChiller", "IfcCoil", "IfcFan", "IfcBoiler",
+         "IfcCompressor", "IfcCondenser", "IfcCooledBeam", "IfcCoolingTower", "IfcDamper",
+         "IfcUnitaryEquipment", "IfcSpaceHeater"},
+        "mechanical / HVAC installation",
+    ),
+    "PLUMBING": (
+        {"plumbing", "sanitary", "drainage", "sewer", "water supply", "pipe", "piping",
+         "pipework", "basin", "washbasin", "toilet fixture", "wc fixture", "sink", "tap",
+         "صرف", "سباكة", "مواسير", "انابيب", "أنابيب", "تمديدات صحية"},
+        {"IfcPipeSegment", "IfcPipeFitting", "IfcSanitaryTerminal", "IfcFlowMeter",
+         "IfcInterceptor", "IfcPump", "IfcTank", "IfcValve", "IfcWasteTerminal"},
+        "plumbing / sanitary installation",
+    ),
+    "FIRE_PROTECTION": (
+        {"sprinkler", "fire alarm", "fire fighting", "firefighting", "fire suppression",
+         "smoke detector", "hose reel", "اطفاء", "إطفاء", "انذار", "إنذار", "حريق"},
+        {"IfcFireSuppressionTerminal", "IfcAlarm", "IfcSensor", "IfcProtectiveDeviceTrippingUnit"},
+        "fire protection installation",
+    ),
+    "STRUCTURAL": (
+        {"reinforcement", "rebar", "formwork", "concrete pour", "footing", "foundation",
+         "pile", "shoring", "خرسانة", "حديد تسليح", "اساسات", "أساسات", "قواعد"},
+        {"IfcFooting", "IfcPile", "IfcReinforcingBar", "IfcReinforcingMesh", "IfcBeam",
+         "IfcColumn", "IfcSlab", "IfcMember", "IfcPlate"},
+        "structural works",
+    ),
+}
+
+# Values stored in Task.discipline mapped onto the discipline checks above.
+DISCIPLINE_FIELD_MAP: dict[str, str] = {
+    "electrical": "ELECTRICAL",
+    "mechanical": "MECHANICAL_HVAC",
+    "hvac": "MECHANICAL_HVAC",
+    "plumbing": "PLUMBING",
+    "sanitary": "PLUMBING",
+    "fire": "FIRE_PROTECTION",
+    "fire protection": "FIRE_PROTECTION",
+    "structural": "STRUCTURAL",
+}
+
+# Storey-count bands implied by a project type, used only to warn about a model
+# that is obviously a different kind of asset than the project describes.
+SCALE_EXPECTATIONS: dict[str, tuple[int, int]] = {
+    "villa": (1, 4), "residential villa": (1, 4), "house": (1, 4), "bungalow": (1, 2),
+    "tower": (6, 200), "high rise": (8, 200), "highrise": (8, 200), "skyscraper": (15, 200),
+}
+
 
 @dataclass(frozen=True)
 class CompatibilityFinding:
@@ -43,6 +108,13 @@ class CompatibilityFinding:
 
 def _normalize(value: str | None) -> str:
     return " ".join(re.findall(r"[\w]+", str(value or "").casefold(), flags=re.UNICODE))
+
+
+def _contains_phrase(normalized_text: str, phrase: str) -> bool:
+    """Whole-phrase match on already-normalized text, so 'cable' never matches 'cables tray x'."""
+    if not normalized_text or not phrase:
+        return False
+    return bool(re.search(rf"(?<![\w]){re.escape(phrase)}(?![\w])", normalized_text, flags=re.UNICODE))
 
 
 def _tokens(value: str | None) -> set[str]:
@@ -99,6 +171,7 @@ def evaluate_ifc_compatibility(
     element_types: set[str],
     task_texts: list[tuple[str, str]],
     previous_summary: dict | None = None,
+    scheduled_tasks: list[dict] | None = None,
 ) -> list[CompatibilityFinding]:
     findings: list[CompatibilityFinding] = []
     overview = summary.get("projectOverview") or {}
@@ -189,6 +262,111 @@ def evaluate_ifc_compatibility(
                 {"tasks": task_ids, "categories": [category]},
             ))
 
+    # ── Discipline coverage ────────────────────────────────────────────────
+    # Scheduled work in a discipline that the model does not represent at all is
+    # the mismatch that a plain element count never surfaces.
+    normalized_tasks = [(task_id, _normalize(text)) for task_id, text in task_texts]
+    # An explicitly recorded task discipline is stronger evidence than wording.
+    declared: dict[str, list[str]] = {}
+    for item in (scheduled_tasks or []):
+        key = DISCIPLINE_FIELD_MAP.get(_normalize(item.get("discipline")))
+        if key:
+            declared.setdefault(key, []).append(item["taskId"])
+    for discipline, (terms, ifc_classes, label) in DISCIPLINE_TERMS.items():
+        matching = [
+            (task_id, next(term for term in sorted(terms) if _contains_phrase(text, term)))
+            for task_id, text in normalized_tasks
+            if any(_contains_phrase(text, term) for term in terms)
+        ]
+        matched_ids = {task_id for task_id, _ in matching}
+        for task_id in declared.get(discipline, []):
+            if task_id not in matched_ids:
+                matching.append((task_id, "task.discipline field"))
+        if not matching:
+            continue
+        present = element_types & ifc_classes
+        if present:
+            continue
+        severity = "CRITICAL" if len(matching) >= 3 else "HIGH"
+        findings.append(CompatibilityFinding(
+            f"DISCIPLINE_{discipline}_NOT_IN_IFC", "DISCIPLINE_MISMATCH", severity,
+            round(min(.99, .85 + .03 * len(matching)), 3),
+            f"{len(matching)} {label} task(s) exist, but the IFC contains no {discipline.replace('_', '/').lower()} elements",
+            f"Project tasks describe {label}, while the active model exposes none of the "
+            f"characteristic IFC classes for that discipline.",
+            "Task wording was matched against a fixed discipline vocabulary and compared with the "
+            "IFC entity classes extracted from this revision. Absence of the classes is factual; "
+            "the intent behind the task wording is not verified.",
+            "Confirm whether the discipline model was omitted from this export, or whether the "
+            "wrong model was uploaded for this project.",
+            {
+                "discipline": discipline,
+                "expectedIfcClasses": sorted(ifc_classes),
+                "modelElementTypes": sorted(element_types)[:60],
+                "matchedTasks": [{"taskId": task_id, "matchedTerm": term} for task_id, term in matching[:20]],
+                "matchedTaskCount": len(matching),
+            },
+            {"tasks": [task_id for task_id, _ in matching], "disciplines": [discipline]},
+        ))
+
+    # ── Model scale / asset context ────────────────────────────────────────
+    storey_count = len(storey_names)
+    expectation = next(
+        (band for keyword, band in SCALE_EXPECTATIONS.items()
+         if _contains_phrase(_normalize(project_type), keyword) or _contains_phrase(_normalize(project_name), keyword)),
+        None,
+    )
+    if expectation and storey_count:
+        low, high = expectation
+        if not low <= storey_count <= high:
+            findings.append(CompatibilityFinding(
+                "IFC_MODEL_SCALE_ANOMALY", "PROJECT_MODEL_MISMATCH", "WARNING", .8,
+                "Model scale does not match the described project",
+                f"The project describes an asset that normally has {low}–{high} storeys, "
+                f"while this IFC contains {storey_count}.",
+                "Storey count extracted from the IFC was compared with the storey band implied by "
+                "the project type/name. This is an assumption based on naming, not a verified requirement.",
+                "Confirm the intended building scale, or correct the project type if the model is right.",
+                {"projectType": project_type, "projectName": project_name,
+                 "expectedStoreyRange": [low, high], "modelStoreys": storey_count,
+                 "storeyNames": storey_names[:50], "assumption": "storey band inferred from project naming"},
+                {},
+            ))
+
+    # ── Scheduled work with no addressable model context ───────────────────
+    if scheduled_tasks and storey_names:
+        unmappable = []
+        for item in scheduled_tasks:
+            if not item.get("plannedStart"):
+                continue
+            floors, rooms = _references(item.get("text") or "")
+            if not (floors or rooms):
+                continue
+            missing_floors_here = sorted(floors - model_floors)
+            missing_rooms_here = sorted(rooms - model_rooms)
+            if missing_floors_here or missing_rooms_here:
+                unmappable.append({
+                    "taskId": item["taskId"], "taskCode": item.get("taskCode"),
+                    "name": item.get("name"), "plannedStart": item["plannedStart"],
+                    "unresolvedFloors": missing_floors_here, "unresolvedRooms": missing_rooms_here,
+                })
+        if unmappable:
+            findings.append(CompatibilityFinding(
+                "SCHEDULED_WORK_NOT_MAPPABLE_TO_IFC", "SCHEDULE_MODEL_MISMATCH", "HIGH",
+                round(min(.97, .8 + .02 * len(unmappable)), 3),
+                "Scheduled work references locations the active model cannot identify",
+                f"{len(unmappable)} task(s) with a planned start date reference a floor or room that "
+                "matches no storey or space in the active IFC revision.",
+                "Floor and room references were extracted from the names and descriptions of tasks that "
+                "carry a planned start date, then compared with the IFC storey and space identifiers. "
+                "Tasks without an explicit location reference were not evaluated.",
+                "Align task locations with the model hierarchy, or upload the revision that contains "
+                "these areas, before using the model to validate schedule progress.",
+                {"unmappableTasks": unmappable[:20], "unmappableTaskCount": len(unmappable),
+                 "modelFloors": sorted(model_floors), "modelRooms": sorted(model_rooms)[:50]},
+                {"tasks": [item["taskId"] for item in unmappable]},
+            ))
+
     if previous_summary:
         current_stats = summary.get("mainStatistics") or summary
         previous_stats = previous_summary.get("mainStatistics") or previous_summary
@@ -239,6 +417,17 @@ def run_ifc_compatibility(db: Session, version: IFCModelVersion) -> list[Compati
         element_types={element.entity_type for element in elements},
         task_texts=[(str(task.id), f"{task.name} {task.description or ''}") for task in tasks],
         previous_summary=previous.model_summary_json if previous else None,
+        scheduled_tasks=[
+            {
+                "taskId": str(task.id),
+                "taskCode": task.task_code,
+                "name": task.name,
+                "discipline": task.discipline,
+                "text": f"{task.name} {task.description or ''}",
+                "plannedStart": task.planned_start_date.isoformat() if task.planned_start_date else None,
+            }
+            for task in tasks
+        ],
     )
     for finding in findings:
         fingerprint = hashlib.sha256(

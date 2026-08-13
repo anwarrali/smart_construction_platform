@@ -20,7 +20,7 @@ from app.models.project import Project
 from app.models.milestone import Milestone
 from app.models.enums import NotificationType
 from app.services.audit_service import record_audit
-from app.services.file_storage import resolve_private_storage_key
+from app.services.private_storage import private_storage
 from app.services.ifc_parser import IFCParseError, IFCParser, stable_json_hash
 from app.services.ifc_geometry_service import generate_geometry
 from app.services.ai_insight_engine import run_project_intelligence
@@ -46,7 +46,8 @@ VERSION_TRANSITIONS = {
 
 def _parse_worker(path: str, output) -> None:
     try:
-        output.put(("ok", IFCParser().parse(resolve_private_storage_key(path))))
+        with private_storage.local_path(path) as source:
+            output.put(("ok", IFCParser().parse(source)))
     except IFCParseError as exc:
         output.put(("error", str(exc)))
     except Exception:
