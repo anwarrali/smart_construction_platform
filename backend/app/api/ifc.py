@@ -37,7 +37,8 @@ from app.schemas.ifc import (
     IFCSpatialNodeOut, IFCVersionOut, IFCVersionPatch,
 )
 from app.services.audit_service import record_audit
-from app.services.file_storage import resolve_private_storage_key, save_private_upload
+from app.services.file_storage import save_private_upload
+from app.services.private_storage import private_storage
 from app.services.ifc_parser import content_hash
 from app.services.ifc_policy import can_ifc, friendly_ifc_error
 from app.services.ifc_processing_service import compare_versions, process_version
@@ -154,12 +155,12 @@ async def upload_version(
         parent = _version(db, project_id, parent_version_id)
         if parent.model_group_id != model_id:
             raise HTTPException(status_code=400, detail="Parent version must belong to this model group")
-    storage_key, size = await save_private_upload(file, "ifc")
-    stored_path = resolve_private_storage_key(storage_key)
-    digest = content_hash(stored_path)
+    storage_key, size = await private_storage.save(file, "ifc")
+    with private_storage.local_path(storage_key) as stored_path:
+        digest = content_hash(stored_path)
     duplicate = db.query(IFCModelVersion).filter(IFCModelVersion.project_id == project_id, IFCModelVersion.file_hash == digest).first()
     if duplicate:
-        stored_path.unlink(missing_ok=True)
+        private_storage.delete(storage_key)
         detail = friendly_ifc_error("IFC_DUPLICATE"); detail["existingVersionId"] = str(duplicate.id)
         raise HTTPException(status_code=409, detail=detail)
     locked = db.query(IFCModelGroup).filter(IFCModelGroup.id == model_id).with_for_update().one()
@@ -237,10 +238,10 @@ def retry_version(project_id: uuid.UUID, version_id: uuid.UUID, background_tasks
 @router.get("/versions/{version_id}/download")
 def download_version(project_id: uuid.UUID, version_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require(db, current_user, project_id, "DOWNLOAD"); item = _version(db, project_id, version_id)
-    path = resolve_private_storage_key(item.storage_key)
-    if not path.exists(): raise HTTPException(status_code=404, detail="Stored IFC file is unavailable")
+    if not private_storage.exists(item.storage_key): raise HTTPException(status_code=404, detail="Stored IFC file is unavailable")
     record_audit(db, actor_id=current_user.id, action="ifc_version_downloaded", entity_type="ifc_model_version", entity_id=item.id, project_id=project_id); db.commit()
-    return FileResponse(path, filename=item.original_filename, media_type="application/x-step")
+    with private_storage.local_path(item.storage_key) as path:
+        return FileResponse(path, filename=item.original_filename, media_type="application/x-step")
 
 
 @router.get("/versions/{version_id}/hierarchy", response_model=list[IFCSpatialNodeOut])
@@ -252,7 +253,7 @@ def hierarchy(project_id: uuid.UUID, version_id: uuid.UUID, db: Session = Depend
 @router.get("/versions/{version_id}/geometry/status")
 def geometry_status(project_id: uuid.UUID, version_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require(db, current_user, project_id, "VIEW"); item = _version(db, project_id, version_id)
-    asset_exists = bool(item.geometry_storage_key and resolve_private_storage_key(item.geometry_storage_key).exists())
+    asset_exists = bool(item.geometry_storage_key and private_storage.exists(item.geometry_storage_key))
     status = item.geometry_status
     if status in {"GEOMETRY_READY", "GEOMETRY_PARTIAL"} and not asset_exists:
         status = "VIEWER_ASSET_MISSING"
@@ -277,10 +278,10 @@ def geometry_asset(project_id: uuid.UUID, version_id: uuid.UUID, db: Session = D
     _require(db, current_user, project_id, "VIEW"); item = _version(db, project_id, version_id)
     if item.geometry_status not in {"GEOMETRY_READY", "GEOMETRY_PARTIAL"} or not item.geometry_storage_key:
         raise HTTPException(status_code=409, detail={"status": item.geometry_status, "message": item.geometry_error or "Viewer geometry is not ready."})
-    path = resolve_private_storage_key(item.geometry_storage_key)
-    if not path.exists():
+    if not private_storage.exists(item.geometry_storage_key):
         raise HTTPException(status_code=404, detail={"status": "VIEWER_ASSET_MISSING", "message": "The generated viewer asset is missing."})
-    return FileResponse(path, filename=f"{item.id}.bimgeom", media_type="application/vnd.construction.bim-geometry")
+    with private_storage.local_path(item.geometry_storage_key) as path:
+        return FileResponse(path, filename=f"{item.id}.bimgeom", media_type="application/vnd.construction.bim-geometry")
 
 
 @router.get("/versions/{version_id}/geometry/mapping")

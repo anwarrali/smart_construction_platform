@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import api from "../../../../services/api";
 import { ROUTES } from "../../../../utils/constants";
+import { useRole } from "../../../../hooks/useRole";
+import { projectModulePath } from "../../../../utils/projectRoutes";
 
 /* ─── Types ─── */
 interface DashboardStats {
@@ -131,6 +133,8 @@ const SkeletonCard = () => (
 /* ─── Component ─── */
 export const ProjectManagerDashboard = () => {
   const navigate = useNavigate();
+  const { role, isConsultantEngineer } = useRole();
+  const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
   const [dayLabel] = useState(getDayLabel);
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -265,7 +269,7 @@ export const ProjectManagerDashboard = () => {
   /* ─── Navigation helpers ─── */
   const handleScheduleReview = () => {
     if (projects.length > 0) {
-      navigate(`/projects/${projects[0].id}/schedule`);
+      navigate(projectModulePath(projects[0].id, "schedule", role, affiliation));
     } else {
       navigate(ROUTES.PROJECTS);
     }
@@ -337,7 +341,7 @@ export const ProjectManagerDashboard = () => {
         </div>
         {projects.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No projects are assigned to your account.</p> :
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{projects.map(project =>
-            <button key={project.id} onClick={() => navigate(`/project-manager/projects/${project.id}/dashboard`)} className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/30">
+            <button key={project.id} onClick={() => navigate(projectModulePath(project.id, "dashboard", role, affiliation))} className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/30">
               <div className="flex items-center justify-between gap-2"><span className="font-medium">{project.name}</span><span className="text-xs capitalize text-muted-foreground">{project.status.replace('_',' ')}</span></div>
               <div className="mt-3 flex justify-between text-xs text-muted-foreground"><span>{project.completionPercentage}% complete</span><span>{project.openIssueCount || 0} open issues</span></div>
               <div className="mt-1 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{width:`${project.completionPercentage}%`}} /></div>

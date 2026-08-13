@@ -12,7 +12,7 @@ from app.models.enums import (
     TaskStatus, TaskPriority, IssueStatus, IssueSeverity, ProjectStatus,
     DesignChangeStatus,
 )
-from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
+from app.models.project import Project, ProjectConsultantReviewer, ProjectMember, ProjectViewState
 from app.models.task import Task, TaskReview
 from app.models.milestone import Milestone as MilestoneModel
 from app.models.cost_validation import CostValidation
@@ -49,6 +49,7 @@ from app.services.audit_service import record_audit
 from app.models.notification import Notification
 from app.models.enums import NotificationType
 from app.services.consultant_approval_service import normalize_discipline
+from app.services.project_view_service import record_visit, visit_boundary
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -1053,7 +1054,13 @@ def get_owner_dashboard(
     verified_reports = db.query(SiteReport).filter(
         SiteReport.project_id == project_id, SiteReport.review_status == "approved",
     ).order_by(SiteReport.report_date.desc()).limit(8).all()
-    since = datetime.now(timezone.utc) - timedelta(days=7)
+    # "What changed since I was last here" uses this owner's own previous visit.
+    # The 7-day window is only a first-visit fallback, not the general answer.
+    now = datetime.now(timezone.utc)
+    view_state = db.query(ProjectViewState).filter(
+        ProjectViewState.user_id == current_user.id, ProjectViewState.project_id == project_id,
+    ).first()
+    since, first_visit = visit_boundary(view_state, now=now)
     verified_tasks_since = db.query(Task).filter(
         Task.project_id == project_id, Task.status == TaskStatus.DONE,
         Task.review_status == "approved", Task.updated_at >= since,
@@ -1062,6 +1069,9 @@ def get_owner_dashboard(
         DesignChange.project_id == project_id, DesignChange.status == DesignChangeStatus.APPROVED,
         DesignChange.updated_at >= since,
     ).count()
+    # Record this visit last, so the numbers above describe the *previous* one.
+    record_visit(db, user_id=current_user.id, project_id=project_id, now=now)
+    db.commit()
     return OwnerDashboardOut(
         project_summary=project_summary,
         cost_summary=cost_summary,
@@ -1105,7 +1115,11 @@ def get_owner_dashboard(
                                "visitType": item.visit_type, "status": item.status, "location": item.location} for item in upcoming_site_visits],
         recent_verified_site_reports=[{"id": str(item.id), "reportDate": item.report_date,
                                        "summary": item.summary_text, "reviewStatus": item.review_status} for item in verified_reports],
-        since_last_visit={"periodDays": 7, "verifiedTasks": verified_tasks_since,
+        since_last_visit={"periodDays": max(1, (now - since).days),
+                          "since": since,
+                          "basis": "FIRST_RECORDED_VISIT" if first_visit else "YOUR_PREVIOUS_VISIT",
+                          "previousVisitAt": None if first_visit else since,
+                          "verifiedTasks": verified_tasks_since,
                           "approvedDesignChanges": approved_changes_since,
                           "verifiedSiteReports": sum(item.created_at >= since for item in verified_reports),
                           "requestsAwaitingClarification": sum(item.status == "NEEDS_CLARIFICATION" for item in pending_owner_requests),

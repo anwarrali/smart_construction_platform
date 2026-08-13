@@ -1,8 +1,8 @@
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -149,3 +149,28 @@ class ProjectConsultantReviewer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     project: Mapped["Project"] = relationship(back_populates="consultant_reviewer_assignments")
     user: Mapped["User"] = relationship(foreign_keys=[user_id])
     assigned_by: Mapped["User | None"] = relationship(foreign_keys=[assigned_by_id])
+
+
+class ProjectViewState(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Per-user, per-project record of when someone last opened the project.
+
+    Powers the owner's "what changed since I was last here" window. Without it
+    the dashboard can only guess with a fixed recent-period fallback.
+    """
+
+    __tablename__ = "project_view_states"
+    __table_args__ = (
+        UniqueConstraint("user_id", "project_id", name="uq_project_view_state_user_project"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # The visit currently in progress.
+    last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # The visit before it: the boundary the "since your last visit" panel uses.
+    previous_viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

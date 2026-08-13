@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import api from "../../../services/api";
 import { useRole } from "../../../hooks/useRole";
 import type { Project } from "../../../types/project";
+import { portfolioProjectsPath, projectModulePath } from "../../../utils/projectRoutes";
 
 interface ProjectWorkspaceValue {
   projectId?: string;
@@ -12,6 +13,7 @@ interface ProjectWorkspaceValue {
   isLoading: boolean;
   error: string;
   path: (module: string) => string;
+  portfolioPath: string;
 }
 
 const ProjectWorkspaceContext = createContext<ProjectWorkspaceValue | null>(null);
@@ -22,9 +24,15 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
   const managerMatch = location.pathname.match(/^\/project-manager\/projects\/([^/]+)(?:\/|$)/);
   const engineerMatch = location.pathname.match(/^\/engineer\/projects\/([^/]+)(?:\/|$)/);
   const consultantMatch = location.pathname.match(/^\/consultant-engineer\/projects\/([^/]+)(?:\/|$)/);
-  const match = role === "engineer" ? (isConsultantEngineer ? consultantMatch : engineerMatch) : managerMatch;
+  const genericMatch = location.pathname.match(/^\/projects\/([^/]+)(?:\/|$)/);
+  const preferred = role === "engineer" ? (isConsultantEngineer ? consultantMatch : engineerMatch)
+    : role === "project_manager" ? managerMatch : genericMatch;
+  // A project workspace must survive landing on a prefix that does not belong to the
+  // current role (deep links, notification URLs, links authored for another role).
+  // Without the fallback the sidebar silently drops back to portfolio mode.
+  const match = preferred || managerMatch || engineerMatch || consultantMatch || genericMatch;
   const projectId = match?.[1] ? decodeURIComponent(match[1]) : undefined;
-  const supportsProjectWorkspace = role === "project_manager" || role === "engineer";
+  const supportsProjectWorkspace = ["admin", "owner", "project_manager", "engineer", "consultant"].includes(role || "");
   const isProjectWorkspace = supportsProjectWorkspace && Boolean(projectId);
   const [project, setProject] = useState<Project | null>(null);
   const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
@@ -71,12 +79,12 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
     isLoading,
     error,
     path: (module: string) => {
-      const base = role === "engineer"
-        ? (isConsultantEngineer ? "/consultant-engineer/projects" : "/engineer/projects")
-        : "/project-manager/projects";
-      return projectId ? `${base}/${projectId}/${module.replace(/^\//, "")}` : base;
+      return projectId
+        ? projectModulePath(projectId, module, role, isConsultantEngineer ? "external_consultant" : undefined)
+        : portfolioProjectsPath(role, isConsultantEngineer ? "external_consultant" : undefined);
     },
-  }), [projectId, project, assignedProjects, isProjectWorkspace, isLoading, error, isConsultantEngineer]);
+    portfolioPath: portfolioProjectsPath(role, isConsultantEngineer ? "external_consultant" : undefined),
+  }), [projectId, project, assignedProjects, isProjectWorkspace, isLoading, error, isConsultantEngineer, role]);
 
   return <ProjectWorkspaceContext.Provider value={value}>{children}</ProjectWorkspaceContext.Provider>;
 };

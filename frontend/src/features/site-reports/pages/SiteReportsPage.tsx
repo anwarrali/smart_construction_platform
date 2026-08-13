@@ -10,6 +10,7 @@ import { Modal, ModalActions } from "../../../components/ui/Modal";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import api from "../../../services/api";
+import axios from "../../../services/axios";
 import { useRole } from "../../../hooks/useRole";
 import { AttachmentPanel } from "../../../components/shared/AttachmentPanel";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
@@ -49,6 +50,7 @@ export const SiteReportsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const focusedReportId = searchParams.get("reportId");
   const [formOpen, setFormOpen] = useState(false);
+  const [prefilledVisit, setPrefilledVisit] = useState<{ id: string; visitType: string; reportDate: string } | null>(null);
   const [projects, setProjects] = useState<{id:string;name:string}[]>([]);
   const [projectId, setProjectId] = useState("");
   const [summary, setSummary] = useState("");
@@ -111,6 +113,24 @@ export const SiteReportsPage = () => {
     api.field.context().then(context => { const ids = context.projects.filter(project => project.isSiteEngineer).map(project => project.id); setSiteProjectIds(ids); if (role === "engineer" && ids[0]) setProjectId(ids[0]); }).catch(() => setSiteProjectIds([]));
   }, [activeProjectId, role, workspace.project]);
   const canSubmit = role === "project_manager" || (role === "engineer" && siteProjectIds.length > 0);
+
+  // Opening a site report from a scheduled visit prefills the report from that
+  // visit instead of asking the engineer to retype what the platform knows.
+  const siteVisitId = searchParams.get("siteVisitId");
+  useEffect(() => {
+    if (!siteVisitId) return;
+    let cancelled = false;
+    axios.get(`/site-visits/${siteVisitId}/report-prefill`).then(({ data }) => {
+      if (cancelled) return;
+      setPrefilledVisit({ id: siteVisitId, visitType: data.visitType, reportDate: data.reportDate });
+      setProjectId((current) => data.projectId || current);
+      setSummary((current) => current || data.summaryText || "");
+      setFormOpen(true);
+    }).catch(() => {
+      toast.error("The linked site visit could not be loaded; start the report manually.");
+    });
+    return () => { cancelled = true; };
+  }, [siteVisitId]);
   const saveReport = async (reviewStatus: "draft" | "submitted") => {
     setIsSaving(true);
     try {
@@ -195,9 +215,10 @@ export const SiteReportsPage = () => {
           ))}
         </div>
       )}
-      <Modal isOpen={formOpen} onClose={() => { setFormOpen(false); setEditingId(""); }} title={editingId ? "Edit site report draft" : "Create site report"}>
+      <Modal isOpen={formOpen} onClose={() => { setFormOpen(false); setEditingId(""); setPrefilledVisit(null); if (siteVisitId) { const next = new URLSearchParams(searchParams); next.delete("siteVisitId"); setSearchParams(next, { replace: true }); } }} title={editingId ? "Edit site report draft" : "Create site report"}>
         <form onSubmit={submitReport} className="space-y-4">
-          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">Project:</span> {workspace.project?.name}</p> : <Select label="Project" value={projectId} onChange={e=>setProjectId(e.target.value)} options={projects.filter(project => role === "project_manager" || siteProjectIds.includes(project.id)).map(p=>({value:p.id,label:p.name}))}/>} 
+          {prefilledVisit && <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm"><p className="font-medium">Prefilled from a scheduled site visit</p><p className="mt-0.5 text-muted-foreground">{prefilledVisit.visitType.replaceAll("_", " ").toLowerCase()} · visit date {prefilledVisit.reportDate}</p></div>}
+          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">Project:</span> {workspace.project?.name}</p> : <Select label="Project" value={projectId} onChange={e=>setProjectId(e.target.value)} options={projects.filter(project => role === "project_manager" || siteProjectIds.includes(project.id)).map(p=>({value:p.id,label:p.name}))}/>}
           <Input label="Work summary" value={summary} onChange={e=>setSummary(e.target.value)} required/>
           <Select label="Related task (optional)" value={taskId} onChange={e=>setTaskId(e.target.value)} options={[{value:"",label:"General daily report"},...tasks.map(task=>({value:task.id,label:`${task.taskCode} — ${task.name}`}))]}/>
           <Input label="Weather" value={weather} onChange={e=>setWeather(e.target.value)}/>

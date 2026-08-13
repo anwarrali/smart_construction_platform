@@ -1,7 +1,7 @@
 """accountable collaboration owner requests and site visits
 
 Revision ID: aa28d1e6f3a7
-Revises: z27c0a5e2d46
+Revises: e32a1b4c5d67
 """
 
 from alembic import op
@@ -10,7 +10,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "aa28d1e6f3a7"
-down_revision = "z27c0a5e2d46"
+down_revision = "e32a1b4c5d67"
 branch_labels = None
 depends_on = None
 

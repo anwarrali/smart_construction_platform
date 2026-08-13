@@ -56,7 +56,7 @@ const FlowArrow = ({ vertical = false, label }: { vertical?: boolean; label?: st
 const ArchitectureDiagram = () => (
   <section id="architecture" className="landing-section scroll-mt-20">
     <div className="landing-container">
-      <SectionHeading eyebrow="01 / System Architecture" title="Two interfaces. One coordinated system." description="Field data, decisions, documents, and approvals all pass through a shared control layer." />
+      <SectionHeading eyebrow="System Architecture" title="Two interfaces. One coordinated system." description="Field data, decisions, documents, and approvals all pass through a shared control layer." />
       <div className="architecture-shell">
         <div className="architecture-interface">
           <div className="browser-mini">
@@ -100,7 +100,7 @@ const OrganizationHierarchy = () => {
   return (
     <section id="team" className="landing-section bg-muted/25 scroll-mt-20">
       <div className="landing-container">
-        <SectionHeading eyebrow="02 / Project Organization" title="Clear authority. Clear accountability." description="Select a side to highlight how responsibility moves through the project team." />
+        <SectionHeading eyebrow="Project Organization" title="Clear authority. Clear accountability." description="Select a side to highlight how responsibility moves through the project team." />
         <div className="hierarchy-root"><Building2 size={19} /> Construction Project</div>
         <div className="hierarchy-split" />
         <div className="grid gap-6 lg:grid-cols-2">
@@ -143,7 +143,7 @@ const RoleCard = ({ role, purpose, icon: Icon, items, mobile }: typeof roleData[
 const RolesSection = () => (
   <section id="roles" className="landing-section">
     <div className="landing-container">
-      <SectionHeading eyebrow="03 / Role Responsibilities" title="The right view for every responsibility" />
+      <SectionHeading eyebrow="Role Responsibilities" title="The right view for every responsibility" />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{roleData.map((role) => <RoleCard key={role.role} {...role} />)}</div>
     </div>
   </section>
@@ -156,7 +156,7 @@ const TaskLifecycle = () => {
   return (
     <section id="workflow" className="landing-section bg-slate-950 text-white scroll-mt-20">
       <div className="landing-container">
-        <SectionHeading eyebrow="04 / Task Lifecycle" title="From assignment to controlled approval" description="Every step is traceable. Consultant review decides what happens next." />
+        <SectionHeading eyebrow="Task Lifecycle" title="From assignment to controlled approval" description="Every step is traceable. Consultant review decides what happens next." />
         <div className="lifecycle-track">{lifecycleSteps.map((step, index) => <div className="lifecycle-item" key={step}><span>{String(index + 1).padStart(2, "0")}</span><strong>{step}</strong>{index < lifecycleSteps.length - 1 && <ArrowRight size={18} />}</div>)}</div>
         <div className="mt-8 flex justify-center gap-3">
           <button onClick={() => setOutcome("approved")} className={`outcome-button approved ${outcome === "approved" ? "active" : ""}`}><CheckCircle2 size={17} /> Approved path</button>
@@ -177,7 +177,7 @@ const TaskLifecycle = () => {
 const DependencyFlow = () => (
   <section className="landing-section">
     <div className="landing-container">
-      <SectionHeading eyebrow="05 / Dependency Control" title="Approval is a gate—not a label" />
+      <SectionHeading eyebrow="Dependency Control" title="Approval is a gate—not a label" />
       <div className="dependency-flow">
         <div className="dependency-task done"><span>Task 01</span><HardHat size={22} /><strong>Foundation Reinforcement</strong><em><Check size={14} /> Approved</em></div>
         <FlowArrow label="Consultant gate" />
@@ -195,7 +195,7 @@ const MobileFlow = () => {
   return (
     <section id="mobile-ai" className="landing-section bg-muted/25 scroll-mt-20">
       <div className="landing-container">
-        <SectionHeading eyebrow="06 / Mobile Application" title="Built for the construction site" description="Fast input, low friction, and immediate connection to the project record." />
+        <SectionHeading eyebrow="Mobile Application" title="Built for the construction site" description="Fast input, low friction, and immediate connection to the project record." />
         <div className="grid items-center gap-12 lg:grid-cols-[0.72fr_1.28fr]">
           <div className="phone-mockup">
             <div className="phone-top"><span>9:41</span><i /></div>
@@ -226,7 +226,7 @@ const AILayer = () => {
   return (
     <section className="landing-section">
       <div className="landing-container">
-        <SectionHeading eyebrow="07 / AI Assistance Layer" title="Useful intelligence, controlled authority" />
+        <SectionHeading eyebrow="AI Assistance Layer" title="Useful intelligence, controlled authority" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">{modules.map((item) => <IconCard key={item.title} {...item} tone="amber"><p className="mt-3 text-sm leading-relaxed text-muted-foreground">{item.text}</p></IconCard>)}</div>
         <p className="statement-line"><ShieldCheck size={20} /><strong>AI assists the project team.</strong> It does not replace engineering authority or consultant approval.</p>
       </div>
@@ -236,14 +236,14 @@ const AILayer = () => {
 
 const InformationFlow = () => {
   const steps = [
-    [HardHat, "Construction Site"], [Smartphone, "Engineer Mobile"], [Server, "Backend"],
-    [Bot, "AI + Rules"], [Database, "Database"], [Laptop, "PM Dashboard"],
-    [SearchCheck, "Consultant Review"], [CheckCircle2, "Decision"], [Bell, "Notification"],
+    [HardHat, "Work on site"], [Smartphone, "Engineer records it"], [Camera, "Evidence attached"],
+    [Bot, "Checked against the plan"], [ClipboardList, "Task updated"], [Gauge, "Progress visible"],
+    [SearchCheck, "Consultant review"], [CheckCircle2, "Approved"], [Bell, "Owner informed"],
   ] as const;
   return (
     <section id="information-flow" className="landing-section bg-primary text-primary-foreground scroll-mt-20">
       <div className="landing-container">
-        <SectionHeading eyebrow="08 / Information Flow" title="How one field update travels through the system" />
+        <SectionHeading eyebrow="Information flow" title="What happens to one update from the site" description="A single field update becomes verified progress, a reviewable record, and an answer for the owner." />
         <div className="information-flow">{steps.map(([Icon, label], i) => <div className="information-node" key={label}><span><Icon size={19} /></span><strong>{label}</strong>{i < steps.length - 1 && <div className="animated-connector"><i /></div>}</div>)}</div>
       </div>
     </section>
@@ -253,7 +253,7 @@ const InformationFlow = () => {
 const ContractorConsultantComparison = () => (
   <section className="landing-section">
     <div className="landing-container">
-      <SectionHeading eyebrow="09 / Collaboration Model" title="Execution meets independent verification" />
+      <SectionHeading eyebrow="Collaboration Model" title="Execution meets independent verification" />
       <div className="comparison-grid">
         <div className="comparison-side contractor"><HardHat size={28} /><p>Responsible for</p><h3>Execution</h3><ul>{["Perform construction work", "Update progress", "Upload evidence", "Report site conditions", "Resolve and resubmit rejected work"].map((x) => <li key={x}><Check size={15} />{x}</li>)}</ul></div>
         <div className="comparison-middle"><span>Execution</span><ArrowDown /><span>Review</span><ArrowDown /><span>Approval</span><ArrowDown /><span>Next activity</span></div>
@@ -267,7 +267,7 @@ const ContractorConsultantComparison = () => (
 const WebApplication = () => (
   <section className="landing-section bg-muted/25">
     <div className="landing-container">
-      <SectionHeading eyebrow="10 / Web Application" title="Management, monitoring, and technical review" description="Optimized workspaces for the Project Manager, Consultant, Owner, and Administrator." />
+      <SectionHeading eyebrow="Web Application" title="Management, monitoring, and technical review" description="Optimized workspaces for the Project Manager, Consultant, Owner, and Administrator." />
       <div className="dashboard-mockup">
         <div className="dashboard-sidebar"><Layers3 size={23} /><span /><span /><span /><span /></div>
         <div className="dashboard-content">
@@ -285,7 +285,7 @@ const SystemViews = () => {
   return (
     <section className="landing-section">
       <div className="landing-container">
-        <SectionHeading eyebrow="11 / One System, Different Views" title="Shared data. Role-specific access." />
+        <SectionHeading eyebrow="One System, Different Views" title="Shared data. Role-specific access." />
         <div className="system-orbit">
           <div className="orbit-center"><Database size={30} /><strong>Central Project Data</strong><span><KeyRound size={14} /> Role-Based Access Control</span></div>
           {views.map(([Icon, view], i) => <div key={view} className={`orbit-view orbit-${i + 1}`}><Icon size={19} /><span>{view}</span></div>)}
@@ -306,7 +306,7 @@ const ProjectExample = () => {
   return (
     <section id="example" className="landing-section bg-slate-950 text-white scroll-mt-20">
       <div className="landing-container">
-        <SectionHeading eyebrow="12 / Live Project Example" title="Residential Complex C" description="Select an activity to see how status, reviews, and dependencies connect." />
+        <SectionHeading eyebrow="Live Project Example" title="Residential Complex C" description="Select an activity to see how status, reviews, and dependencies connect." />
         <div className="example-grid">
           <div className="space-y-3">{activities.map((item, i) => <button className={`project-activity ${selected === i ? "active" : ""}`} onClick={() => setSelected(i)} key={item.title}><span className={`activity-icon ${item.tone}`}>{item.status === "Blocked" ? <LockKeyhole size={18} /> : <CheckCircle2 size={18} />}</span><span><strong>{item.title}</strong><small>{item.status}</small></span><b>{item.progress}%</b></button>)}</div>
           <div className="project-detail">
@@ -327,7 +327,7 @@ const WhySection = () => {
   return (
     <section className="landing-section">
       <div className="landing-container">
-        <SectionHeading eyebrow="13 / Why This Platform Exists" title="Replace fragmented communication with one workflow" />
+        <SectionHeading eyebrow="Why This Platform Exists" title="Replace fragmented communication with one workflow" />
         <div className="problem-solution">
           <div><span className="side-label problem"><AlertTriangle size={16} /> Today’s problem</span>{problems.map((x) => <p key={x}><XCircle size={16} />{x}</p>)}</div>
           <div className="transformation-arrow"><ArrowRight size={26} /></div>
@@ -338,42 +338,200 @@ const WhySection = () => {
   );
 };
 
+/* ── §23 Problem / Value ── */
+const ProblemValue = () => (
+  <section id="why" className="landing-section scroll-mt-20">
+    <div className="landing-container">
+      <SectionHeading
+        eyebrow="The problem"
+        title="Your project already produces the information. It just lives everywhere."
+        description="Progress is agreed in a phone call, proven by a photo on someone's device, tracked in a spreadsheet, and approved in a message thread nobody can find two months later."
+      />
+      <div className="problem-split">
+        <article className="problem-col scattered">
+          <div className="section-kicker">Today</div>
+          <h3 className="mt-2 text-xl font-extrabold">Scattered across tools</h3>
+          <ul>
+            {[
+              "Progress agreed in WhatsApp messages",
+              "Site photos stuck on personal phones",
+              "Schedules in spreadsheets nobody updates",
+              "Drawings emailed as attachments",
+              "Approvals given verbally on site",
+              "The owner asks what changed, and nobody can answer",
+            ].map((item) => <li key={item}><XCircle size={15} />{item}</li>)}
+          </ul>
+        </article>
+        <div className="comparison-middle"><ArrowRight size={22} /><span>One workspace</span></div>
+        <article className="problem-col connected">
+          <div className="section-kicker">With the platform</div>
+          <h3 className="mt-2 text-xl font-extrabold">Connected and accountable</h3>
+          <ul>
+            {[
+              "Progress recorded against the actual task",
+              "Photos filed as evidence on the record they prove",
+              "One schedule with real dependencies",
+              "Drawings and IFC models versioned in place",
+              "Approvals signed by the authorized person",
+              "A dated answer to what changed since the last visit",
+            ].map((item) => <li key={item}><Check size={15} />{item}</li>)}
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+);
+
+/* ── §23 Core features ── */
+const CoreFeatures = () => (
+  <section id="features" className="landing-section bg-muted/25 scroll-mt-20">
+    <div className="landing-container">
+      <SectionHeading
+        eyebrow="What you get"
+        title="Everything a construction project has to keep track of"
+        description="One workspace per project, with the modules your team already needs and the permissions your organization already has."
+      />
+      <div className="feature-grid">
+        {[
+          { icon: ClipboardList, title: "Projects & tasks", body: "Task boards per project with disciplines, assignees, priorities and review states." },
+          { icon: CalendarClock, title: "Scheduling & Gantt", body: "Planned dates, dependencies, critical path and float, with rescheduling that tells you what moved." },
+          { icon: FileText, title: "Site reports", body: "Daily reports with weather, workforce, equipment, delays and issues, prefilled from the scheduled visit." },
+          { icon: Camera, title: "Field evidence", body: "Photos and submissions captured on site and attached to the task or issue they prove." },
+          { icon: MessageSquareText, title: "Team communication", body: "Project conversations where an action-required message stays open until somebody answers it." },
+          { icon: CircleUserRound, title: "Owner requests", body: "A simple form for the client, routed to the right discipline without exposing engineering internals." },
+          { icon: CalendarClock, title: "Site visits", body: "Scheduled visits with participants, conflict detection, and a report waiting when the visit ends." },
+          { icon: Layers3, title: "Documents & photo archive", body: "Drawings, documents and site photography filed against the project, searchable and filterable." },
+          { icon: Building2, title: "IFC / BIM intelligence", body: "Versioned models checked against the tasks, disciplines and floors your project actually has." },
+          { icon: TriangleAlert, title: "Issues & design changes", body: "Raise an issue on site; propose a design change that follows the real approval chain." },
+          { icon: FileCheck2, title: "Approvals & reviews", body: "Consultant review per discipline or centralized, with the decision recorded against the work." },
+          { icon: Bell, title: "Reminders & accountability", body: "Automatic reminders and escalation so waiting work does not quietly go stale." },
+        ].map(({ icon, title, body }) => <IconCard key={title} icon={icon} title={title}><p>{body}</p></IconCard>)}
+      </div>
+    </div>
+  </section>
+);
+
+/* ── §23 BIM / IFC ── */
+const BimSection = () => (
+  <section id="bim" className="landing-section scroll-mt-20">
+    <div className="landing-container">
+      <SectionHeading
+        eyebrow="BIM / IFC"
+        title="A model is only useful when it is checked against the real project"
+        description="Uploading an IFC gives you an element count. Comparing it with your tasks, schedule, disciplines and issues tells you whether the model matches the job."
+      />
+      <div className="bim-stack">
+        {[
+          { icon: Layers3, label: "IFC model" },
+          { icon: ClipboardList, label: "Tasks" },
+          { icon: CalendarClock, label: "Schedule" },
+          { icon: Gauge, label: "Progress" },
+          { icon: TriangleAlert, label: "Issues" },
+        ].map(({ icon: Icon, label }) => <div key={label} className="bim-input"><Icon size={19} />{label}</div>)}
+      </div>
+      <div className="bim-finding">
+        <div className="section-kicker"><SearchCheck size={14} /> Example finding</div>
+        <p className="mt-2">
+          <strong>4 electrical installation tasks exist, but this IFC contains no electrical elements.</strong>{" "}
+          The uploaded revision exposes none of the characteristic IFC classes for that discipline
+          (IfcCableCarrierSegment, IfcLightFixture, IfcOutlet, IfcSwitchingDevice).
+        </p>
+        <small>
+          Severity: Critical · Evidence: 4 matched tasks, matched terms “electrical” and “cable” ·
+          Suggested action: confirm whether the discipline model was omitted from this export, or whether the wrong model was uploaded.
+        </small>
+      </div>
+      <div className="statement-line"><ShieldCheck size={17} /><span>Findings are <strong>advisory</strong>. An engineer decides what happens next.</span></div>
+    </div>
+  </section>
+);
+
+/* ── §23 Accountability ── */
+const AccountabilitySection = () => (
+  <section id="accountability" className="landing-section bg-muted/25 scroll-mt-20">
+    <div className="landing-container">
+      <SectionHeading
+        eyebrow="Accountability"
+        title="Who did what, when, and who approved it"
+        description="Construction disputes are settled with records. Every meaningful action leaves one."
+      />
+      <div className="accountability-grid">
+        {[
+          { icon: Activity, title: "Audit history", body: "Every task update, approval, request and model upload is written to an activity trail." },
+          { icon: Check, title: "Acknowledgements", body: "Important messages track delivery, reading, acknowledgement and response per recipient." },
+          { icon: FileCheck2, title: "Review chains", body: "Consultant decisions stay attached to the work they approved or rejected, with the reason." },
+          { icon: Bell, title: "Automatic reminders", body: "Waiting requests escalate on a schedule you configure, with quiet hours and attempt limits." },
+          { icon: UserCog, title: "Human authority", body: "Only an authorized person approves engineering work, including when the request arrives by voice." },
+          { icon: Workflow, title: "Traceable decisions", body: "An owner request that becomes a design change keeps the link back to who asked and who approved." },
+        ].map(({ icon: Icon, title, body }) => (
+          <div key={title}><Icon size={19} /><strong className="mt-3">{title}</strong><p>{body}</p></div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
 export const LandingPage = () => (
   <div className="landing-page">
     <section className="hero-section">
       <div className="blueprint-grid" />
       <div className="landing-container relative">
         <div className="hero-copy">
-          <div className="section-kicker"><HardHat size={15} /> Connected construction intelligence</div>
-          <h1>Smart Construction<br /><span>Management Platform</span></h1>
-          <p>A connected Web + Mobile platform that brings contractors, consultants, engineers, project managers, and owners into one coordinated construction workflow.</p>
-          <div className="hero-actions"><a href="#architecture" className="primary-cta">Explore System Flow <ArrowDown size={17} /></a><Link to={ROUTES.LOGIN} className="secondary-cta">Open Platform <ArrowRight size={17} /></Link></div>
+          <div className="section-kicker"><HardHat size={15} /> Built for construction teams</div>
+          <h1>One connected workspace for<br /><span>construction execution</span></h1>
+          <p>Plan the work, assign it, capture what actually happened on site, review it, approve it, and keep the record. Coordination, evidence, progress and accountability in one place — for contractors, consultants, engineers, project managers and owners.</p>
+          <div className="hero-actions">
+            <Link to={ROUTES.LOGIN} className="primary-cta">Open the platform <ArrowRight size={17} /></Link>
+            <a href="#workflow" className="secondary-cta">See how it works <ArrowDown size={17} /></a>
+          </div>
         </div>
-        <div className="hero-system" aria-label="Mobile and web applications connected through a central backend">
-          <div className="hero-device mobile"><Smartphone size={28} /><span>Mobile Application</span><small>Field Operations</small></div>
-          <div className="hero-connection"><i /><span>LIVE DATA</span><i /></div>
-          <div className="hero-device backend"><Server size={30} /><span>Central Backend + AI</span><small>One Shared Source of Truth</small></div>
-          <div className="hero-connection"><i /><span>SECURE API</span><i /></div>
-          <div className="hero-device web"><Laptop size={30} /><span>Web Application</span><small>Management, Monitoring & Review</small></div>
+        <div className="hero-scene" aria-label="A project floor plan alongside site progress and evidence">
+          <div className="hero-panel">
+            <h4>Residential Complex C · Floor plan</h4>
+            <div className="hero-plan" aria-hidden="true"><i /><i /><i /><b>Ground floor</b></div>
+          </div>
+          <div className="hero-stack">
+            <div className="hero-panel">
+              <h4>Verified progress</h4>
+              <div className="hero-progress">
+                {[["Foundation concrete pour", "100%", 100], ["Structural framing", "62%", 62], ["Electrical rough-in", "18%", 18]].map(([label, value, width]) => (
+                  <div key={label as string}><span>{label}</span><span>{value}</span><u><b style={{ width: `${width}%` }} /></u></div>
+                ))}
+              </div>
+            </div>
+            <div className="hero-panel">
+              <h4>Latest from site</h4>
+              <div className="mt-3 grid gap-2">
+                <div className="hero-evidence"><Camera size={15} /><span>6 photos attached to <strong>TSK-005 Structural framing</strong></span></div>
+                <div className="hero-evidence"><FileCheck2 size={15} /><span>Site report submitted, awaiting consultant review</span></div>
+                <div className="hero-evidence"><TriangleAlert size={15} /><span>Issue raised in Zone B — routed to the civil engineer</span></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="hero-proof"><span><ShieldCheck size={17} /> Controlled approvals</span><span><Database size={17} /> Shared project data</span><span><Workflow size={17} /> Traceable workflows</span></div>
+        <div className="hero-proof"><span><ShieldCheck size={17} /> Controlled approvals</span><span><Camera size={17} /> Evidence on the record</span><span><Workflow size={17} /> Traceable decisions</span></div>
       </div>
     </section>
-    <ArchitectureDiagram />
-    <OrganizationHierarchy />
-    <RolesSection />
+    {/* §23 order: problem → workflow → features → AI → roles → BIM → mobile → accountability → CTA */}
+    <ProblemValue />
     <TaskLifecycle />
     <DependencyFlow />
-    <MobileFlow />
+    <CoreFeatures />
     <AILayer />
+    <RolesSection />
+    <OrganizationHierarchy />
+    <BimSection />
+    <MobileFlow />
     <InformationFlow />
+    <AccountabilitySection />
     <ContractorConsultantComparison />
     <WebApplication />
     <SystemViews />
     <ProjectExample />
+    <ArchitectureDiagram />
     <WhySection />
     <section className="final-section">
-      <div className="landing-container text-center"><div className="section-kicker">One connected system</div><h2>From Construction Site to<br />Management Dashboard</h2><div className="final-flow">{["Field Engineer", "Contractor", "Project Manager", "Consultant", "Owner"].map((x, i) => <span key={x}>{x}{i < 4 && <ArrowRight size={17} />}</span>)}</div><p>Connected through <strong>Mobile + Web + Backend + AI</strong></p><a href="#architecture" className="primary-cta">Explore System Flow <ArrowDown size={17} /></a></div>
+      <div className="landing-container text-center"><div className="section-kicker">One connected workspace</div><h2>Run the project from<br />the site to the handover</h2><div className="final-flow">{["Plan", "Assign", "Execute", "Capture evidence", "Review", "Approve", "Report"].map((x, i, all) => <span key={x}>{x}{i < all.length - 1 && <ArrowRight size={17} />}</span>)}</div><p>For contractors, consultants, engineers, project managers and owners</p><div className="hero-actions"><Link to={ROUTES.LOGIN} className="primary-cta">Open the platform <ArrowRight size={17} /></Link><a href="#features" className="secondary-cta">See the modules <ArrowDown size={17} /></a></div></div>
     </section>
   </div>
 );

@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useNotificationStore } from "../app/store/notification.store";
 import api from "../services/api";
 import { useRole } from "./useRole";
+import { projectEntityPath, projectModulePath } from "../utils/projectRoutes";
 
 export const useNotifications = () => {
   const { role, isConsultantEngineer } = useRole();
@@ -19,31 +20,18 @@ export const useNotifications = () => {
         const items = (data.items || data.data || []).map((notification: any) => {
           const entityType = notification.relatedEntityType;
           const entityId = notification.relatedEntityId;
-          const projectRoot = role === "project_manager" && notification.projectId
-            ? `/project-manager/projects/${notification.projectId}`
-            : role === "engineer" && notification.projectId
-              ? `${isConsultantEngineer ? "/consultant-engineer/projects" : "/engineer/projects"}/${notification.projectId}`
-              : undefined;
-          const link = entityType === "MESSAGE" ? undefined
-            : projectRoot && entityType === "TASK" && entityId ? `${projectRoot}/tasks/${entityId}`
-            : projectRoot && entityType === "PROJECT" ? `${projectRoot}/dashboard`
-            : projectRoot && entityType === "DESIGN_CHANGE" ? `${projectRoot}/design-changes${entityId ? `?changeId=${entityId}` : ""}`
-            : projectRoot && entityType === "ISSUE" ? `${projectRoot}/issues${entityId ? `?issueId=${entityId}` : ""}`
-            : projectRoot && entityType === "SITE_REPORT" ? `${projectRoot}/site-reports${entityId ? `?reportId=${entityId}` : ""}`
-            : projectRoot && entityType === "DOCUMENT" ? `${projectRoot}/documents${entityId ? `?documentId=${entityId}` : ""}`
-            : projectRoot && entityType === "MILESTONE" ? `${projectRoot}/milestones`
-            : role === "owner" && entityType === "DOCUMENT" ? `/documents${entityId ? `?documentId=${entityId}` : ""}`
-            : role === "owner" && entityType === "DESIGN_CHANGE" ? `/design-changes${entityId ? `?changeId=${entityId}` : ""}`
-            : role === "owner" && entityType === "SITE_REPORT" ? `/site-reports${entityId ? `?reportId=${entityId}` : ""}`
-            : role === "owner" ? "/owner-dashboard"
-            : entityType === "TASK" && entityId ? `/tasks/${entityId}`
-            : entityType === "PROJECT" && entityId ? `/projects/${entityId}`
-            : entityType === "DESIGN_CHANGE" ? `/design-changes${entityId ? `?changeId=${entityId}` : ""}`
-            : entityType === "ISSUE" ? `/issues${entityId ? `?issueId=${entityId}` : ""}`
-            : entityType === "SITE_REPORT" ? `/site-reports${entityId ? `?reportId=${entityId}` : ""}`
-            : entityType === "DOCUMENT" ? `/documents${entityId ? `?documentId=${entityId}` : ""}`
-            : notification.taskId ? `/tasks/${notification.taskId}`
-            : notification.projectId ? `/projects/${notification.projectId}` : undefined;
+          const affiliation = isConsultantEngineer ? "external_consultant" as const : undefined;
+          const projectId = notification.projectId;
+          const effectiveType = entityType || (notification.taskId ? "TASK" : undefined);
+          const effectiveId = entityId || notification.taskId;
+          // Project-scoped notifications must always resolve inside the project
+          // workspace; only a notification with no project at all may fall back
+          // to a server-provided action URL.
+          const link = projectId
+            ? effectiveType
+              ? projectEntityPath(projectId, effectiveType, effectiveId || "", role, affiliation)
+              : projectModulePath(projectId, "activity", role, affiliation)
+            : notification.actionUrl || undefined;
           return { ...notification, link };
         });
         setNotifications(items);

@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.ifc import IFCElement, IFCModelVersion, IFCSpatialNode
-from app.services.file_storage import resolve_private_storage_key
+from app.services.private_storage import private_storage
 
 MAGIC = b"BIMGEO1\x00"
 
@@ -179,13 +179,13 @@ def generate_geometry(db: Session, version_id) -> dict:
             .filter(IFCSpatialNode.version_id == version.id, IFCSpatialNode.node_type.in_(["BUILDING", "STOREY", "SPACE"])).all() if value
         )
         key = geometry_storage_key(version.id)
-        target = resolve_private_storage_key(key)
-        args = (
-            resolve_private_storage_key(version.storage_key), target, selectable_step_ids,
-            {"workers": settings.IFC_GEOMETRY_WORKERS, "max_vertices": settings.IFC_GEOMETRY_MAX_VERTICES,
-             "version_id": str(version.id), "source_hash": version.file_hash},
-        )
-        header = _build_with_timeout(args, settings.IFC_GEOMETRY_TIMEOUT_SECONDS)
+        with private_storage.writable_local_path(key) as target, private_storage.local_path(version.storage_key) as source:
+            args = (
+                source, target, selectable_step_ids,
+                {"workers": settings.IFC_GEOMETRY_WORKERS, "max_vertices": settings.IFC_GEOMETRY_MAX_VERTICES,
+                 "version_id": str(version.id), "source_hash": version.file_hash},
+            )
+            header = _build_with_timeout(args, settings.IFC_GEOMETRY_TIMEOUT_SECONDS)
         duration_ms = int((perf_counter() - started) * 1000)
         header["durationMs"] = duration_ms
         version.geometry_storage_key = key

@@ -33,8 +33,9 @@ from app.schemas.collaboration import (
 from app.services.audit_service import record_audit
 from app.services.collaboration_policy import (
     assert_human_authority, can_transition_owner_request, choose_discipline_assignee,
-    reminder_is_due,
 )
+from app.services.reminder_service import evaluate_project_reminders
+from app.services.scheduler import status as scheduler_status
 from app.services.messaging_authorization import active_project_participant_ids
 
 
@@ -348,58 +349,22 @@ def upsert_reminder_rule(project_id: uuid.UUID, payload: ReminderRuleUpsert,
     db.commit(); db.refresh(rule); return rule
 
 
-def _effective_rule(db: Session, project_id, priority, target_type):
-    rule = db.query(ReminderRule).filter(ReminderRule.project_id == project_id,
-        ReminderRule.target_type == target_type, ReminderRule.priority == priority).first()
-    if rule: return rule
-    defaults = {"NORMAL": (1440, 1440), "HIGH": (360, 360), "CRITICAL": (120, 120)}
-    first, repeat = defaults.get(priority, defaults["NORMAL"])
-    return ReminderRule(project_id=project_id, target_type=target_type, priority=priority,
-                        first_reminder_minutes=first, repeat_interval_minutes=repeat, maximum_reminders=3, enabled=True)
-
-
 @router.post("/projects/{project_id}/reminders/run")
 def run_reminders(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Manual sweep. The scheduler runs the same evaluation automatically."""
     project = _project(db, current_user, project_id)
     if not (current_user.role == UserRole.ADMIN or project.project_manager_id == current_user.id):
         raise HTTPException(status_code=403, detail="Only project management can run reminders")
-    now = datetime.now(timezone.utc); created = 0
-    targets = []
-    for item in db.query(OwnerRequest).filter(OwnerRequest.project_id == project_id,
-                                              OwnerRequest.status.in_(ACTIVE_REQUEST_STATUSES),
-                                              OwnerRequest.assigned_to_id.isnot(None)).all():
-        targets.append(("OWNER_REQUEST", item.id, item.assigned_to_id, item.priority, item.created_at, item.title))
-    states = db.query(MessageRecipientState, Message).join(Message, Message.id == MessageRecipientState.message_id).filter(
-        Message.conversation.has(project_id=project_id), Message.requires_response == True,
-        MessageRecipientState.response_status.notin_(["RESPONDED", "RESOLVED"]),
-    ).all()
-    for state, message in states:
-        targets.append(("MESSAGE", message.id, state.user_id, message.priority, message.created_at, message.content[:80]))
-    for target_type, target_id, recipient_id, priority, waiting_since, label in targets:
-        rule = _effective_rule(db, project_id, priority, "IMPORTANT_COMMUNICATION")
-        if not rule.enabled: continue
-        history = db.query(ReminderEvent).filter(ReminderEvent.target_type == target_type,
-                                                 ReminderEvent.target_id == target_id,
-                                                 ReminderEvent.recipient_id == recipient_id).order_by(ReminderEvent.sent_at.desc()).all()
-        if not reminder_is_due(now=now, waiting_since=waiting_since, last_sent_at=history[0].sent_at if history else None,
-                               first_minutes=rule.first_reminder_minutes, repeat_minutes=rule.repeat_interval_minutes,
-                               sent_count=len(history), maximum=rule.maximum_reminders,
-                               quiet_start=rule.quiet_hours_start, quiet_end=rule.quiet_hours_end): continue
-        sequence = len(history) + 1; escalation = sequence >= rule.maximum_reminders and rule.escalation_recipient_id
-        recipient = rule.escalation_recipient_id if escalation else recipient_id
-        event = ReminderEvent(project_id=project_id, rule_id=rule.id if rule.id else None, target_type=target_type,
-                              target_id=target_id, recipient_id=recipient, event_type="ESCALATION" if escalation else "REMINDER",
-                              sequence_number=sequence, sent_at=now, metadata_json={"originalRecipientId": str(recipient_id)})
-        db.add(event)
-        _notify(db, user_id=recipient, project_id=project_id,
-                title=("Escalation: " if escalation else "Response reminder: ") + label,
-                message=f"This {target_type.lower().replace('_', ' ')} is still waiting for action. Reminder {sequence}.",
-                category="REMINDERS", entity_type=target_type, entity_id=target_id, requires_action=True)
-        created += 1
-    if created:
-        record_audit(db, actor_id=current_user.id, action="reminders_dispatched", entity_type="project",
-                     entity_id=project_id, project_id=project_id, details={"count": created})
-    db.commit(); return {"created": created, "evaluated": len(targets), "generatedAt": now}
+    result = evaluate_project_reminders(db, project_id, actor_id=current_user.id)
+    db.commit()
+    return result
+
+
+@router.get("/reminders/scheduler-status")
+def reminder_scheduler_status(current_user: User = Depends(get_current_user)):
+    if current_user.role not in {UserRole.ADMIN, UserRole.PROJECT_MANAGER}:
+        raise HTTPException(status_code=403, detail="Only project management can inspect the scheduler")
+    return scheduler_status()
 
 
 @router.get("/my-action-center")

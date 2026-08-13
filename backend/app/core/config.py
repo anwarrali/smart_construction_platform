@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     IFC_RETENTION_DAYS: int = int(os.getenv("IFC_RETENTION_DAYS", "3650"))
     IFC_NOTIFICATION_DIGEST_ENABLED: bool = os.getenv("IFC_NOTIFICATION_DIGEST_ENABLED", "true").lower() == "true"
     IFC_ENGINEER_UPLOAD_ENABLED: bool = os.getenv("IFC_ENGINEER_UPLOAD_ENABLED", "false").lower() == "true"
+    # Private artefact storage (IFC sources, geometry, voice audio). "local" is the
+    # development default; an S3/R2 backend plugs in behind the same interface.
+    PRIVATE_STORAGE_BACKEND: str = os.getenv("PRIVATE_STORAGE_BACKEND", "local")
+    REMINDER_SCHEDULER_ENABLED: bool = os.getenv("REMINDER_SCHEDULER_ENABLED", "true").lower() == "true"
+    REMINDER_SCHEDULER_INTERVAL_SECONDS: int = int(os.getenv("REMINDER_SCHEDULER_INTERVAL_SECONDS", "300"))
     
     # Database
     DATABASE_URL: str

@@ -294,6 +294,7 @@ def get_dashboard_stats(
         "taskCompletion": task_completion,
         "recentActivity": [{"id": str(log.id), "projectId": str(log.project_id) if log.project_id else None,
             "action": log.action, "entityType": log.entity_type,
+            "entityId": str(log.entity_id) if log.entity_id else None,
             "timestamp": log.created_at.isoformat()} for log in recent_logs],
     }
 
