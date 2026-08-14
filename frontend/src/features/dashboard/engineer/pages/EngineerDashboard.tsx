@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../../utils/errorMessage";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -88,7 +90,9 @@ const TaskList = ({
   empty: string;
   onOpen: (task: EngineerTaskSummary) => void;
   mode?: "normal" | "overdue" | "rework";
-}) => (
+}) => {
+  const { t } = useTranslation();
+  return (
   <div className="divide-y">
     {tasks.map((task) => (
       <button key={task.id} type="button" onClick={() => onOpen(task)} className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition hover:bg-muted/40">
@@ -96,14 +100,14 @@ const TaskList = ({
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs font-semibold text-primary">{task.taskCode}</span>
             <Badge size="sm" variant={priorityVariant(task.priority)}>{task.priority}</Badge>
-            {task.isCriticalPath && <Badge size="sm" variant="danger">Critical</Badge>}
+            {task.isCriticalPath && <Badge size="sm" variant="danger">{t("engineerDash.critical")}</Badge>}
           </div>
           <p className="mt-1 truncate text-sm font-medium">{task.name}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {task.discipline || "General"} · {task.status.replaceAll("_", " ")}
             {mode === "overdue" && task.daysOverdue > 0 ? ` · ${task.daysOverdue} days overdue` : ""}
           </p>
-          {mode === "rework" && <p className="mt-2 line-clamp-2 text-xs text-rose-700">{task.rejectionReason || task.reviewComment || "Review feedback is available in the task."}</p>}
+          {mode === "rework" && <p className="mt-2 line-clamp-2 text-xs text-state-overdue">{task.rejectionReason || task.reviewComment || "Review feedback is available in the task."}</p>}
         </div>
         <div className="shrink-0 text-right">
           <p className="text-sm font-semibold">{task.progressPercentage}%</p>
@@ -114,8 +118,10 @@ const TaskList = ({
     {!tasks.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{empty}</p>}
   </div>
 );
+}
 
 export const EngineerDashboard = () => {
+  const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const navigate = useNavigate();
   const [data, setData] = useState<EngineerDashboardData | null>(null);
@@ -134,7 +140,7 @@ export const EngineerDashboard = () => {
       setData(await api.dashboard.getEngineerProjectStats(workspace.projectId));
     } catch (err: any) {
       setData(null);
-      setError(err?.response?.data?.detail || "Unable to load the Engineer dashboard.");
+      setError(errorMessage(err, "Unable to load the Engineer dashboard."));
     } finally {
       setIsLoading(false);
     }
@@ -147,14 +153,14 @@ export const EngineerDashboard = () => {
 
   const openTask = (task: EngineerTaskSummary) => navigate(workspace.path(`tasks/${task.id}`));
   const cards = [
-    ["My Total Tasks", data.stats.totalTasks, ClipboardList, "text-blue-600 bg-blue-50"],
-    ["My Tasks Today", data.stats.tasksToday, CalendarClock, "text-sky-600 bg-sky-50"],
-    ["In Progress", data.stats.inProgress, CircleDashed, "text-amber-600 bg-amber-50"],
-    ["Overdue", data.stats.overdue, Clock3, "text-rose-600 bg-rose-50"],
-    ["Under Review", data.stats.underReview, Clock3, "text-violet-600 bg-violet-50"],
-    ["Rework Required", data.stats.reworkRequired, RotateCcw, "text-orange-600 bg-orange-50"],
-    ["Completed", data.stats.completed, CheckCircle2, "text-emerald-600 bg-emerald-50"],
-    ["Open Issues", data.stats.openIssues, AlertCircle, "text-red-600 bg-red-50"],
+    ["My Total Tasks", data.stats.totalTasks, ClipboardList, "text-state-progress bg-wash-progress"],
+    ["My Tasks Today", data.stats.tasksToday, CalendarClock, "text-state-progress bg-wash-progress"],
+    ["In Progress", data.stats.inProgress, CircleDashed, "text-state-review bg-wash-review"],
+    ["Overdue", data.stats.overdue, Clock3, "text-state-overdue bg-wash-overdue"],
+    ["Under Review", data.stats.underReview, Clock3, "text-state-blocked bg-wash-blocked"],
+    ["Rework Required", data.stats.reworkRequired, RotateCcw, "text-state-review bg-wash-review"],
+    ["Completed", data.stats.completed, CheckCircle2, "text-state-verified bg-wash-verified"],
+    ["Open Issues", data.stats.openIssues, AlertCircle, "text-state-overdue bg-wash-overdue"],
   ] as const;
 
   return <div className="page-container space-y-6">
@@ -172,14 +178,14 @@ export const EngineerDashboard = () => {
     </div>
 
     <div className="grid gap-6 xl:grid-cols-2">
-      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">My Tasks Today</h2><TaskList tasks={data.tasksToday} empty="No assigned tasks scheduled for today." onOpen={openTask} /></Card>
-      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">Upcoming Deadlines · 7 Days</h2><TaskList tasks={data.upcomingDeadlines} empty="No deadlines in the next seven days." onOpen={openTask} /></Card>
-      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold text-rose-700">Overdue Tasks</h2><TaskList tasks={data.overdueTasks} empty="No overdue assigned tasks." onOpen={openTask} mode="overdue" /></Card>
-      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold text-orange-700">Rework Required</h2><TaskList tasks={data.reworkRequired} empty="No work has been returned for correction." onOpen={openTask} mode="rework" /></Card>
-      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">Pending Review</h2><TaskList tasks={data.pendingReview} empty="No submitted work is waiting for review." onOpen={openTask} /></Card>
-      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">Recent Activity</h2><div className="divide-y">{data.recentActivity.map((item) => <div key={item.id} className="px-4 py-3"><p className="text-sm font-medium">{item.action.replaceAll("_", " ")}</p><p className="text-xs text-muted-foreground">{item.actorName} · {new Date(item.timestamp).toLocaleString()}</p></div>)}{!data.recentActivity.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">No recent Engineer activity.</p>}</div></Card>
+      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">{t("engineerDash.my_tasks_today")}</h2><TaskList tasks={data.tasksToday} empty="No assigned tasks scheduled for today." onOpen={openTask} /></Card>
+      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">{t("engineerDash.upcoming_deadlines_7_days")}</h2><TaskList tasks={data.upcomingDeadlines} empty="No deadlines in the next seven days." onOpen={openTask} /></Card>
+      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold text-state-overdue">{t("engineerDash.overdue_tasks")}</h2><TaskList tasks={data.overdueTasks} empty="No overdue assigned tasks." onOpen={openTask} mode="overdue" /></Card>
+      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold text-state-review">{t("engineerDash.rework_required")}</h2><TaskList tasks={data.reworkRequired} empty="No work has been returned for correction." onOpen={openTask} mode="rework" /></Card>
+      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">{t("engineerDash.pending_review")}</h2><TaskList tasks={data.pendingReview} empty="No submitted work is waiting for review." onOpen={openTask} /></Card>
+      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">{t("engineerDash.recent_activity")}</h2><div className="divide-y">{data.recentActivity.map((item) => <div key={item.id} className="px-4 py-3"><p className="text-sm font-medium">{item.action.replaceAll("_", " ")}</p><p className="text-xs text-muted-foreground">{item.actorName} · {new Date(item.timestamp).toLocaleString()}</p></div>)}{!data.recentActivity.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("engineerDash.no_recent_engineer_activity")}</p>}</div></Card>
     </div>
 
-    <Card className="overflow-hidden p-0"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">Notifications</h2><Button size="sm" variant="ghost" onClick={() => navigate(workspace.path("notifications"))}>View all</Button></div><div className="divide-y">{data.notifications.map((item) => <div key={item.id} className={`px-4 py-3 ${item.isRead ? "" : "bg-primary/5"}`}><p className="text-sm font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.message} · {new Date(item.createdAt).toLocaleString()}</p></div>)}{!data.notifications.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">No project notifications.</p>}</div></Card>
+    <Card className="overflow-hidden p-0"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">{t("engineerDash.notifications")}</h2><Button size="sm" variant="ghost" onClick={() => navigate(workspace.path("notifications"))}>{t("engineerDash.view_all")}</Button></div><div className="divide-y">{data.notifications.map((item) => <div key={item.id} className={`px-4 py-3 ${item.isRead ? "" : "bg-primary/5"}`}><p className="text-sm font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.message} · {new Date(item.createdAt).toLocaleString()}</p></div>)}{!data.notifications.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("engineerDash.no_project_notifications")}</p>}</div></Card>
   </div>;
 };

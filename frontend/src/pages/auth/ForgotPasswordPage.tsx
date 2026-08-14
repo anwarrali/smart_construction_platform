@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -6,6 +7,7 @@ import api from "../../services/api";
 import { ROUTES } from "../../utils/constants";
 
 export const ForgotPasswordPage = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,9 +29,9 @@ export const ForgotPasswordPage = () => {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-center mb-2">Reset Password</h1>
+      <h1 className="text-2xl font-bold text-center mb-2">{t("forgotPasswordPage.reset_password")}</h1>
       <p className="text-sm text-muted-foreground text-center mb-6">
-        Enter your email and we&apos;ll send you a secure reset link.
+        {t("forgotPasswordPage.enter_your_email_and_we_apos_ll_send_you")}
       </p>
 
       {sent ? (
@@ -39,7 +41,7 @@ export const ForgotPasswordPage = () => {
           </div>
           <Link to={ROUTES.LOGIN}>
             <Button variant="outline" fullWidth>
-              Back to Login
+              {t("forgotPasswordPage.back_to_login")}
             </Button>
           </Link>
         </div>
@@ -53,21 +55,21 @@ export const ForgotPasswordPage = () => {
           <Input
             id="email"
             type="email"
-            label="Email"
+            label={t("forgotPasswordPage.email")}
             placeholder="you@company.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
           <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>
-            Send Reset Link
+            {t("forgotPasswordPage.send_reset_link")}
           </Button>
         </form>
       )}
 
       <p className="text-center text-sm text-muted-foreground mt-6">
         <Link to={ROUTES.LOGIN} className="text-primary hover:underline font-medium">
-          Back to Login
+          {t("forgotPasswordPage.back_to_login")}
         </Link>
       </p>
     </div>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import toast from "react-hot-toast";
 import { Camera, KeyRound, Mail, Save, Shield, UserRound } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
@@ -23,6 +25,7 @@ const SPECIALIZATION_OPTIONS = [
 ];
 
 export const ProfilePage = () => {
+  const { t } = useTranslation();
   const { refreshUser, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,7 +60,7 @@ export const ProfilePage = () => {
       setLicenseNumber(data.engineerProfile?.licenseNumber || "");
       setYearsOfExperience(data.engineerProfile?.yearsOfExperience?.toString() || "");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to load profile.");
+      toast.error(errorMessage(err, "Failed to load profile."));
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +110,7 @@ export const ProfilePage = () => {
       await refreshUser();
       toast.success("Profile updated successfully.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to update profile.");
+      toast.error(errorMessage(err, "Failed to update profile."));
     } finally {
       setIsSavingProfile(false);
     }
@@ -137,7 +140,7 @@ export const ProfilePage = () => {
       await refreshUser();
       toast.success("Password updated successfully.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to change password.");
+      toast.error(errorMessage(err, "Failed to change password."));
     } finally {
       setIsSavingPassword(false);
     }
@@ -154,7 +157,7 @@ export const ProfilePage = () => {
       await refreshUser();
       toast.success("Profile photo updated.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to upload avatar.");
+      toast.error(errorMessage(err, "Failed to upload avatar."));
     } finally {
       setIsUploadingAvatar(false);
       event.target.value = "";
@@ -168,7 +171,7 @@ export const ProfilePage = () => {
       <div className="page-container">
         <Card>
           <div className="empty-state">
-            <p className="empty-state-title">Profile not found</p>
+            <p className="empty-state-title">{t("profilePage.profile_not_found")}</p>
           </div>
         </Card>
       </div>
@@ -179,15 +182,15 @@ export const ProfilePage = () => {
     <div className="page-container space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Profile & Settings</h1>
-          <p className="text-muted-foreground">Manage your account, contact details, notifications, and password</p>
+          <h1 className="text-2xl font-bold">{t("profilePage.profile_settings")}</h1>
+          <p className="text-muted-foreground">{t("profilePage.manage_your_account_contact_details")}</p>
         </div>
-        <Button variant="outline" onClick={logout}>Sign Out</Button>
+        <Button variant="outline" onClick={logout}>{t("profilePage.sign_out")}</Button>
       </div>
 
       {profile.mustChangePassword && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          You are using a temporary password. Please set a new password before continuing.
+          {t("profilePage.you_are_using_a_temporary_password")}
         </div>
       )}
 
@@ -224,7 +227,7 @@ export const ProfilePage = () => {
           <Card>
             <div className="flex items-center gap-2 mb-4">
               <Shield size={18} className="text-primary" />
-              <h2 className="font-semibold">Account</h2>
+              <h2 className="font-semibold">{t("profilePage.account")}</h2>
             </div>
             <div className="space-y-3">
               {accountStatus.map((item) => (
@@ -241,23 +244,23 @@ export const ProfilePage = () => {
           <Card>
             <div className="flex items-center gap-2 mb-5">
               <UserRound size={18} className="text-primary" />
-              <h2 className="font-semibold">Personal Information</h2>
+              <h2 className="font-semibold">{t("profilePage.personal_information")}</h2>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <Input label="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-              <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              <Input label="Phone Number" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+              <Input label={t("profilePage.full_name")} value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+              <Input label={t("profilePage.email")} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input label={t("profilePage.phone_number")} value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
               {canEditSpecialization && (
                 <>
                   <Select
-                    label="Specialization"
+                    label={t("profilePage.specialization")}
                     value={specialization}
                     onChange={(e) => setSpecialization(e.target.value as EngineerDiscipline)}
                     options={SPECIALIZATION_OPTIONS}
                   />
-                  <Input label="License Number" value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} />
+                  <Input label={t("profilePage.license_number")} value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} />
                   <Input
-                    label="Years of Experience"
+                    label={t("profilePage.years_of_experience")}
                     type="number"
                     min="0"
                     value={yearsOfExperience}
@@ -268,7 +271,7 @@ export const ProfilePage = () => {
             </div>
             <div className="flex justify-end mt-6">
               <Button onClick={handleSaveProfile} isLoading={isSavingProfile} leftIcon={<Save size={16} />}>
-                Save Profile
+                {t("profilePage.save_profile")}
               </Button>
             </div>
           </Card>
@@ -276,20 +279,20 @@ export const ProfilePage = () => {
           <Card>
             <div className="flex items-center gap-2 mb-5">
               <Mail size={18} className="text-primary" />
-              <h2 className="font-semibold">Notification Preferences</h2>
+              <h2 className="font-semibold">{t("profilePage.notification_preferences")}</h2>
             </div>
             <div className="grid gap-3">
               <label className="flex items-center justify-between rounded-md border px-4 py-3">
                 <span>
-                  <span className="block text-sm font-medium">Email notifications</span>
-                  <span className="block text-xs text-muted-foreground">Receive account and project updates by email</span>
+                  <span className="block text-sm font-medium">{t("profilePage.email_notifications")}</span>
+                  <span className="block text-xs text-muted-foreground">{t("profilePage.receive_account_and_project_updates_by")}</span>
                 </span>
                 <input type="checkbox" checked={notifyByEmail} onChange={(e) => setNotifyByEmail(e.target.checked)} />
               </label>
             </div>
             <div className="flex justify-end mt-6">
               <Button onClick={handleSaveProfile} isLoading={isSavingProfile} variant="outline">
-                Save Preferences
+                {t("profilePage.save_preferences")}
               </Button>
             </div>
           </Card>
@@ -298,23 +301,23 @@ export const ProfilePage = () => {
             <form onSubmit={handleChangePassword}>
               <div className="flex items-center gap-2 mb-5">
                 <KeyRound size={18} className="text-primary" />
-                <h2 className="font-semibold">Password</h2>
+                <h2 className="font-semibold">{t("profilePage.password")}</h2>
               </div>
               <div className="grid gap-4 md:grid-cols-3">
                 <Input
-                  label="Current Password"
+                  label={t("profilePage.current_password")}
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                 />
                 <Input
-                  label="New Password"
+                  label={t("profilePage.new_password")}
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
                 <Input
-                  label="Confirm New Password"
+                  label={t("profilePage.confirm_new_password")}
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -322,7 +325,7 @@ export const ProfilePage = () => {
               </div>
               <div className="flex justify-end mt-6">
                 <Button type="submit" isLoading={isSavingPassword}>
-                  Update Password
+                  {t("profilePage.update_password")}
                 </Button>
               </div>
             </form>

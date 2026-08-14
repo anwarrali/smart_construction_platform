@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../utils/errorMessage";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Button } from "../../components/ui/Button";
@@ -8,6 +10,7 @@ import { ROUTES } from "../../utils/constants";
 
 
 export const ResetPasswordPage = () => {
+  const { t } = useTranslation();
   const [params] = useSearchParams();
   const token = params.get("token") || "";
   const [password, setPassword] = useState("");
@@ -27,27 +30,27 @@ export const ResetPasswordPage = () => {
       await api.auth.resetPassword({ token, newPassword: password });
       setComplete(true);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "This reset link is invalid or expired.");
+      setError(errorMessage(err, "This reset link is invalid or expired."));
     } finally {
       setIsLoading(false);
     }
   };
 
   if (complete) return <div className="space-y-4 p-6 text-center">
-    <h1 className="text-2xl font-bold">Password Updated</h1>
-    <p className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">Your password was changed successfully. You can now sign in.</p>
-    <Link to={ROUTES.LOGIN}><Button fullWidth>Go to Login</Button></Link>
+    <h1 className="text-2xl font-bold">{t("resetPassword.password_updated")}</h1>
+    <p className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">{t("resetPassword.your_password_was_changed_successfully")}</p>
+    <Link to={ROUTES.LOGIN}><Button fullWidth>{t("resetPassword.go_to_login")}</Button></Link>
   </div>;
 
   return <div className="p-6">
-    <h1 className="mb-2 text-center text-2xl font-bold">Choose a New Password</h1>
-    <p className="mb-6 text-center text-sm text-muted-foreground">Use at least 8 characters and keep this password private.</p>
+    <h1 className="mb-2 text-center text-2xl font-bold">{t("resetPassword.choose_a_new_password")}</h1>
+    <p className="mb-6 text-center text-sm text-muted-foreground">{t("resetPassword.use_at_least_8_characters_and_keep_this")}</p>
     <form className="space-y-4" onSubmit={handleSubmit}>
       {error && <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
-      <Input label="New Password" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-      <Input label="Confirm Password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
-      <Button type="submit" fullWidth isLoading={isLoading} disabled={!token}>Update Password</Button>
+      <Input label={t("resetPassword.new_password")} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+      <Input label={t("resetPassword.confirm_password")} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
+      <Button type="submit" fullWidth isLoading={isLoading} disabled={!token}>{t("resetPassword.update_password")}</Button>
     </form>
-    <p className="mt-6 text-center text-sm"><Link className="font-medium text-primary hover:underline" to={ROUTES.LOGIN}>Back to Login</Link></p>
+    <p className="mt-6 text-center text-sm"><Link className="font-medium text-primary hover:underline" to={ROUTES.LOGIN}>{t("resetPassword.back_to_login")}</Link></p>
   </div>;
 };

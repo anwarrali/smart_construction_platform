@@ -16,6 +16,7 @@ from app.models.milestone import Milestone
 from app.models.enums import RescheduleReason
 from app.schemas.scheduling import GanttDataResponse, ShiftTaskRequest
 from app.services.audit_service import record_audit
+from app.services.authorization import require
 from app.services.cpm_service import calculate_dependency_cpm
 from app.core.schedule_dates import inclusive_duration_days
 
@@ -205,7 +206,10 @@ def shift_task_schedule(
     if not root_task or root_task.project_id != project_id:
         raise HTTPException(status_code=404, detail="Task not found")
     project = db.get(Project, project_id)
-    if current_user.role != UserRole.ADMIN and (not project or project.project_manager_id != current_user.id):
+    require(db, current_user, "schedule.edit", project_id)
+    # Beyond holding the permission, an ordinary project manager may only move
+    # the schedule of a project they actually run.
+    if current_user.role == UserRole.PROJECT_MANAGER and (not project or project.project_manager_id != current_user.id):
         raise HTTPException(status_code=403, detail="Only the assigned Project Manager can shift schedules")
 
     if payload.shift_days == 0:

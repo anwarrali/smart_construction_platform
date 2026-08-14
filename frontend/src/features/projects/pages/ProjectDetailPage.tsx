@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
@@ -16,6 +18,7 @@ import { useRole } from "../../../hooks/useRole";
 import { useProjectWorkspace } from "../context/ProjectWorkspaceContext";
 
 export const ProjectDetailPage = () => {
+  const { t } = useTranslation();
   const { id, projectId: routeProjectId } = useParams<{ id?: string; projectId?: string }>();
   const workspace = useProjectWorkspace();
   const activeProjectId = routeProjectId || id || workspace.projectId;
@@ -45,7 +48,7 @@ export const ProjectDetailPage = () => {
         setAvailableEngineers(available); setEngineerId(available[0]?.id || "");
       }
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Unable to load this project dashboard.");
+      setError(errorMessage(err, "Unable to load this project dashboard."));
       setProject(null);
     } finally { setIsLoading(false); }
   };
@@ -60,14 +63,14 @@ export const ProjectDetailPage = () => {
 
   if (isLoading) return <Loader fullPage />;
 
-  if (error) return <div className="page-container"><Card><p className="text-sm text-red-600">{error}</p><Button className="mt-4" variant="outline" onClick={()=>navigate(isProjectManager ? ROUTES.PM_PROJECTS : ROUTES.PROJECTS)}>Back to projects</Button></Card></div>;
+  if (error) return <div className="page-container"><Card><p className="text-sm text-state-overdue">{error}</p><Button className="mt-4" variant="outline" onClick={()=>navigate(isProjectManager ? ROUTES.PM_PROJECTS : ROUTES.PROJECTS)}>{t("projectDetail.back_to_projects")}</Button></Card></div>;
 
   if (!project) {
     return (
       <div className="page-container">
         <Card>
           <div className="empty-state">
-            <p className="empty-state-title">Project not found</p>
+            <p className="empty-state-title">{t("projectDetail.project_not_found")}</p>
           </div>
         </Card>
       </div>
@@ -88,7 +91,7 @@ export const ProjectDetailPage = () => {
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{project.name}</h1>
-        <div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => navigate(isProjectManager ? workspace.path("ifc") : `/projects/${project.id}/ifc`)}>IFC Intelligence</Button><Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/projects/${project.id}/evidence` : workspace.path("evidence"))}>Evidence Photos</Button>{isProjectManager && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("schedule"))}>Schedule</Button>}{(isProjectManager || isAdmin) && <Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/projects/${project.id}/milestones` : workspace.path("milestones"))}>Milestones</Button>}{isProjectManager && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("messages"))}>Messages</Button>}{(isProjectManager || isAdmin) && <Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/admin/projects/${project.id}/team` : workspace.path("team"))}>Team</Button>}<Badge variant={project.status === "active" ? "success" : "neutral"}>
+        <div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => navigate(isProjectManager ? workspace.path("ifc") : `/projects/${project.id}/ifc`)}>{t("projectDetail.ifc_intelligence")}</Button><Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/projects/${project.id}/evidence` : workspace.path("evidence"))}>{t("projectDetail.evidence_photos")}</Button>{isProjectManager && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("schedule"))}>{t("projectDetail.schedule")}</Button>}{(isProjectManager || isAdmin) && <Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/projects/${project.id}/milestones` : workspace.path("milestones"))}>{t("projectDetail.milestones")}</Button>}{isProjectManager && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("messages"))}>{t("projectDetail.messages")}</Button>}{(isProjectManager || isAdmin) && <Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/admin/projects/${project.id}/team` : workspace.path("team"))}>{t("projectDetail.team")}</Button>}<Badge variant={project.status === "active" ? "success" : "neutral"}>
           {project.status.replace("_", " ")}
         </Badge></div>
       </div>
@@ -113,39 +116,39 @@ export const ProjectDetailPage = () => {
 
       <div className="grid md:grid-cols-3 gap-6">
         <Card className="md:col-span-2 space-y-4">
-          <h3 className="font-semibold">Project Details</h3>
+          <h3 className="font-semibold">{t("projectDetail.project_details")}</h3>
           <p className="text-muted-foreground">{project.description}</p>
           <div className="grid grid-cols-2 gap-4 text-sm">
             {project.location && (
               <div>
-                <span className="text-muted-foreground">Location:</span>{" "}
+                <span className="text-muted-foreground">{t("projectDetail.location")}</span>{" "}
                 {project.location}
               </div>
             )}
             {project.projectType && (
               <div>
-                <span className="text-muted-foreground">Type:</span>{" "}
+                <span className="text-muted-foreground">{t("projectDetail.type")}</span>{" "}
                 {project.projectType}
               </div>
             )}
             <div>
-              <span className="text-muted-foreground">Start:</span>{" "}
+              <span className="text-muted-foreground">{t("projectDetail.start")}</span>{" "}
               {formatDate(project.startDate || "")}
             </div>
             <div>
-              <span className="text-muted-foreground">Planned End:</span>{" "}
+              <span className="text-muted-foreground">{t("projectDetail.planned_end")}</span>{" "}
               {formatDate(project.plannedEndDate || "")}
             </div>
           </div>
         </Card>
 
         <Card className="space-y-4">
-          <h3 className="font-semibold">Progress</h3>
+          <h3 className="font-semibold">{t("projectDetail.progress")}</h3>
           <div className="text-center">
             <p className="text-4xl font-bold text-primary">
               {project.completionPercentage}%
             </p>
-            <p className="text-sm text-muted-foreground mt-1">Complete</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("projectDetail.complete")}</p>
           </div>
           <div className="progress-bar">
             <div
@@ -168,16 +171,16 @@ export const ProjectDetailPage = () => {
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
-          <h3 className="font-semibold mb-4">Budget</h3>
+          <h3 className="font-semibold mb-4">{t("projectDetail.budget")}</h3>
           <div className="space-y-2">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Planned</span>
+              <span className="text-muted-foreground">{t("projectDetail.planned")}</span>
               <span className="font-medium">
                 {formatCurrency(project.budgetTotal || 0)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Spent</span>
+              <span className="text-muted-foreground">{t("projectDetail.spent")}</span>
               <span className="font-medium">
                 {formatCurrency(project.budgetSpent || 0)}
               </span>
@@ -197,12 +200,12 @@ export const ProjectDetailPage = () => {
                 className="flex items-center justify-between"
               >
                 <span className="text-sm">{member.user?.fullName}</span>
-                <div className="flex items-center gap-2"><Badge size="sm">{member.roleOnProject}</Badge>{(isProjectManager || isAdmin) && ["engineer","consultant"].includes(member.roleOnProject) && <Button size="sm" variant="ghost" onClick={async()=>{await api.projects.removeMember(project.id,member.userId);await loadProject(project.id);}}>Remove</Button>}</div>
+                <div className="flex items-center gap-2"><Badge size="sm">{member.roleOnProject}</Badge>{(isProjectManager || isAdmin) && ["engineer","consultant"].includes(member.roleOnProject) && <Button size="sm" variant="ghost" onClick={async()=>{await api.projects.removeMember(project.id,member.userId);await loadProject(project.id);}}>{t("projectDetail.remove")}</Button>}</div>
               </div>
             ))}
             {(!project.members || project.members.length === 0) && (
               <p className="text-sm text-muted-foreground">
-                No team members assigned
+                {t("projectDetail.no_team_members_assigned")}
               </p>
             )}
           </div>
@@ -210,9 +213,9 @@ export const ProjectDetailPage = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card><h3 className="font-semibold mb-3">Recent Design Changes</h3><div className="space-y-2">{recentChanges.map(change=><div key={change.id} className="border-b pb-2"><p className="text-sm font-medium">{change.title}</p><p className="text-xs text-muted-foreground capitalize">{change.status.replace('_',' ')}</p></div>)}{recentChanges.length===0&&<p className="text-sm text-muted-foreground">No design changes.</p>}</div></Card>
-        <Card><h3 className="font-semibold mb-3">Recent Site Reports</h3><div className="space-y-2">{recentReports.map(report=><div key={report.id} className="border-b pb-2"><p className="text-sm font-medium">{formatDate(report.reportDate)}</p><p className="text-xs text-muted-foreground line-clamp-1">{report.summaryText || 'Site progress report'}</p></div>)}{recentReports.length===0&&<p className="text-sm text-muted-foreground">No site reports.</p>}</div></Card>
-        <Card><h3 className="font-semibold mb-3">Recent Activity</h3><div className="space-y-2">{(projectStats?.recentActivity||[]).map((activity,index)=><div key={`${activity.timestamp}-${index}`} className="border-b pb-2"><p className="text-sm capitalize">{activity.entityType.replace('_',' ')} · {activity.action.replace('_',' ')}</p><p className="text-xs text-muted-foreground">{formatDate(activity.timestamp)}</p></div>)}{!projectStats?.recentActivity?.length&&<p className="text-sm text-muted-foreground">No recent activity.</p>}</div></Card>
+        <Card><h3 className="font-semibold mb-3">{t("projectDetail.recent_design_changes")}</h3><div className="space-y-2">{recentChanges.map(change=><div key={change.id} className="border-b pb-2"><p className="text-sm font-medium">{change.title}</p><p className="text-xs text-muted-foreground capitalize">{change.status.replace('_',' ')}</p></div>)}{recentChanges.length===0&&<p className="text-sm text-muted-foreground">{t("projectDetail.no_design_changes")}</p>}</div></Card>
+        <Card><h3 className="font-semibold mb-3">{t("projectDetail.recent_site_reports")}</h3><div className="space-y-2">{recentReports.map(report=><div key={report.id} className="border-b pb-2"><p className="text-sm font-medium">{formatDate(report.reportDate)}</p><p className="text-xs text-muted-foreground line-clamp-1">{report.summaryText || 'Site progress report'}</p></div>)}{recentReports.length===0&&<p className="text-sm text-muted-foreground">{t("projectDetail.no_site_reports")}</p>}</div></Card>
+        <Card><h3 className="font-semibold mb-3">{t("projectDetail.recent_activity")}</h3><div className="space-y-2">{(projectStats?.recentActivity||[]).map((activity,index)=><div key={`${activity.timestamp}-${index}`} className="border-b pb-2"><p className="text-sm capitalize">{activity.entityType.replace('_',' ')} · {activity.action.replace('_',' ')}</p><p className="text-xs text-muted-foreground">{formatDate(activity.timestamp)}</p></div>)}{!projectStats?.recentActivity?.length&&<p className="text-sm text-muted-foreground">{t("projectDetail.no_recent_activity")}</p>}</div></Card>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { errorMessage } from "../../../../utils/errorMessage";
 import { AlertTriangle, Building2, CalendarDays, CheckCircle2, Clock, Flag, MessageSquareText, Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -13,9 +14,9 @@ const money = (value: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 
 const healthLabels = {
-  on_track: { label: "On Track", className: "bg-emerald-100 text-emerald-700" },
-  at_risk: { label: "At Risk", className: "bg-amber-100 text-amber-700" },
-  delayed: { label: "Delayed", className: "bg-rose-100 text-rose-700" },
+  on_track: { label: "On Track", className: "bg-wash-verified text-state-verified" },
+  at_risk: { label: "At Risk", className: "bg-wash-review text-state-review" },
+  delayed: { label: "Delayed", className: "bg-wash-overdue text-state-overdue" },
 };
 
 export const OwnerDashboard = () => {
@@ -33,7 +34,7 @@ export const OwnerDashboard = () => {
       setProjectId((current) => current || assigned[0]?.id || "");
       if (!assigned.length) setIsLoading(false);
     }).catch((err) => {
-      setError(err?.response?.data?.detail || "Unable to load assigned projects.");
+      setError(errorMessage(err, "Unable to load assigned projects."));
       setIsLoading(false);
     });
   }, []);
@@ -45,7 +46,7 @@ export const OwnerDashboard = () => {
     try {
       setData(await api.projects.getOwnerDashboard(projectId));
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Unable to load the executive dashboard.");
+      setError(errorMessage(err, "Unable to load the executive dashboard."));
       setData(null);
     } finally {
       setIsLoading(false);
@@ -96,9 +97,9 @@ export const OwnerDashboard = () => {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.projectProgress")}</p><p className="mt-2 text-3xl font-bold">{summary.completionPercentage}%</p><p className="text-xs text-muted-foreground">{summary.currentPhase}</p></div><Building2 className="text-primary" /></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${summary.completionPercentage}%` }} /></div></Card>
-        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.projectStatus")}</p><span className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${health.className}`}>{health.label}</span><p className="mt-2 text-xs text-muted-foreground">{summary.daysRemaining >= 0 ? t("project.daysRemaining", { count: summary.daysRemaining }) : t("project.daysOverdue", { count: Math.abs(summary.daysRemaining) })}</p></div><CheckCircle2 className="text-emerald-600" /></div></Card>
-        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.criticalDelayedTasks")}</p><p className="mt-2 text-3xl font-bold">{data.delayedTasks.length}</p><a href="#delays" className="text-xs font-medium text-primary">{t("owner.viewCriticalDelays")}</a></div><Clock className="text-rose-600" /></div></Card>
-        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("project.openIssues")}</p><p className="mt-2 text-3xl font-bold">{data.openIssues.length}</p><p className="text-xs text-muted-foreground">{data.openIssues.filter((item) => item.severity === "critical").length} critical</p></div><AlertTriangle className="text-amber-600" /></div></Card>
+        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.projectStatus")}</p><span className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${health.className}`}>{health.label}</span><p className="mt-2 text-xs text-muted-foreground">{summary.daysRemaining >= 0 ? t("project.daysRemaining", { count: summary.daysRemaining }) : t("project.daysOverdue", { count: Math.abs(summary.daysRemaining) })}</p></div><CheckCircle2 className="text-state-verified" /></div></Card>
+        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.criticalDelayedTasks")}</p><p className="mt-2 text-3xl font-bold">{data.delayedTasks.length}</p><a href="#delays" className="text-xs font-medium text-primary">{t("owner.viewCriticalDelays")}</a></div><Clock className="text-state-overdue" /></div></Card>
+        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("project.openIssues")}</p><p className="mt-2 text-3xl font-bold">{data.openIssues.length}</p><p className="text-xs text-muted-foreground">{data.openIssues.filter((item) => item.severity === "critical").length} critical</p></div><AlertTriangle className="text-state-review" /></div></Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
@@ -106,8 +107,8 @@ export const OwnerDashboard = () => {
           <h2 className="font-semibold">{t("owner.attentionRequired")}</h2>
           <p className="text-sm text-muted-foreground">{t("owner.attentionHint")}</p>
           <div className="mt-4 space-y-3">
-            {data.attentionRequired.map((item) => <div key={`${item.type}-${item.id}`} className="rounded-lg border p-3"><div className="flex items-start gap-3"><AlertTriangle size={17} className={item.severity === "critical" ? "text-rose-600" : "text-amber-600"} /><div><p className="text-sm font-semibold">{item.title}</p><p className="mt-1 text-sm text-muted-foreground">{item.summary}</p></div></div></div>)}
-            {!data.attentionRequired.length && <div className="rounded-lg bg-emerald-50 p-4 text-sm text-emerald-700">{t("owner.noAttentionItems")}</div>}
+            {data.attentionRequired.map((item) => <div key={`${item.type}-${item.id}`} className="rounded-lg border p-3"><div className="flex items-start gap-3"><AlertTriangle size={17} className={item.severity === "critical" ? "text-state-overdue" : "text-state-review"} /><div><p className="text-sm font-semibold">{item.title}</p><p className="mt-1 text-sm text-muted-foreground">{item.summary}</p></div></div></div>)}
+            {!data.attentionRequired.length && <div className="rounded-lg bg-wash-verified p-4 text-sm text-state-verified">{t("owner.noAttentionItems")}</div>}
           </div>
         </Card>
 
@@ -116,13 +117,13 @@ export const OwnerDashboard = () => {
           <div className="mt-5 space-y-4">
             <div><p className="text-xs text-muted-foreground">{t("owner.overallBudget")}</p><p className="text-2xl font-bold">{money(cost.budgetTotal)}</p></div>
             <div className="grid grid-cols-2 gap-3"><div><p className="text-xs text-muted-foreground">{t("project.spent")}</p><p className="font-semibold">{money(cost.budgetSpent)}</p></div><div><p className="text-xs text-muted-foreground">{t("project.remaining")}</p><p className="font-semibold">{money(remaining)}</p></div></div>
-            <div><div className="mb-1 flex justify-between text-xs"><span>{t("owner.costProgress")}</span><span>{cost.budgetTotal ? Math.min(Math.round(cost.budgetSpent / cost.budgetTotal * 100), 100) : 0}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-emerald-600" style={{ width: `${cost.budgetTotal ? Math.min(cost.budgetSpent / cost.budgetTotal * 100, 100) : 0}%` }} /></div></div>
+            <div><div className="mb-1 flex justify-between text-xs"><span>{t("owner.costProgress")}</span><span>{cost.budgetTotal ? Math.min(Math.round(cost.budgetSpent / cost.budgetTotal * 100), 100) : 0}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-state-verified" style={{ width: `${cost.budgetTotal ? Math.min(cost.budgetSpent / cost.budgetTotal * 100, 100) : 0}%` }} /></div></div>
           </div>
         </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="p-5"><div className="flex items-center gap-2"><MessageSquareText size={18} /><h2 className="font-semibold">{t("owner.yourRequests")}</h2></div><div className="mt-4 space-y-3">{data.pendingOwnerRequests.map((item) => <Link key={item.id} to={projectEntityPath(projectId, "OWNER_REQUEST", item.id, "owner")} className="block rounded-lg border p-3 transition-colors hover:bg-muted/40"><div className="flex justify-between gap-3"><p className="text-sm font-semibold">{item.title}</p><span className="text-xs font-medium capitalize">{item.status.replaceAll("_", " ").toLowerCase()}</span></div>{item.needsOwnerInput && <p className="mt-1 text-xs font-semibold text-amber-700">{t("owner.clarificationRequired")}</p>}</Link>)}{!data.pendingOwnerRequests.length && <p className="text-sm text-muted-foreground">{t("empty.noRequestsHint")}</p>}</div><Link className="mt-3 inline-flex text-sm font-medium text-primary" to={projectModulePath(projectId, "requests", "owner")}>{t("owner.openRequests")}</Link></Card>
+        <Card className="p-5"><div className="flex items-center gap-2"><MessageSquareText size={18} /><h2 className="font-semibold">{t("owner.yourRequests")}</h2></div><div className="mt-4 space-y-3">{data.pendingOwnerRequests.map((item) => <Link key={item.id} to={projectEntityPath(projectId, "OWNER_REQUEST", item.id, "owner")} className="block rounded-lg border p-3 transition-colors hover:bg-muted/40"><div className="flex justify-between gap-3"><p className="text-sm font-semibold">{item.title}</p><span className="text-xs font-medium capitalize">{item.status.replaceAll("_", " ").toLowerCase()}</span></div>{item.needsOwnerInput && <p className="mt-1 text-xs font-semibold text-state-review">{t("owner.clarificationRequired")}</p>}</Link>)}{!data.pendingOwnerRequests.length && <p className="text-sm text-muted-foreground">{t("empty.noRequestsHint")}</p>}</div><Link className="mt-3 inline-flex text-sm font-medium text-primary" to={projectModulePath(projectId, "requests", "owner")}>{t("owner.openRequests")}</Link></Card>
         <Card className="p-5"><div className="flex items-center gap-2"><CalendarDays size={18} /><h2 className="font-semibold">{t("owner.upcomingEngineerVisits")}</h2></div><div className="mt-4 space-y-3">{data.upcomingSiteVisits.map((visit) => <Link key={visit.id} to={projectEntityPath(projectId, "SITE_VISIT", visit.id, "owner")} className="block rounded-lg border p-3 transition-colors hover:bg-muted/40"><p className="text-sm font-semibold">{visit.title}</p><p className="text-xs text-muted-foreground">{new Date(visit.scheduledStart).toLocaleString()} · {visit.location || "Project site"}</p></Link>)}{!data.upcomingSiteVisits.length && <p className="text-sm text-muted-foreground">{t("owner.noVisitsScheduled")}</p>}</div><Link className="mt-3 inline-flex text-sm font-medium text-primary" to={projectModulePath(projectId, "site-visits", "owner")}>{t("owner.openSchedule")}</Link></Card>
         <Card className="p-5">
           <div className="flex items-center gap-2"><Flag size={18} /><h2 className="font-semibold">{t("owner.projectTimeline")}</h2></div>
@@ -138,8 +139,8 @@ export const OwnerDashboard = () => {
       </div>
 
       <div id="delays" className="grid gap-6 lg:grid-cols-2">
-        <Card className="p-5"><h2 className="font-semibold">{t("owner.criticalDelays")}</h2><div className="mt-4 space-y-3">{data.delayedTasks.map((task) => <div key={task.id} className="flex justify-between rounded-lg border p-3"><div><p className="text-sm font-semibold">{task.name}</p><p className="text-xs text-muted-foreground">{task.taskCode}</p></div><span className="text-sm font-semibold text-rose-600">{t("owner.daysDelayed", { count: task.daysDelayed })}</span></div>)}{!data.delayedTasks.length && <p className="text-sm text-muted-foreground">{t("owner.noDelays")}</p>}</div></Card>
-        <Card className="p-5"><h2 className="font-semibold">{t("project.openIssues")}</h2><div className="mt-4 space-y-3">{data.openIssues.map((issue) => <div key={issue.id} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><p className="text-sm font-semibold">{issue.title}</p><span className={`text-xs font-semibold capitalize ${issue.severity === "critical" ? "text-rose-600" : issue.severity === "high" ? "text-amber-600" : "text-muted-foreground"}`}>{issue.severity}</span></div><p className="mt-1 text-sm text-muted-foreground">{issue.summary}</p></div>)}{!data.openIssues.length && <p className="text-sm text-muted-foreground">{t("owner.noIssues")}</p>}</div></Card>
+        <Card className="p-5"><h2 className="font-semibold">{t("owner.criticalDelays")}</h2><div className="mt-4 space-y-3">{data.delayedTasks.map((task) => <div key={task.id} className="flex justify-between rounded-lg border p-3"><div><p className="text-sm font-semibold">{task.name}</p><p className="text-xs text-muted-foreground">{task.taskCode}</p></div><span className="text-sm font-semibold text-state-overdue">{t("owner.daysDelayed", { count: task.daysDelayed })}</span></div>)}{!data.delayedTasks.length && <p className="text-sm text-muted-foreground">{t("owner.noDelays")}</p>}</div></Card>
+        <Card className="p-5"><h2 className="font-semibold">{t("project.openIssues")}</h2><div className="mt-4 space-y-3">{data.openIssues.map((issue) => <div key={issue.id} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><p className="text-sm font-semibold">{issue.title}</p><span className={`text-xs font-semibold capitalize ${issue.severity === "critical" ? "text-state-overdue" : issue.severity === "high" ? "text-state-review" : "text-muted-foreground"}`}>{issue.severity}</span></div><p className="mt-1 text-sm text-muted-foreground">{issue.summary}</p></div>)}{!data.openIssues.length && <p className="text-sm text-muted-foreground">{t("owner.noIssues")}</p>}</div></Card>
       </div>
     </div>
   );

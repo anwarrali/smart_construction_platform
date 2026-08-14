@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Badge } from "../../../components/ui/Badge";
@@ -66,6 +68,7 @@ const statusVariant: Record<string, "neutral" | "success" | "warning" | "danger"
 };
 
 export const ProjectsPage = () => {
+  const { t } = useTranslation();
   const { isAdmin, isProjectManager, isEngineer, checkPermission } = useRole();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -105,7 +108,7 @@ export const ProjectsPage = () => {
         setUsers([]);
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to load projects.");
+      toast.error(errorMessage(err, "Failed to load projects."));
     } finally {
       setIsLoading(false);
     }
@@ -159,7 +162,7 @@ export const ProjectsPage = () => {
       const members = await projectsService.getMembers(project.id);
       setSelectedMembers(members);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to load project members.");
+      toast.error(errorMessage(err, "Failed to load project members."));
       setSelectedMembers(project.members || []);
     }
   };
@@ -208,7 +211,7 @@ export const ProjectsPage = () => {
       setForm(emptyProjectForm);
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to save project.");
+      toast.error(errorMessage(err, "Failed to save project."));
     } finally {
       setIsSaving(false);
     }
@@ -269,10 +272,10 @@ export const ProjectsPage = () => {
       render: (project) => (
         <div className="flex justify-end gap-2">
           {!isEngineer && <Button variant="outline" size="sm" onClick={() => openMembers(project)}>
-            View Members
+            {t("projectsPage.view_members")}
           </Button>}
           {isAdmin && <Button variant="outline" size="sm" onClick={() => navigate(`/admin/projects/${project.id}/team`)}>
-            Manage Team
+            {t("projectsPage.manage_team")}
           </Button>}
           <Button size="sm" onClick={() => navigate(
             isProjectManager
@@ -283,11 +286,11 @@ export const ProjectsPage = () => {
                   : `/engineer/projects/${project.id}/dashboard`)
                 : `/projects/${project.id}`
           )}>
-            Open
+            {t("projectsPage.open")}
           </Button>
           {isAdmin && (
             <Button variant="ghost" size="sm" onClick={() => openEdit(project)}>
-              Edit
+              {t("projectsPage.edit")}
             </Button>
           )}
         </div>
@@ -301,7 +304,7 @@ export const ProjectsPage = () => {
     <div className="page-container space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Projects</h1>
+          <h1 className="text-2xl font-bold">{t("projectsPage.projects")}</h1>
           <p className="text-muted-foreground">{
             isProjectManager
               ? "Select an assigned project to open its project dashboard"
@@ -318,7 +321,7 @@ export const ProjectsPage = () => {
       <Card>
         <div className="grid gap-3 mb-4 md:grid-cols-[1fr_220px]">
           <Input
-            placeholder="Search projects..."
+            placeholder={t("projectsPage.search_projects")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -342,7 +345,7 @@ export const ProjectsPage = () => {
           data={filteredProjects}
           keyExtractor={(project) => project.id}
           isLoading={isLoading}
-          emptyMessage="No projects found"
+          emptyMessage={t("projectsPage.no_projects_found")}
         />
       </Card>
 
@@ -354,30 +357,30 @@ export const ProjectsPage = () => {
       >
         <form onSubmit={saveProject} className="space-y-4">
           <Input
-            label="Project Name *"
+            label={t("projectsPage.project_name")}
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
-              label="Description"
+              label={t("projectsPage.description")}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
             <Input
-              label="Location"
+              label={t("projectsPage.location")}
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
             />
             <Input
-              label="Project Type"
+              label={t("projectsPage.project_type")}
               value={form.projectType}
               onChange={(e) => setForm({ ...form, projectType: e.target.value })}
               placeholder="residential, commercial..."
             />
             <Select
-              label="Status"
+              label={t("projectsPage.status")}
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
               options={[
@@ -390,26 +393,26 @@ export const ProjectsPage = () => {
               ]}
             />
             <Input
-              label="Start Date"
+              label={t("projectsPage.start_date")}
               type="date"
               value={form.startDate}
               onChange={(e) => setForm({ ...form, startDate: e.target.value })}
             />
             <Input
-              label="Expected End Date"
+              label={t("projectsPage.expected_end_date")}
               type="date"
               value={form.plannedEndDate}
               onChange={(e) => setForm({ ...form, plannedEndDate: e.target.value })}
             />
             <Input
-              label="Budget Total"
+              label={t("projectsPage.budget_total")}
               type="number"
               min="0"
               value={form.budgetTotal}
               onChange={(e) => setForm({ ...form, budgetTotal: e.target.value })}
             />
             <Select
-              label="Owner *"
+              label={t("projectsPage.owner")}
               value={form.ownerId}
               onChange={(e) => setForm({ ...form, ownerId: e.target.value })}
               options={[
@@ -419,7 +422,7 @@ export const ProjectsPage = () => {
               required
             />
             <Select
-              label="Project Manager *"
+              label={t("projectsPage.project_manager")}
               value={form.projectManagerId}
               onChange={(e) => setForm({ ...form, projectManagerId: e.target.value })}
               options={[
@@ -429,7 +432,7 @@ export const ProjectsPage = () => {
               required
             />
             <Select
-              label="Initial Consultant"
+              label={t("projectsPage.initial_consultant")}
               value={form.consultantId}
               onChange={(e) => setForm({ ...form, consultantId: e.target.value })}
               options={[
@@ -440,7 +443,7 @@ export const ProjectsPage = () => {
           </div>
           <ModalActions>
             <Button variant="outline" type="button" onClick={() => setIsFormOpen(false)}>
-              Cancel
+              {t("projectsPage.cancel")}
             </Button>
             <Button type="submit" isLoading={isSaving}>
               {selectedProject ? "Save Changes" : "Create Project"}
@@ -471,7 +474,7 @@ export const ProjectsPage = () => {
             </div>
           ))}
           {selectedMembers.length === 0 && (
-            <div className="py-8 text-center text-sm text-muted-foreground">No members assigned.</div>
+            <div className="py-8 text-center text-sm text-muted-foreground">{t("projectsPage.no_members_assigned")}</div>
           )}
         </div>
       </Modal>

@@ -22,6 +22,9 @@ class AIInsightOut(CamelModel):
     insight_type: str; category: str; severity: str; confidence: float
     title: str; description: str; reason: str; recommended_action: str
     potential_impact: str | None = None; evidence_json: dict[str, Any]; affected_json: dict[str, Any]
+    message_key: str | None = None
+    #: Facts for the localized rendering; empty for rows written before this.
+    message_params_json: dict[str, Any] = Field(default_factory=dict)
     related_task_ids_json: list; related_issue_ids_json: list; related_evidence_ids_json: list
     source_engine: str; status: str; review_note: str | None = None
     reviewed_by_id: UUID | None = None; reviewed_at: datetime | None = None; resolved_at: datetime | None = None

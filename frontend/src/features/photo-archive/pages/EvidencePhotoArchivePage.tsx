@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -21,6 +23,7 @@ const directions = ["FRONT", "BACK", "LEFT", "RIGHT", "TOP", "DETAIL", "OTHER"];
 const statuses = ["SUBMITTED", "VERIFIED", "REJECTED"];
 
 export const EvidencePhotoArchivePage = () => {
+  const { t } = useTranslation();
   const params = useParams<{ projectId?: string; id?: string }>();
   const workspace = useProjectWorkspace();
   const projectId = params.projectId || params.id || workspace.projectId;
@@ -53,7 +56,7 @@ export const EvidencePhotoArchivePage = () => {
       setTotal(result.total);
       setTotalPages(result.totalPages);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Unable to load the evidence archive.");
+      setError(errorMessage(err, "Unable to load the evidence archive."));
     } finally {
       setLoading(false);
     }
@@ -73,7 +76,7 @@ export const EvidencePhotoArchivePage = () => {
       await loadCategories();
       toast.success("Project category created.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Unable to create category.");
+      toast.error(errorMessage(err, "Unable to create category."));
     }
   };
 
@@ -84,21 +87,21 @@ export const EvidencePhotoArchivePage = () => {
       await loadCategories();
       toast.success("Category deactivated; historical tags were preserved.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Unable to deactivate category.");
+      toast.error(errorMessage(err, "Unable to deactivate category."));
     }
   };
 
-  if (!projectId) return <Card>No project is selected.</Card>;
+  if (!projectId) return <Card>{t("photoArchive.no_project_is_selected")}</Card>;
 
   return <div className="page-container space-y-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-bold">Evidence Photo Archive</h1>
+        <h1 className="text-2xl font-bold">{t("photoArchive.evidence_photo_archive")}</h1>
         <p className="text-sm text-muted-foreground">
           Search field photos while retaining their task, submission, uploader, and review provenance.
         </p>
       </div>
-      {canManage && <Button variant="outline" onClick={() => setShowManage(true)}>Manage Categories</Button>}
+      {canManage && <Button variant="outline" onClick={() => setShowManage(true)}>{t("photoArchive.manage_categories")}</Button>}
     </div>
 
     <Card className="space-y-4">
@@ -107,34 +110,34 @@ export const EvidencePhotoArchivePage = () => {
         setFilter("search", draftSearch.trim());
       }}>
         <Input value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)}
-          placeholder="Search task, discipline, category, filename…" />
-        <Button type="submit">Search</Button>
+          placeholder={t("photoArchive.search_task_discipline_category_filename")} />
+        <Button type="submit">{t("photoArchive.search")}</Button>
       </form>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-        <Select label="Category" value={filters.category || ""} onChange={(event) => setFilter("category", event.target.value)}
+        <Select label={t("photoArchive.category")} value={filters.category || ""} onChange={(event) => setFilter("category", event.target.value)}
           options={[{ value: "", label: "All categories" }, ...categories.filter((item) => item.active).map((item) => ({ value: item.id, label: item.name }))]} />
-        <Input label="Discipline" value={filters.discipline || ""} onChange={(event) => setFilter("discipline", event.target.value)} placeholder="e.g. electrical" />
-        <Select label="Status" value={filters.status || ""} onChange={(event) => setFilter("status", event.target.value)}
+        <Input label={t("photoArchive.discipline")} value={filters.discipline || ""} onChange={(event) => setFilter("discipline", event.target.value)} placeholder="e.g. electrical" />
+        <Select label={t("photoArchive.status")} value={filters.status || ""} onChange={(event) => setFilter("status", event.target.value)}
           options={[{ value: "", label: "All statuses" }, ...statuses.map((value) => ({ value, label: value.toLowerCase() }))]} />
-        <Select label="Direction" value={filters.direction || ""} onChange={(event) => setFilter("direction", event.target.value)}
+        <Select label={t("photoArchive.direction")} value={filters.direction || ""} onChange={(event) => setFilter("direction", event.target.value)}
           options={[{ value: "", label: "All directions" }, ...directions.map((value) => ({ value, label: value.toLowerCase() }))]} />
-        <Input label="From" type="date" value={filters.dateFrom || ""} onChange={(event) => setFilter("dateFrom", event.target.value)} />
+        <Input label={t("photoArchive.from")} type="date" value={filters.dateFrom || ""} onChange={(event) => setFilter("dateFrom", event.target.value)} />
         <Input label="To" type="date" value={filters.dateTo || ""} onChange={(event) => setFilter("dateTo", event.target.value)} />
       </div>
       <div className="flex justify-end">
         <Button variant="ghost" onClick={() => {
           setDraftSearch("");
           setFilters({ page: 1, pageSize: 24 });
-        }}>Clear filters</Button>
+        }}>{t("photoArchive.clear_filters")}</Button>
       </div>
     </Card>
 
     {error && <Card className="border-destructive/30 text-destructive">{error}</Card>}
     <div className="flex justify-between text-sm text-muted-foreground">
       <span>{total} evidence photo{total === 1 ? "" : "s"}</span>
-      {loading && <span>Loading…</span>}
+      {loading && <span>{t("photoArchive.loading")}</span>}
     </div>
-    {!loading && !items.length && <Card className="py-12 text-center text-muted-foreground">No evidence photos match these filters.</Card>}
+    {!loading && !items.length && <Card className="py-12 text-center text-muted-foreground">{t("photoArchive.no_evidence_photos_match_these_filters")}</Card>}
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {items.map((photo) => <button key={photo.id} type="button" onClick={() => setSelected(photo)}
         className="overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -149,7 +152,7 @@ export const EvidencePhotoArchivePage = () => {
           </div>
           <div className="flex flex-wrap gap-1">
             {photo.categories.map((category) => <Badge key={category.id} size="sm" variant="info">{category.name}</Badge>)}
-            {!photo.categories.length && <span className="text-xs text-muted-foreground">Uncategorized</span>}
+            {!photo.categories.length && <span className="text-xs text-muted-foreground">{t("photoArchive.uncategorized")}</span>}
           </div>
           <p className="text-xs text-muted-foreground">
             {photo.discipline || "General"} · {photo.workerName} · {new Date(photo.submissionCreatedAt).toLocaleDateString()}
@@ -160,42 +163,42 @@ export const EvidencePhotoArchivePage = () => {
     </div>
 
     <div className="flex items-center justify-center gap-3">
-      <Button variant="outline" disabled={(filters.page || 1) <= 1} onClick={() => setFilter("page", (filters.page || 1) - 1)}>Previous</Button>
+      <Button variant="outline" disabled={(filters.page || 1) <= 1} onClick={() => setFilter("page", (filters.page || 1) - 1)}>{t("photoArchive.previous")}</Button>
       <span className="text-sm">Page {filters.page || 1} of {Math.max(totalPages, 1)}</span>
-      <Button variant="outline" disabled={(filters.page || 1) >= totalPages} onClick={() => setFilter("page", (filters.page || 1) + 1)}>Next</Button>
+      <Button variant="outline" disabled={(filters.page || 1) >= totalPages} onClick={() => setFilter("page", (filters.page || 1) + 1)}>{t("photoArchive.next")}</Button>
     </div>
 
-    <Modal isOpen={Boolean(selected)} onClose={() => setSelected(null)} title="Evidence Photo Provenance" size="full">
+    <Modal isOpen={Boolean(selected)} onClose={() => setSelected(null)} title={t("photoArchive.evidence_photo_provenance")} size="full">
       {selected && <div className="grid gap-5 md:grid-cols-2">
         <a href={selected.attachment.fileUrl} target="_blank" rel="noreferrer">
           <img src={selected.attachment.fileUrl} alt={selected.attachment.originalFilename} className="max-h-[65vh] w-full rounded-lg bg-muted object-contain" />
         </a>
         <dl className="grid content-start grid-cols-[130px_1fr] gap-2 text-sm">
-          <dt className="text-muted-foreground">Task</dt><dd>{selected.taskCode} — {selected.taskTitle}</dd>
-          <dt className="text-muted-foreground">Discipline</dt><dd>{selected.discipline || "General"}</dd>
-          <dt className="text-muted-foreground">Worker</dt><dd>{selected.workerName}</dd>
-          <dt className="text-muted-foreground">Uploader</dt><dd>{selected.uploaderName}</dd>
-          <dt className="text-muted-foreground">Submitted</dt><dd>{new Date(selected.submissionCreatedAt).toLocaleString()}</dd>
-          <dt className="text-muted-foreground">Status</dt><dd>{selected.submissionStatus}</dd>
-          <dt className="text-muted-foreground">Reviewer</dt><dd>{selected.reviewerName || "Not reviewed"}</dd>
-          <dt className="text-muted-foreground">Reviewed</dt><dd>{selected.reviewedAt ? new Date(selected.reviewedAt).toLocaleString() : "—"}</dd>
-          <dt className="text-muted-foreground">Direction</dt><dd>{selected.direction || "Unlabelled"}</dd>
-          <dt className="text-muted-foreground">Categories</dt><dd>{selected.categories.map((item) => item.name).join(", ") || "Uncategorized"}</dd>
-          <dt className="text-muted-foreground">Filename</dt><dd className="break-all">{selected.attachment.originalFilename}</dd>
-          <dt className="text-muted-foreground">Submission ID</dt><dd className="break-all font-mono text-xs">{selected.fieldSubmissionId}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.task")}</dt><dd>{selected.taskCode} — {selected.taskTitle}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.discipline")}</dt><dd>{selected.discipline || "General"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.worker")}</dt><dd>{selected.workerName}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.uploader")}</dt><dd>{selected.uploaderName}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.submitted")}</dt><dd>{new Date(selected.submissionCreatedAt).toLocaleString()}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.status")}</dt><dd>{selected.submissionStatus}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.reviewer")}</dt><dd>{selected.reviewerName || "Not reviewed"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.reviewed")}</dt><dd>{selected.reviewedAt ? new Date(selected.reviewedAt).toLocaleString() : "—"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.direction")}</dt><dd>{selected.direction || "Unlabelled"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.categories")}</dt><dd>{selected.categories.map((item) => item.name).join(", ") || "Uncategorized"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.filename")}</dt><dd className="break-all">{selected.attachment.originalFilename}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.submission_id")}</dt><dd className="break-all font-mono text-xs">{selected.fieldSubmissionId}</dd>
         </dl>
       </div>}
     </Modal>
 
-    <Modal isOpen={showManage} onClose={() => setShowManage(false)} title="Project Photo Categories" size="lg">
+    <Modal isOpen={showManage} onClose={() => setShowManage(false)} title={t("photoArchive.project_photo_categories")} size="lg">
       <div className="flex gap-2">
-        <Input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="New project category, e.g. Waterproofing" />
+        <Input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder={t("photoArchive.new_project_category_e_g_waterproofing")} />
         <Button disabled={categoryName.trim().length < 2} onClick={createCategory}>Add</Button>
       </div>
       <div className="mt-4 max-h-96 space-y-2 overflow-y-auto">
         {categories.map((category) => <div key={category.id} className="flex items-center justify-between rounded border p-3">
           <div><p className="font-medium">{category.name}</p><p className="text-xs text-muted-foreground">{category.isSystem ? "System category" : "Project category"} · {category.active ? "Active" : "Inactive"}</p></div>
-          {!category.isSystem && category.active && <Button size="sm" variant="outline" onClick={() => deactivate(category)}>Deactivate</Button>}
+          {!category.isSystem && category.active && <Button size="sm" variant="outline" onClick={() => deactivate(category)}>{t("photoArchive.deactivate")}</Button>}
         </div>)}
       </div>
     </Modal>

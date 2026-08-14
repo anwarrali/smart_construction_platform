@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
@@ -27,6 +28,7 @@ export const ProjectForm = ({
   onSubmit,
   project,
 }: ProjectFormProps) => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [name, setName] = useState(project?.name || "");
   const [description, setDescription] = useState(project?.description || "");
@@ -86,23 +88,23 @@ export const ProjectForm = ({
         )}
 
         <Input
-          label="Project Name *"
+          label={t("projectForm.project_name")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
         />
         <Input
-          label="Description"
+          label={t("projectForm.description")}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
         <Input
-          label="Location"
+          label={t("projectForm.location")}
           value={location}
           onChange={(e) => setLocation(e.target.value)}
         />
         <Input
-          label="Project Type"
+          label={t("projectForm.project_type")}
           value={projectType}
           onChange={(e) => setProjectType(e.target.value)}
           placeholder="residential, commercial..."
@@ -110,13 +112,13 @@ export const ProjectForm = ({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
-            label="Start Date"
+            label={t("projectForm.start_date")}
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
           />
           <Input
-            label="Planned End Date"
+            label={t("projectForm.planned_end_date")}
             type="date"
             value={plannedEndDate}
             onChange={(e) => setPlannedEndDate(e.target.value)}
@@ -125,13 +127,13 @@ export const ProjectForm = ({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
-            label="Budget Total"
+            label={t("projectForm.budget_total")}
             type="number"
             value={budgetTotal}
             onChange={(e) => setBudgetTotal(e.target.value)}
           />
           <Select
-            label="Status"
+            label={t("projectForm.status")}
             options={STATUS_OPTIONS}
             value={status}
             onChange={(e) => setStatus(e.target.value)}
@@ -140,7 +142,7 @@ export const ProjectForm = ({
 
         <ModalActions>
           <Button variant="outline" onClick={onClose} type="button">
-            Cancel
+            {t("projectForm.cancel")}
           </Button>
           <Button type="submit" isLoading={isLoading}>
             {isEditing ? "Save Changes" : "Create Project"}

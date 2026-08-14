@@ -222,7 +222,6 @@ def get_dashboard_stats(
     )
     sync_overdue_task_notifications(db, project_ids)
     active_projects_count = projects_query.filter(Project.status == ProjectStatus.ACTIVE).count()
-    active_projects_sub = f"{active_projects_count} on schedule" if active_projects_count > 0 else "0 on schedule"
     
     # 2. Open Issues
     open_issues_count = db.query(Issue).filter(Issue.project_id.in_(project_ids), Issue.status == IssueStatus.OPEN).count()
@@ -230,7 +229,6 @@ def get_dashboard_stats(
         Issue.project_id.in_(project_ids), Issue.status == IssueStatus.OPEN,
         Issue.severity == IssueSeverity.CRITICAL
     ).count()
-    open_issues_sub = f"{critical_issues_count} critical"
     
     # 3. Tasks Due Today
     today = date.today()
@@ -246,14 +244,12 @@ def get_dashboard_stats(
         Task.is_critical_path == True, Task.status.notin_([TaskStatus.DONE, TaskStatus.CANCELLED])).count()
     unresolved_changes_count = db.query(DesignChange).filter(DesignChange.project_id.in_(project_ids),
         DesignChange.status.in_([DesignChangeStatus.PROPOSED, DesignChangeStatus.UNDER_REVIEW])).count()
-    tasks_due_today_sub = f"{overdue_tasks_count} overdue"
     
     # 4. Team Members
     # Count unique user IDs in ProjectMember
     team_members_count = db.query(ProjectMember.user_id).filter(
         ProjectMember.project_id.in_(project_ids), ProjectMember.is_active == True
     ).distinct().count()
-    team_members_sub = f"Active today: {team_members_count}"
     
     # 5. Task Completion (for each project)
     projects = projects_query.all()
@@ -277,11 +273,11 @@ def get_dashboard_stats(
     return {
         "totalAssignedProjects": len(projects),
         "activeProjects": active_projects_count,
-        "activeProjectsSub": active_projects_sub,
+        "activeProjectsOnSchedule": active_projects_count,
         "openIssues": open_issues_count,
-        "openIssuesSub": open_issues_sub,
+        "criticalIssues": critical_issues_count,
         "tasksDueToday": tasks_due_today_count,
-        "tasksDueTodaySub": tasks_due_today_sub,
+        "overdueTasks": overdue_tasks_count,
         "delayedTasks": overdue_tasks_count,
         "criticalTasks": critical_tasks_count,
         "scheduledTaskDays": scheduled_task_days,
@@ -290,7 +286,7 @@ def get_dashboard_stats(
         "milestoneCompleted": completed_milestones,
         "milestonePending": len(milestones) - completed_milestones,
         "teamMembers": team_members_count,
-        "teamMembersSub": team_members_sub,
+        "activeTeamMembersToday": team_members_count,
         "taskCompletion": task_completion,
         "recentActivity": [{"id": str(log.id), "projectId": str(log.project_id) if log.project_id else None,
             "action": log.action, "entityType": log.entity_type,

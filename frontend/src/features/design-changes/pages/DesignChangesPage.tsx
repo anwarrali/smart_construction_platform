@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
@@ -16,6 +17,7 @@ import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceCont
 import { useSearchParams } from "react-router-dom";
 
 export const DesignChangesPage = () => {
+  const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const activeProjectId = workspace.projectId;
   const [changes, setChanges] = useState<DesignChange[]>([]);
@@ -86,11 +88,11 @@ export const DesignChangesPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Design Changes{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-          <p className="text-muted-foreground">Engineering change requests</p>
+          <p className="text-muted-foreground">{t("designChanges.engineering_change_requests")}</p>
         </div>
         {canPropose && <Button onClick={() => setFormOpen(true)}>+ Propose Change</Button>}
       </div>
-      {focusedChangeId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>Showing the design change opened from your notification.</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>Show all changes</Button></div>}
+      {focusedChangeId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("designChanges.showing_the_design_change_opened_from")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("designChanges.show_all_changes")}</Button></div>}
 
       <Card className="grid gap-3 p-4 md:grid-cols-6">
         {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || "Selected project"}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:"All projects"},...projects.map(project=>({value:project.id,label:project.name}))]}/>} 
@@ -105,7 +107,7 @@ export const DesignChangesPage = () => {
         <Card>
           <div className="empty-state">
             <div className="empty-state-icon">📐</div>
-            <p className="empty-state-title">No design changes</p>
+            <p className="empty-state-title">{t("designChanges.no_design_changes")}</p>
           </div>
         </Card>
       ) : (
@@ -134,21 +136,21 @@ export const DesignChangesPage = () => {
                     +{change.affectedDisciplines.length} affected
                   </div>
                 )}
-                {role === "consultant" && ["proposed","under_review"].includes(change.status) && <div className="flex gap-2 ml-3"><Button size="sm" onClick={async()=>{await api.designChanges.approve(change.id);fetchChanges();}}>Approve</Button><Button size="sm" variant="destructive" onClick={async()=>{await api.designChanges.reject(change.id,"Rejected after review");fetchChanges();}}>Reject</Button></div>}
+                {role === "consultant" && ["proposed","under_review"].includes(change.status) && <div className="flex gap-2 ml-3"><Button size="sm" onClick={async()=>{await api.designChanges.approve(change.id);fetchChanges();}}>{t("designChanges.approve")}</Button><Button size="sm" variant="destructive" onClick={async()=>{await api.designChanges.reject(change.id,"Rejected after review");fetchChanges();}}>{t("designChanges.reject")}</Button></div>}
               </div>
             </Card>
           ))}
         </div>
       )}
-      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title="Propose design change">
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={t("designChanges.propose_design_change")}>
         <form onSubmit={createChange} className="space-y-4">
-          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">Project:</span> {workspace.project?.name}</p> : <Select label="Project" value={projectId} onChange={e => setProjectId(e.target.value)} options={projects.map(p=>({value:p.id,label:p.name}))}/>} 
-          <Input label="Title" value={title} onChange={e=>setTitle(e.target.value)} required/>
-          <Input label="Description" value={description} onChange={e=>setDescription(e.target.value)}/>
-          <Input label="Reason" value={reason} onChange={e=>setReason(e.target.value)}/>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><Input label="Expected cost impact" type="number" value={costImpact} onChange={e=>setCostImpact(e.target.value)}/><Input label="Schedule impact (days)" type="number" value={scheduleImpact} onChange={e=>setScheduleImpact(e.target.value)}/></div>
-          <Select label="Source discipline" value={discipline} onChange={e=>setDiscipline(e.target.value)} options={["civil","architectural","electrical","mechanical"].map(value=>({value,label:value}))}/>
-          <ModalActions><Button type="button" variant="outline" onClick={()=>setFormOpen(false)}>Cancel</Button><Button type="submit" disabled={!(activeProjectId || projectId)||!title.trim()}>Submit change</Button></ModalActions>
+          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">{t("designChanges.project")}</span> {workspace.project?.name}</p> : <Select label={t("designChanges.project_2")} value={projectId} onChange={e => setProjectId(e.target.value)} options={projects.map(p=>({value:p.id,label:p.name}))}/>} 
+          <Input label={t("designChanges.title")} value={title} onChange={e=>setTitle(e.target.value)} required/>
+          <Input label={t("designChanges.description")} value={description} onChange={e=>setDescription(e.target.value)}/>
+          <Input label={t("designChanges.reason")} value={reason} onChange={e=>setReason(e.target.value)}/>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><Input label={t("designChanges.expected_cost_impact")} type="number" value={costImpact} onChange={e=>setCostImpact(e.target.value)}/><Input label={t("designChanges.schedule_impact_days")} type="number" value={scheduleImpact} onChange={e=>setScheduleImpact(e.target.value)}/></div>
+          <Select label={t("designChanges.source_discipline")} value={discipline} onChange={e=>setDiscipline(e.target.value)} options={["civil","architectural","electrical","mechanical"].map(value=>({value,label:value}))}/>
+          <ModalActions><Button type="button" variant="outline" onClick={()=>setFormOpen(false)}>{t("designChanges.cancel")}</Button><Button type="submit" disabled={!(activeProjectId || projectId)||!title.trim()}>{t("designChanges.submit_change")}</Button></ModalActions>
         </form>
       </Modal>
     </div>

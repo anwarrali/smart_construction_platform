@@ -104,6 +104,12 @@ class CompatibilityFinding:
     recommended_action: str
     evidence: dict
     affected: dict
+    #: Family name for translation. Defaults to the code, which is already
+    #: stable for findings whose subject does not vary.
+    message_key: str | None = None
+    #: The varying facts, so the same statement can be composed in any
+    #: language. Defaults to the evidence, which already holds them.
+    params: dict | None = None
 
 
 def _normalize(value: str | None) -> str:
@@ -197,6 +203,8 @@ def evaluate_ifc_compatibility(
             "Normalized token overlap and string similarity were below the compatibility threshold.",
             "Verify that the correct model was uploaded before activation or downstream coordination.",
             {"platformProjectName": project_name, "ifcNameScores": scores}, {"names": list(scores)},
+            message_key="IFC_PROJECT_NAME_MISMATCH",
+            params={"projectName": project_name},
         ))
 
     asset = ((summary.get("assetType") or {}).get("value") or overview.get("buildingType"))
@@ -260,6 +268,9 @@ def evaluate_ifc_compatibility(
                 "Verify IFC export scope/classification and confirm that the correct discipline model was uploaded.",
                 {"expectedIfcClasses": sorted(expected_classes), "modelElementTypes": sorted(element_types), "taskIds": task_ids},
                 {"tasks": task_ids, "categories": [category]},
+                message_key="TASK_ELEMENTS_MISSING",
+                params={"category": category.lower(), "taskCount": len(task_ids),
+                        "expectedClasses": ", ".join(sorted(expected_classes))},
             ))
 
     # ── Discipline coverage ────────────────────────────────────────────────
@@ -307,6 +318,9 @@ def evaluate_ifc_compatibility(
                 "matchedTaskCount": len(matching),
             },
             {"tasks": [task_id for task_id, _ in matching], "disciplines": [discipline]},
+            message_key="DISCIPLINE_NOT_IN_IFC",
+            params={"discipline": discipline.replace("_", "/").lower(), "label": label,
+                    "taskCount": len(matching)},
         ))
 
     # ── Model scale / asset context ────────────────────────────────────────
@@ -453,6 +467,8 @@ def run_ifc_compatibility(db: Session, version: IFCModelVersion) -> list[Compati
                 recommended_action=finding.recommended_action,
                 evidence_json=finding.evidence,
                 affected_json=finding.affected,
+                message_key=finding.message_key or finding.code,
+                message_params_json=finding.params or finding.evidence,
                 source_engine="IFC_COMPATIBILITY_RULES_V1",
                 status="OPEN",
             )
@@ -463,5 +479,7 @@ def run_ifc_compatibility(db: Session, version: IFCModelVersion) -> list[Compati
             item.description = payload["description"]
             item.evidence_json = payload["evidence"]
             item.affected_json = payload["affected"]
+            item.message_key = finding.message_key or finding.code
+            item.message_params_json = finding.params or finding.evidence
     db.flush()
     return findings

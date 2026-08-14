@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { Input } from "../../../components/ui/Input";
@@ -21,6 +23,7 @@ import type {
 } from "../../../types/task";
 
 const EngineerTasksPage = () => {
+  const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -47,7 +50,7 @@ const EngineerTasksPage = () => {
       setTasks(Array.isArray(response) ? response : response.data || response.items || []);
     } catch (err: any) {
       setTasks([]);
-      setError(err?.response?.data?.detail || "Unable to load your assigned tasks.");
+      setError(errorMessage(err, "Unable to load your assigned tasks."));
     } finally {
       setIsLoading(false);
     }
@@ -81,28 +84,29 @@ const EngineerTasksPage = () => {
   };
 
   return <div className="page-container space-y-6">
-    <div><h1 className="text-2xl font-bold">My Tasks{workspace.project ? ` · ${workspace.project.name}` : ""}</h1><p className="text-muted-foreground">Only work assigned to you in the selected project is shown.</p></div>
+    <div><h1 className="text-2xl font-bold">My Tasks{workspace.project ? ` · ${workspace.project.name}` : ""}</h1><p className="text-muted-foreground">{t("tasksPage.only_work_assigned_to_you_in_the")}</p></div>
     <Card className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
-      <Input placeholder="Search title, ID, or description…" value={search} onChange={(event) => setSearch(event.target.value)} />
+      <Input placeholder={t("tasksPage.search_title_id_or_description")} value={search} onChange={(event) => setSearch(event.target.value)} />
       <Select value={status} onChange={(event) => setStatus(event.target.value)} options={[{ value: "", label: "All statuses" }, ...["backlog", "todo", "in_progress", "under_review", "rework_required", "blocked", "done", "cancelled"].map((value) => ({ value, label: value.replaceAll("_", " ") }))]} />
       <Select value={priority} onChange={(event) => setPriority(event.target.value)} options={[{ value: "", label: "All priorities" }, ...["low", "medium", "high", "critical"].map((value) => ({ value, label: value }))]} />
       <Select value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={[{ value: "", label: "All disciplines" }, ...["civil", "architectural", "electrical", "mechanical"].map((value) => ({ value, label: value }))]} />
-      <Input label="Due date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+      <Input label={t("tasksPage.due_date")} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={criticalOnly} onChange={(event) => setCriticalOnly(event.target.checked)} /> Critical only</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} /> Overdue only</label>
     </Card>
     {error && <Card className="border-destructive/30 p-4 text-destructive">{error}</Card>}
-    {isLoading ? <Card className="p-8 text-center text-muted-foreground">Loading assigned tasks…</Card> : !filtered.length ? <Card className="p-10 text-center"><p className="font-medium">No tasks assigned</p><p className="mt-1 text-sm text-muted-foreground">No authorized tasks match the selected filters.</p></Card> : <div className="grid gap-4 lg:grid-cols-2">
+    {isLoading ? <Card className="p-8 text-center text-muted-foreground">{t("tasksPage.loading_assigned_tasks")}</Card> : !filtered.length ? <Card className="p-10 text-center"><p className="font-medium">{t("tasksPage.no_tasks_assigned")}</p><p className="mt-1 text-sm text-muted-foreground">{t("tasksPage.no_authorized_tasks_match_the_selected")}</p></Card> : <div className="grid gap-4 lg:grid-cols-2">
       {filtered.map((task) => <Card key={task.id} isHoverable className="cursor-pointer p-4" onClick={() => navigate(workspace.path(`tasks/${task.id}`))}>
         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-mono text-xs font-semibold text-primary">{task.taskCode}</p><h2 className="truncate font-semibold">{task.name}</h2><p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{task.description || "No description"}</p></div><Badge variant={task.priority === "critical" || task.priority === "high" ? "danger" : task.priority === "medium" ? "warning" : "neutral"}>{task.priority}</Badge></div>
-        <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><div><p className="text-muted-foreground">Status</p><p className="font-medium capitalize">{task.status.replaceAll("_", " ")}</p></div><div><p className="text-muted-foreground">Discipline</p><p className="font-medium capitalize">{task.discipline || "General"}</p></div><div><p className="text-muted-foreground">Progress</p><p className="font-medium">{task.progressPercentage}%</p></div><div><p className="text-muted-foreground">Timing</p><p className={timing(task).includes("overdue") ? "font-medium text-destructive" : "font-medium"}>{timing(task)}</p></div></div>
-        <div className="mt-4 flex flex-wrap gap-2 border-t pt-3 text-xs text-muted-foreground"><span>Start: {task.plannedStartDate || "—"}</span><span>Due: {task.plannedEndDate || "—"}</span><span>Assigned by: {task.createdBy?.fullName || "Project Manager"}</span><span>Dependencies: {task.dependencies?.length || 0}</span>{task.isCriticalPath && <Badge size="sm" variant="danger">Critical path</Badge>}{task.status === "blocked" && <Badge size="sm" variant="danger">Blocked</Badge>}{task.reviewStatus && <Badge size="sm" variant="warning">Review: {task.reviewStatus}</Badge>}</div>
+        <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><div><p className="text-muted-foreground">{t("tasksPage.status")}</p><p className="font-medium capitalize">{task.status.replaceAll("_", " ")}</p></div><div><p className="text-muted-foreground">{t("tasksPage.discipline")}</p><p className="font-medium capitalize">{task.discipline || "General"}</p></div><div><p className="text-muted-foreground">{t("tasksPage.progress")}</p><p className="font-medium">{task.progressPercentage}%</p></div><div><p className="text-muted-foreground">{t("tasksPage.timing")}</p><p className={timing(task).includes("overdue") ? "font-medium text-destructive" : "font-medium"}>{timing(task)}</p></div></div>
+        <div className="mt-4 flex flex-wrap gap-2 border-t pt-3 text-xs text-muted-foreground"><span>Start: {task.plannedStartDate || "—"}</span><span>Due: {task.plannedEndDate || "—"}</span><span>Assigned by: {task.createdBy?.fullName || "Project Manager"}</span><span>Dependencies: {task.dependencies?.length || 0}</span>{task.isCriticalPath && <Badge size="sm" variant="danger">{t("tasksPage.critical_path")}</Badge>}{task.status === "blocked" && <Badge size="sm" variant="danger">{t("tasksPage.blocked")}</Badge>}{task.reviewStatus && <Badge size="sm" variant="warning">Review: {task.reviewStatus}</Badge>}</div>
       </Card>)}
     </div>}
   </div>;
 };
 
 const ManagedTasksPage = () => {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -131,7 +135,7 @@ const ManagedTasksPage = () => {
       setTasks(Array.isArray(response) ? response : response.data || response.items || []);
     } catch (err: any) {
       setTasks([]);
-      toast.error(err?.response?.data?.detail || "Unable to load tasks.");
+      toast.error(errorMessage(err, "Unable to load tasks."));
     } finally { setIsLoading(false); }
   }, [activeProjectId, debouncedSearch, statusFilter, priorityFilter]);
 
@@ -175,7 +179,7 @@ const ManagedTasksPage = () => {
   const handleDelete = async (task: Task) => {
     if (!window.confirm(`Delete task "${task.name}"?`)) return;
     try { await tasksService.delete(task.id); await fetchTasks(); toast.success("Task deleted."); }
-    catch (err: any) { toast.error(err?.response?.data?.detail || "Unable to delete task."); }
+    catch (err: any) { toast.error(errorMessage(err, "Unable to delete task.")); }
   };
 
   return (
@@ -184,7 +188,7 @@ const ManagedTasksPage = () => {
         <div>
           <h1 className="text-2xl font-bold">Tasks{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
           <p className="text-muted-foreground">
-            Manage and track project tasks
+            {t("tasksPage.manage_and_track_project_tasks")}
           </p>
         </div>
         {canCreate && (
@@ -196,7 +200,7 @@ const ManagedTasksPage = () => {
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="flex-1">
             <Input
-              placeholder="Search tasks..."
+              placeholder={t("tasksPage.search_tasks")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

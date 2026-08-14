@@ -25,10 +25,12 @@ from app.api.ifc import router as ifc_router
 from app.api.ai_intelligence import router as ai_intelligence_router
 from app.api.ai_actions import router as ai_actions_router
 from app.api.collaboration import router as collaboration_router
+from app.api.permissions import router as permissions_router
 
 api_router = APIRouter()
 
 api_router.include_router(auth_router)
+api_router.include_router(permissions_router)
 api_router.include_router(users_router)
 api_router.include_router(projects_router)
 api_router.include_router(tasks_router)

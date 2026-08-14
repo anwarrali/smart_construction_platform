@@ -22,6 +22,7 @@ import { DashboardSelectorPage } from "../../features/dashboard/DashboardSelecto
 import { OwnerDashboard } from "../../features/dashboard/owner/pages/OwnerDashboard";
 import { ExecutiveOverviewPage } from "../../features/dashboard/owner/pages/ExecutiveOverviewPage";
 import { AdminDashboard } from "../../features/dashboard/admin/pages/AdminDashboard";
+import { AccessControlPage } from "../../features/admin/pages/AccessControlPage";
 import { EngineerDashboard } from "../../features/dashboard/engineer/pages/EngineerDashboard";
 import { ConsultantDashboard } from "../../features/dashboard/consultant/pages/ConsultantDashboard";
 import { ConsultantReviewsPage } from "../../features/dashboard/consultant/pages/ConsultantReviewsPage";
@@ -78,6 +79,7 @@ export const Router = () => {
               <Route path={ROUTES.ADMIN_DASHBOARD} element={<AdminDashboard />} />
               <Route path={ROUTES.USERS}           element={<UsersPage />} />
               <Route path={ROUTES.ADMIN_TEAMS}     element={<ProjectTeamPage />} />
+              <Route path={ROUTES.ADMIN_ACCESS_CONTROL} element={<AccessControlPage />} />
               <Route path={ROUTES.ADMIN_PROJECT_TEAM} element={<ProjectTeamPage />} />
               <Route path={ROUTES.PROJECT_MILESTONES} element={<MilestonesPage />} />
             </Route>

@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
@@ -19,6 +21,7 @@ import { useSearchParams } from "react-router-dom";
 import { ContextDiscussion } from "../../messages/components/ContextDiscussion";
 
 export const IssuesPage = () => {
+  const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const { isProjectManager } = useRole();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -53,7 +56,7 @@ export const IssuesPage = () => {
       setIssues(response.data || []);
     } catch (err: any) {
       setIssues([]);
-      toast.error(err?.response?.data?.detail || "Unable to load project issues.");
+      toast.error(errorMessage(err, "Unable to load project issues."));
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +88,7 @@ export const IssuesPage = () => {
       await fetchIssues();
       toast.success("Site issue created.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Issue creation failed.");
+      toast.error(errorMessage(err, "Issue creation failed."));
     }
   };
 
@@ -115,12 +118,12 @@ export const IssuesPage = () => {
         <div>
           <h1 className="text-2xl font-bold">Issues{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
           <p className="text-muted-foreground">
-            Track and resolve project issues
+            {t("issuesPage.track_and_resolve_project_issues")}
           </p>
         </div>
         <Button onClick={() => setFormOpen(true)}>+ Raise Issue</Button>
       </div>
-      {focusedIssueId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>Showing the issue opened from your notification.</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>Show all issues</Button></div>}
+      {focusedIssueId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("issuesPage.showing_the_issue_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("issuesPage.show_all_issues")}</Button></div>}
 
       <Card className="grid gap-3 p-4 md:grid-cols-6">
         {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || "Selected project"}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:"All projects"},...projects.map(project=>({value:project.id,label:project.name}))]}/>} 
@@ -135,7 +138,7 @@ export const IssuesPage = () => {
         <Card>
           <div className="empty-state">
             <div className="empty-state-icon">⚠️</div>
-            <p className="empty-state-title">No issues found</p>
+            <p className="empty-state-title">{t("issuesPage.no_issues_found")}</p>
           </div>
         </Card>
       ) : (
@@ -161,23 +164,23 @@ export const IssuesPage = () => {
                   </div>
                   <AttachmentPanel projectId={issue.projectId} entityType="ISSUE" entityId={issue.id} initialCount={issue.attachmentCount} />
                   <Button className="mt-2 mr-2" size="sm" variant="outline" onClick={() => setDiscussionIssueId((current) => current === issue.id ? "" : issue.id)}>{discussionIssueId === issue.id ? "Hide Discussion" : "Open Discussion"}</Button>
-                  {isProjectManager && ["open", "in_progress"].includes(issue.status) && <Button className="mt-2" size="sm" variant="outline" onClick={async () => { const resolution = window.prompt("Resolution note (required)"); if (!resolution?.trim()) return; try { await issuesService.update(issue.id, { status: "resolved", resolutionNotes: resolution.trim() }); await fetchIssues(); toast.success("Issue resolved. The assigned Engineer can resume if no blockers remain."); } catch (err: any) { toast.error(err?.response?.data?.detail || "Issue could not be resolved."); } }}>Resolve</Button>}
-                  {discussionIssueId === issue.id && <div className="mt-3"><ContextDiscussion projectId={issue.projectId} contextType="ISSUE" contextId={issue.id} title="Issue Discussion" /></div>}
+                  {isProjectManager && ["open", "in_progress"].includes(issue.status) && <Button className="mt-2" size="sm" variant="outline" onClick={async () => { const resolution = window.prompt("Resolution note (required)"); if (!resolution?.trim()) return; try { await issuesService.update(issue.id, { status: "resolved", resolutionNotes: resolution.trim() }); await fetchIssues(); toast.success("Issue resolved. The assigned Engineer can resume if no blockers remain."); } catch (err: any) { toast.error(errorMessage(err, "Issue could not be resolved.")); } }}>{t("issuesPage.resolve")}</Button>}
+                  {discussionIssueId === issue.id && <div className="mt-3"><ContextDiscussion projectId={issue.projectId} contextType="ISSUE" contextId={issue.id} title={t("issuesPage.issue_discussion")} /></div>}
                 </div>
               </div>
             </Card>
           ))}
         </div>
       )}
-      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title="Raise site issue">
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={t("issuesPage.raise_site_issue")}>
         <form onSubmit={createIssue} className="space-y-4">
-          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">Project:</span> {workspace.project?.name}</p> : <Select label="Project" value={projectId} onChange={e => setProjectId(e.target.value)} options={projects.map(p => ({value:p.id,label:p.name}))}/>} 
-          <Input label="Title" value={title} onChange={e => setTitle(e.target.value)} required/>
-          <Input label="Description" value={description} onChange={e => setDescription(e.target.value)}/>
-          <Select label="Category" value={category} onChange={e => setCategory(e.target.value)} options={["technical","material","design","coordination","quality","schedule","equipment","site_condition","other"].map(value => ({value,label:value.replaceAll("_", " ")}))}/>
-          <Select label="Related task (optional)" value={taskId} onChange={e => setTaskId(e.target.value)} options={[{ value: "", label: "Project-level issue" }, ...tasks.map(task => ({ value: task.id, label: `${task.taskCode} — ${task.name}` }))]} />
-          <Select label="Severity" value={severity} onChange={e => setSeverity(e.target.value)} options={["low","medium","high","critical"].map(value => ({value,label:value}))}/>
-          <ModalActions><Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button><Button type="submit" disabled={!(activeProjectId || projectId) || !title.trim()}>Create issue</Button></ModalActions>
+          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">{t("issuesPage.project")}</span> {workspace.project?.name}</p> : <Select label={t("issuesPage.project_2")} value={projectId} onChange={e => setProjectId(e.target.value)} options={projects.map(p => ({value:p.id,label:p.name}))}/>} 
+          <Input label={t("issuesPage.title")} value={title} onChange={e => setTitle(e.target.value)} required/>
+          <Input label={t("issuesPage.description")} value={description} onChange={e => setDescription(e.target.value)}/>
+          <Select label={t("issuesPage.category")} value={category} onChange={e => setCategory(e.target.value)} options={["technical","material","design","coordination","quality","schedule","equipment","site_condition","other"].map(value => ({value,label:value.replaceAll("_", " ")}))}/>
+          <Select label={t("issuesPage.related_task_optional")} value={taskId} onChange={e => setTaskId(e.target.value)} options={[{ value: "", label: "Project-level issue" }, ...tasks.map(task => ({ value: task.id, label: `${task.taskCode} — ${task.name}` }))]} />
+          <Select label={t("issuesPage.severity")} value={severity} onChange={e => setSeverity(e.target.value)} options={["low","medium","high","critical"].map(value => ({value,label:value}))}/>
+          <ModalActions><Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{t("issuesPage.cancel")}</Button><Button type="submit" disabled={!(activeProjectId || projectId) || !title.trim()}>{t("issuesPage.create_issue")}</Button></ModalActions>
         </form>
       </Modal>
     </div>

@@ -1,4 +1,5 @@
 import { Button } from "../../../components/ui/Button";
+import { useTranslation } from "react-i18next";
 import { Loader } from "../../../components/ui/Loader";
 import { timeAgo } from "../../../utils/date";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +27,7 @@ export const NotificationList = ({
   onMarkRead,
   onMarkAllRead,
 }: NotificationListProps) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   if (isLoading) return <Loader text="Loading notifications..." />;
 
@@ -45,10 +47,10 @@ export const NotificationList = ({
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Notifications</h3>
+        <h3 className="font-semibold">{t("notificationList.notifications")}</h3>
         {unreadCount > 0 && (
           <Button variant="ghost" size="sm" onClick={onMarkAllRead}>
-            Mark all read
+            {t("notificationList.mark_all_read")}
           </Button>
         )}
       </div>
@@ -56,7 +58,7 @@ export const NotificationList = ({
       {notifications.length === 0 ? (
         <div className="empty-state py-8">
           <div className="empty-state-icon">🔔</div>
-          <p className="empty-state-title">No notifications</p>
+          <p className="empty-state-title">{t("notificationList.no_notifications")}</p>
         </div>
       ) : (
         <div className="space-y-5">

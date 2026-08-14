@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../ui/Button";
 import { Badge } from "../../ui/Badge";
@@ -18,6 +19,7 @@ export const NotificationDropdown = ({
   isOpen,
   onClose,
 }: NotificationDropdownProps) => {
+  const { t } = useTranslation();
   const {
     notifications,
     isLoading,
@@ -43,7 +45,7 @@ export const NotificationDropdown = ({
       <div className="absolute right-0 top-full mt-2 w-80 rounded-md border bg-popover shadow-lg z-50">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm">Notifications</h3>
+            <h3 className="font-semibold text-sm">{t("notificationDropdown.notifications")}</h3>
             {unreadCount > 0 && (
               <Badge variant="danger" size="sm">
                 {unreadCount} new
@@ -53,7 +55,7 @@ export const NotificationDropdown = ({
           <div className="flex items-center gap-1">
             {unreadCount > 0 && (
               <Button variant="ghost" size="sm" onClick={() => markAllAsRead(workspace.projectId)}>
-                Mark all read
+                {t("notificationDropdown.mark_all_read")}
               </Button>
             )}
             <Button
@@ -77,7 +79,7 @@ export const NotificationDropdown = ({
           ) : notifications.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
               <p className="text-2xl mb-2">🔔</p>
-              <p>No notifications yet</p>
+              <p>{t("notificationDropdown.no_notifications_yet")}</p>
             </div>
           ) : (
             notifications.slice(0, 10).map((notification) => (
@@ -126,7 +128,7 @@ export const NotificationDropdown = ({
                 onClose();
               }}
             >
-              View all notifications
+              {t("notificationDropdown.view_all_notifications")}
             </Button>
           </div>
         )}

@@ -6,6 +6,7 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 
 interface ModalProps {
@@ -39,6 +40,7 @@ export const Modal = ({
   closeOnOverlayClick = true,
   showCloseButton = true,
 }: ModalProps) => {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -138,7 +140,7 @@ export const Modal = ({
                 onClick={onClose}
                 type="button"
                 className="btn btn-ghost btn-icon ml-auto shrink-0"
-                aria-label="Close"
+                aria-label={t("modal.close")}
               >
                 ✕
               </button>

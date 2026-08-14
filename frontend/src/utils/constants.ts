@@ -92,6 +92,7 @@ export const ROUTES = {
   EXECUTIVE_OVERVIEW: "/executive-overview",
   ADMIN_DASHBOARD: "/admin",
   ADMIN_TEAMS: "/admin/project-teams",
+  ADMIN_ACCESS_CONTROL: "/admin/access-control",
   ADMIN_PROJECT_TEAM: "/admin/projects/:projectId/team",
   ISSUES: "/issues",
   DESIGN_CHANGES: "/design-changes",

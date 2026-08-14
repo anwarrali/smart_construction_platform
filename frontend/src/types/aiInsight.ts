@@ -1,6 +1,8 @@
 export interface AIInsight {
   id:string;projectId:string;modelRevisionId?:string;insightType:string;category:string;severity:string;confidence:number;
   title:string;description:string;reason:string;recommendedAction:string;potentialImpact?:string;
+  /** Stable family name for translation; absent on rows written before this. */
+  messageKey?:string|null; messageParamsJson?:Record<string,unknown>;
   evidenceJson:Record<string,unknown>;affectedJson:{elements?:string[];storeys?:string[];spaces?:string[];buildings?:string[];disciplines?:string[];categories?:string[]};
   relatedTaskIdsJson:string[];relatedIssueIdsJson:string[];relatedEvidenceIdsJson:string[];sourceEngine:string;status:string;
   reviewNote?:string;reviewedById?:string;reviewedAt?:string;resolvedAt?:string;appliedEntityType?:string;appliedEntityId?:string;createdAt:string;updatedAt:string;

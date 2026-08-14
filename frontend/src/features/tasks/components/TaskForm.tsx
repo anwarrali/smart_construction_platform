@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
@@ -63,6 +65,7 @@ const memberLabel = (member: ProjectMember) => {
 };
 
 export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFormProps) => {
+  const { t } = useTranslation();
   const activeProjectId = projectId || task?.projectId || "";
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -122,7 +125,7 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
       setMilestones(milestoneData);
       const tasks = Array.isArray(response) ? response : response.data || response.items || [];
       setProjectTasks(tasks.filter((candidate) => candidate.id !== task?.id));
-    }).catch((err: any) => setError(err?.response?.data?.detail || "Unable to load project task options."));
+    }).catch((err: any) => setError(errorMessage(err, "Unable to load project task options.")));
   }, [activeProjectId, isOpen, task?.id]);
 
   const eligibleMembers = useMemo(() => members.filter((member) => {
@@ -172,7 +175,7 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
       });
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Unable to save this task.");
+      setError(errorMessage(err, "Unable to save this task."));
     } finally { setIsLoading(false); }
   };
 
@@ -181,60 +184,60 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
       {error && <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
       {!activeProjectId && <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Open a project workspace to create a task. The project is taken automatically from that context.</div>}
       <div className="grid gap-4 md:grid-cols-2">
-        <Input label="Task Name *" value={name} onChange={(event) => setName(event.target.value)} required />
-        <Input label="Description" value={description} onChange={(event) => setDescription(event.target.value)} />
-        <Select label="Status" options={task ? EDIT_STATUSES : CREATE_STATUSES} value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)} />
-        <Select label="Priority" options={PRIORITIES} value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)} />
-        <Select label="Discipline" value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={[
+        <Input label={t("taskForm.task_name")} value={name} onChange={(event) => setName(event.target.value)} required />
+        <Input label={t("taskForm.description")} value={description} onChange={(event) => setDescription(event.target.value)} />
+        <Select label={t("taskForm.status")} options={task ? EDIT_STATUSES : CREATE_STATUSES} value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)} />
+        <Select label={t("taskForm.priority")} options={PRIORITIES} value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)} />
+        <Select label={t("taskForm.discipline")} value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={[
           { value: "civil", label: "Civil" }, { value: "architectural", label: "Architectural" },
           { value: "electrical", label: "Electrical" }, { value: "mechanical", label: "Mechanical" },
         ]} />
-        <Select label="Milestone" value={milestoneId} onChange={(event) => setMilestoneId(event.target.value)} options={[{ value: "", label: "No milestone" }, ...milestones.map((milestone) => ({ value: milestone.id, label: `${milestone.milestoneCode} — ${milestone.name}` }))]} />
+        <Select label={t("taskForm.milestone")} value={milestoneId} onChange={(event) => setMilestoneId(event.target.value)} options={[{ value: "", label: "No milestone" }, ...milestones.map((milestone) => ({ value: milestone.id, label: `${milestone.milestoneCode} — ${milestone.name}` }))]} />
       </div>
 
       <div className="rounded-lg border p-4">
-        <div className="flex items-center justify-between gap-3"><h3 className="font-medium">Assigned Team Members</h3><span className="rounded-full bg-muted px-2 py-1 text-xs font-medium">{assigneeIds.length ? `${assigneeIds.length} selected` : "Unassigned"}</span></div>
+        <div className="flex items-center justify-between gap-3"><h3 className="font-medium">{t("taskForm.assigned_team_members")}</h3><span className="rounded-full bg-muted px-2 py-1 text-xs font-medium">{assigneeIds.length ? `${assigneeIds.length} selected` : "Unassigned"}</span></div>
         <p className="mb-3 text-xs text-muted-foreground">Select one or multiple active project members. Leave every option unchecked to keep the task unassigned.</p>
-        <Input label="Search assignees" value={assigneeSearch} onChange={(event) => setAssigneeSearch(event.target.value)} placeholder="Name, role, discipline, company, responsibility…" />
+        <Input label={t("taskForm.search_assignees")} value={assigneeSearch} onChange={(event) => setAssigneeSearch(event.target.value)} placeholder={t("taskForm.name_role_discipline_company")} />
         <div className="mt-3 max-h-52 space-y-2 overflow-y-auto rounded border p-2">
           {eligibleMembers.map((member) => <label key={member.userId} className="flex cursor-pointer items-start gap-3 rounded p-2 hover:bg-muted/50">
             <input type="checkbox" className="mt-1" checked={assigneeIds.includes(member.userId)} onChange={() => toggleAssignee(member.userId)} />
             <span className="min-w-0 text-sm"><span className="block font-medium">{member.user.fullName}</span><span className="block text-xs text-muted-foreground">{memberLabel(member).split(" — ")[1]}</span></span>
           </label>)}
-          {!eligibleMembers.length && <p className="p-3 text-sm text-muted-foreground">No eligible active project members match this search.</p>}
+          {!eligibleMembers.length && <p className="p-3 text-sm text-muted-foreground">{t("taskForm.no_eligible_active_project_members_match")}</p>}
         </div>
       </div>
 
       <div className="rounded-lg border p-4">
-        <h3 className="font-medium">Task Dependencies <span className="font-normal text-muted-foreground">(optional)</span></h3>
-        <p className="mb-3 text-xs text-muted-foreground">Select zero, one, or multiple predecessor tasks from this project.</p>
+        <h3 className="font-medium">{t("taskForm.task_dependencies")} <span className="font-normal text-muted-foreground">(optional)</span></h3>
+        <p className="mb-3 text-xs text-muted-foreground">{t("taskForm.select_zero_one_or_multiple_predecessor")}</p>
         {projectTasks.length ? <>
-          <Input label="Search dependencies" value={dependencySearch} onChange={(event) => setDependencySearch(event.target.value)} placeholder="Task code, name, or status" />
+          <Input label={t("taskForm.search_dependencies")} value={dependencySearch} onChange={(event) => setDependencySearch(event.target.value)} placeholder={t("taskForm.task_code_name_or_status")} />
           <div className="mt-3 max-h-52 space-y-2 overflow-y-auto rounded border p-2">
             {dependencyOptions.map((candidate) => <label key={candidate.id} className="flex cursor-pointer items-start gap-3 rounded p-2 hover:bg-muted/50">
               <input type="checkbox" className="mt-1" checked={dependencyIds.includes(candidate.id)} onChange={() => toggleDependency(candidate.id)} />
               <span><span className="font-medium">{candidate.taskCode} — {candidate.name}</span><span className="block text-xs text-muted-foreground">{titleCase(candidate.status)}{candidate.plannedStartDate && candidate.plannedEndDate ? ` · ${candidate.plannedStartDate} to ${candidate.plannedEndDate}` : ""}</span></span>
             </label>)}
-            {!dependencyOptions.length && <p className="p-3 text-sm text-muted-foreground">No project tasks match this search.</p>}
+            {!dependencyOptions.length && <p className="p-3 text-sm text-muted-foreground">{t("taskForm.no_project_tasks_match_this_search")}</p>}
           </div>
         </> : <p className="rounded bg-muted/40 p-3 text-sm text-muted-foreground">No existing tasks are available as dependencies. You can create the first task without a predecessor.</p>}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Input label="Start Date" type="date" value={plannedStartDate} onChange={(event) => setPlannedStartDate(event.target.value)} />
-        <Input label="End Date" type="date" value={plannedEndDate} onChange={(event) => setPlannedEndDate(event.target.value)} />
-        <Input label="Duration (Days)" type="number" value={durationDays} readOnly helperText="Both dates are included; the backend recalculates this value." />
+        <Input label={t("taskForm.start_date")} type="date" value={plannedStartDate} onChange={(event) => setPlannedStartDate(event.target.value)} />
+        <Input label={t("taskForm.end_date")} type="date" value={plannedEndDate} onChange={(event) => setPlannedEndDate(event.target.value)} />
+        <Input label={t("taskForm.duration_days")} type="number" value={durationDays} readOnly helperText="Both dates are included; the backend recalculates this value." />
       </div>
 
       <div className="rounded-lg border p-4">
         <label className="flex cursor-pointer items-start gap-3">
           <input type="checkbox" className="mt-1" checked={reviewRequired} onChange={(event) => setReviewRequired(event.target.checked)} />
-          <span><span className="block font-medium">Consultant review required</span><span className="block text-xs text-muted-foreground">When enabled, 100% execution is submitted to the authorized discipline Consultant and dependent tasks remain gated until approval.</span></span>
+          <span><span className="block font-medium">{t("taskForm.consultant_review_required")}</span><span className="block text-xs text-muted-foreground">When enabled, 100% execution is submitted to the authorized discipline Consultant and dependent tasks remain gated until approval.</span></span>
         </label>
-        {reviewRequired && <div className="mt-4 max-w-sm"><Input label="Review Due Date" type="date" value={reviewDueDate} onChange={(event) => setReviewDueDate(event.target.value)} helperText="Optional supervision deadline; it does not change the execution end date." /></div>}
+        {reviewRequired && <div className="mt-4 max-w-sm"><Input label={t("taskForm.review_due_date")} type="date" value={reviewDueDate} onChange={(event) => setReviewDueDate(event.target.value)} helperText="Optional supervision deadline; it does not change the execution end date." /></div>}
       </div>
 
-      <ModalActions><Button variant="outline" onClick={onClose} type="button">Cancel</Button><Button type="submit" isLoading={isLoading} disabled={!activeProjectId}>{task ? "Save Task" : "Create Task"}</Button></ModalActions>
+      <ModalActions><Button variant="outline" onClick={onClose} type="button">{t("taskForm.cancel")}</Button><Button type="submit" isLoading={isLoading} disabled={!activeProjectId}>{task ? "Save Task" : "Create Task"}</Button></ModalActions>
     </form>
   </Modal>;
 };

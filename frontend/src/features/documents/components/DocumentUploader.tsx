@@ -1,4 +1,6 @@
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
@@ -36,6 +38,7 @@ export const DocumentUploader = ({
   taskId,
   projects,
 }: DocumentUploaderProps) => {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [documentType, setDocumentType] = useState<string>("other");
   const [notes, setNotes] = useState("");
@@ -79,7 +82,7 @@ export const DocumentUploader = ({
       setFile(null); setTitle(""); setNotes(""); setDocumentType("other");
       onClose();
     } catch (err: any) {
-      const detail = err?.response?.data?.detail;
+      const detail = errorMessage(err);
       setError(Array.isArray(detail) ? detail.map((item:any)=>item.msg).join(", ") : detail || "Document upload failed. Check the selected project and file.");
     } finally {
       setIsLoading(false);
@@ -87,7 +90,7 @@ export const DocumentUploader = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Upload Document" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title={t("docUploader.upload_document")} size="md">
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="bg-red-50 text-red-600 text-sm rounded-md px-4 py-3">
@@ -110,7 +113,7 @@ export const DocumentUploader = ({
             <div>
               <p className="text-2xl mb-2">📁</p>
               <p className="text-sm text-muted-foreground">
-                Click to select a file
+                {t("docUploader.click_to_select_a_file")}
               </p>
             </div>
           )}
@@ -124,37 +127,37 @@ export const DocumentUploader = ({
         </div>
 
         <Input
-          label="Title"
+          label={t("docUploader.title")}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Document title"
+          placeholder={t("docUploader.document_title")}
         />
         <Select
-          label="Project *"
+          label={t("docUploader.project")}
           value={selectedProjectId}
           onChange={(e) => setSelectedProjectId(e.target.value)}
           options={[{value:"",label:"Select project"}, ...projects.map(project=>({value:project.id,label:project.name}))]}
           required
         />
         <Select
-          label="Document Type"
+          label={t("docUploader.document_type")}
           options={DOCUMENT_TYPE_OPTIONS}
           value={documentType}
           onChange={(e) => setDocumentType(e.target.value)}
         />
         <Input
-          label="Notes"
+          label={t("docUploader.notes")}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Optional notes"
+          placeholder={t("docUploader.optional_notes")}
         />
 
         <ModalActions>
           <Button variant="outline" onClick={onClose} type="button">
-            Cancel
+            {t("docUploader.cancel")}
           </Button>
           <Button type="submit" isLoading={isLoading}>
-            Upload
+            {t("docUploader.upload")}
           </Button>
         </ModalActions>
       </form>

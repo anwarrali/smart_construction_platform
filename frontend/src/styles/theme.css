@@ -9,232 +9,694 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv05" 1, "ss03" 1;
   }
 
   [dir="rtl"] body {
-    font-family: "Tajawal", "Noto Naskh Arabic", sans-serif;
+    font-family: "Cairo", "Tajawal", "Noto Naskh Arabic", sans-serif;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    @apply font-bold tracking-tight;
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+    letter-spacing: var(--tracking-heading);
   }
 
-  h1 {
-    @apply text-3xl md:text-4xl;
+  h1 { @apply text-2xl md:text-[1.75rem]; letter-spacing: var(--tracking-display); }
+  h2 { @apply text-lg md:text-xl; }
+  h3 { @apply text-base md:text-lg; }
+  h4 { @apply text-sm md:text-base; }
+
+  /* Measured values read in the technical face wherever they appear. */
+  .tabular-nums, [data-measured] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
-  h2 {
-    @apply text-2xl md:text-3xl;
+
+  ::selection {
+    background: hsl(var(--accent) / 0.22);
   }
-  h3 {
-    @apply text-xl md:text-2xl;
-  }
-  h4 {
-    @apply text-lg md:text-xl;
+
+  /* Focus is a precise ring, consistent across every control. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: var(--radius-control);
   }
 }
 
 @layer components {
+  /* ══════════════════════════════════════════════════════════
+     SHEET — the page ground.
+     Content sits on a sheet with generous margins, the way a drawing
+     sits inside its border.
+     ══════════════════════════════════════════════════════════ */
   .page-container {
-    @apply container mx-auto px-4 py-6 md:px-6 lg:px-8 max-w-7xl;
+    @apply mx-auto w-full max-w-[1440px] px-5 py-6 md:px-8 lg:px-10;
   }
 
+  /* The shell provides the sheet margin, and many pages also declare their
+     own container. A nested one contributes nothing, so neither the shell nor
+     the pages need to know about the other. */
+  .page-container .page-container {
+    @apply mx-0 max-w-none px-0 py-0;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     TITLE BLOCK — the header device of the product.
+     Borrowed from the title block of a drawing sheet: identity on the
+     left, measured metadata in a precise row beneath, actions right.
+     ══════════════════════════════════════════════════════════ */
+  .title-block {
+    @apply relative flex flex-col gap-4 pb-5 lg:flex-row lg:items-end lg:justify-between;
+    border-bottom: var(--rule-cut) solid hsl(var(--border-strong));
+  }
+
+  .title-block-eyebrow {
+    @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase text-muted-foreground;
+    letter-spacing: var(--tracking-label);
+  }
+
+  .title-block h1 {
+    @apply mt-2;
+  }
+
+  /* The metadata strip: discipline, revision, status, dates. */
+  .title-block-meta {
+    @apply mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground;
+  }
+
+  .title-block-meta dt {
+    @apply text-[10px] font-semibold uppercase text-muted-foreground/70;
+    letter-spacing: var(--tracking-label);
+  }
+
+  .title-block-meta dd {
+    @apply font-medium text-foreground;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     PANEL — a sheet of paper. Replaces the old .card.
+     One hairline, a whisper of lift, no heavy shadow.
+     ══════════════════════════════════════════════════════════ */
+  .panel {
+    @apply rounded-panel border bg-card;
+    box-shadow: var(--shadow-sheet);
+  }
+
+  .panel-head {
+    @apply flex items-center justify-between gap-3 px-5 py-3.5;
+    border-bottom: var(--rule-hair) solid hsl(var(--border));
+  }
+
+  .panel-title {
+    @apply text-sm font-semibold;
+  }
+
+  .panel-body { @apply p-5; }
+  .panel-tight { @apply p-4; }
+
+  /* A panel that reads as inset rather than raised — for tables and
+     technical read-outs. */
+  .well {
+    @apply rounded-panel border bg-well;
+  }
+
+  /* Backwards compatibility: existing markup still says .card, and it
+     should inherit the new language rather than the old one. */
   .card {
-    @apply bg-card rounded-lg border shadow-sm p-6;
+    @apply rounded-panel border bg-card p-5;
+    box-shadow: var(--shadow-sheet);
   }
 
   .card-hover {
-    @apply card transition-shadow hover:shadow-md;
+    @apply card transition-[box-shadow,transform] duration-200;
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow-lift);
+    transform: translateY(-1px);
   }
 
-  .stat-card {
-    @apply card flex flex-col gap-2;
+  /* ══════════════════════════════════════════════════════════
+     METRIC — a measured read-out, not a "stat card".
+     Presented as a labelled quantity over a rule, the way a schedule
+     of quantities is set out.
+     ══════════════════════════════════════════════════════════ */
+  .metric {
+    @apply relative flex flex-col gap-1.5 py-1;
   }
 
-  .stat-value {
-    @apply text-2xl md:text-3xl font-bold;
+  .metric-label {
+    @apply text-[11px] font-semibold uppercase text-muted-foreground;
+    letter-spacing: var(--tracking-label);
   }
 
-  .stat-label {
-    @apply text-sm text-muted-foreground;
+  .metric-value {
+    @apply text-[1.75rem] font-semibold leading-none text-foreground;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-heading);
   }
 
-  .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  .metric-note { @apply text-xs text-muted-foreground; }
+
+  /* A row of metrics divided by hairlines instead of boxed into cards. */
+  .metric-row {
+    @apply grid gap-px overflow-hidden rounded-panel border bg-border;
+  }
+  .metric-row > * {
+    @apply bg-card px-5 py-4;
   }
 
-  .badge-success {
-    @apply badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
-  }
-  .badge-warning {
-    @apply badge bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
-  }
-  .badge-danger {
-    @apply badge bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
-  }
-  .badge-info {
-    @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
-  }
-  .badge-neutral {
-    @apply badge bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200;
+  /* Legacy names keep working. */
+  .stat-card { @apply metric; }
+  .stat-value { @apply metric-value; }
+  .stat-label { @apply metric-label; }
+
+  /* ══════════════════════════════════════════════════════════
+     RULES — the structural device.
+     ══════════════════════════════════════════════════════════ */
+  .rule-hair { border-top: var(--rule-hair) solid hsl(var(--border)); }
+  .rule-edge { border-top: var(--rule-edge) solid hsl(var(--border-strong)); }
+  .rule-cut  { border-top: var(--rule-cut) solid hsl(var(--border-strong)); }
+
+  /* A section heading that sits on a rule, replacing yet another card. */
+  .section-head {
+    @apply flex flex-wrap items-baseline justify-between gap-3 pb-2.5;
+    border-bottom: var(--rule-hair) solid hsl(var(--border));
   }
 
-  .skeleton {
-    @apply animate-pulse bg-muted rounded;
+  .section-title {
+    @apply text-sm font-semibold;
   }
 
+  .section-kicker {
+    @apply text-[11px] font-semibold uppercase text-muted-foreground;
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     DATA ROWS — lists read as a schedule, divided by hairlines.
+     ══════════════════════════════════════════════════════════ */
+  .data-list > * + * {
+    border-top: var(--rule-hair) solid hsl(var(--border));
+  }
+
+  .data-row {
+    @apply flex items-center gap-4 px-4 py-3 transition-colors;
+  }
+  .data-row:hover { @apply bg-muted/40; }
+
+  .data-code {
+    @apply shrink-0 text-xs text-muted-foreground;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     STATUS — chips carry a state colour and a leading tick, so state
+     is legible without relying on colour alone.
+     ══════════════════════════════════════════════════════════ */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-chip px-2 py-0.5 text-[11px] font-semibold;
+    letter-spacing: 0.01em;
+  }
+
+  .chip::before {
+    content: "";
+    @apply h-1.5 w-1.5 shrink-0 rounded-[1px];
+    background: currentColor;
+  }
+
+  .chip-verified { @apply chip bg-wash-verified text-state-verified; }
+  .chip-progress { @apply chip bg-wash-progress text-state-progress; }
+  .chip-review   { @apply chip bg-wash-review text-state-review; }
+  .chip-overdue  { @apply chip bg-wash-overdue text-state-overdue; }
+  .chip-blocked  { @apply chip bg-wash-blocked text-state-blocked; }
+  .chip-idle     { @apply chip bg-wash-idle text-state-idle; }
+
+  /* Legacy badge names map onto the same vocabulary. */
+  .badge         { @apply chip; }
+  .badge-success { @apply chip-verified; }
+  .badge-warning { @apply chip-review; }
+  .badge-danger  { @apply chip-overdue; }
+  .badge-info    { @apply chip-progress; }
+  .badge-neutral { @apply chip-idle; }
+
+  /* ══════════════════════════════════════════════════════════
+     GAUGE — progress drawn as a measured bar with tick marks, the way
+     a scale bar is drawn, rather than a rounded pill.
+     ══════════════════════════════════════════════════════════ */
+  .gauge {
+    @apply relative h-1.5 w-full overflow-hidden rounded-[2px] bg-muted;
+  }
+
+  .gauge-fill {
+    @apply absolute inset-y-0 start-0 rounded-[2px] bg-primary transition-[width] duration-500;
+  }
+
+  /* Quarter ticks, so a bar can be read as a quantity at a glance. */
+  .gauge-ticked {
+    background-image: linear-gradient(
+      to right,
+      transparent calc(25% - 1px), hsl(var(--border-strong)) calc(25% - 1px), hsl(var(--border-strong)) 25%, transparent 25%,
+      transparent calc(50% - 1px), hsl(var(--border-strong)) calc(50% - 1px), hsl(var(--border-strong)) 50%, transparent 50%,
+      transparent calc(75% - 1px), hsl(var(--border-strong)) calc(75% - 1px), hsl(var(--border-strong)) 75%, transparent 75%
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     BLUEPRINT — texture, used in a small number of places only.
+     ══════════════════════════════════════════════════════════ */
+  .blueprint-field {
+    background-image:
+      linear-gradient(hsl(var(--grid-line) / var(--grid-alpha)) var(--rule-hair), transparent var(--rule-hair)),
+      linear-gradient(90deg, hsl(var(--grid-line) / var(--grid-alpha)) var(--rule-hair), transparent var(--rule-hair));
+    background-size: 28px 28px;
+  }
+
+  /* A coarser grid over the fine one, as on a real sheet. */
+  .blueprint-field-major {
+    background-image:
+      linear-gradient(hsl(var(--grid-line) / calc(var(--grid-alpha) * 1.8)) var(--rule-hair), transparent var(--rule-hair)),
+      linear-gradient(90deg, hsl(var(--grid-line) / calc(var(--grid-alpha) * 1.8)) var(--rule-hair), transparent var(--rule-hair)),
+      linear-gradient(hsl(var(--grid-line) / var(--grid-alpha)) var(--rule-hair), transparent var(--rule-hair)),
+      linear-gradient(90deg, hsl(var(--grid-line) / var(--grid-alpha)) var(--rule-hair), transparent var(--rule-hair));
+    background-size: 140px 140px, 140px 140px, 28px 28px, 28px 28px;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     NAVIGATION
+     ══════════════════════════════════════════════════════════ */
+  .nav-link {
+    @apply relative flex items-center gap-3 rounded-control px-3 py-2 text-sm font-medium transition-colors;
+    color: hsl(var(--sidebar-foreground));
+  }
+  .nav-link:hover {
+    background: hsl(var(--sidebar-accent) / 0.7);
+    color: hsl(var(--sidebar-accent-foreground));
+  }
+
+  /* The active item is marked by a rule on its leading edge — a
+     registration mark rather than a filled pill. */
+  .nav-link-active {
+    background: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-accent-foreground));
+  }
+  .nav-link-active::before {
+    content: "";
+    @apply absolute inset-y-1.5 start-0 w-[2px] rounded-full;
+    background: hsl(var(--sidebar-mark));
+  }
+
+  .sidebar-link { @apply nav-link; }
+  .sidebar-link-active { @apply nav-link nav-link-active; }
+
+  /* ══════════════════════════════════════════════════════════
+     EMPTY STATES — a drawn placeholder, not a giant emoji.
+     ══════════════════════════════════════════════════════════ */
   .empty-state {
-    @apply flex flex-col items-center justify-center py-16 text-center;
+    @apply flex flex-col items-center justify-center rounded-panel border border-dashed px-6 py-14 text-center;
   }
 
-  .empty-state-icon {
-    @apply text-6xl mb-4 text-muted-foreground;
-  }
+  .empty-state-icon { @apply mb-3 text-muted-foreground/60; }
 
-  .empty-state-title {
-    @apply text-lg font-semibold mb-2;
-  }
+  .empty-state-title { @apply text-sm font-semibold; }
 
   .empty-state-description {
-    @apply text-sm text-muted-foreground max-w-md;
+    @apply mt-1 max-w-sm text-sm text-muted-foreground;
   }
 
-  .table-responsive {
-    @apply w-full overflow-x-auto;
+  /* ══════════════════════════════════════════════════════════
+     TABLES — set as a schedule: hairline rows, a ruled header, mono
+     figures. No zebra striping.
+     ══════════════════════════════════════════════════════════ */
+  .table-responsive { @apply w-full overflow-x-auto; }
+
+  .table-container { @apply overflow-hidden rounded-panel border bg-card; }
+
+  .schedule-table { @apply w-full text-sm; }
+
+  .schedule-table thead th {
+    @apply bg-well px-4 py-2.5 text-start text-[11px] font-semibold uppercase text-muted-foreground;
+    letter-spacing: var(--tracking-label);
+    border-bottom: var(--rule-edge) solid hsl(var(--border-strong));
   }
 
-  .table-container {
-    @apply bg-card rounded-lg border;
+  .schedule-table tbody td {
+    @apply px-4 py-3 align-middle;
+    border-top: var(--rule-hair) solid hsl(var(--border));
   }
 
-  .sidebar-link {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors hover:bg-accent hover:text-accent-foreground;
+  .schedule-table tbody tr:hover { @apply bg-muted/40; }
+
+  .schedule-table td[data-measured],
+  .schedule-table th[data-measured] { @apply text-end; }
+
+  .skeleton { @apply animate-pulse rounded-control bg-muted; }
+}
+
+@layer utilities {
+  /* Hairline dividers that follow the reading direction. */
+  .divide-rule > * + * {
+    border-top: var(--rule-hair) solid hsl(var(--border));
   }
 
-  .sidebar-link-active {
-    @apply sidebar-link bg-accent text-accent-foreground font-medium;
+  .text-measured {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
 
-  .form-group {
-    @apply space-y-2 mb-4;
+  .label-caps {
+    @apply text-[11px] font-semibold uppercase;
+    letter-spacing: var(--tracking-label);
   }
+}
 
-  .form-label {
-    @apply text-sm font-medium;
-  }
-
-  .form-error {
-    @apply text-xs text-destructive mt-1;
-  }
-
-  .input {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
-  }
-
+/* ══════════════════════════════════════════════════════════════════════
+   CONTROLS
+   Redrawn in the drawing-set language: precise radii, hairline edges,
+   weight carried by tone rather than by heavy fills.
+   ══════════════════════════════════════════════════════════════════════ */
+@layer components {
   .btn {
-    @apply inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 gap-2;
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-control px-4 text-sm font-medium transition-all duration-150;
+    @apply disabled:pointer-events-none disabled:opacity-45;
+    letter-spacing: -0.006em;
   }
 
   .btn-primary {
-    @apply btn bg-primary text-primary-foreground hover:bg-primary/90;
+    @apply btn bg-primary text-primary-foreground;
+    box-shadow: var(--shadow-sheet);
   }
+  .btn-primary:hover { background: hsl(var(--primary) / 0.92); }
+  .btn-primary:active { transform: translateY(0.5px); }
+
   .btn-secondary {
-    @apply btn bg-secondary text-secondary-foreground hover:bg-secondary/80;
+    @apply btn border bg-card text-foreground;
+    box-shadow: var(--shadow-sheet);
   }
-  .btn-destructive {
-    @apply btn bg-destructive text-destructive-foreground hover:bg-destructive/90;
-  }
+  .btn-secondary:hover { @apply bg-muted; border-color: hsl(var(--border-strong)); }
+
+  .btn-destructive { @apply btn bg-destructive text-destructive-foreground; }
+  .btn-destructive:hover { background: hsl(var(--destructive) / 0.9); }
+
   .btn-outline {
-    @apply btn border border-input bg-background hover:bg-accent hover:text-accent-foreground;
+    @apply btn border bg-transparent text-foreground;
   }
-  .btn-ghost {
-    @apply btn hover:bg-accent hover:text-accent-foreground;
-  }
-  .btn-link {
-    @apply btn underline-offset-4 hover:underline text-primary;
-  }
-  .btn-sm {
-    @apply h-9 rounded-md px-3 text-xs;
-  }
-  .btn-lg {
-    @apply h-11 rounded-md px-8;
-  }
-  .btn-icon {
-    @apply h-10 w-10 p-0;
+  .btn-outline:hover { @apply bg-muted; border-color: hsl(var(--border-strong)); }
+
+  .btn-ghost { @apply btn bg-transparent text-foreground/75; }
+  .btn-ghost:hover { @apply bg-muted text-foreground; }
+
+  .btn-link { @apply btn h-auto px-0 text-primary underline-offset-4 hover:underline; }
+
+  .btn-sm { @apply h-8 rounded-control px-2.5 text-xs; }
+  .btn-lg { @apply h-11 rounded-control px-6; }
+  .btn-icon { @apply h-9 w-9 p-0; }
+
+  /* ── Forms ── */
+  .form-group { @apply mb-4 space-y-1.5; }
+
+  .form-label {
+    @apply block text-[11px] font-semibold uppercase text-muted-foreground;
+    letter-spacing: var(--tracking-label);
   }
 
+  .form-error { @apply mt-1 text-xs text-destructive; }
+
+  .input {
+    @apply flex h-10 w-full rounded-control border border-input bg-card px-3 text-sm transition-colors;
+    @apply placeholder:text-muted-foreground/60;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .input:hover:not(:disabled) { border-color: hsl(var(--border-strong)); }
+  .input:focus {
+    outline: none;
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.12);
+  }
+
+  /* ── Dialogs ── */
   .dialog-overlay {
-    @apply fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/50 p-2 backdrop-blur-[1px] sm:p-4;
-    animation: fade-in 0.2s ease-out;
+    @apply fixed inset-0 z-50 flex items-center justify-center overflow-hidden p-2 sm:p-4;
+    background: hsl(220 24% 8% / 0.55);
+    backdrop-filter: blur(2px);
+    animation: fade-in 0.18s ease-out;
   }
 
   .dialog-content {
-    @apply relative z-50 flex w-full min-w-0 flex-col overflow-hidden rounded-lg border bg-background shadow-xl outline-none duration-200;
+    @apply relative z-50 flex w-full min-w-0 flex-col overflow-hidden rounded-sheet border bg-card outline-none;
+    box-shadow: var(--shadow-float);
     max-height: calc(100dvh - 1rem);
-    animation: scale-in 0.2s ease-out;
+    animation: rise-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .dialog-header {
-    @apply flex shrink-0 items-center justify-between border-b bg-background px-4 py-3 sm:px-6 sm:py-4;
+    @apply flex shrink-0 items-center justify-between gap-3 px-5 py-4;
+    border-bottom: var(--rule-edge) solid hsl(var(--border-strong));
   }
 
   .dialog-body {
-    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5;
+    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5;
     scrollbar-gutter: stable;
   }
 
-  .dialog-body .form-group {
-    @apply mb-0 min-w-0;
-  }
+  .dialog-body .form-group { @apply mb-0 min-w-0; }
 
   .dialog-footer,
   .modal-actions {
-    @apply flex shrink-0 flex-col gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:px-6;
+    @apply flex shrink-0 flex-col gap-2 bg-card px-5 py-3.5 sm:flex-row sm:items-center sm:justify-end;
+    border-top: var(--rule-hair) solid hsl(var(--border));
   }
 
-  .modal-actions {
-    @apply sticky bottom-0 z-10 -mx-4 mt-5 sm:-mx-6 sm:mt-6;
-    box-shadow: 0 -8px 16px -16px rgb(0 0 0 / 0.45);
-  }
+  .modal-actions { @apply sticky bottom-0 z-10 -mx-5 mt-5; }
 
   .dialog-footer .btn,
-  .modal-actions .btn {
-    @apply w-full sm:w-auto;
-  }
+  .modal-actions .btn { @apply w-full sm:w-auto; }
 
   @media (min-width: 640px) {
-    .dialog-content {
-      max-height: calc(100dvh - 2rem);
-    }
+    .dialog-content { max-height: calc(100dvh - 2rem); }
   }
 
+  /* ── Dropdowns ── */
   .dropdown-content {
-    @apply z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md;
+    @apply z-50 min-w-[9rem] overflow-hidden rounded-panel border bg-popover p-1 text-popover-foreground;
+    box-shadow: var(--shadow-float);
+    animation: rise-in 0.16s ease-out;
   }
 
   .dropdown-item {
-    @apply relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground;
+    @apply relative flex cursor-pointer select-none items-center gap-2 rounded-control px-2.5 py-1.5 text-sm outline-none transition-colors;
+  }
+  .dropdown-item:hover { @apply bg-muted; }
+
+  /* ── Progress: the same measured bar as .gauge ── */
+  .progress-bar { @apply gauge; }
+  .progress-fill { @apply gauge-fill; }
+  .progress-fill-success { @apply gauge-fill; background: hsl(var(--state-verified)); }
+  .progress-fill-warning { @apply gauge-fill; background: hsl(var(--state-review)); }
+  .progress-fill-danger  { @apply gauge-fill; background: hsl(var(--state-overdue)); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   STRUCTIQ — composition devices
+
+   These exist so a dashboard can be built from something other than a
+   grid of cards. Each one is a different way of presenting a relationship,
+   which is the actual subject matter of the product: what blocks what,
+   what is slipping, what is waiting on a person.
+   ══════════════════════════════════════════════════════════════════════ */
+@layer components {
+
+  /* ── ATTENTION BAND ───────────────────────────────────────
+     The first thing on a workspace page. It answers "what needs me
+     today" before any metric is shown, which is the difference between
+     a dashboard that reports and one that directs. Deliberately not a
+     card: it is a full-width band divided into decisions by hairlines. */
+  .attention-band {
+    @apply overflow-hidden rounded-panel border bg-card;
+    border-inline-start: 3px solid hsl(var(--state-review));
+    box-shadow: var(--shadow-sheet);
   }
 
-  .progress-bar {
-    @apply h-2 rounded-full bg-secondary overflow-hidden;
+  .attention-head {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3;
+    border-bottom: var(--rule-hair) solid hsl(var(--border));
   }
 
-  .progress-fill {
-    @apply h-full rounded-full bg-primary transition-all duration-300;
+  .attention-grid {
+    @apply grid gap-px bg-border;
+  }
+  .attention-grid > * {
+    @apply bg-card;
   }
 
-  .progress-fill-success {
-    @apply progress-fill bg-green-500;
+  /* A single decision. The kicker carries the state, the title carries
+     the consequence, and the meta line carries the evidence. */
+  .decision {
+    @apply flex flex-col gap-2 px-5 py-4 text-start transition-colors;
   }
-  .progress-fill-warning {
-    @apply progress-fill bg-yellow-500;
+  .decision:hover { @apply bg-muted/40; }
+
+  .decision-kicker {
+    @apply inline-flex items-center gap-2 text-[10px] font-semibold uppercase;
+    letter-spacing: var(--tracking-label);
   }
-  .progress-fill-danger {
-    @apply progress-fill bg-red-500;
+  .decision-kicker::before {
+    content: "";
+    @apply h-2 w-2 shrink-0 rounded-[2px];
+    background: currentColor;
+  }
+
+  .decision-title {
+    @apply text-[13px] font-semibold leading-snug;
+  }
+
+  .decision-meta {
+    @apply flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground;
+    font-family: var(--font-mono);
+  }
+
+  /* ── DISCIPLINE BAR ───────────────────────────────────────
+     A labelled quantity read against a common baseline. Used for
+     progress by discipline, workload by team, budget by package. Reads
+     as a schedule of quantities rather than as a chart widget. */
+  .bar-row {
+    @apply grid grid-cols-[minmax(6rem,9rem)_1fr_auto] items-center gap-3 py-1.5;
+  }
+
+  .bar-row-label {
+    @apply truncate text-xs text-muted-foreground;
+  }
+
+  .bar-row-track {
+    @apply relative h-2 overflow-hidden rounded-[3px] bg-muted;
+  }
+
+  .bar-row-fill {
+    @apply absolute inset-y-0 start-0 rounded-[3px] transition-[width] duration-700;
+    background: hsl(var(--primary));
+  }
+
+  .bar-row-value {
+    @apply w-10 text-end text-xs font-semibold;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── DEPENDENCY NODE ──────────────────────────────────────
+     One activity in a critical-path chain. The state is carried by the
+     leading rule; float is set in the technical face because it is a
+     measured engineering quantity, not a label. */
+  .dep-node {
+    @apply relative rounded-control border bg-card px-3 py-2.5;
+    border-inline-start-width: 3px;
+  }
+
+  .dep-node-title {
+    @apply truncate text-xs font-semibold;
+  }
+
+  .dep-node-float {
+    @apply mt-0.5 text-[10px] text-muted-foreground;
+    font-family: var(--font-mono);
+  }
+
+  /* The connector between two nodes in a chain. Drawn, not decorative:
+     it is the relationship. Mirrors correctly under RTL because the
+     arrowhead is a separate element on the logical end edge. */
+  .dep-link {
+    @apply relative mx-auto my-1 h-4 w-px;
+    background: hsl(var(--border-strong));
+  }
+  .dep-link::after {
+    content: "";
+    @apply absolute -bottom-px start-1/2 h-1.5 w-1.5 -translate-x-1/2 rotate-45 border-b border-e;
+    border-color: hsl(var(--border-strong));
+  }
+
+  /* ── INSIGHT SURFACE ──────────────────────────────────────
+     Where the product tells you something it worked out. Verdant, because
+     that is the brand's intelligence colour, and quiet, because an
+     inference is not an alert. No robot, no brain, no sparkle cliché —
+     the signal is the colour and the connection rule. */
+  .insight {
+    @apply relative rounded-panel px-4 py-3.5;
+    background: hsl(var(--accent-wash));
+    border: var(--rule-hair) solid hsl(var(--accent) / 0.22);
+  }
+
+  .insight-label {
+    @apply inline-flex items-center gap-2 text-[10px] font-semibold uppercase text-accent;
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* The two-node connection tail from the logo, reused as the marker for
+     anything the platform inferred. This is the single graphic device
+     that ties the identity to the intelligence in the product. */
+  .insight-label::before {
+    content: "";
+    @apply h-1.5 w-1.5 shrink-0 rounded-full;
+    background: hsl(var(--accent));
+    box-shadow: 0 0 0 3px hsl(var(--accent) / 0.16);
+  }
+
+  .insight-body {
+    @apply mt-2 text-[13px] leading-relaxed text-foreground/85;
+  }
+
+  /* ── TAB NAVIGATION ───────────────────────────────────────
+     For switching view within a page. Marked by a rule beneath rather
+     than a filled pill, so it stays quiet next to real content. */
+  .tab-bar {
+    @apply flex items-center gap-1 overflow-x-auto;
+    border-bottom: var(--rule-hair) solid hsl(var(--border));
+  }
+
+  .tab-link {
+    @apply relative whitespace-nowrap px-3 py-2.5 text-[13px] font-medium text-muted-foreground transition-colors;
+  }
+  .tab-link:hover { @apply text-foreground; }
+
+  .tab-link-active {
+    @apply text-foreground;
+  }
+  .tab-link-active::after {
+    content: "";
+    @apply absolute inset-x-2 -bottom-px h-[2px] rounded-full;
+    background: hsl(var(--accent));
+  }
+
+  /* ── SEGMENTED CONTROL ────────────────────────────────────
+     For sorting and small mutually-exclusive choices. */
+  .segmented {
+    @apply inline-flex items-center gap-0.5 rounded-control border bg-well p-0.5;
+  }
+
+  .segmented-item {
+    @apply rounded-[5px] px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors;
+  }
+  .segmented-item:hover { @apply text-foreground; }
+
+  .segmented-item-active {
+    @apply bg-card text-foreground;
+    box-shadow: var(--shadow-sheet);
+  }
+
+  /* ── PORTFOLIO / WORKSPACE DISTINCTION ────────────────────
+     The global portfolio and an individual project must not look alike.
+     The portfolio header is set wide and open on the page ground; a
+     project workspace header sits on a tinted band with its reference
+     and status, so you always know which of the two you are in. */
+  .workspace-header {
+    @apply relative overflow-hidden rounded-sheet border bg-card px-6 py-5;
+    box-shadow: var(--shadow-sheet);
+  }
+  .workspace-header::before {
+    content: "";
+    @apply absolute inset-y-0 start-0 w-1;
+    background: hsl(var(--primary));
   }
 }

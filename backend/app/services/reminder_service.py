@@ -110,6 +110,11 @@ def evaluate_project_reminders(db: Session, project_id: uuid.UUID, *, actor_id: 
             type=NotificationType.SYSTEM, category="REMINDERS", requires_action=True,
             related_entity_type=target_type, related_entity_id=target_id,
         ))
+        # The session runs with autoflush disabled, so without this the history
+        # query above cannot see reminders written earlier in the same session
+        # and would send the same nudge again. Idempotency must not depend on
+        # the caller happening to commit between sweeps.
+        db.flush()
         created += 1
     if created:
         record_audit(

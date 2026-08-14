@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { useParams, useNavigate } from "react-router-dom";
 import { Gantt, ViewMode } from "gantt-task-react";
 import type { Task } from "gantt-task-react";
@@ -52,6 +54,7 @@ interface CriticalPathResult {
 }
 
 export const ProjectSchedulePage = () => {
+  const { t } = useTranslation();
   const { id, projectId } = useParams<{ id?: string; projectId?: string }>();
   const workspace = useProjectWorkspace();
   const activeProjectId = projectId || id || workspace.projectId;
@@ -143,7 +146,7 @@ export const ProjectSchedulePage = () => {
       return true;
     } catch (e: any) {
       setTasks(previousTasks);
-      toast.error(e?.response?.data?.detail || "Schedule update failed. The Gantt change was reverted.");
+      toast.error(errorMessage(e, "Schedule update failed. The Gantt change was reverted."));
       return false;
     } finally { setSavingTaskId(null); }
   };
@@ -159,7 +162,7 @@ export const ProjectSchedulePage = () => {
       return true;
     } catch (e: any) {
       setTasks(previousTasks);
-      toast.error(e?.response?.data?.detail || "Progress update failed. The Gantt change was reverted.");
+      toast.error(errorMessage(e, "Progress update failed. The Gantt change was reverted."));
       return false;
     } finally { setSavingTaskId(null); }
   };
@@ -173,7 +176,7 @@ export const ProjectSchedulePage = () => {
       if (result.criticalTaskIds?.length) toast.success("Dependency-based CPM path calculated.");
       else toast.error(result.reason || "No dependency-driven critical path exists.");
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Critical path calculation failed.");
+      toast.error(errorMessage(e, "Critical path calculation failed."));
     }
   };
 
@@ -192,8 +195,8 @@ export const ProjectSchedulePage = () => {
     isCritical: criticalEdgeKeys.has(`${predecessorId}:${task.id}`),
   })));
 
-  if (loading) return <div className="p-8 text-center animate-pulse">Loading Gantt chart...</div>;
-  if (error) return <div className="p-8 text-center text-rose-500 flex flex-col items-center gap-2"><AlertTriangle /> {error}</div>;
+  if (loading) return <div className="p-8 text-center animate-pulse">{t("projectSchedule.loading_gantt_chart")}</div>;
+  if (error) return <div className="p-8 text-center text-state-overdue flex flex-col items-center gap-2"><AlertTriangle /> {error}</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -203,7 +206,7 @@ export const ProjectSchedulePage = () => {
             <ArrowLeft size={14} /> Project Dashboard
           </button>
           <h1 className="text-3xl font-bold tracking-tight">Project Schedule{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-          <p className="text-muted-foreground">Interactive Gantt chart and dependency mapping</p>
+          <p className="text-muted-foreground">{t("projectSchedule.interactive_gantt_chart_and_dependency")}</p>
         </div>
         <div className="flex gap-2">
           <select 
@@ -211,12 +214,12 @@ export const ProjectSchedulePage = () => {
             value={viewMode}
             onChange={(e) => setViewMode(e.target.value as ViewMode)}
           >
-            <option value={ViewMode.Day}>Day View</option>
-            <option value={ViewMode.Week}>Week View</option>
-            <option value={ViewMode.Month}>Month View</option>
+            <option value={ViewMode.Day}>{t("projectSchedule.day_view")}</option>
+            <option value={ViewMode.Week}>{t("projectSchedule.week_view")}</option>
+            <option value={ViewMode.Month}>{t("projectSchedule.month_view")}</option>
           </select>
           <button onClick={handleCriticalPath} className="btn-outline btn-sm">
-            Calculate Critical Path
+            {t("projectSchedule.calculate_critical_path")}
           </button>
           <button onClick={fetchSchedule} className="btn-primary btn-sm flex items-center gap-2">
             <RefreshCw size={14} /> Refresh
@@ -225,15 +228,15 @@ export const ProjectSchedulePage = () => {
       </div>
 
       <div className="bg-card border rounded-xl shadow-sm p-4 overflow-x-auto">
-        {savingTaskId && <p className="mb-3 text-sm font-medium text-primary">Saving schedule change…</p>}
-        {unscheduledTasks.length > 0 && <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        {savingTaskId && <p className="mb-3 text-sm font-medium text-primary">{t("projectSchedule.saving_schedule_change")}</p>}
+        {unscheduledTasks.length > 0 && <div className="mb-4 rounded-lg border border-state-review/30 bg-wash-review p-3 text-sm text-state-review">
           {unscheduledTasks.length} task{unscheduledTasks.length === 1 ? " has" : "s have"} no complete planned date range and {unscheduledTasks.length === 1 ? "is" : "are"} not drawn: {unscheduledTasks.map((task) => task.name).join(", ")}.
         </div>}
-        <div className="mb-4 flex flex-wrap gap-4 text-xs text-muted-foreground" aria-label="Gantt legend">
-          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-blue-600" /> Scheduled</span>
-          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-green-600" /> Completed</span>
-          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-amber-500" /> Delayed</span>
-          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-red-600" /> Critical path</span>
+        <div className="mb-4 flex flex-wrap gap-4 text-xs text-muted-foreground" aria-label={t("projectSchedule.gantt_legend")}>
+          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-progress" /> Scheduled</span>
+          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-verified" /> Completed</span>
+          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-review" /> Delayed</span>
+          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-overdue" /> Critical path</span>
         </div>
         {tasks.length > 0 ? (
           <Gantt
@@ -247,29 +250,29 @@ export const ProjectSchedulePage = () => {
             columnWidth={viewMode === ViewMode.Month ? 150 : 60}
           />
         ) : (
-          <div className="text-center py-10 text-muted-foreground">No tasks available for this project.</div>
+          <div className="text-center py-10 text-muted-foreground">{t("projectSchedule.no_tasks_available_for_this_project")}</div>
         )}
       </div>
       {criticalPath && <div className="bg-card border rounded-xl p-5 shadow-sm">
-        <div className="flex items-center gap-2"><Route size={18} className="text-red-600" /><h2 className="font-semibold">Dependency-based Critical Path (CPM)</h2></div>
+        <div className="flex items-center gap-2"><Route size={18} className="text-state-overdue" /><h2 className="font-semibold">{t("projectSchedule.dependency_based_critical_path_cpm")}</h2></div>
         <p className="mt-1 text-sm text-muted-foreground">
           Forward pass (ES/EF) + backward pass (LS/LF) across {criticalPath.dependencyCount} stored dependencies.
           Isolated tasks are excluded; the longest individual task is never used as a fallback.
         </p>
         {criticalPath.criticalTaskIds.length > 0 ? <>
           <p className="mt-3 text-sm font-medium">Ordered driving sequence · {criticalPath.projectDurationDays} days</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" aria-label="Ordered critical path task IDs">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" aria-label={t("projectSchedule.ordered_critical_path_task_ids")}>
             {criticalPath.criticalTasks.map((task, index) => <div key={task.taskId} className="contents">
-              {index > 0 && <span className="font-bold text-red-600">→</span>}
-              <span className="rounded-md border border-red-300 bg-red-50 px-3 py-1.5 font-medium text-red-800">{index + 1}. {task.taskCode} — {task.name}</span>
+              {index > 0 && <span className="font-bold text-state-overdue">→</span>}
+              <span className="rounded-md border border-state-overdue/30 bg-wash-overdue px-3 py-1.5 font-medium text-state-overdue">{index + 1}. {task.taskCode} — {task.name}</span>
             </div>)}
           </div>
           <ol className="mt-4 grid gap-3 text-sm md:grid-cols-2">
             {criticalPath.criticalTasks.map((task, index) => {
               const predecessor = task.drivingPredecessorId ? taskName(task.drivingPredecessorId) : null;
               const relation = task.drivingDependencyType?.replaceAll("_", " ").toUpperCase();
-              return <li key={task.taskId} className="rounded-lg border border-red-200 p-3">
-                <p className="font-medium text-red-800">{index + 1}. {task.taskCode} — {task.name}</p>
+              return <li key={task.taskId} className="rounded-lg border border-state-overdue/30 p-3">
+                <p className="font-medium text-state-overdue">{index + 1}. {task.taskCode} — {task.name}</p>
                 <p className="mt-2">ES {task.earliestStart} · EF {task.earliestFinish} · LS {task.latestStart} · LF {task.latestFinish} · Float {task.totalFloatDays}</p>
                 <p className="mt-1 text-muted-foreground">
                   {predecessor
@@ -279,15 +282,15 @@ export const ProjectSchedulePage = () => {
               </li>;
             })}
           </ol>
-        </> : <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        </> : <div className="mt-4 rounded-lg border border-state-review/30 bg-wash-review p-3 text-sm text-state-review">
           {criticalPath.reason || "No connected dependency chain drives the project finish."}
         </div>}
       </div>}
       <div className="bg-card border rounded-xl p-5 shadow-sm">
-        <div className="flex items-center gap-2"><Link2 size={18} /><h2 className="font-semibold">Task Dependencies</h2></div>
+        <div className="flex items-center gap-2"><Link2 size={18} /><h2 className="font-semibold">{t("projectSchedule.task_dependencies")}</h2></div>
         <p className="mt-1 text-sm text-muted-foreground">Arrows are rendered between scheduled Gantt bars. The list below also exposes every stored predecessor → successor relation; red rows are edges in the calculated critical sequence.</p>
         {dependencyEdges.length ? <div className="mt-3 grid gap-2 md:grid-cols-2">
-          {dependencyEdges.map((edge) => <div key={`${edge.predecessorId}:${edge.successorId}`} className={`rounded border p-2 text-sm ${edge.isCritical ? "border-red-300 bg-red-50 text-red-800" : ""}`}>
+          {dependencyEdges.map((edge) => <div key={`${edge.predecessorId}:${edge.successorId}`} className={`rounded border p-2 text-sm ${edge.isCritical ? "border-state-overdue/30 bg-wash-overdue text-state-overdue" : ""}`}>
             <span className="font-medium">{edge.predecessorName}</span> <span aria-hidden>→</span> <span className="font-medium">{edge.successorName}</span>
           </div>)}
         </div> : <p className="mt-3 text-sm text-muted-foreground">No dependencies are defined. Add finish-to-start predecessors from a task’s detail page before calculating CPM.</p>}

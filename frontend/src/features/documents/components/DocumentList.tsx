@@ -1,4 +1,5 @@
 import { Card } from "../../../components/ui/Card";
+import { useTranslation } from "react-i18next";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Loader } from "../../../components/ui/Loader";
@@ -29,13 +30,14 @@ export const DocumentList = ({
   onDownload,
   onDelete,
 }: DocumentListProps) => {
+  const { t } = useTranslation();
   if (isLoading) return <Loader text="Loading documents..." />;
 
   if (documents.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-state-icon">📄</div>
-        <p className="empty-state-title">No documents found</p>
+        <p className="empty-state-title">{t("documentList.no_documents_found")}</p>
       </div>
     );
   }
@@ -69,12 +71,12 @@ export const DocumentList = ({
           <div className="flex items-center gap-2">
             {onDownload && (
               <Button variant="ghost" size="sm" onClick={() => onDownload(doc)}>
-                Download
+                {t("documentList.download")}
               </Button>
             )}
             {onDelete && (
               <Button variant="ghost" size="sm" onClick={() => onDelete(doc)}>
-                Delete
+                {t("documentList.delete")}
               </Button>
             )}
           </div>

@@ -14,6 +14,7 @@ from app.models.enums import ConsultantApprovalMode, UserRole
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
 from app.models.task import Task
 from app.models.user import User
+from app.services.authorization import consultant_covers_engineers
 from app.services.consultant_approval_policy import (
     ReviewerAssignment,
     assignment_allows_review,
@@ -42,7 +43,7 @@ def can_consultant_review_task(db: Session, user: User, task: Task) -> bool:
         ProjectConsultantReviewer.project_id == task.project_id,
         ProjectConsultantReviewer.user_id == user.id,
     ).all()
-    return assignment_allows_review(
+    if not assignment_allows_review(
         project.consultant_approval_mode.value,
         [
             ReviewerAssignment(str(item.project_id), str(item.user_id), item.discipline)
@@ -51,6 +52,14 @@ def can_consultant_review_task(db: Session, user: User, task: Task) -> bool:
         project_id=str(task.project_id),
         user_id=str(user.id),
         task_discipline=task.discipline,
+    ):
+        return False
+    # Some organisations divide review work by person rather than by
+    # discipline. When an administrator has named the engineers this consultant
+    # covers, work belonging to anyone else is out of their remit. Projects that
+    # never configure this are unaffected.
+    return consultant_covers_engineers(
+        db, task.project_id, user.id, {assignee.id for assignee in task.assignees},
     )
 
 

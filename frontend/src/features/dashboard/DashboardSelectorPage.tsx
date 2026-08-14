@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../utils/errorMessage";
 import { Navigate } from "react-router-dom";
 import { useRole } from "../../hooks/useRole";
 import { ProjectManagerDashboard } from "./project-manager/pages/ProjectManagerDashboard";
@@ -8,6 +10,7 @@ import api from "../../services/api";
 import type { Project } from "../../types/project";
 
 const EngineerEntry = () => {
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState("");
@@ -17,7 +20,7 @@ const EngineerEntry = () => {
     api.projects.list({ limit: 100 }).then((response) => {
       if (!cancelled) setProjects(response.data || []);
     }).catch((err: any) => {
-      if (!cancelled) setError(err?.response?.data?.detail || "Unable to load assigned projects.");
+      if (!cancelled) setError(errorMessage(err, "Unable to load assigned projects."));
     });
     return () => { cancelled = true; };
   }, []);
@@ -28,10 +31,10 @@ const EngineerEntry = () => {
     || !["main_contractor", "external_consultant"].includes(user.engineerAffiliation || "")
     || user.status !== "active"
   ) {
-    return <div className="rounded-xl border bg-card p-6 text-destructive">Active Engineer organization side is required.</div>;
+    return <div className="rounded-xl border bg-card p-6 text-destructive">{t("dashboardSelectorPage.active_engineer_organization_side_is")}</div>;
   }
   if (error) return <div className="rounded-xl border bg-card p-6 text-destructive">{error}</div>;
-  if (!projects) return <div className="p-8 text-center text-muted-foreground">Loading your assigned projects…</div>;
+  if (!projects) return <div className="p-8 text-center text-muted-foreground">{t("dashboardSelectorPage.loading_your_assigned_projects")}</div>;
   if (projects.length === 1) {
     const base = user.engineerAffiliation === "external_consultant" ? "/consultant-engineer/projects" : "/engineer/projects";
     return <Navigate to={`${base}/${projects[0].id}/dashboard`} replace />;

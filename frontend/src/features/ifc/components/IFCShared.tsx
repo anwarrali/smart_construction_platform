@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw } from "lucide-react";
 
 import { Button } from "../../../components/ui/Button";
@@ -27,7 +28,9 @@ export const EmptyState = ({ title, description, action }: { title: string; desc
 
 export const LoadingState = ({ label = "Loading model intelligence…" }: { label?: string }) => <Card><div className="flex min-h-44 items-center justify-center gap-3 text-sm text-muted-foreground"><LoaderCircle className="animate-spin"/> {label}</div></Card>;
 
-export const ErrorState = ({ message, onRetry }: { message: string; onRetry?: () => void }) => <Card className="border-red-200"><div className="py-8 text-center"><AlertTriangle className="mx-auto mb-3 text-red-500"/><h3 className="font-semibold">This view could not be loaded</h3><p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">{message}</p>{onRetry && <Button className="mt-4" variant="outline" onClick={onRetry}><RefreshCw size={15}/> Retry</Button>}</div></Card>;
+export const ErrorState = ({ message, onRetry }: { message: string; onRetry?: () => void }) => {
+  const { t } = useTranslation();
+  return <Card className="border-red-200"><div className="py-8 text-center"><AlertTriangle className="mx-auto mb-3 text-red-500"/><h3 className="font-semibold">{t("iFCShared.this_view_could_not_be_loaded")}</h3><p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">{message}</p>{onRetry && <Button className="mt-4" variant="outline" onClick={onRetry}><RefreshCw size={15}/> Retry</Button>}</div></Card>; }
 
 interface BoundaryProps { name: string; children: ReactNode; onRetry?: () => void }
 interface BoundaryState { error?: Error }
