@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Sun, Moon, Bell, FolderKanban } from "lucide-react";
+import { Bell, LogOut, Menu } from "lucide-react";
 import { Badge } from "../../ui/Badge";
 import { NotificationDropdown } from "../NotificationDropdown";
 import { LanguageSwitcher } from "../LanguageSwitcher";
+import { ThemeSwitcher } from "../ThemeSwitcher";
 import { useAuth } from "../../../hooks/useAuth";
-import { useTheme } from "../../../hooks/useTheme";
 import { useRole } from "../../../hooks/useRole";
 import { useNotificationStore } from "../../../app/store/notification.store";
 import { ROUTES } from "../../../utils/constants";
@@ -15,10 +15,9 @@ import { useProjectWorkspace } from "../../../features/projects/context/ProjectW
 import { replaceProjectInPath } from "../../../utils/projectRoutes";
 import { useLocation } from "react-router-dom";
 
-export const Topbar = () => {
+export const Topbar = ({ onOpenMenu }: { onOpenMenu?: () => void }) => {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const { unreadCount, setUnreadCount } = useNotificationStore();
   const { roleLabel } = useRole();
   const navigate = useNavigate();
@@ -49,42 +48,50 @@ export const Topbar = () => {
       .slice(0, 2) || "U";
 
   return (
-    <header className="h-16 border-b bg-background flex items-center justify-between px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b bg-background/85 px-3 backdrop-blur-md sm:gap-4 sm:px-5 md:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-3">
+        {/* The rail is hidden below `lg`, so this is the only way to the
+            navigation on a phone or a narrow window. */}
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          aria-label={t("nav.openMenu")}
+          title={t("nav.openMenu")}
+          className="-ms-1 inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-control border-none text-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+          style={{ background: "none" }}
+        >
+          <Menu size={20} />
+        </button>
         {workspace.isProjectWorkspace && <>
-          <FolderKanban size={17} className="shrink-0 text-primary" />
-          <div className="min-w-0"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("common.activeProject")}</p><p className="truncate text-sm font-semibold">{workspace.project?.name || t("common.loadingProject")}</p></div>
+          <span aria-hidden className="h-8 w-[3px] shrink-0 rounded-[1px] bg-accent" />
+          <div className="min-w-0">
+            <p className="label-caps text-muted-foreground/70">{t("common.activeProject")}</p>
+            <p className="truncate text-sm font-semibold tracking-heading">{workspace.project?.name || t("common.loadingProject")}</p>
+          </div>
           <select aria-label={t("common.switchActiveProject")} value={workspace.projectId} onChange={(event) => {
             navigate(`${replaceProjectInPath(location.pathname, event.target.value)}${location.search}`);
-          }} className="ml-2 max-w-56 rounded-md border bg-background px-2 py-1.5 text-xs">
+          }} className="ms-2 hidden max-w-56 rounded-control border bg-card px-2.5 py-1.5 text-xs transition-colors hover:border-border-strong sm:block">
             {workspace.assignedProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
         </>}
       </div>
 
-      <div className="flex h-full items-center gap-3">
+      <div className="flex h-full shrink-0 items-center gap-1 sm:gap-3">
         <LanguageSwitcher />
-        <button
-          onClick={toggleTheme}
-          aria-label={theme === "dark" ? t("common.switchToLight") : t("common.switchToDark")}
-          title={theme === "dark" ? t("common.switchToLight") : t("common.switchToDark")}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-foreground/70 hover:bg-muted hover:text-foreground transition-colors cursor-pointer border-none outline-none"
-          style={{ background: "none" }}
-        >
-          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+        {/* Light / Dark / System — the same control the landing page uses. */}
+        <ThemeSwitcher compact />
 
         <div className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center">
           <button
             onClick={() => setIsNotificationOpen(!isNotificationOpen)}
             aria-label={t("common.notifications")}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-foreground/70 hover:bg-muted hover:text-foreground transition-colors cursor-pointer border-none outline-none"
+            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-control border-none text-foreground/65 outline-none transition-colors hover:bg-muted hover:text-foreground"
             style={{ background: "none" }}
           >
             <span className="relative inline-flex">
               <Bell size={18} />
               {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-semibold">
+                <span className="absolute -top-1.5 -end-1.5 flex h-4 min-w-4 items-center justify-center rounded-chip bg-state-overdue px-1 text-[10px] font-semibold text-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
@@ -96,26 +103,41 @@ export const Topbar = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 pl-3 border-l">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-medium">
+        <div className="flex items-center gap-2.5 border-s ps-2 sm:ps-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-primary text-xs font-semibold text-primary-foreground">
             {initials}
           </div>
           <div className="hidden md:block">
             <p className="text-sm font-medium">{user?.fullName || t("roles.worker")}</p>
-            <Badge variant="info" size="sm">
+            <Badge variant="neutral" size="sm">
               {roleLabel}
             </Badge>
           </div>
         </div>
 
+        {/* Kept on every screen size — signing out is not optional on a phone.
+            Below `sm` it becomes an icon so the bar stops overflowing. */}
         <button
-          className="btn-ghost btn-sm"
+          className="btn-ghost btn-sm hidden sm:inline-flex"
           onClick={() => {
             logout();
             navigate(ROUTES.HOME);
           }}
         >
           {t("common.logout")}
+        </button>
+        <button
+          type="button"
+          aria-label={t("common.logout")}
+          title={t("common.logout")}
+          onClick={() => {
+            logout();
+            navigate(ROUTES.HOME);
+          }}
+          className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-control border-none text-foreground/65 outline-none transition-colors hover:bg-muted hover:text-foreground sm:hidden"
+          style={{ background: "none" }}
+        >
+          <LogOut size={18} className="rtl-flip" />
         </button>
       </div>
     </header>

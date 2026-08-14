@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
@@ -39,6 +41,7 @@ interface SiteReport {
 }
 
 export const SiteReportsPage = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const workspace = useProjectWorkspace();
   const activeProjectId = workspace.projectId || id;
@@ -90,7 +93,7 @@ export const SiteReportsPage = () => {
       setReports(data || []);
     } catch (err: any) {
       setReports([]);
-      toast.error(err?.response?.data?.detail || "Unable to load site reports.");
+      toast.error(errorMessage(err, "Unable to load site reports."));
     }
     setIsLoading(false);
   }, [activeProjectId, filterProject, filterStatus, filterDiscipline, dateFrom, dateTo, onlyAttachments]);
@@ -143,7 +146,7 @@ export const SiteReportsPage = () => {
       await fetchReports();
       toast.success(reviewStatus === "draft" ? "Site report draft saved." : "Site report submitted.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Site report could not be saved.");
+      toast.error(errorMessage(err, "Site report could not be saved."));
     } finally {
       setIsSaving(false);
     }
@@ -164,10 +167,10 @@ export const SiteReportsPage = () => {
       <div className="flex items-center justify-between">
         <div>
         <h1 className="text-2xl font-bold">Site Reports{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-        <p className="text-muted-foreground">Daily site progress reports</p>
+        <p className="text-muted-foreground">{t("siteReports.daily_site_progress_reports")}</p>
         </div>{canSubmit && <Button onClick={() => setFormOpen(true)}>+ Site Report</Button>}
       </div>
-      {focusedReportId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>Showing the site report opened from your notification.</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>Show all reports</Button></div>}
+      {focusedReportId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("siteReports.showing_the_site_report_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("siteReports.show_all_reports")}</Button></div>}
 
       <Card className="grid gap-3 p-4 md:grid-cols-6">
         {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || "Selected project"}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:"All projects"},...projects.map(project=>({value:project.id,label:project.name}))]}/>} 
@@ -182,7 +185,7 @@ export const SiteReportsPage = () => {
         <Card>
           <div className="empty-state">
             <div className="empty-state-icon">🏗️</div>
-            <p className="empty-state-title">No site reports</p>
+            <p className="empty-state-title">{t("siteReports.no_site_reports")}</p>
           </div>
         </Card>
       ) : (
@@ -201,14 +204,14 @@ export const SiteReportsPage = () => {
                     </Badge>
                   )}
                   {report.reviewStatus && <Badge size="sm" className="mt-1 ml-2">{report.reviewStatus}</Badge>}
-                  {report.reviewStatus === "draft" && report.submittedById === user?.id && <Button className="ml-2" size="sm" variant="ghost" onClick={() => editDraft(report)}>Edit Draft</Button>}
+                  {report.reviewStatus === "draft" && report.submittedById === user?.id && <Button className="ml-2" size="sm" variant="ghost" onClick={() => editDraft(report)}>{t("siteReports.edit_draft")}</Button>}
                   <AttachmentPanel projectId={report.projectId} entityType="SITE_REPORT" entityId={report.id} initialCount={report.attachmentCount} />
                 </div>
                 {report.progressPercentageReported !== undefined && report.progressPercentageReported !== null && <div className="text-right">
                   <p className="text-lg font-bold">
                     {report.progressPercentageReported}%
                   </p>
-                  <p className="text-xs text-muted-foreground">Progress</p>
+                  <p className="text-xs text-muted-foreground">{t("siteReports.progress")}</p>
                 </div>}
               </div>
             </Card>
@@ -217,20 +220,20 @@ export const SiteReportsPage = () => {
       )}
       <Modal isOpen={formOpen} onClose={() => { setFormOpen(false); setEditingId(""); setPrefilledVisit(null); if (siteVisitId) { const next = new URLSearchParams(searchParams); next.delete("siteVisitId"); setSearchParams(next, { replace: true }); } }} title={editingId ? "Edit site report draft" : "Create site report"}>
         <form onSubmit={submitReport} className="space-y-4">
-          {prefilledVisit && <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm"><p className="font-medium">Prefilled from a scheduled site visit</p><p className="mt-0.5 text-muted-foreground">{prefilledVisit.visitType.replaceAll("_", " ").toLowerCase()} · visit date {prefilledVisit.reportDate}</p></div>}
-          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">Project:</span> {workspace.project?.name}</p> : <Select label="Project" value={projectId} onChange={e=>setProjectId(e.target.value)} options={projects.filter(project => role === "project_manager" || siteProjectIds.includes(project.id)).map(p=>({value:p.id,label:p.name}))}/>}
-          <Input label="Work summary" value={summary} onChange={e=>setSummary(e.target.value)} required/>
-          <Select label="Related task (optional)" value={taskId} onChange={e=>setTaskId(e.target.value)} options={[{value:"",label:"General daily report"},...tasks.map(task=>({value:task.id,label:`${task.taskCode} — ${task.name}`}))]}/>
-          <Input label="Weather" value={weather} onChange={e=>setWeather(e.target.value)}/>
-          <Input label="Workers count" type="number" min="0" value={workers} onChange={e=>setWorkers(e.target.value)}/>
-          <Input label="Equipment" value={equipment} onChange={e=>setEquipment(e.target.value)}/>
-          <Input label="Work completed" value={workCompleted} onChange={e=>setWorkCompleted(e.target.value)}/>
-          <Input label="Work in progress" value={workInProgress} onChange={e=>setWorkInProgress(e.target.value)}/>
-          <Input label="Delay notes" value={delays} onChange={e=>setDelays(e.target.value)}/>
-          <Input label="Issue references / summary" value={issuesSummary} onChange={e=>setIssuesSummary(e.target.value)}/>
-          <Input label="Additional notes" value={notes} onChange={e=>setNotes(e.target.value)}/>
-          <label className="block text-sm font-medium">Optional photos<input className="mt-1 block w-full text-sm" type="file" accept="image/*,.pdf" multiple onChange={e=>setPhotos(Array.from(e.target.files || []))}/></label>
-          <ModalActions><Button type="button" variant="outline" onClick={()=>setFormOpen(false)}>Cancel</Button><Button type="button" variant="outline" isLoading={isSaving} disabled={!(activeProjectId || projectId)||!summary.trim()} onClick={()=>saveReport("draft")}>Save Draft</Button><Button type="submit" isLoading={isSaving} disabled={!(activeProjectId || projectId)||!summary.trim()}>Submit report</Button></ModalActions>
+          {prefilledVisit && <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm"><p className="font-medium">{t("siteReports.prefilled_from_a_scheduled_site_visit")}</p><p className="mt-0.5 text-muted-foreground">{prefilledVisit.visitType.replaceAll("_", " ").toLowerCase()} · visit date {prefilledVisit.reportDate}</p></div>}
+          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">{t("siteReports.project")}</span> {workspace.project?.name}</p> : <Select label={t("siteReports.project_2")} value={projectId} onChange={e=>setProjectId(e.target.value)} options={projects.filter(project => role === "project_manager" || siteProjectIds.includes(project.id)).map(p=>({value:p.id,label:p.name}))}/>}
+          <Input label={t("siteReports.work_summary")} value={summary} onChange={e=>setSummary(e.target.value)} required/>
+          <Select label={t("siteReports.related_task_optional")} value={taskId} onChange={e=>setTaskId(e.target.value)} options={[{value:"",label:"General daily report"},...tasks.map(task=>({value:task.id,label:`${task.taskCode} — ${task.name}`}))]}/>
+          <Input label={t("siteReports.weather")} value={weather} onChange={e=>setWeather(e.target.value)}/>
+          <Input label={t("siteReports.workers_count")} type="number" min="0" value={workers} onChange={e=>setWorkers(e.target.value)}/>
+          <Input label={t("siteReports.equipment")} value={equipment} onChange={e=>setEquipment(e.target.value)}/>
+          <Input label={t("siteReports.work_completed")} value={workCompleted} onChange={e=>setWorkCompleted(e.target.value)}/>
+          <Input label={t("siteReports.work_in_progress")} value={workInProgress} onChange={e=>setWorkInProgress(e.target.value)}/>
+          <Input label={t("siteReports.delay_notes")} value={delays} onChange={e=>setDelays(e.target.value)}/>
+          <Input label={t("siteReports.issue_references_summary")} value={issuesSummary} onChange={e=>setIssuesSummary(e.target.value)}/>
+          <Input label={t("siteReports.additional_notes")} value={notes} onChange={e=>setNotes(e.target.value)}/>
+          <label className="block text-sm font-medium">{t("siteReports.optional_photos")}<input className="mt-1 block w-full text-sm" type="file" accept="image/*,.pdf" multiple onChange={e=>setPhotos(Array.from(e.target.files || []))}/></label>
+          <ModalActions><Button type="button" variant="outline" onClick={()=>setFormOpen(false)}>{t("siteReports.cancel")}</Button><Button type="button" variant="outline" isLoading={isSaving} disabled={!(activeProjectId || projectId)||!summary.trim()} onClick={()=>saveReport("draft")}>{t("siteReports.save_draft")}</Button><Button type="submit" isLoading={isSaving} disabled={!(activeProjectId || projectId)||!summary.trim()}>{t("siteReports.submit_report")}</Button></ModalActions>
         </form>
       </Modal>
     </div>

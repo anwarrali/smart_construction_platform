@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../../utils/errorMessage";
 import {
   Briefcase,
   CheckCircle2,
@@ -39,6 +41,7 @@ const byCreatedDateDesc = <T extends { createdAt?: string }>(items: T[]) =>
   });
 
 export const AdminDashboard = () => {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +58,7 @@ export const AdminDashboard = () => {
       setUsers(normalizeUsers(usersResponse));
       setProjects(normalizeProjects(projectsResponse));
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Failed to load administrator dashboard data.");
+      setError(errorMessage(err, "Failed to load administrator dashboard data."));
     } finally {
       setIsLoading(false);
     }
@@ -110,17 +113,17 @@ export const AdminDashboard = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Administrator Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("adminDash.administrator_dashboard")}</h1>
           <p className="text-muted-foreground mt-1">
-            Company users, project registry, access status, and system configuration.
+            {t("adminDash.company_users_project_registry_access")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link to={ROUTES.USERS} className="btn-outline">
-            Manage Users
+            {t("adminDash.manage_users")}
           </Link>
           <Link to={ROUTES.PROJECTS} className="btn-primary">
-            Manage Projects
+            {t("adminDash.manage_projects")}
           </Link>
         </div>
       </div>
@@ -133,13 +136,13 @@ export const AdminDashboard = () => {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {[
-          { label: "Total Users", value: summary.totalUsers, icon: Users },
-          { label: "Active Users", value: summary.activeUsers, icon: UserCheck },
-          { label: "Inactive Users", value: summary.inactiveUsers, icon: UserMinus },
-          { label: "Total Projects", value: summary.totalProjects, icon: Briefcase },
-          { label: "Active Projects", value: summary.activeProjects, icon: CheckCircle2 },
-        ].map(({ label, value, icon: Icon }) => (
-          <div key={label} className="bg-card border rounded-lg p-5 shadow-sm">
+          { label: t("adminDash.totalUsers"), value: summary.totalUsers, icon: Users },
+          { label: t("adminDash.activeUsers"), value: summary.activeUsers, icon: UserCheck },
+          { label: t("adminDash.inactiveUsers"), value: summary.inactiveUsers, icon: UserMinus },
+          { label: t("adminDash.totalProjects"), value: summary.totalProjects, icon: Briefcase },
+          { label: t("adminDash.activeProjects"), value: summary.activeProjects, icon: CheckCircle2 },
+        ].map(({ label, value, icon: Icon }, index) => (
+          <div key={index} className="bg-card border rounded-lg p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">{label}</span>
               <span className="rounded-md bg-primary/10 p-2 text-primary">
@@ -156,10 +159,10 @@ export const AdminDashboard = () => {
           <div className="flex items-center justify-between border-b px-5 py-4">
             <div className="flex items-center gap-2">
               <Clock size={18} className="text-primary" />
-              <h2 className="text-base font-semibold">Recently Created Users</h2>
+              <h2 className="text-base font-semibold">{t("adminDash.recently_created_users")}</h2>
             </div>
             <Link to={ROUTES.USERS} className="text-sm font-medium text-primary hover:underline">
-              View all
+              {t("adminDash.view_all")}
             </Link>
           </div>
           <div className="divide-y">
@@ -181,7 +184,7 @@ export const AdminDashboard = () => {
               </div>
             ))}
             {recentUsers.length === 0 && (
-              <div className="px-5 py-10 text-center text-sm text-muted-foreground">No users found.</div>
+              <div className="px-5 py-10 text-center text-sm text-muted-foreground">{t("adminDash.no_users_found")}</div>
             )}
           </div>
         </section>
@@ -189,7 +192,7 @@ export const AdminDashboard = () => {
         <section className="bg-card border rounded-lg p-5 shadow-sm">
           <div className="flex items-center gap-2">
             <Users size={18} className="text-primary" />
-            <h2 className="text-base font-semibold">User Role Distribution</h2>
+            <h2 className="text-base font-semibold">{t("adminDash.user_role_distribution")}</h2>
           </div>
           <div className="mt-5 space-y-4">
             {roleDistribution.map(({ role, count, percentage }) => (
@@ -204,7 +207,7 @@ export const AdminDashboard = () => {
               </div>
             ))}
             {roleDistribution.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">No role data available.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">{t("adminDash.no_role_data_available")}</p>
             )}
           </div>
         </section>
@@ -215,10 +218,10 @@ export const AdminDashboard = () => {
           <div className="flex items-center justify-between border-b px-5 py-4">
             <div className="flex items-center gap-2">
               <FolderKanban size={18} className="text-primary" />
-              <h2 className="text-base font-semibold">Recently Created Projects</h2>
+              <h2 className="text-base font-semibold">{t("adminDash.recently_created_projects")}</h2>
             </div>
             <Link to={ROUTES.PROJECTS} className="text-sm font-medium text-primary hover:underline">
-              View all
+              {t("adminDash.view_all")}
             </Link>
           </div>
           <div className="divide-y">
@@ -239,7 +242,7 @@ export const AdminDashboard = () => {
               </div>
             ))}
             {recentProjects.length === 0 && (
-              <div className="px-5 py-10 text-center text-sm text-muted-foreground">No projects found.</div>
+              <div className="px-5 py-10 text-center text-sm text-muted-foreground">{t("adminDash.no_projects_found")}</div>
             )}
           </div>
         </section>
@@ -247,17 +250,17 @@ export const AdminDashboard = () => {
         <section className="bg-card border rounded-lg p-5 shadow-sm">
           <div className="flex items-center gap-2">
             <Settings size={18} className="text-primary" />
-            <h2 className="text-base font-semibold">System Administration</h2>
+            <h2 className="text-base font-semibold">{t("adminDash.system_administration")}</h2>
           </div>
           <div className="mt-5 space-y-3">
             <Link className="block rounded-md border px-4 py-3 text-sm font-medium hover:bg-muted/40" to={ROUTES.USERS}>
-              Manage company users and access
+              {t("adminDash.manage_company_users_and_access")}
             </Link>
             <Link className="block rounded-md border px-4 py-3 text-sm font-medium hover:bg-muted/40" to={ROUTES.PROJECTS}>
-              Manage project registry
+              {t("adminDash.manage_project_registry")}
             </Link>
             <Link className="block rounded-md border px-4 py-3 text-sm font-medium hover:bg-muted/40" to={ROUTES.SETTINGS}>
-              Open system settings
+              {t("adminDash.open_system_settings")}
             </Link>
           </div>
         </section>

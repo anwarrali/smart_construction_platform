@@ -1,99 +1,233 @@
 /* ============================================================
-   Construction Platform – Design Tokens
-   Palette: Cool Slate (light) / Deep Slate (dark) + Bronze accent
+   StructIQ — design tokens
+   Smart Construction Management Platform
+
+   The identity is built from the logo outward. The mark is a chamfered
+   structural frame in Architectural Navy with a connection tail in Verdant
+   Data, and the interface reuses exactly that pair:
+
+     NAVY     structure, authority, the built thing.
+              Primary actions, headings, the navigation rail, the ink of
+              the product.
+
+     VERDANT  intelligence, connection, the resolved decision.
+              The active mark, AI and insight surfaces, verified state,
+              focus. It is the colour of the product knowing something.
+
+   Three rules govern everything below.
+
+     1. The ground is light. This is engineering software used all day in
+        site offices; it stays bright, calm and legible, and the only dark
+        surface in the product is the navigation rail, which frames the
+        work the way the mark frames its own tail.
+
+     2. Structure comes from line weight and space, not from a border,
+        shadow and radius on every element. Cards are one device among
+        several, never the design language itself.
+
+     3. Colour is signal. Outside the two brand colours, chroma is reserved
+        for state a person must act on, and each hue means exactly one
+        thing across the entire product.
    ============================================================ */
 
 :root {
-  /* ── Typography ── */
+  /* ── Typography ───────────────────────────────────────────
+     Inter carries the interface. The mono face is reserved for measured
+     things — quantities, codes, revisions, dates, float — which is what
+     makes the product read as engineering software rather than as a
+     generic dashboard. */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
   --font-arabic: "Cairo", "Tajawal", sans-serif;
 
-  /* ── Border Radius ── */
-  --radius: 0.5rem;
+  /* Optical tracking. Display tightens, technical labels open up. */
+  --tracking-display: -0.023em;
+  --tracking-heading: -0.014em;
+  --tracking-label: 0.085em;
 
-  /* ── Light Mode Tokens ── */
+  /* ── Radius ───────────────────────────────────────────────
+     Unchanged from the current product. The rounding here is already the
+     middle ground worth keeping — softer than legacy enterprise, tighter
+     than consumer — so the rebrand leaves it exactly as it was. */
+  --radius-chip: 3px;
+  --radius-control: 5px;
+  --radius-panel: 8px;
+  --radius-sheet: 12px;
+  --radius: var(--radius-control);
 
-  /* Page surfaces */
-  --background:       215 25% 97%;   /* near-white cool slate */
-  --foreground:       220 20% 12%;   /* dark charcoal */
+  /* ── Line weights ─────────────────────────────────────────
+     Borrowed from drafting practice: heavy = a boundary, medium = an
+     edge, hairline = reference information. */
+  --rule-hair: 1px;
+  --rule-edge: 1px;
+  --rule-cut: 2px;
 
-  /* Card / popover surfaces */
-  --card:             0 0% 100%;
-  --card-foreground:  220 20% 12%;
-  --popover:          0 0% 100%;
-  --popover-foreground: 220 20% 12%;
+  /* ── Brand constants ──────────────────────────────────────
+     Used by the logo lockup and anywhere the brand itself appears.
+     These are the identity, so they do not drift with the theme —
+     only --brand-ink flips, so the wordmark stays legible on the
+     dark rail and in dark mode. */
+  --brand-ink:    216 60% 15%;   /* Architectural Navy  #10233F */
+  --brand-accent: 134 28% 43%;   /* Verdant Data        #4E8B5C */
 
-  /* Primary — deep slate-blue (professional, trustworthy) */
-  --primary:          221 39% 22%;
-  --primary-foreground: 210 40% 98%;
+  /* ══ LIGHT ═══════════════════════════════════════════════ */
 
-  /* Secondary — light gray surface */
-  --secondary:        214 20% 93%;
-  --secondary-foreground: 221 39% 22%;
+  /* A cool, bright technical ground — daylight on a desk, not a warm
+     paper pastiche and not a blue "technology" surface. */
+  --background:         210 25% 98%;
+  --foreground:         216 38% 13%;
 
-  /* Muted — subtle fills and placeholders */
-  --muted:            214 18% 90%;
-  --muted-foreground: 215 15% 48%;
+  /* Panels sit above the ground as clean white sheets. */
+  --card:               0 0% 100%;
+  --card-foreground:    216 38% 13%;
+  --popover:            0 0% 100%;
+  --popover-foreground: 216 38% 13%;
 
-  /* Accent — warm bronze/brass (construction-inspired, subtle) */
-  --accent:           34 70% 52%;
-  --accent-foreground: 0 0% 100%;
+  /* Sunken wells for tables, insets and technical read-outs. */
+  --well:               210 22% 96%;
+  --well-foreground:    216 14% 34%;
 
-  /* Destructive */
-  --destructive:      0 72% 51%;
+  /* Primary — Architectural Navy, lifted just enough to hold white text
+     with presence rather than reading as flat black. */
+  --primary:            216 55% 19%;
+  --primary-foreground: 210 30% 98%;
+
+  --secondary:            210 20% 94%;
+  --secondary-foreground: 216 45% 22%;
+
+  --muted:              210 20% 94%;
+  --muted-foreground:   215 13% 45%;
+
+  /* Accent — Verdant Data. The intelligence signal of the product. */
+  --accent:             134 30% 38%;
+  --accent-foreground:  0 0% 100%;
+  --accent-wash:        134 34% 95%;
+
+  --destructive:            8 62% 48%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Form elements */
-  --border:           214 20% 88%;
-  --input:            214 20% 88%;
-  --ring:             221 39% 35%;
+  /* Rules, tuned so a hairline is visible but quiet. */
+  --border:        214 20% 90%;
+  --border-strong: 214 16% 79%;
+  --input:         214 18% 86%;
+  --ring:          134 30% 38%;
 
-  /* Sidebar */
-  --sidebar:          222 28% 16%;
-  --sidebar-foreground:         210 30% 88%;
-  --sidebar-border:             222 25% 22%;
-  --sidebar-accent:             222 25% 24%;
-  --sidebar-accent-foreground:  210 30% 95%;
+  /* ── Status — one semantic ramp ──
+     Six hues, one meaning each, used identically in every module. This
+     replaces the indigo / sky / violet / cyan / emerald / rose scatter
+     that previously carried no consistent meaning. */
+  --state-verified: 140 34% 34%;   /* approved · signed off · on plan   */
+  --state-progress: 205 60% 42%;   /* under way · information           */
+  --state-review:   36 82% 44%;    /* at risk · awaiting a decision     */
+  --state-overdue:  8 62% 48%;     /* delayed · critical · past date    */
+  --state-blocked:  282 24% 48%;   /* held by something else            */
+  --state-idle:     215 10% 60%;   /* not started · inactive            */
+
+  /* Tinted grounds for the same six, for chips and row washes. */
+  --state-verified-wash: 140 36% 95%;
+  --state-progress-wash: 205 58% 95%;
+  --state-review-wash:   36 80% 94%;
+  --state-overdue-wash:  8 64% 96%;
+  --state-blocked-wash:  282 30% 96%;
+  --state-idle-wash:     215 14% 95%;
+
+  /* ── Elevation — light, never heavy. Panels lift by a few pixels. ── */
+  --shadow-sheet: 0 1px 2px hsl(216 30% 12% / 0.05), 0 1px 1px hsl(216 30% 12% / 0.03);
+  --shadow-lift:  0 4px 14px hsl(216 30% 12% / 0.07), 0 1px 3px hsl(216 30% 12% / 0.04);
+  --shadow-float: 0 14px 36px hsl(216 30% 12% / 0.12), 0 2px 8px hsl(216 30% 12% / 0.06);
+
+  /* Structural grid, used as texture in a small number of places only.
+     Never a full blueprint treatment — the brief is explicit that
+     engineering references stay subtle. */
+  --grid-line:  216 40% 22%;
+  --grid-alpha: 0.04;
+
+  /* ── Navigation rail ──
+     Navy in both themes. It is the constant edge of the product and the
+     one place the identity is stated without apology. */
+  --sidebar:                   216 52% 12%;
+  --sidebar-foreground:        212 20% 70%;
+  --sidebar-border:            216 40% 19%;
+  --sidebar-accent:            216 40% 18%;
+  --sidebar-accent-foreground: 210 30% 97%;
+  --sidebar-mark:              134 38% 52%;   /* the active marker */
 }
 
-/* ── Dark Mode ── */
+/* ══ DARK ══════════════════════════════════════════════════
+   Not an inverted dashboard. The ground goes to a deep navy-black drawn
+   from the same hue as the mark, panels lift by tone alone, and the
+   verdant brightens so it keeps its signal without glaring. */
 .dark {
-  --background:       222 28% 9%;
-  --foreground:       210 30% 92%;
+  --brand-ink: 210 30% 96%;
 
-  --card:             222 26% 12%;
-  --card-foreground:  210 30% 92%;
-  --popover:          222 26% 11%;
-  --popover-foreground: 210 30% 92%;
+  --background:         216 32% 8%;
+  --foreground:         210 22% 92%;
 
-  --primary:          210 40% 70%;
-  --primary-foreground: 222 28% 9%;
+  --card:               216 28% 11%;
+  --card-foreground:    210 22% 92%;
+  --popover:            216 28% 12%;
+  --popover-foreground: 210 22% 92%;
 
-  --secondary:        222 22% 18%;
-  --secondary-foreground: 210 30% 82%;
+  --well:               216 30% 9%;
+  --well-foreground:    212 15% 66%;
 
-  --muted:            222 22% 16%;
-  --muted-foreground: 215 15% 55%;
+  --primary:            210 40% 78%;
+  --primary-foreground: 216 45% 11%;
 
-  --accent:           34 65% 50%;
-  --accent-foreground: 0 0% 100%;
+  --secondary:            216 22% 16%;
+  --secondary-foreground: 210 22% 84%;
 
-  --destructive:      0 65% 55%;
+  --muted:              216 22% 15%;
+  --muted-foreground:   214 13% 58%;
+
+  --accent:             134 36% 52%;
+  --accent-foreground:  216 45% 10%;
+  --accent-wash:        134 30% 14%;
+
+  --destructive:            8 60% 57%;
   --destructive-foreground: 0 0% 100%;
 
-  --border:           222 22% 20%;
-  --input:            222 22% 20%;
-  --ring:             210 40% 60%;
+  --border:        216 20% 18%;
+  --border-strong: 216 16% 27%;
+  --input:         216 20% 20%;
+  --ring:          134 36% 50%;
 
-  --sidebar:          222 30% 7%;
-  --sidebar-foreground:         210 25% 72%;
-  --sidebar-border:             222 25% 13%;
-  --sidebar-accent:             222 25% 16%;
-  --sidebar-accent-foreground:  210 30% 90%;
+  --state-verified: 140 38% 52%;
+  --state-progress: 205 62% 60%;
+  --state-review:   36 78% 57%;
+  --state-overdue:  8 62% 60%;
+  --state-blocked:  282 32% 68%;
+  --state-idle:     215 10% 50%;
+
+  --state-verified-wash: 140 28% 14%;
+  --state-progress-wash: 205 40% 15%;
+  --state-review-wash:   36 40% 14%;
+  --state-overdue-wash:  8 40% 15%;
+  --state-blocked-wash:  282 24% 17%;
+  --state-idle-wash:     215 14% 15%;
+
+  --shadow-sheet: 0 1px 2px hsl(0 0% 0% / 0.32);
+  --shadow-lift:  0 4px 14px hsl(0 0% 0% / 0.40);
+  --shadow-float: 0 14px 36px hsl(0 0% 0% / 0.52);
+
+  --grid-line:  210 40% 80%;
+  --grid-alpha: 0.05;
+
+  --sidebar:                   216 40% 7%;
+  --sidebar-foreground:        212 16% 62%;
+  --sidebar-border:            216 30% 14%;
+  --sidebar-accent:            216 30% 13%;
+  --sidebar-accent-foreground: 210 24% 93%;
+  --sidebar-mark:              134 40% 55%;
 }
 
-/* ── RTL Font Override ── */
+/* Arabic sets in Cairo, which needs the optical tracking neutralised —
+   the negative tracking that flatters Inter's Latin display sizes works
+   against Arabic letterforms. Layout is mirrored by logical properties
+   throughout, so nothing else needs to change here. */
 [dir="rtl"] {
   --font-sans: "Cairo", "Tajawal", sans-serif;
+  --tracking-display: 0;
+  --tracking-heading: 0;
+  --tracking-label: 0.03em;
 }

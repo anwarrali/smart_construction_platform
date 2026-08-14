@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
@@ -15,6 +16,7 @@ import { useRole } from "../../../hooks/useRole";
 const DISCIPLINES = ["civil", "architectural", "electrical", "mechanical"];
 
 export const ProjectTeamPage = () => {
+  const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const { projectId: routeProjectId } = useParams<{ projectId?: string }>();
   const { isAdmin } = useRole();
@@ -164,35 +166,35 @@ export const ProjectTeamPage = () => {
   return <div className="page-container space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h1 className="text-2xl font-bold">Project Team{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-        <p className="text-muted-foreground">Manage existing Engineers and Consultants through project-specific memberships.</p></div>
-      <Button onClick={() => { resetAssignmentForm(); setAddOpen(true); }}>Add Team Member</Button>
+        <p className="text-muted-foreground">{t("projectTeam.manage_existing_engineers_and")}</p></div>
+      <Button onClick={() => { resetAssignmentForm(); setAddOpen(true); }}>{t("projectTeam.add_team_member")}</Button>
     </div>
     <Card className="space-y-4">
-      {workspace.projectId ? <p className="text-sm"><span className="text-muted-foreground">Active project:</span> {workspace.project?.name}</p>
-        : <Select label="Project" value={projectId} onChange={(event) => setProjectId(event.target.value)} options={projects.map((project) => ({ value: project.id, label: project.name }))} />}
+      {workspace.projectId ? <p className="text-sm"><span className="text-muted-foreground">{t("projectTeam.active_project")}</span> {workspace.project?.name}</p>
+        : <Select label={t("projectTeam.project")} value={projectId} onChange={(event) => setProjectId(event.target.value)} options={projects.map((project) => ({ value: project.id, label: project.name }))} />}
       {error && <p className={`text-sm ${error.includes("added") || error.includes("transferred") || error.includes("preserved") || error.includes("saved") ? "text-green-600" : "text-red-600"}`}>{error}</p>}
     </Card>
     {isAdmin && <Card className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold">Approval Workflow</h2>
-        <p className="text-sm text-muted-foreground">Configure which project Consultants may review submitted work.</p>
+        <h2 className="text-lg font-semibold">{t("projectTeam.approval_workflow")}</h2>
+        <p className="text-sm text-muted-foreground">{t("projectTeam.configure_which_project_consultants_may")}</p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <button type="button" onClick={() => setApprovalMode("CENTRALIZED_REVIEW")}
           className={`rounded-lg border p-4 text-left transition ${approvalMode === "CENTRALIZED_REVIEW" ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
-          <span className="font-medium">Centralized Review</span>
-          <span className="mt-1 block text-sm text-muted-foreground">One authorized Consultant reviews all disciplines.</span>
+          <span className="font-medium">{t("projectTeam.centralized_review")}</span>
+          <span className="mt-1 block text-sm text-muted-foreground">{t("projectTeam.one_authorized_consultant_reviews_all")}</span>
         </button>
         <button type="button" onClick={() => setApprovalMode("DISCIPLINE_BASED_REVIEW")}
           className={`rounded-lg border p-4 text-left transition ${approvalMode === "DISCIPLINE_BASED_REVIEW" ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
-          <span className="font-medium">Discipline-Based Review</span>
-          <span className="mt-1 block text-sm text-muted-foreground">Different Consultants review their configured disciplines.</span>
+          <span className="font-medium">{t("projectTeam.discipline_based_review")}</span>
+          <span className="mt-1 block text-sm text-muted-foreground">{t("projectTeam.different_consultants_review_their")}</span>
         </button>
       </div>
       {!consultantMembers.length ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
         Add an active external Consultant Engineer to this project before configuring approval authority.
       </p> : approvalMode === "CENTRALIZED_REVIEW" ? (
-        <Select label="Centralized Consultant reviewer" value={centralizedReviewerId}
+        <Select label={t("projectTeam.centralized_consultant_reviewer")} value={centralizedReviewerId}
           onChange={(event) => setCentralizedReviewerId(event.target.value)}
           options={[{ value: "", label: "Select Consultant" }, ...consultantMembers.map((member) => ({
             value: member.userId,
@@ -217,57 +219,57 @@ export const ProjectTeamPage = () => {
     </Card>}
     <Card>
       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead><tr className="border-b text-muted-foreground">
-        <th className="p-3">Member</th><th className="p-3">Role / discipline</th><th className="p-3">Company affiliation</th><th className="p-3">Project responsibility</th><th className="p-3">Assigned</th><th className="p-3">Actions</th>
+        <th className="p-3">{t("projectTeam.member")}</th><th className="p-3">{t("projectTeam.role_discipline")}</th><th className="p-3">{t("projectTeam.company_affiliation")}</th><th className="p-3">{t("projectTeam.project_responsibility")}</th><th className="p-3">{t("projectTeam.assigned")}</th><th className="p-3">{t("projectTeam.actions")}</th>
       </tr></thead><tbody>{members.map((member) => <tr key={member.id} className="border-b align-top last:border-0">
         <td className="p-3"><p className="font-medium">{member.user?.fullName}</p><p className="text-xs text-muted-foreground">{member.user?.email}</p><Badge size="sm" variant={member.user?.status === "active" ? "success" : "neutral"}>{member.user?.status || "unknown"}</Badge></td>
         <td className="p-3"><p className="capitalize">{member.user?.role?.replaceAll("_", " ")}</p><p className="capitalize text-muted-foreground">{member.projectDiscipline || member.user?.engineerProfile?.discipline || "—"}</p></td>
         <td className="p-3"><p>{member.user?.organization || "—"}</p>{member.user?.engineerAffiliation && <Badge size="sm" variant={member.user.engineerAffiliation === "external_consultant" ? "warning" : "neutral"}>{member.user.engineerAffiliation === "external_consultant" ? "External Consultant" : member.user.engineerAffiliation === "main_contractor" ? "Main Contractor" : "Internal Engineer"}</Badge>}</td>
-        <td className="p-3"><p>{member.assignmentTitle || "Project participant"}</p>{member.isSiteEngineer && <Badge size="sm" variant="success">Site Engineer</Badge>}<p className="mt-1 max-w-xs text-xs text-muted-foreground">{member.projectNotes}</p></td>
+        <td className="p-3"><p>{member.assignmentTitle || "Project participant"}</p>{member.isSiteEngineer && <Badge size="sm" variant="success">{t("projectTeam.site_engineer")}</Badge>}<p className="mt-1 max-w-xs text-xs text-muted-foreground">{member.projectNotes}</p></td>
         <td className="p-3 text-muted-foreground">{new Date(member.createdAt || "").toLocaleDateString()}</td>
         <td className="p-3">{["engineer", "consultant", "worker"].includes(member.user?.role || "") && <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => openEdit(member)}>Edit Project Assignment</Button>
-          {otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setAnotherMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>Add to Another Project</Button>}
-          {isAdmin && otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setTransferMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>Transfer</Button>}
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm(`Remove ${member.user.fullName} from this project? The global account will be preserved.`)) run(() => api.projects.removeMember(projectId, member.userId), "Member removed from this project; the global account was preserved."); }}>Remove from Project</Button>
+          <Button size="sm" variant="outline" onClick={() => openEdit(member)}>{t("projectTeam.edit_project_assignment")}</Button>
+          {otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setAnotherMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.add_to_another_project")}</Button>}
+          {isAdmin && otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setTransferMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.transfer")}</Button>}
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm(`Remove ${member.user.fullName} from this project? The global account will be preserved.`)) run(() => api.projects.removeMember(projectId, member.userId), "Member removed from this project; the global account was preserved."); }}>{t("projectTeam.remove_from_project")}</Button>
         </div>}</td>
-      </tr>)}{!busy && members.length === 0 && <tr><td className="p-6 text-center text-muted-foreground" colSpan={6}>No participants assigned.</td></tr>}</tbody></table></div>
+      </tr>)}{!busy && members.length === 0 && <tr><td className="p-6 text-center text-muted-foreground" colSpan={6}>{t("projectTeam.no_participants_assigned")}</td></tr>}</tbody></table></div>
     </Card>
 
-    <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Add Team Member" size="lg"><div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2"><Input label="Search database users" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name or email" />
-        <Select label="Global role" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} options={[{ value: "", label: "Engineer, Consultant, or Worker" }, { value: "engineer", label: "Engineer" }, { value: "consultant", label: "Consultant" }, { value: "worker", label: "Worker" }]} />
-        <Select label="Discipline" value={disciplineFilter} onChange={(event) => setDisciplineFilter(event.target.value)} options={[{ value: "", label: "All disciplines" }, ...DISCIPLINES.map((value) => ({ value, label: value }))]} />
-        <Select label="Company affiliation" value={affiliationFilter} onChange={(event) => setAffiliationFilter(event.target.value)} options={[{ value: "", label: "All affiliations" }, { value: "internal_engineer", label: "Internal Engineer" }, { value: "main_contractor", label: "Main Contractor" }, { value: "external_consultant", label: "External Consultant" }]} /></div>
-      <Select label="Eligible active user" value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${user.role} · ${user.engineerProfile?.discipline || "no discipline"} · ${user.organization || "no organization"}` }))} />
+    <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title={t("projectTeam.add_team_member")} size="lg"><div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.search_database_users")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("projectTeam.name_or_email")} />
+        <Select label={t("projectTeam.global_role")} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} options={[{ value: "", label: "Engineer, Consultant, or Worker" }, { value: "engineer", label: "Engineer" }, { value: "consultant", label: "Consultant" }, { value: "worker", label: "Worker" }]} />
+        <Select label={t("projectTeam.discipline")} value={disciplineFilter} onChange={(event) => setDisciplineFilter(event.target.value)} options={[{ value: "", label: "All disciplines" }, ...DISCIPLINES.map((value) => ({ value, label: value }))]} />
+        <Select label={t("projectTeam.company_affiliation")} value={affiliationFilter} onChange={(event) => setAffiliationFilter(event.target.value)} options={[{ value: "", label: "All affiliations" }, { value: "internal_engineer", label: "Internal Engineer" }, { value: "main_contractor", label: "Main Contractor" }, { value: "external_consultant", label: "External Consultant" }]} /></div>
+      <Select label={t("projectTeam.eligible_active_user")} value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${user.role} · ${user.engineerProfile?.discipline || "no discipline"} · ${user.organization || "no organization"}` }))} />
       {selectedUser && <div className="rounded border p-3 text-sm"><p className="font-medium">{selectedUser.fullName}</p><p>{selectedUser.email} · {selectedUser.role} · {selectedUser.engineerProfile?.discipline}</p><p>{selectedUser.organization || "No organization"} · {selectedUser.engineerAffiliation?.replaceAll("_", " ")}</p></div>}
-      <div className="grid gap-3 sm:grid-cols-2"><Input label="Project responsibility / title" value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder="Technical Reviewer, Project Engineer…" />
-        <Select label="Project discipline" value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={[{ value: "", label: "Use account discipline" }, ...DISCIPLINES.map((value) => ({ value, label: value }))]} /></div>
-      <label className="block text-sm"><span className="font-medium">Project-specific notes</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
+      <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.project_responsibility_title")} value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder={t("projectTeam.technical_reviewer_project_engineer")} />
+        <Select label={t("projectTeam.project_discipline")} value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={[{ value: "", label: "Use account discipline" }, ...DISCIPLINES.map((value) => ({ value, label: value }))]} /></div>
+      <label className="block text-sm"><span className="font-medium">{t("projectTeam.project_specific_notes")}</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
       {selectedUser?.role === "engineer" && selectedUser.engineerAffiliation !== "external_consultant" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> Assign as Site Engineer</label>}
-      {!available.length && <p className="text-sm text-muted-foreground">No eligible active users match these backend filters.</p>}
-      <ModalActions><Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button><Button disabled={!selectedUserId || busy} onClick={addMember}>Add Team Member</Button></ModalActions>
+      {!available.length && <p className="text-sm text-muted-foreground">{t("projectTeam.no_eligible_active_users_match_these")}</p>}
+      <ModalActions><Button variant="outline" onClick={() => setAddOpen(false)}>{t("projectTeam.cancel")}</Button><Button disabled={!selectedUserId || busy} onClick={addMember}>{t("projectTeam.add_team_member")}</Button></ModalActions>
     </div></Modal>
 
-    <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit Project Assignment" size="lg"><div className="space-y-4">
+    <Modal isOpen={!!editing} onClose={() => setEditing(null)} title={t("projectTeam.edit_project_assignment")} size="lg"><div className="space-y-4">
       <p className="text-sm text-muted-foreground">Only this project membership is changed. Email, global role, account status, and organization remain Administrator-only.</p>
-      <Input label="Project responsibility / title" value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} />
-      <Select label="Project discipline" value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={DISCIPLINES.map((value) => ({ value, label: value }))} />
-      <label className="block text-sm"><span className="font-medium">Project-specific notes</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
+      <Input label={t("projectTeam.project_responsibility_title")} value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} />
+      <Select label={t("projectTeam.project_discipline")} value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={DISCIPLINES.map((value) => ({ value, label: value }))} />
+      <label className="block text-sm"><span className="font-medium">{t("projectTeam.project_specific_notes")}</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
       {editing?.user?.role === "engineer" && editing.user.engineerAffiliation !== "external_consultant" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> Site Engineer responsibility</label>}
-      <ModalActions><Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button><Button disabled={busy} onClick={async () => { if (!editing) return; const ok = await run(() => api.projects.updateMemberAssignment(projectId, editing.userId, { assignmentTitle, projectDiscipline, projectNotes, isSiteEngineer: editing.user?.role === "engineer" ? siteEngineer : false })); if (ok) setEditing(null); }}>Save Project Assignment</Button></ModalActions>
+      <ModalActions><Button variant="outline" onClick={() => setEditing(null)}>{t("projectTeam.cancel")}</Button><Button disabled={busy} onClick={async () => { if (!editing) return; const ok = await run(() => api.projects.updateMemberAssignment(projectId, editing.userId, { assignmentTitle, projectDiscipline, projectNotes, isSiteEngineer: editing.user?.role === "engineer" ? siteEngineer : false })); if (ok) setEditing(null); }}>{t("projectTeam.save_project_assignment")}</Button></ModalActions>
     </div></Modal>
 
-    <Modal isOpen={!!anotherMember} onClose={() => setAnotherMember(null)} title="Add to Another Project"><div className="space-y-4">
-      <p className="text-sm">This adds <strong>{anotherMember?.user?.fullName}</strong> to another assigned project and keeps the current membership.</p>
-      <Select label="Target project" value={targetProjectId} onChange={(event) => setTargetProjectId(event.target.value)} options={otherProjects.map((project) => ({ value: project.id, label: project.name }))} />
-      <ModalActions><Button variant="outline" onClick={() => setAnotherMember(null)}>Cancel</Button><Button disabled={!targetProjectId || busy} onClick={async () => { if (!anotherMember) return; const ok = await run(() => api.projects.addMember(targetProjectId, anotherMember.userId, anotherMember.roleOnProject, anotherMember.assignmentTitle, false, anotherMember.projectDiscipline, anotherMember.projectNotes), "Member added to another project; current membership was kept."); if (ok) setAnotherMember(null); }}>Add to Another Project</Button></ModalActions>
+    <Modal isOpen={!!anotherMember} onClose={() => setAnotherMember(null)} title={t("projectTeam.add_to_another_project")}><div className="space-y-4">
+      <p className="text-sm">{t("projectTeam.this_adds")} <strong>{anotherMember?.user?.fullName}</strong> to another assigned project and keeps the current membership.</p>
+      <Select label={t("projectTeam.target_project")} value={targetProjectId} onChange={(event) => setTargetProjectId(event.target.value)} options={otherProjects.map((project) => ({ value: project.id, label: project.name }))} />
+      <ModalActions><Button variant="outline" onClick={() => setAnotherMember(null)}>{t("projectTeam.cancel")}</Button><Button disabled={!targetProjectId || busy} onClick={async () => { if (!anotherMember) return; const ok = await run(() => api.projects.addMember(targetProjectId, anotherMember.userId, anotherMember.roleOnProject, anotherMember.assignmentTitle, false, anotherMember.projectDiscipline, anotherMember.projectNotes), "Member added to another project; current membership was kept."); if (ok) setAnotherMember(null); }}>{t("projectTeam.add_to_another_project")}</Button></ModalActions>
     </div></Modal>
 
-    <Modal isOpen={!!transferMember} onClose={() => setTransferMember(null)} title="Transfer Project Member"><div className="space-y-4">
-      <p className="text-sm">Transfer <strong>{transferMember?.user?.fullName}</strong> to another project. This removes only the current project membership; the global account is preserved.</p>
-      <Select label="Target project" value={targetProjectId} onChange={(event) => setTargetProjectId(event.target.value)} options={otherProjects.map((project) => ({ value: project.id, label: project.name }))} />
+    <Modal isOpen={!!transferMember} onClose={() => setTransferMember(null)} title={t("projectTeam.transfer_project_member")}><div className="space-y-4">
+      <p className="text-sm">{t("projectTeam.transfer")} <strong>{transferMember?.user?.fullName}</strong> to another project. This removes only the current project membership; the global account is preserved.</p>
+      <Select label={t("projectTeam.target_project")} value={targetProjectId} onChange={(event) => setTargetProjectId(event.target.value)} options={otherProjects.map((project) => ({ value: project.id, label: project.name }))} />
       <p className="text-xs text-muted-foreground">Active source-project tasks are safely returned to the unassigned queue. Site Engineer responsibility must be assigned explicitly in the target project.</p>
-      <ModalActions><Button variant="outline" onClick={() => setTransferMember(null)}>Cancel</Button><Button disabled={!targetProjectId || busy} onClick={async () => { if (!transferMember) return; const ok = await run(() => api.projects.transferMember(projectId, transferMember.userId, targetProjectId), "Member transferred; the global account was preserved."); if (ok) setTransferMember(null); }}>Transfer Member</Button></ModalActions>
+      <ModalActions><Button variant="outline" onClick={() => setTransferMember(null)}>{t("projectTeam.cancel")}</Button><Button disabled={!targetProjectId || busy} onClick={async () => { if (!transferMember) return; const ok = await run(() => api.projects.transferMember(projectId, transferMember.userId, targetProjectId), "Member transferred; the global account was preserved."); if (ok) setTransferMember(null); }}>{t("projectTeam.transfer_member")}</Button></ModalActions>
     </div></Modal>
   </div>;
 };

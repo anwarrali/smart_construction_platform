@@ -54,7 +54,10 @@
     "loadingProject": "Loading project…",
     "notifications": "Notifications",
     "switchToLight": "Switch to light",
-    "switchToDark": "Switch to dark"
+    "switchToDark": "Switch to dark",
+    "saving": "Saving…",
+    "today": "Today",
+    "yesterday": "Yesterday"
   },
   "empty": {
     "noData": "No data to show",
@@ -123,7 +126,16 @@
     "pendingReviews": "Pending reviews",
     "voiceReports": "Voice reports",
     "team": "Team",
-    "activity": "Activity"
+    "activity": "Activity",
+    "groupPlan": "Plan",
+    "groupControl": "Control",
+    "groupField": "Field",
+    "groupReference": "Reference",
+    "groupTeam": "Team & activity",
+    "menu": "Menu",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "accessControl": "Permissions"
   },
   "roles": {
     "admin": "Administrator",
@@ -420,6 +432,18 @@
       "COMPLETED": "Completed",
       "CANCELLED": "Cancelled",
       "RESCHEDULED": "Rescheduled"
+    },
+    "locationHint": "Leave empty to use the project site address.",
+    "responsibleEngineer": "Responsible engineer",
+    "responsibleEngineerSelf": "Myself",
+    "participantsHint": "Only the people selected here are notified about this visit.",
+    "noMembersHint": "This project has no other active members to invite yet.",
+    "errors": {
+      "projectRequired": "Select a project before scheduling a visit.",
+      "titleRequired": "Enter a visit title.",
+      "datesRequired": "Enter both a start and an end time.",
+      "datesInvalid": "Enter a valid start and end time.",
+      "endBeforeStart": "The end time must be after the start time."
     }
   },
   "ai": {
@@ -551,9 +575,10 @@
     "positiveNumber": "Enter a number greater than zero."
   },
   "brand": {
-    "name": "Smart Construction",
-    "tagline": "Project Management Platform",
-    "copyright": "Smart Construction Platform"
+    "name": "StructIQ",
+    "tagline": "Smart Construction Management Platform",
+    "descriptor": "Smart Construction Management",
+    "copyright": "StructIQ"
   },
   "authAside": {
     "eyebrow": "Built for construction teams",
@@ -567,5 +592,838 @@
     "rolesText": "Give owners, managers, consultants, and engineers the right workspace.",
     "credentialsHint": "Use the account credentials created by your platform administrator.",
     "managedByAdmin": "Accounts are managed by your organization's administrator."
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "landing": {
+    "nav": {
+      "home": "Home",
+      "architecture": "Architecture",
+      "workflow": "Workflow",
+      "mobileAi": "Mobile + AI",
+      "example": "Project example",
+      "signIn": "Sign in",
+      "homeAria": "StructIQ — home"
+    },
+    "hero": {
+      "kicker": "Built for construction teams",
+      "titleLine1": "One connected workspace for",
+      "titleLine2": "construction execution",
+      "description": "Plan the work, assign it, capture what actually happened on site, review it, approve it, and keep the record. Coordination, evidence, progress and accountability in one place — for contractors, consultants, engineers, project managers and owners.",
+      "openPlatform": "Open the platform",
+      "seeHow": "See how it works",
+      "sceneAria": "A project floor plan alongside site progress and evidence",
+      "floorPlan": "Residential Complex C · Floor plan",
+      "groundFloor": "Ground floor",
+      "verifiedProgress": "Verified progress",
+      "progressItems": [
+        "Foundation concrete pour",
+        "Structural framing",
+        "Electrical rough-in"
+      ],
+      "latestFromSite": "Latest from site",
+      "evidencePhotos": "6 photos attached to TSK-005 Structural framing",
+      "evidenceReport": "Site report submitted, awaiting consultant review",
+      "evidenceIssue": "Issue raised in Zone B — routed to the civil engineer",
+      "proofApprovals": "Controlled approvals",
+      "proofEvidence": "Evidence on the record",
+      "proofDecisions": "Traceable decisions"
+    },
+    "problem": {
+      "eyebrow": "The problem",
+      "title": "Your project already produces the information. It just lives everywhere.",
+      "description": "Progress is agreed in a phone call, proven by a photo on someone's device, tracked in a spreadsheet, and approved in a message thread nobody can find two months later.",
+      "today": "Today",
+      "scattered": "Scattered across tools",
+      "scatteredItems": [
+        "Progress agreed in WhatsApp messages",
+        "Site photos stuck on personal phones",
+        "Schedules in spreadsheets nobody updates",
+        "Drawings emailed as attachments",
+        "Approvals given verbally on site",
+        "The owner asks what changed, and nobody can answer"
+      ],
+      "oneWorkspace": "One workspace",
+      "withPlatform": "With the platform",
+      "connected": "Connected and accountable",
+      "connectedItems": [
+        "Progress recorded against the actual task",
+        "Photos filed as evidence on the record they prove",
+        "One schedule with real dependencies",
+        "Drawings and IFC models versioned in place",
+        "Approvals signed by the authorized person",
+        "A dated answer to what changed since the last visit"
+      ]
+    },
+    "lifecycle": {
+      "eyebrow": "Task lifecycle",
+      "title": "From assignment to controlled approval",
+      "description": "Every step is traceable. Consultant review decides what happens next.",
+      "steps": [
+        "Task created",
+        "Assigned to contractor",
+        "Work starts",
+        "Progress + evidence updated",
+        "Submitted for review",
+        "Consultant review"
+      ],
+      "approvedPath": "Approved path",
+      "rejectedPath": "Rejected path",
+      "approvedSteps": [
+        "Consultant approves",
+        "Task becomes done",
+        "Dependent task unlocks",
+        "Next activity starts"
+      ],
+      "rejectedSteps": [
+        "Reject + comment",
+        "Return to engineer",
+        "Rework",
+        "Resubmit",
+        "Review again"
+      ]
+    },
+    "dependency": {
+      "eyebrow": "Dependency control",
+      "title": "Approval is a gate — not a label",
+      "task01": "Task 01",
+      "task02": "Task 02",
+      "task03": "Task 03",
+      "foundation": "Foundation Reinforcement",
+      "concrete": "Concrete Pouring",
+      "columns": "Column Construction",
+      "approved": "Approved",
+      "readyToStart": "Ready to start",
+      "blocked": "Blocked",
+      "gate": "Consultant gate",
+      "statementStrong": "The system understands dependencies",
+      "statementRest": "and prevents work from advancing before required approvals are completed."
+    },
+    "features": {
+      "eyebrow": "What you get",
+      "title": "Everything a construction project has to keep track of",
+      "description": "One workspace per project, with the modules your team already needs and the permissions your organization already has.",
+      "projectsTasks": {
+        "title": "Projects & tasks",
+        "body": "Task boards per project with disciplines, assignees, priorities and review states."
+      },
+      "scheduling": {
+        "title": "Scheduling & Gantt",
+        "body": "Planned dates, dependencies, critical path and float, with rescheduling that tells you what moved."
+      },
+      "siteReports": {
+        "title": "Site reports",
+        "body": "Daily reports with weather, workforce, equipment, delays and issues, prefilled from the scheduled visit."
+      },
+      "fieldEvidence": {
+        "title": "Field evidence",
+        "body": "Photos and submissions captured on site and attached to the task or issue they prove."
+      },
+      "communication": {
+        "title": "Team communication",
+        "body": "Project conversations where an action-required message stays open until somebody answers it."
+      },
+      "ownerRequests": {
+        "title": "Owner requests",
+        "body": "A simple form for the client, routed to the right discipline without exposing engineering internals."
+      },
+      "siteVisits": {
+        "title": "Site visits",
+        "body": "Scheduled visits with participants, conflict detection, and a report waiting when the visit ends."
+      },
+      "documents": {
+        "title": "Documents & photo archive",
+        "body": "Drawings, documents and site photography filed against the project, searchable and filterable."
+      },
+      "ifc": {
+        "title": "IFC / BIM intelligence",
+        "body": "Versioned models checked against the tasks, disciplines and floors your project actually has."
+      },
+      "issues": {
+        "title": "Issues & design changes",
+        "body": "Raise an issue on site; propose a design change that follows the real approval chain."
+      },
+      "approvals": {
+        "title": "Approvals & reviews",
+        "body": "Consultant review per discipline or centralized, with the decision recorded against the work."
+      },
+      "reminders": {
+        "title": "Reminders & accountability",
+        "body": "Automatic reminders and escalation so waiting work does not quietly go stale."
+      }
+    },
+    "ai": {
+      "eyebrow": "AI assistance layer",
+      "title": "Useful intelligence, controlled authority",
+      "voice": {
+        "title": "Voice intelligence",
+        "text": "Voice notes → transcription → extraction"
+      },
+      "taskUpdates": {
+        "title": "Smart task updates",
+        "text": "Task · percentage · delay · issue · status"
+      },
+      "delay": {
+        "title": "Delay intelligence",
+        "text": "Overdue · blocked · downstream impact"
+      },
+      "summaries": {
+        "title": "Smart summaries",
+        "text": "Daily site · progress · issues · reviews"
+      },
+      "statementStrong": "AI assists the project team.",
+      "statementRest": "It does not replace engineering authority or consultant approval."
+    },
+    "roles": {
+      "eyebrow": "Role responsibilities",
+      "title": "The right view for every responsibility",
+      "mobileFirst": "Mobile-first",
+      "owner": {
+        "name": "Owner",
+        "purpose": "High-level visibility",
+        "items": [
+          "Overall progress & milestones",
+          "Approved documents",
+          "Major delays & project status"
+        ]
+      },
+      "projectManager": {
+        "name": "Project Manager",
+        "purpose": "Manage execution",
+        "items": [
+          "Create, assign & coordinate tasks",
+          "Track deadlines & dependencies",
+          "Monitor issues, teams & reports"
+        ]
+      },
+      "contractorEngineer": {
+        "name": "Contractor Engineer",
+        "purpose": "Execute & update work",
+        "items": [
+          "Update progress & submit work",
+          "Upload evidence & site reports",
+          "Record issues, notes & delays"
+        ]
+      },
+      "siteEngineer": {
+        "name": "Site Engineer",
+        "purpose": "Fast field updates",
+        "items": [
+          "Voice updates from site",
+          "Photos, reports & issues",
+          "Tasks & live notifications"
+        ]
+      },
+      "consultantEngineer": {
+        "name": "Consultant Engineer",
+        "purpose": "Independent review",
+        "items": [
+          "Inspect submitted evidence",
+          "Approve, reject & comment",
+          "Control dependent task gates"
+        ]
+      },
+      "administrator": {
+        "name": "Administrator",
+        "purpose": "Platform configuration",
+        "items": [
+          "Users, companies & projects",
+          "Roles & project teams",
+          "Access & account status"
+        ]
+      }
+    },
+    "org": {
+      "eyebrow": "Project organization",
+      "title": "Clear authority. Clear accountability.",
+      "description": "Select a side to highlight how responsibility moves through the project team.",
+      "root": "Construction Project",
+      "ownerSide": "Owner side",
+      "ownerCompany": "Owner + Consultant Company",
+      "consultantEngineers": "Consultant Engineers",
+      "consultantDisciplines": [
+        "Civil Consultant",
+        "Architectural Consultant",
+        "Electrical Consultant",
+        "Mechanical Consultant"
+      ],
+      "consultantPurpose": "Reviews, verifies, approves, or rejects work on behalf of the owner.",
+      "contractorSide": "Contractor side",
+      "contractorCompany": "Contractor Company",
+      "projectManager": "Project Manager",
+      "siteEngineers": "Site Engineers",
+      "contractorDisciplines": [
+        "Civil Engineer",
+        "Architectural Engineer",
+        "Electrical Engineer",
+        "Mechanical Engineer"
+      ],
+      "contractorPurpose": "Executes construction work, records evidence, and reports progress.",
+      "contractorEngineers": "Contractor engineers",
+      "consultantEngineersShort": "Consultant engineers",
+      "bridge": "Platform communication & review trail"
+    },
+    "bim": {
+      "eyebrow": "BIM / IFC",
+      "title": "A model is only useful when it is checked against the real project",
+      "description": "Uploading an IFC gives you an element count. Comparing it with your tasks, schedule, disciplines and issues tells you whether the model matches the job.",
+      "inputs": [
+        "IFC model",
+        "Tasks",
+        "Schedule",
+        "Progress",
+        "Issues"
+      ],
+      "exampleFinding": "Example finding",
+      "findingStrong": "4 electrical installation tasks exist, but this IFC contains no electrical elements.",
+      "findingRest": "The uploaded revision exposes none of the characteristic IFC classes for that discipline (IfcCableCarrierSegment, IfcLightFixture, IfcOutlet, IfcSwitchingDevice).",
+      "findingMeta": "Severity: Critical · Evidence: 4 matched tasks, matched terms “electrical” and “cable” · Suggested action: confirm whether the discipline model was omitted from this export, or whether the wrong model was uploaded.",
+      "advisory": "Findings are advisory. An engineer decides what happens next."
+    },
+    "mobile": {
+      "eyebrow": "Mobile application",
+      "title": "Built for the construction site",
+      "description": "Fast input, low friction, and immediate connection to the project record.",
+      "projectName": "Residential Complex C",
+      "greeting": "Good morning, Ahmad",
+      "actions": [
+        "My Tasks",
+        "Progress",
+        "Upload Photo",
+        "Report Issue",
+        "Site Report",
+        "Notifications"
+      ],
+      "voiceUpdate": "Voice Update",
+      "recording": "Recording update…",
+      "quote": "“Foundation reinforcement is approximately 80% complete. We had a two-hour delay because the steel delivery arrived late.”",
+      "pipeline": [
+        "Voice",
+        "Speech-to-text",
+        "AI analysis",
+        "Structured update"
+      ],
+      "fieldTask": "Task",
+      "fieldProgress": "Progress",
+      "fieldIssue": "Issue",
+      "fieldDelay": "Delay",
+      "steelDelay": "Steel delivery delay",
+      "twoHours": "2 hours",
+      "aiSuggestion": "AI suggestion",
+      "ruleValidation": "Rule validation",
+      "authorizedAction": "Authorized action"
+    },
+    "infoFlow": {
+      "eyebrow": "Information flow",
+      "title": "What happens to one update from the site",
+      "description": "A single field update becomes verified progress, a reviewable record, and an answer for the owner.",
+      "steps": [
+        "Work on site",
+        "Engineer records it",
+        "Evidence attached",
+        "Checked against the plan",
+        "Task updated",
+        "Progress visible",
+        "Consultant review",
+        "Approved",
+        "Owner informed"
+      ]
+    },
+    "accountability": {
+      "eyebrow": "Accountability",
+      "title": "Who did what, when, and who approved it",
+      "description": "Construction disputes are settled with records. Every meaningful action leaves one.",
+      "audit": {
+        "title": "Audit history",
+        "body": "Every task update, approval, request and model upload is written to an activity trail."
+      },
+      "acknowledgements": {
+        "title": "Acknowledgements",
+        "body": "Important messages track delivery, reading, acknowledgement and response per recipient."
+      },
+      "reviewChains": {
+        "title": "Review chains",
+        "body": "Consultant decisions stay attached to the work they approved or rejected, with the reason."
+      },
+      "reminders": {
+        "title": "Automatic reminders",
+        "body": "Waiting requests escalate on a schedule you configure, with quiet hours and attempt limits."
+      },
+      "humanAuthority": {
+        "title": "Human authority",
+        "body": "Only an authorized person approves engineering work, including when the request arrives by voice."
+      },
+      "traceable": {
+        "title": "Traceable decisions",
+        "body": "An owner request that becomes a design change keeps the link back to who asked and who approved."
+      }
+    },
+    "comparison": {
+      "eyebrow": "Collaboration model",
+      "title": "Execution meets independent verification",
+      "responsibleFor": "Responsible for",
+      "execution": "Execution",
+      "verification": "Verification",
+      "contractorItems": [
+        "Perform construction work",
+        "Update progress",
+        "Upload evidence",
+        "Report site conditions",
+        "Resolve and resubmit rejected work"
+      ],
+      "consultantItems": [
+        "Review contractor work",
+        "Check compliance",
+        "Inspect submitted evidence",
+        "Approve or reject",
+        "Control technical approval gates"
+      ],
+      "middle": [
+        "Execution",
+        "Review",
+        "Approval",
+        "Next activity"
+      ],
+      "loop": [
+        "Contractor submits",
+        "Consultant decides",
+        "Engineer notified",
+        "PM monitors",
+        "Owner sees results"
+      ]
+    },
+    "web": {
+      "eyebrow": "Web application",
+      "title": "Management, monitoring, and technical review",
+      "description": "Optimized workspaces for the Project Manager, Consultant, Owner, and Administrator.",
+      "commandCenter": "Project Command Center",
+      "stats": [
+        "Project progress",
+        "Active tasks",
+        "Under review",
+        "Delayed tasks"
+      ],
+      "milestoneProgress": "Milestone progress",
+      "recentReports": "Recent site reports",
+      "reports": [
+        "Foundation inspection",
+        "Steel delivery delay",
+        "Column reinforcement"
+      ]
+    },
+    "views": {
+      "eyebrow": "One system, different views",
+      "title": "Shared data. Role-specific access.",
+      "centralData": "Central Project Data",
+      "rbac": "Role-Based Access Control",
+      "items": [
+        "Mobile Engineer",
+        "PM Dashboard",
+        "Consultant Portal",
+        "Owner Dashboard",
+        "Admin Portal"
+      ],
+      "note": "Every user sees the information and actions appropriate to their role, while everyone works from the same project record."
+    },
+    "example": {
+      "eyebrow": "Live project example",
+      "description": "Select an activity to see how status, reviews, and dependencies connect.",
+      "activityTitles": [
+        "Foundation",
+        "Ground Floor Columns",
+        "Electrical Rough-In"
+      ],
+      "activityStatuses": [
+        "Approved",
+        "In Progress",
+        "Blocked"
+      ],
+      "selectedActivity": "Selected activity",
+      "blockedBecause": "Blocked because",
+      "blockedReason": "Waiting for Ground Floor Columns approval",
+      "latestUpdate": "Latest update: “Ground floor column reinforcement is 75% complete.”",
+      "consultantReviews": "Consultant reviews",
+      "twoPending": "2 Pending",
+      "openIssues": "Open issues"
+    },
+    "why": {
+      "eyebrow": "Why this platform exists",
+      "title": "Replace fragmented communication with one workflow",
+      "todayProblem": "Today’s problem",
+      "problems": [
+        "Calls and messages scatter field updates",
+        "Teams may work from different information",
+        "Approval history is difficult to trace",
+        "Delays and dependencies surface too late"
+      ],
+      "solution": "Coordinated solution",
+      "solutionTitle": "One digital construction workflow",
+      "solutions": [
+        "Mobile field updates",
+        "Central project database",
+        "Consultant approvals",
+        "Dashboards + AI assistance"
+      ]
+    },
+    "architecture": {
+      "eyebrow": "System architecture",
+      "title": "Two interfaces. One coordinated system.",
+      "description": "Field data, decisions, documents, and approvals all pass through a shared control layer.",
+      "managementInterface": "Management interface",
+      "webPlatform": "Web Platform",
+      "webPlatformRoles": "PM · Consultant · Owner · Admin",
+      "secureApi": "Secure API",
+      "centralBackend": "Central Backend",
+      "backendFeatures": [
+        "Authentication + RBAC",
+        "Tasks + Reports + Docs",
+        "Notifications + Audit"
+      ],
+      "servicesAria": "Connected backend services",
+      "aiServices": "AI Services",
+      "aiServicesLabel": "Voice · Actions · Delays",
+      "notifications": "Notifications",
+      "notificationsLabel": "Event-driven updates",
+      "fileStorage": "File Storage",
+      "fileStorageLabel": "Photos · Reports · Docs",
+      "sameData": "Same data + rules",
+      "fieldInterface": "Field interface",
+      "mobileApplication": "Mobile Application",
+      "mobileFeatures": "Tasks · Voice · Photos · Reports · Issues",
+      "noteStrong": "Web and Mobile are not separate systems.",
+      "noteText": "They share the same backend, database, permissions, and AI services."
+    },
+    "final": {
+      "kicker": "One connected workspace",
+      "titleLine1": "Run the project from",
+      "titleLine2": "the site to the handover",
+      "flow": [
+        "Plan",
+        "Assign",
+        "Execute",
+        "Capture evidence",
+        "Review",
+        "Approve",
+        "Report"
+      ],
+      "audience": "For contractors, consultants, engineers, project managers and owners",
+      "seeModules": "See the modules"
+    },
+    "footer": {
+      "rights": "{{year}} StructIQ. All rights reserved."
+    }
+  },
+  "pmDashboard": {
+    "title": "Project Management Center",
+    "dayLabel": "{{date}} — Week {{week}} of 52",
+    "scheduleReview": "Schedule review",
+    "siteReports": "Site reports",
+    "needsDecision": "Needs your decision today",
+    "openMyActions": "Open my actions",
+    "nothingWaiting": "Nothing is waiting on you across your portfolio right now.",
+    "statsFailed": "Failed to load statistics. Please refresh.",
+    "selectProject": "Select a project to open its scoped dashboard",
+    "viewProjects": "View projects",
+    "noProjectsAssigned": "No projects are assigned to your account.",
+    "percentComplete": "{{value}}% complete",
+    "recentActivity": "Recent project activity",
+    "urgentIssues": "Urgent issues backlog",
+    "noOpenIssues": "No open issues. All clear.",
+    "taskCompletion": "Task completion",
+    "noProjectData": "No project data yet.",
+    "tasksDoneOfTotal": "{{done}} / {{total}} tasks",
+    "siteReportReviews": "Site report reviews",
+    "noSiteReports": "No site reports submitted yet.",
+    "pendingReview": "Pending review",
+    "dailyProgressUpdate": "Daily progress update",
+    "teamMember": "Team member",
+    "kpi": {
+      "assignedProjects": "Assigned projects",
+      "activeProjects": "Active projects",
+      "openIssues": "Open issues",
+      "tasksDueToday": "Tasks due today",
+      "teamMembers": "Team members",
+      "delayedTasks": "Delayed tasks",
+      "scheduledTaskDays": "Scheduled task-days",
+      "designChanges": "Design changes",
+      "milestones": "Milestones",
+      "portfolioSub": "Your complete portfolio",
+      "plannedDatesSub": "Inclusive planned dates",
+      "awaitingResolution": "Awaiting resolution",
+      "onCriticalPath": "{{count}} on critical path",
+      "milestonePending": "{{pending}} pending of {{total}}",
+      "onSchedule_one": "{{count}} on schedule",
+      "onSchedule_other": "{{count}} on schedule",
+      "criticalCount_one": "{{count}} critical",
+      "criticalCount_other": "{{count}} critical",
+      "overdueCount_one": "{{count}} overdue",
+      "overdueCount_other": "{{count}} overdue",
+      "activeToday_one": "{{count}} active today",
+      "activeToday_other": "{{count}} active today"
+    },
+    "decisions": {
+      "delayed": "Delayed",
+      "criticalIssue": "Critical issue",
+      "criticalMeta": "{{count}} critical · oldest {{age}}",
+      "blockingDownstream": "Blocking downstream work",
+      "dueToday": "Due today",
+      "pendingReview": "Pending review",
+      "oldest": "Oldest {{age}}",
+      "milestonesMet": "{{met}} of {{total}} met",
+      "behindSchedule_one": "{{count}} task is behind schedule",
+      "behindSchedule_other": "{{count}} tasks are behind schedule",
+      "designChangesUnresolved_one": "{{count}} design change unresolved",
+      "designChangesUnresolved_other": "{{count}} design changes unresolved",
+      "tasksDueToday_one": "{{count}} task falls due today",
+      "tasksDueToday_other": "{{count}} tasks fall due today",
+      "reportsAwaiting_one": "{{count}} site report awaiting your verification",
+      "reportsAwaiting_other": "{{count}} site reports awaiting your verification",
+      "milestonesOpen_one": "{{count}} milestone still open",
+      "milestonesOpen_other": "{{count}} milestones still open"
+    },
+    "table": {
+      "report": "Report",
+      "submittedBy": "Submitted by"
+    },
+    "itemCount_one": "{{count}} item",
+    "itemCount_other": "{{count}} items",
+    "openIssueCount_one": "{{count}} open issue",
+    "openIssueCount_other": "{{count}} open issues"
+  },
+  "activity": {
+    "entity": {
+      "task": "Task",
+      "issue": "Issue",
+      "project": "Project",
+      "milestone": "Milestone",
+      "document": "Document",
+      "site_report": "Site report",
+      "site_visit": "Site visit",
+      "owner_request": "Client request",
+      "design_change": "Design change",
+      "task_review": "Task review",
+      "conversation": "Conversation",
+      "message": "Message",
+      "reminder_rule": "Reminder rule",
+      "ai_insight": "AI insight",
+      "user": "User"
+    },
+    "action": {
+      "issue_created_from_ai_insight": "Issue created from an AI insight",
+      "ai_intelligence_run": "AI analysis run",
+      "critical_path_calculated": "Critical path calculated",
+      "schedule_recalculated": "Schedule recalculated",
+      "rework_requested": "Rework requested",
+      "conversation_created": "Conversation created",
+      "site_visit_scheduled": "Site visit scheduled",
+      "site_visit_rescheduled": "Site visit rescheduled",
+      "site_visit_cancelled": "Site visit cancelled",
+      "site_visit_updated": "Site visit updated",
+      "owner_request_submitted": "Client request submitted",
+      "owner_request_updated": "Client request updated",
+      "owner_request_converted_to_design_change": "Client request became a design change",
+      "reminder_rule_configured": "Reminder rule configured",
+      "task_created": "Task created",
+      "task_updated": "Task updated",
+      "task_approved": "Task approved"
+    }
+  },
+  "discipline": {
+    "civil": "Civil",
+    "architectural": "Architectural",
+    "electrical": "Electrical",
+    "mechanical": "Mechanical"
+  },
+  "accessControl": {
+    "eyebrow": "Administration",
+    "title": "Permissions and access",
+    "intro": "Decide what each kind of person can do, make an exception for one person, and set which engineers each consultant reviews.",
+    "tabs": {
+      "roles": "Roles",
+      "people": "People",
+      "consultants": "Consultants"
+    },
+    "groups": {
+      "platform": "Platform administration",
+      "project": "Project setup",
+      "tasks": "Tasks",
+      "schedule": "Schedule",
+      "field": "Site work",
+      "requests": "Client requests",
+      "models": "Models and documents",
+      "ai": "AI decision support"
+    },
+    "permission": "Permission",
+    "rolesTitle": "What each role can do",
+    "rolesHint": "These apply to everybody with that role. Tick to allow, untick to remove.",
+    "changed": "Changed",
+    "lockedHint": "An administrator always keeps this, so the platform stays manageable.",
+    "roleUpdated": "Role permission updated.",
+    "personUpdated": "Permission updated for this person.",
+    "scopeUpdated": "Consultant scope updated.",
+    "updateFailed": "The change could not be saved.",
+    "loadFailed": "Access control could not be loaded.",
+    "peopleTitle": "Exceptions for one person",
+    "peopleHint": "Give somebody more or less than their role normally allows, either everywhere or on a single project.",
+    "person": "Person",
+    "selectPerson": "Select a person",
+    "selectPersonHint": "Choose a person to see exactly what they can do.",
+    "projectScope": "Applies to",
+    "projectScopeHint": "Choose a project to make the exception apply there only.",
+    "everywhere": "Every project",
+    "notProjectScoped": "This permission cannot be limited to a single project.",
+    "holdsCount": "Holds {{count}} permission",
+    "holdsCount_other": "Holds {{count}} permissions",
+    "allowed": "Allowed",
+    "denied": "Not allowed",
+    "grant": "Allow",
+    "revoke": "Deny",
+    "useDefault": "Use role default",
+    "consultantsTitle": "Consultant review scope",
+    "consultantsHint": "A project can have several consultants. Each one can cover the whole project, a discipline, or a named group of engineers.",
+    "selectProject": "Select a project",
+    "noConsultants": "No consultants on this project",
+    "noConsultantsHint": "Add a consultant to the project team first, then set their review scope here.",
+    "noDisciplineAssignment": "No discipline assignment",
+    "projectWide": "Whole project",
+    "approvalMode": {
+      "CENTRALIZED_REVIEW": "One reviewer for the project",
+      "DISCIPLINE_BASED_REVIEW": "Reviewers per discipline"
+    },
+    "allEngineers": "All engineers",
+    "limitedToCount": "Limited to {{count}} engineer",
+    "limitedToCount_other": "Limited to {{count}} engineers",
+    "engineerScopeHint": "Leave every box unticked for no engineer restriction; tick engineers to limit this consultant to their work.",
+    "noEngineers": "This project has no engineers to assign yet.",
+    "enforcementNote": "Permissions are enforced by the server on every request. Hiding a control here is presentation only — a change takes effect for the API as well."
+  },
+  "aiInsight": {
+    "DISCIPLINE_NOT_IN_IFC": {
+      "title": "{{taskCount}} {{label}} task(s) exist, but the IFC contains no {{discipline}} elements",
+      "description": "Project tasks describe {{label}}, while the active model exposes none of the characteristic IFC classes for that discipline.",
+      "reason": "Task wording was matched against a fixed discipline vocabulary and compared with the IFC entity classes extracted from this revision. Absence of the classes is factual; the intent behind the task wording is not verified.",
+      "recommendedAction": "Confirm whether the discipline model was omitted from this export, or whether the wrong model was uploaded for this project."
+    },
+    "TASK_ELEMENTS_MISSING": {
+      "title": "Tasks reference {{category}} work but the IFC contains no matching elements",
+      "description": "{{taskCount}} task(s) reference {{category}} scope; no {{expectedClasses}} elements were extracted.",
+      "reason": "Task terminology was compared with deterministic IFC entity classes.",
+      "recommendedAction": "Verify IFC export scope/classification and confirm that the correct discipline model was uploaded."
+    },
+    "IFC_PROJECT_NAME_MISMATCH": {
+      "title": "IFC identity appears inconsistent with this project",
+      "description": "The IFC project/building/site names have low similarity to the platform project name “{{projectName}}”.",
+      "reason": "Normalized token overlap and string similarity were below the compatibility threshold.",
+      "recommendedAction": "Verify that the correct model was uploaded before activation or downstream coordination."
+    }
+  },
+  "projectTeam": {
+    "manage_existing_engineers_and": "Manage existing Engineers and Consultants through project-specific memberships.",
+    "add_team_member": "Add Team Member",
+    "active_project": "Active project:",
+    "approval_workflow": "Approval Workflow",
+    "configure_which_project_consultants_may": "Configure which project Consultants may review submitted work.",
+    "centralized_review": "Centralized Review",
+    "one_authorized_consultant_reviews_all": "One authorized Consultant reviews all disciplines.",
+    "discipline_based_review": "Discipline-Based Review",
+    "different_consultants_review_their": "Different Consultants review their configured disciplines.",
+    "member": "Member",
+    "role_discipline": "Role / discipline",
+    "company_affiliation": "Company affiliation",
+    "project_responsibility": "Project responsibility",
+    "assigned": "Assigned",
+    "actions": "Actions",
+    "site_engineer": "Site Engineer",
+    "edit_project_assignment": "Edit Project Assignment",
+    "add_to_another_project": "Add to Another Project",
+    "transfer": "Transfer",
+    "remove_from_project": "Remove from Project",
+    "no_participants_assigned": "No participants assigned.",
+    "project_specific_notes": "Project-specific notes",
+    "no_eligible_active_users_match_these": "No eligible active users match these backend filters.",
+    "cancel": "Cancel",
+    "save_project_assignment": "Save Project Assignment",
+    "this_adds": "This adds",
+    "transfer_member": "Transfer Member",
+    "project": "Project",
+    "centralized_consultant_reviewer": "Centralized Consultant reviewer",
+    "search_database_users": "Search database users",
+    "name_or_email": "Name or email",
+    "global_role": "Global role",
+    "discipline": "Discipline",
+    "eligible_active_user": "Eligible active user",
+    "project_responsibility_title": "Project responsibility / title",
+    "technical_reviewer_project_engineer": "Technical Reviewer, Project Engineer…",
+    "project_discipline": "Project discipline",
+    "target_project": "Target project",
+    "transfer_project_member": "Transfer Project Member"
+  },
+  "adminDash": {
+    "administrator_dashboard": "Administrator Dashboard",
+    "company_users_project_registry_access": "Company users, project registry, access status, and system configuration.",
+    "manage_users": "Manage Users",
+    "manage_projects": "Manage Projects",
+    "recently_created_users": "Recently Created Users",
+    "view_all": "View all",
+    "no_users_found": "No users found.",
+    "user_role_distribution": "User Role Distribution",
+    "no_role_data_available": "No role data available.",
+    "recently_created_projects": "Recently Created Projects",
+    "no_projects_found": "No projects found.",
+    "system_administration": "System Administration",
+    "manage_company_users_and_access": "Manage company users and access",
+    "manage_project_registry": "Manage project registry",
+    "open_system_settings": "Open system settings",
+    "totalUsers": "Total users",
+    "activeUsers": "Active users",
+    "inactiveUsers": "Inactive users",
+    "totalProjects": "Total projects",
+    "activeProjects": "Active projects"
+  },
+  "milestonesPage": {
+    "open_a_project_to_manage_milestones": "Open a project to manage milestones.",
+    "project_milestones": "Project Milestones",
+    "link_scheduled_work_to_measurable": "Link scheduled work to measurable project targets.",
+    "loading_milestones": "Loading milestones…",
+    "no_tasks_linked_yet": "No tasks linked yet.",
+    "edit": "Edit",
+    "delete": "Delete",
+    "no_milestones_have_been_created_for_this": "No milestones have been created for this project.",
+    "linked_tasks": "Linked Tasks",
+    "progress_is_calculated_automatically": "Progress is calculated automatically from the selected tasks.",
+    "cancel": "Cancel",
+    "save_milestone": "Save Milestone",
+    "milestone_name": "Milestone Name *",
+    "planned_date": "Planned Date *",
+    "description": "Description"
+  },
+  "profilePage": {
+    "profile_not_found": "Profile not found",
+    "profile_settings": "Profile & Settings",
+    "manage_your_account_contact_details": "Manage your account, contact details, notifications, and password",
+    "sign_out": "Sign Out",
+    "you_are_using_a_temporary_password": "You are using a temporary password. Please set a new password before continuing.",
+    "account": "Account",
+    "personal_information": "Personal Information",
+    "save_profile": "Save Profile",
+    "notification_preferences": "Notification Preferences",
+    "email_notifications": "Email notifications",
+    "receive_account_and_project_updates_by": "Receive account and project updates by email",
+    "save_preferences": "Save Preferences",
+    "password": "Password",
+    "update_password": "Update Password",
+    "full_name": "Full Name",
+    "email": "Email",
+    "phone_number": "Phone Number",
+    "specialization": "Specialization",
+    "license_number": "License Number",
+    "years_of_experience": "Years of Experience",
+    "current_password": "Current Password",
+    "new_password": "New Password",
+    "confirm_new_password": "Confirm New Password"
   }
 }

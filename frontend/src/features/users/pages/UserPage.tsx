@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { Input } from "../../../components/ui/Input";
@@ -36,6 +38,7 @@ const normalizeUsers = (response: unknown): UserProfile[] => {
 };
 
 export const UsersPage = () => {
+  const { t } = useTranslation();
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,7 +56,7 @@ export const UsersPage = () => {
       const response = await usersService.list();
       setUsers(normalizeUsers(response));
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to load users.");
+      toast.error(errorMessage(err, "Failed to load users."));
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +96,7 @@ export const UsersPage = () => {
       }
       fetchUsers();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to update user status.");
+      toast.error(errorMessage(err, "Failed to update user status."));
     }
   };
 
@@ -104,7 +107,7 @@ export const UsersPage = () => {
       toast.success(`Temporary password for ${user.fullName}: ${response.temporaryPassword}`, { duration: 20000 });
       fetchUsers();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to reset password.");
+      toast.error(errorMessage(err, "Failed to reset password."));
     }
   };
 
@@ -115,7 +118,7 @@ export const UsersPage = () => {
       toast.success("User permanently deleted.");
       fetchUsers();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "User could not be permanently deleted.");
+      toast.error(errorMessage(err, "User could not be permanently deleted."));
     }
   };
 
@@ -153,8 +156,8 @@ export const UsersPage = () => {
     <div className="page-container space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Users</h1>
-          <p className="text-muted-foreground">Manage company accounts, roles, specialization, and access status</p>
+          <h1 className="text-2xl font-bold">{t("userPage.users")}</h1>
+          <p className="text-muted-foreground">{t("userPage.manage_company_accounts_roles")}</p>
         </div>
         <Button
           onClick={() => {
@@ -169,7 +172,7 @@ export const UsersPage = () => {
       <Card>
         <div className="grid gap-3 mb-4 md:grid-cols-4">
           <Input
-            placeholder="Search name, email, phone..."
+            placeholder={t("userPage.search_name_email_phone")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

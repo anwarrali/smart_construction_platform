@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../../../utils/errorMessage";
 import { useLocation } from "react-router-dom";
 import api from "../../../services/api";
 import { useRole } from "../../../hooks/useRole";
@@ -66,7 +67,7 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
     }).catch((err: any) => {
       if (cancelled) return;
       setProject(null);
-      setError(err?.response?.data?.detail || "Unable to load the selected project workspace.");
+      setError(errorMessage(err, "Unable to load the selected project workspace."));
     }).finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
   }, [projectId, role, supportsProjectWorkspace, isConsultantEngineer]);

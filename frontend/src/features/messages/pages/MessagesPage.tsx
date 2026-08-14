@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import toast from "react-hot-toast";
 
 import { Badge } from "../../../components/ui/Badge";
@@ -17,6 +19,7 @@ import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceCont
 type Tab = "all" | "unread" | "direct" | "teams" | "project";
 
 export const MessagesPage = () => {
+  const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const { user } = useAuth();
   const { isAdmin, isProjectManager } = useRole();
@@ -68,7 +71,7 @@ export const MessagesPage = () => {
           ? current : response.items[0]?.id || "",
       );
     } catch (err: any) {
-      if (!quiet) toast.error(err?.response?.data?.detail || "Unable to load conversations.");
+      if (!quiet) toast.error(errorMessage(err, "Unable to load conversations."));
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -81,7 +84,7 @@ export const MessagesPage = () => {
       setDetail(value);
       if (value.unreadCount) await api.messages.markConversationRead(value.id);
     } catch (err: any) {
-      if (!quiet) toast.error(err?.response?.data?.detail || "Unable to open conversation.");
+      if (!quiet) toast.error(errorMessage(err, "Unable to open conversation."));
     }
   }, [selectedId]);
 
@@ -115,7 +118,7 @@ export const MessagesPage = () => {
       setContent("");
       await Promise.all([loadDetail(true), loadList(true)]);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Message could not be sent.");
+      toast.error(errorMessage(err, "Message could not be sent."));
     } finally { setBusy(false); }
   };
 
@@ -141,7 +144,7 @@ export const MessagesPage = () => {
       await loadList();
       setSelectedId(conversation.id);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Conversation could not be created.");
+      toast.error(errorMessage(err, "Conversation could not be created."));
     } finally { setBusy(false); }
   };
 
@@ -157,13 +160,13 @@ export const MessagesPage = () => {
 
   return <div className="page-container space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-2xl font-bold">Project Communication</h1><p className="text-sm text-muted-foreground">Direct, team, announcement, and contextual project discussions.</p></div>
-      <Button onClick={() => setComposeOpen(true)}>New Conversation</Button>
+      <div><h1 className="text-2xl font-bold">{t("messagesPage.project_communication")}</h1><p className="text-sm text-muted-foreground">{t("messagesPage.direct_team_announcement_and_contextual")}</p></div>
+      <Button onClick={() => setComposeOpen(true)}>{t("messagesPage.new_conversation")}</Button>
     </div>
-    {!workspace.projectId && <Card><Select label="Project" value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} options={projects.map((project) => ({ value: project.id, label: project.name }))} /></Card>}
+    {!workspace.projectId && <Card><Select label={t("messagesPage.project")} value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} options={projects.map((project) => ({ value: project.id, label: project.name }))} /></Card>}
     <Card className="flex flex-wrap items-center gap-2 p-3">
       {tabs.map((item) => <Button key={item.value} size="sm" variant={tab === item.value ? "primary" : "ghost"} onClick={() => setTab(item.value)}>{item.label}</Button>)}
-      <div className="ml-auto min-w-56"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search messages or people…" /></div>
+      <div className="ml-auto min-w-56"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("messagesPage.search_messages_or_people")} /></div>
     </Card>
     <div className="grid min-h-[610px] overflow-hidden rounded-xl border bg-card lg:grid-cols-[340px_1fr]">
       <aside className="border-b lg:border-b-0 lg:border-r">
@@ -180,8 +183,8 @@ export const MessagesPage = () => {
               <span>{new Date(conversation.lastActivityAt).toLocaleString()}</span>
             </div>
           </button>)}
-          {!loading && !items.length && <p className="p-8 text-center text-sm text-muted-foreground">No conversations match this view.</p>}
-          {loading && <p className="p-8 text-center text-sm text-muted-foreground">Loading conversations…</p>}
+          {!loading && !items.length && <p className="p-8 text-center text-sm text-muted-foreground">{t("messagesPage.no_conversations_match_this_view")}</p>}
+          {loading && <p className="p-8 text-center text-sm text-muted-foreground">{t("messagesPage.loading_conversations")}</p>}
         </div>
       </aside>
       <section className="flex min-h-[610px] flex-col">
@@ -203,24 +206,24 @@ export const MessagesPage = () => {
               </div>;
             })}
           </div>
-          <div className="flex gap-2 border-t p-3"><textarea className="input min-h-12 flex-1 resize-y" maxLength={4000} value={content} onChange={(event) => setContent(event.target.value)} placeholder="Write a project message…" /><Button disabled={busy || !content.trim()} onClick={send}>Send</Button></div>
-        </> : <div className="m-auto text-sm text-muted-foreground">Select or create a conversation.</div>}
+          <div className="flex gap-2 border-t p-3"><textarea className="input min-h-12 flex-1 resize-y" maxLength={4000} value={content} onChange={(event) => setContent(event.target.value)} placeholder={t("messagesPage.write_a_project_message")} /><Button disabled={busy || !content.trim()} onClick={send}>{t("messagesPage.send")}</Button></div>
+        </> : <div className="m-auto text-sm text-muted-foreground">{t("messagesPage.select_or_create_a_conversation")}</div>}
       </section>
     </div>
 
-    <Modal isOpen={composeOpen} onClose={() => setComposeOpen(false)} title="New Project Conversation" size="lg">
+    <Modal isOpen={composeOpen} onClose={() => setComposeOpen(false)} title={t("messagesPage.new_project_conversation")} size="lg">
       <div className="space-y-4">
         {(isAdmin || isProjectManager) && <label className="flex items-center gap-2 rounded border p-3 text-sm font-medium"><input type="checkbox" checked={announcement} onChange={(event) => setAnnouncement(event.target.checked)} /> Project/team announcement</label>}
-        {!announcement && <Select label="Send to" value={recipientMode} onChange={(event) => { setRecipientMode(event.target.value as typeof recipientMode); setRecipientIds([]); setGroupCode(""); }} options={[
+        {!announcement && <Select label={t("messagesPage.send_to")} value={recipientMode} onChange={(event) => { setRecipientMode(event.target.value as typeof recipientMode); setRecipientIds([]); setGroupCode(""); }} options={[
           { value: "individual", label: "Individual" },
           { value: "multiple", label: "Multiple People" },
           ...(options.groups.length ? [{ value: "group", label: "Team / Group" }] : []),
         ]} />}
-        {(recipientMode === "group" || announcement) ? <Select label="Recipient group" value={groupCode} onChange={(event) => setGroupCode(event.target.value)} options={[
+        {(recipientMode === "group" || announcement) ? <Select label={t("messagesPage.recipient_group")} value={groupCode} onChange={(event) => setGroupCode(event.target.value)} options={[
           ...(announcement ? [{ value: "ALL_PROJECT_MEMBERS", label: "All Project Members" }] : []),
           ...options.groups.map((group) => ({ value: group.code, label: `${group.label} (${group.recipientCount})` })),
         ]} /> : <div>
-          <p className="mb-2 text-sm font-medium">Project recipients</p>
+          <p className="mb-2 text-sm font-medium">{t("messagesPage.project_recipients")}</p>
           <div className="max-h-56 space-y-1 overflow-y-auto rounded border p-2">
             {options.users.map((recipient) => {
               const checked = recipientIds.includes(recipient.id);
@@ -233,9 +236,9 @@ export const MessagesPage = () => {
           </div>
           {selectedRecipients.length > 0 && <p className="mt-1 text-xs text-muted-foreground">{selectedRecipients.length} selected</p>}
         </div>}
-        <Input label="Title (optional)" value={title} onChange={(event) => setTitle(event.target.value)} />
-        <label className="block text-sm font-medium">Message<textarea className="input mt-1 min-h-28 w-full" value={firstMessage} onChange={(event) => setFirstMessage(event.target.value)} maxLength={4000} /></label>
-        <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setComposeOpen(false)}>Cancel</Button><Button disabled={busy || !firstMessage.trim() || (!(recipientMode === "group" || announcement) && recipientIds.length === 0) || ((recipientMode === "group" || announcement) && !groupCode)} onClick={create}>Send</Button></div>
+        <Input label={t("messagesPage.title_optional")} value={title} onChange={(event) => setTitle(event.target.value)} />
+        <label className="block text-sm font-medium">{t("messagesPage.message")}<textarea className="input mt-1 min-h-28 w-full" value={firstMessage} onChange={(event) => setFirstMessage(event.target.value)} maxLength={4000} /></label>
+        <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setComposeOpen(false)}>{t("messagesPage.cancel")}</Button><Button disabled={busy || !firstMessage.trim() || (!(recipientMode === "group" || announcement) && recipientIds.length === 0) || ((recipientMode === "group" || announcement) && !groupCode)} onClick={create}>{t("messagesPage.send")}</Button></div>
       </div>
     </Modal>
   </div>;

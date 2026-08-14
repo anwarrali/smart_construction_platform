@@ -31,6 +31,7 @@ from app.schemas.collaboration import (
     SiteVisitOut, SiteVisitUpdate,
 )
 from app.services.audit_service import record_audit
+from app.services.authorization import require
 from app.services.collaboration_policy import (
     assert_human_authority, can_transition_owner_request, choose_discipline_assignee,
 )
@@ -132,8 +133,7 @@ def _route_owner_request(db: Session, item: OwnerRequest) -> uuid.UUID | None:
 @router.post("/owner-requests", response_model=OwnerRequestOut, status_code=201)
 def create_owner_request(payload: OwnerRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = _project(db, current_user, payload.project_id)
-    if current_user.role not in {UserRole.OWNER, UserRole.PROJECT_MANAGER, UserRole.ADMIN}:
-        raise HTTPException(status_code=403, detail="Only an owner or project manager can submit a client request")
+    require(db, current_user, "owner_request.create", payload.project_id)
     if current_user.role == UserRole.OWNER and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Owners can submit requests only for their own project")
     item = OwnerRequest(
@@ -255,11 +255,39 @@ def _visit_conflicts(db: Session, engineer_id, start, end, exclude_id=None):
     return query.order_by(SiteVisit.scheduled_start).all()
 
 
+def _conflict_detail(db: Session, conflicts: list[SiteVisit]) -> list[dict]:
+    """Describe a scheduling clash well enough for the user to judge it.
+
+    Bare identifiers were useless to the caller: a conflicting visit often sits
+    in a different project, so the client could not resolve the id against
+    anything it had already loaded and showed an empty warning.
+    """
+    names = dict(db.query(Project.id, Project.name).filter(
+        Project.id.in_({item.project_id for item in conflicts})).all()) if conflicts else {}
+    return [{
+        "id": str(item.id), "title": item.title, "projectId": str(item.project_id),
+        "projectName": names.get(item.project_id), "scheduledStart": item.scheduled_start,
+        "scheduledEnd": item.scheduled_end, "visitType": item.visit_type, "status": item.status,
+    } for item in conflicts]
+
+
+def _notify_visit_people(db: Session, visit: SiteVisit, *, actor_id, title: str, message: str) -> None:
+    """Notify the people the visit actually concerns — never the whole project.
+
+    That is the participants plus the responsible engineer, who otherwise had no
+    notification at all when a manager scheduled a visit on their behalf.
+    """
+    recipients = {item.user_id for item in visit.participants} | {visit.engineer_id}
+    for user_id in recipients - {actor_id}:
+        _notify(db, user_id=user_id, project_id=visit.project_id, title=title, message=message,
+                category="SITE_VISITS", entity_type="SITE_VISIT", entity_id=visit.id,
+                requires_action=False, action_url=f"/schedule?visitId={visit.id}")
+
+
 @router.post("/site-visits", response_model=SiteVisitOut, status_code=201)
 def create_site_visit(payload: SiteVisitCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = _project(db, current_user, payload.project_id)
-    if current_user.role not in {UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.ENGINEER}:
-        raise HTTPException(status_code=403, detail="Engineering or project management authority is required")
+    require(db, current_user, "site_visit.schedule", payload.project_id)
     engineer_id = payload.engineer_id or current_user.id
     if current_user.role == UserRole.ENGINEER and engineer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Engineers can schedule only their own visits")
@@ -267,7 +295,8 @@ def create_site_visit(payload: SiteVisitCreate, db: Session = Depends(get_db), c
         raise HTTPException(status_code=400, detail="Engineer must be an active project participant")
     conflicts = _visit_conflicts(db, engineer_id, payload.scheduled_start, payload.scheduled_end)
     if conflicts and not payload.allow_conflict:
-        raise HTTPException(status_code=409, detail={"message": "Site visit conflicts with an existing visit", "conflicts": [str(x.id) for x in conflicts]})
+        raise HTTPException(status_code=409, detail={"message": "Site visit conflicts with an existing visit",
+                                                     "conflicts": _conflict_detail(db, conflicts)})
     participant_ids = set(payload.participant_ids)
     if not participant_ids.issubset(active_project_participant_ids(db, payload.project_id)):
         raise HTTPException(status_code=400, detail="All participants must belong to this project")
@@ -277,10 +306,9 @@ def create_site_visit(payload: SiteVisitCreate, db: Session = Depends(get_db), c
     db.add(item); db.flush(); now = datetime.now(timezone.utc)
     for user_id in participant_ids:
         db.add(SiteVisitParticipant(site_visit_id=item.id, user_id=user_id, notified_at=now))
-        if user_id != current_user.id:
-            _notify(db, user_id=user_id, project_id=item.project_id, title=f"Site visit scheduled: {item.title}",
-                    message=f"Visit scheduled for {item.scheduled_start.isoformat()}.", category="SITE_VISITS",
-                    entity_type="SITE_VISIT", entity_id=item.id, action_url=f"/schedule?visit={item.id}")
+    db.flush()
+    _notify_visit_people(db, item, actor_id=current_user.id, title=f"Site visit scheduled: {item.title}",
+                         message=f"Visit scheduled for {item.scheduled_start.isoformat()}.")
     record_audit(db, actor_id=current_user.id, action="site_visit_scheduled", entity_type="site_visit",
                  entity_id=item.id, project_id=item.project_id, details={"start": item.scheduled_start, "participants": list(participant_ids)})
     db.commit(); db.refresh(item); return _visit_payload(item)
@@ -312,7 +340,8 @@ def update_site_visit(visit_id: uuid.UUID, payload: SiteVisitUpdate,
     if end <= start: raise HTTPException(status_code=400, detail="scheduledEnd must be after scheduledStart")
     conflicts = _visit_conflicts(db, item.engineer_id, start, end, item.id)
     if conflicts and not payload.allow_conflict:
-        raise HTTPException(status_code=409, detail={"message": "Site visit conflicts with an existing visit", "conflicts": [str(x.id) for x in conflicts]})
+        raise HTTPException(status_code=409, detail={"message": "Site visit conflicts with an existing visit",
+                                                     "conflicts": _conflict_detail(db, conflicts)})
     changed_time = (start, end) != (old_start, old_end)
     item.scheduled_start, item.scheduled_end = start, end
     if changed_time: item.status = "RESCHEDULED"; item.reschedule_reason = payload.reschedule_reason
@@ -330,11 +359,9 @@ def update_site_visit(visit_id: uuid.UUID, payload: SiteVisitUpdate,
         item.participants.clear(); db.flush()
         for user_id in ids: item.participants.append(SiteVisitParticipant(user_id=user_id))
     verb = "cancelled" if item.status == "CANCELLED" else "rescheduled" if changed_time else "updated"
-    for participant in item.participants:
-        if participant.user_id != current_user.id:
-            _notify(db, user_id=participant.user_id, project_id=item.project_id, title=f"Site visit {verb}: {item.title}",
-                    message=f"Current schedule: {item.scheduled_start.isoformat()}.", category="SITE_VISITS",
-                    entity_type="SITE_VISIT", entity_id=item.id, action_url=f"/schedule?visit={item.id}")
+    db.flush()
+    _notify_visit_people(db, item, actor_id=current_user.id, title=f"Site visit {verb}: {item.title}",
+                         message=f"Current schedule: {item.scheduled_start.isoformat()}.")
     record_audit(db, actor_id=current_user.id, action=f"site_visit_{verb}", entity_type="site_visit", entity_id=item.id,
                  project_id=item.project_id, details={"oldStart": old_start, "newStart": item.scheduled_start, "oldStatus": old_status, "newStatus": item.status})
     db.commit(); db.refresh(item); return _visit_payload(item)
@@ -373,8 +400,7 @@ def update_message_accountability(message_id: uuid.UUID, payload: MessageAccount
 def upsert_reminder_rule(project_id: uuid.UUID, payload: ReminderRuleUpsert,
                          db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = _project(db, current_user, project_id)
-    if not (current_user.role == UserRole.ADMIN or project.project_manager_id == current_user.id):
-        raise HTTPException(status_code=403, detail="Only project management can configure reminders")
+    require(db, current_user, "project.manage_reminders", project_id)
     rule = db.query(ReminderRule).filter(ReminderRule.project_id == project_id,
         ReminderRule.target_type == payload.target_type.upper(), ReminderRule.priority == payload.priority.upper()).first()
     if not rule:

@@ -43,6 +43,7 @@ from app.models.company import Company
 from app.models.password_reset import PasswordResetToken
 from app.models.user import User, EngineerProfile
 from app.models.project import Project, ProjectMember, ProjectConsultantReviewer, ProjectViewState
+from app.models.permission import ConsultantEngineerScope, RolePermissionOverride, UserPermissionOverride
 from app.models.milestone import Milestone
 from app.models.task import Task, TaskDependency, TaskRescheduleLog, TaskComment, TaskReview
 from app.models.message import Conversation, ConversationParticipant, Message

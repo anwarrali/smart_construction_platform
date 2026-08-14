@@ -269,6 +269,14 @@ class AIInsight(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     recommended_action: Mapped[str] = mapped_column(Text, nullable=False)
     potential_impact: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Stable name of the *family* of statement, used as the translation key.
+    #: Null on rows written before this existed; the client then falls back
+    #: to the stored English sentence.
+    message_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: The facts the English sentence was composed from. The client renders
+    #: a localized message from `insight_type` + these values, falling back
+    #: to the stored sentence for rows written before this existed.
+    message_params_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     evidence_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     affected_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     related_task_ids_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")

@@ -1,4 +1,5 @@
 import { Table } from "../../../components/ui/Table";
+import { useTranslation } from "react-i18next";
 import type { Column } from "../../../components/ui/Table/Table";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
@@ -32,6 +33,7 @@ export const UserTable = ({
   onDelete,
   currentUserId,
 }: UserTableProps) => {
+  const { t } = useTranslation();
   const columns: Column<UserProfile>[] = [
     {
       key: "fullName",
@@ -104,7 +106,7 @@ export const UserTable = ({
         <div className="flex items-center gap-2 justify-end">
           {onEdit && (
             <Button variant="ghost" size="sm" onClick={() => onEdit(user)}>
-              Edit
+              {t("userTable.edit")}
             </Button>
           )}
           {onToggleStatus && (
@@ -118,12 +120,12 @@ export const UserTable = ({
           )}
           {onResetPassword && (
             <Button variant="outline" size="sm" onClick={() => onResetPassword(user)}>
-              Reset Password
+              {t("userTable.reset_password")}
             </Button>
           )}
           {onDelete && user.id !== currentUserId && (
             <Button variant="destructive" size="sm" onClick={() => onDelete(user)}>
-              Delete
+              {t("userTable.delete")}
             </Button>
           )}
         </div>
@@ -138,7 +140,7 @@ export const UserTable = ({
       data={users}
       keyExtractor={(user) => user.id}
       isLoading={isLoading}
-      emptyMessage="No users found"
+      emptyMessage={t("userTable.no_users_found")}
     />
   );
 };

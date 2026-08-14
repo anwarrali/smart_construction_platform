@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../../../utils/errorMessage";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, ExternalLink, MessageSquareWarning, Plus, RefreshCw, Sparkles, Users } from "lucide-react";
@@ -23,12 +24,16 @@ type SiteVisit = { id: string; projectId: string; engineerId: string; title: str
 type Activity = { id: string; occurredAt: string; action: string; entityType: string; entityId?: string; details: Record<string, unknown> };
 type MessageAccountability = { messageId: string; status: string; reminderCount: number };
 type ActionCenter = { generatedAt: string; counts: Record<string, number>; ownerRequests: OwnerRequest[]; messageAccountability: MessageAccountability[]; upcomingSiteVisits: SiteVisit[]; notifications: { id: string; title: string; message: string }[] };
-type Member = { userId: string; fullName?: string; user?: { id: string; fullName: string } };
+type Member = { userId: string; fullName?: string; roleOnProject?: string; isActive?: boolean; user?: { id: string; fullName: string; role?: string; status?: string } };
+/** A clashing visit, described well enough to judge without loading it. */
+type VisitConflict = { id: string; title: string; projectId: string; projectName?: string; scheduledStart: string; scheduledEnd: string; visitType: string; status: string };
 
 const humanize = (value: string) => value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase());
 const dateTime = (value: string) => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 const statusTone = (status: string) => status === "COMPLETED" || status === "ACCEPTED" ? "success" : status === "REJECTED" || status === "CANCELLED" ? "danger" : status === "NEEDS_CLARIFICATION" ? "warning" : "info";
-const errorText = (error: any, fallback: string) => error?.response?.data?.detail?.message || error?.response?.data?.detail || fallback;
+// Every failure shape (string, validation array, structured object) is
+// normalised centrally so a failed request can never crash the render.
+const errorText = (error: unknown, fallback: string) => errorMessage(error, fallback);
 
 /** Owner-request lifecycle rendered as a visible timeline (§18). */
 const REQUEST_STAGES = ["SUBMITTED", "ASSIGNED", "UNDER_REVIEW", "NEEDS_CLARIFICATION", "ACCEPTED", "CONVERTED_TO_DESIGN_CHANGE", "COMPLETED"] as const;
@@ -69,7 +74,7 @@ const RequestTimeline = ({ request }: { request: OwnerRequest }) => {
         );
       })}
       {request.status === "REJECTED" && (
-        <li className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500" /><p className="-mt-0.5 text-sm font-medium">{t("ownerRequest.status.REJECTED")}</p></li>
+        <li className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-state-overdue" /><p className="-mt-0.5 text-sm font-medium">{t("ownerRequest.status.REJECTED")}</p></li>
       )}
     </ol>
   );
@@ -95,8 +100,9 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
   const [requestOpen, setRequestOpen] = useState(false);
   const [visitOpen, setVisitOpen] = useState(false);
   const [requestForm, setRequestForm] = useState({ title: "", description: "", category: "GENERAL_REQUEST", discipline: "", priority: "NORMAL", floor: "", room: "" });
-  const [visitForm, setVisitForm] = useState({ title: "", start: "", end: "", visitType: "ROUTINE_INSPECTION", location: "", participantIds: [] as string[] });
-  const [visitConflicts, setVisitConflicts] = useState<string[]>([]);
+  const [visitForm, setVisitForm] = useState({ title: "", start: "", end: "", visitType: "ROUTINE_INSPECTION", location: "", engineerId: "", participantIds: [] as string[] });
+  const [visitConflicts, setVisitConflicts] = useState<VisitConflict[]>([]);
+  const [visitError, setVisitError] = useState("");
   const [requestStatus, setRequestStatus] = useState("");
   const [responseDraft, setResponseDraft] = useState("");
   const [clarificationDraft, setClarificationDraft] = useState("");
@@ -148,6 +154,15 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
     return found?.user?.fullName || found?.fullName || `${id.slice(0, 8)}…`;
   }, [members]);
 
+  /* The API accepts a participant only when the membership is active *and* the
+     user account is active. Offering the rest produced a form that looked
+     complete and then failed with "All participants must belong to this
+     project" on submit. */
+  const selectableMembers = useMemo(
+    () => members.filter((item) => item.isActive !== false && (item.user?.status ?? "active") === "active"),
+    [members],
+  );
+
   const filteredRequests = useMemo(() => requests.filter((item) => !requestStatus || item.status === requestStatus), [requests, requestStatus]);
   const focusedRequest = useMemo(() => requests.find((item) => item.id === focusedRequestId), [requests, focusedRequestId]);
   const visibleVisits = useMemo(() => {
@@ -194,25 +209,52 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
       affectedDisciplines: item.discipline ? [item.discipline] : [],
     }), "Design change proposed — the existing human approval workflow still applies.");
 
+  /** Editing the visit invalidates any conflict warning raised for the old times. */
+  const editVisit = (patch: Partial<typeof visitForm>) => {
+    setVisitForm((current) => ({ ...current, ...patch }));
+    setVisitConflicts([]); setVisitError("");
+  };
+
+  /** Client-side gate, so obvious mistakes are named instead of round-tripped. */
+  const validateVisit = () => {
+    if (!projectId) return t("siteVisit.errors.projectRequired");
+    if (!visitForm.title.trim()) return t("siteVisit.errors.titleRequired");
+    if (!visitForm.start || !visitForm.end) return t("siteVisit.errors.datesRequired");
+    if (Number.isNaN(+new Date(visitForm.start)) || Number.isNaN(+new Date(visitForm.end))) return t("siteVisit.errors.datesInvalid");
+    if (+new Date(visitForm.end) <= +new Date(visitForm.start)) return t("siteVisit.errors.endBeforeStart");
+    return "";
+  };
+
   const createVisit = async (allowConflict = false) => {
-    if (!projectId || !visitForm.title || !visitForm.start || !visitForm.end) return toast.error(t("errors.visitRequiredFields"));
+    const problem = validateVisit();
+    if (problem) { setVisitError(problem); return toast.error(problem); }
+    setVisitError("");
     setBusy("create-visit");
     try {
       await axios.post("/site-visits", {
-        projectId, title: visitForm.title,
+        projectId, title: visitForm.title.trim(),
         scheduledStart: new Date(visitForm.start).toISOString(), scheduledEnd: new Date(visitForm.end).toISOString(),
-        visitType: visitForm.visitType, location: visitForm.location || null,
+        visitType: visitForm.visitType, location: visitForm.location.trim() || null,
+        engineerId: visitForm.engineerId || null,
         participantIds: visitForm.participantIds, allowConflict,
       });
       setVisitOpen(false); setVisitConflicts([]);
-      setVisitForm({ title: "", start: "", end: "", visitType: "ROUTINE_INSPECTION", location: "", participantIds: [] });
+      setVisitForm({ title: "", start: "", end: "", visitType: "ROUTINE_INSPECTION", location: "", engineerId: "", participantIds: [] });
       toast.success(t("siteVisit.scheduledToast")); await load();
     } catch (error: any) {
-      const detail = error?.response?.data?.detail;
+      // A scheduling clash carries a structured payload the form renders as a
+      // list; everything else is flattened to a sentence.
+      const detail = error?.response?.data?.detail as { conflicts?: VisitConflict[] } | undefined;
       if (error?.response?.status === 409 && detail?.conflicts) {
         setVisitConflicts(detail.conflicts);
+        setVisitError(t("siteVisit.conflictToast"));
         toast.error(t("siteVisit.conflictToast"));
-      } else toast.error(errorText(error, t("errors.visitFailed")));
+      } else {
+        const message = errorText(error, t("errors.visitFailed"));
+        // The form stays open and states the reason; the visit was NOT created.
+        setVisitError(message);
+        toast.error(message);
+      }
     } finally { setBusy(""); }
   };
 
@@ -222,10 +264,11 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
     setSearchParams(next, { replace: true });
   };
 
-  const conflictDetail = (ids: string[]) => ids
-    .map((id) => visits.find((v) => v.id === id))
-    .filter(Boolean)
-    .map((v) => `“${v!.title}” ${dateTime(v!.scheduledStart)} – ${new Date(v!.scheduledEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+  // The server now describes each clash, including ones in other projects that
+  // this page never loaded — previously those rendered as an empty warning.
+  const conflictLine = (item: VisitConflict) =>
+    `“${item.title}” · ${dateTime(item.scheduledStart)} – ${new Date(item.scheduledEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    + (item.projectName ? ` · ${item.projectName}` : "");
 
   return <div className="page-container space-y-6">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -258,7 +301,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
         </div>
         <div className="mt-4 space-y-2">
           {filteredAccountability.map((item) => <div key={item.messageId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-            <div className="flex items-center gap-3"><Badge variant={item.status === "RESOLVED" || item.status === "RESPONDED" ? "success" : item.status === "UNREAD" ? "warning" : "info"}>{humanize(item.status)}</Badge>{item.reminderCount > 0 && <span className="text-xs font-medium text-amber-700">{t("collaboration.remindersSent", { count: item.reminderCount })}</span>}</div>
+            <div className="flex items-center gap-3"><Badge variant={item.status === "RESOLVED" || item.status === "RESPONDED" ? "success" : item.status === "UNREAD" ? "warning" : "info"}>{humanize(item.status)}</Badge>{item.reminderCount > 0 && <span className="text-xs font-medium text-state-review">{t("collaboration.remindersSent", { count: item.reminderCount })}</span>}</div>
             <div className="flex gap-2">
               {!["ACKNOWLEDGED", "RESPONDED", "RESOLVED"].includes(item.status) && <Button size="sm" variant="outline" disabled={busy === item.messageId} onClick={() => run(item.messageId, () => axios.post(`/messages/${item.messageId}/accountability`, { action: "ACKNOWLEDGE" }), "Acknowledged.")}>{t("collaboration.acknowledge")}</Button>}
               {item.status !== "RESOLVED" && <Button size="sm" variant="outline" disabled={busy === item.messageId} onClick={() => run(item.messageId, () => axios.post(`/messages/${item.messageId}/accountability`, { action: "RESOLVED" }), "Marked resolved.")}>{t("collaboration.markResolved")}</Button>}
@@ -281,7 +324,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
           <div>
             <p className="text-sm leading-6">{focusedRequest.description}</p>
             <p className="mt-3 text-xs text-muted-foreground">{t("ownerRequest.submittedBy", { name: memberName(focusedRequest.createdById) })} · {t("ownerRequest.assignedTo", { name: memberName(focusedRequest.assignedToId) })}</p>
-            {focusedRequest.clarificationText && <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50/50 p-3 text-sm"><strong>{t("ownerRequest.clarification")}:</strong> {focusedRequest.clarificationText}</div>}
+            {focusedRequest.clarificationText && <div className="mt-3 rounded-lg border border-state-review/30 bg-wash-review/50 p-3 text-sm"><strong>{t("ownerRequest.clarification")}:</strong> {focusedRequest.clarificationText}</div>}
             {focusedRequest.responseText && <div className="mt-3 rounded-lg bg-muted p-3 text-sm"><strong>{t("ownerRequest.engineeringResponse")}:</strong> {focusedRequest.responseText}</div>}
             {focusedRequest.convertedDesignChangeId && <Link className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary" to={projectEntityPath(focusedRequest.projectId, "DESIGN_CHANGE", focusedRequest.convertedDesignChangeId, role, affiliation)}><ExternalLink size={14} /> {t("ownerRequest.openLinkedChange")}</Link>}
           </div>
@@ -314,20 +357,48 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
     {!loading && tab === "schedule" && <Card className="p-5">
       <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("siteVisit.siteVisits")}</h2><p className="text-sm text-muted-foreground">{t("siteVisit.conflictBlockedHint")}</p></div><div className="flex flex-wrap gap-2">{(["upcoming", "past", "all"] as const).map((x) => <Button size="sm" key={x} variant={calendarView === x ? "primary" : "outline"} onClick={() => setCalendarView(x)}>{t("siteVisit.views." + x)}</Button>)}{canSchedule && <Button onClick={() => setVisitOpen((x) => !x)}><Plus size={16} /> {t("siteVisit.scheduleVisit")}</Button>}</div></div>
       {visitOpen && <div className="mt-5 grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-2">
-        <Input label={t("siteVisit.visitTitle")} value={visitForm.title} onChange={(e) => setVisitForm({ ...visitForm, title: e.target.value })} />
-        <Select label={t("siteVisit.visitType")} value={visitForm.visitType} onChange={(e) => setVisitForm({ ...visitForm, visitType: e.target.value })} options={["ROUTINE_INSPECTION", "PROGRESS_REVIEW", "CLIENT_MEETING", "TECHNICAL_INSPECTION", "PROBLEM_INVESTIGATION", "HANDOVER", "OTHER"].map((x) => ({ value: x, label: t("siteVisit.type." + x, { defaultValue: humanize(x) }) }))} />
-        <Input type="datetime-local" label={t("siteVisit.start")} value={visitForm.start} onChange={(e) => setVisitForm({ ...visitForm, start: e.target.value })} />
-        <Input type="datetime-local" label={t("siteVisit.end")} value={visitForm.end} onChange={(e) => setVisitForm({ ...visitForm, end: e.target.value })} />
-        <Input label={t("siteVisit.location")} value={visitForm.location} onChange={(e) => setVisitForm({ ...visitForm, location: e.target.value })} />
-        <label className="text-sm font-medium">{t("siteVisit.participants")}<select multiple className="mt-1 h-24 w-full rounded-lg border bg-background p-2 text-sm" value={visitForm.participantIds} onChange={(e) => setVisitForm({ ...visitForm, participantIds: Array.from(e.target.selectedOptions, (o) => o.value) })}>{members.map((m) => { const id = m.user?.id || m.userId; return <option key={id} value={id}>{memberName(id)}</option>; })}</select></label>
-        {visitConflicts.length > 0 && <div className="md:col-span-2 rounded-lg border border-amber-300 bg-amber-50/60 p-3 text-sm">
-          <p className="flex items-center gap-2 font-semibold text-amber-800"><AlertTriangle size={16} /> {t("siteVisit.conflictTitle")}</p>
-          <ul className="mt-2 list-disc pl-5 text-amber-900">{conflictDetail(visitConflicts).map((line) => <li key={line}>{line}</li>)}</ul>
-          <p className="mt-2 text-amber-900">{t("siteVisit.conflictHint")}</p>
+        {!projectId && <p className="md:col-span-2 rounded-lg border border-state-review/30 bg-wash-review/60 p-3 text-sm text-state-review">{t("siteVisit.errors.projectRequired")}</p>}
+        <Input label={`${t("siteVisit.visitTitle")} *`} required value={visitForm.title} onChange={(e) => editVisit({ title: e.target.value })} />
+        <Select label={t("siteVisit.visitType")} value={visitForm.visitType} onChange={(e) => editVisit({ visitType: e.target.value })} options={["ROUTINE_INSPECTION", "PROGRESS_REVIEW", "CLIENT_MEETING", "TECHNICAL_INSPECTION", "PROBLEM_INVESTIGATION", "HANDOVER", "OTHER"].map((x) => ({ value: x, label: t("siteVisit.type." + x, { defaultValue: humanize(x) }) }))} />
+        <Input type="datetime-local" label={`${t("siteVisit.start")} *`} required value={visitForm.start} onChange={(e) => editVisit({ start: e.target.value })} />
+        <Input type="datetime-local" label={`${t("siteVisit.end")} *`} required value={visitForm.end} onChange={(e) => editVisit({ end: e.target.value })} />
+        <Input label={t("siteVisit.location")} helperText={t("siteVisit.locationHint")} value={visitForm.location} onChange={(e) => editVisit({ location: e.target.value })} />
+        {/* A manager schedules on an engineer's behalf; conflicts are checked
+            against that engineer's calendar, so it must be selectable. */}
+        {(isProjectManager || isAdmin) && (
+          <Select label={t("siteVisit.responsibleEngineer")} value={visitForm.engineerId} onChange={(e) => editVisit({ engineerId: e.target.value })}
+            options={[{ value: "", label: t("siteVisit.responsibleEngineerSelf") }, ...selectableMembers.map((m) => { const id = m.user?.id || m.userId; return { value: id, label: memberName(id) }; })]} />
+        )}
+        <div className="md:col-span-2">
+          <p className="text-sm font-medium">{t("siteVisit.participants")}</p>
+          <p className="text-xs text-muted-foreground">{t("siteVisit.participantsHint")}</p>
+          {selectableMembers.length === 0
+            ? <p className="mt-2 text-sm text-muted-foreground">{t("siteVisit.noMembersHint")}</p>
+            : <div className="mt-2 grid max-h-48 gap-1 overflow-y-auto rounded-lg border bg-background p-2 sm:grid-cols-2">
+              {selectableMembers.map((m) => {
+                const id = m.user?.id || m.userId;
+                const checked = visitForm.participantIds.includes(id);
+                return <label key={id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50">
+                  <input type="checkbox" className="h-4 w-4 shrink-0" checked={checked}
+                    onChange={(e) => editVisit({ participantIds: e.target.checked ? [...visitForm.participantIds, id] : visitForm.participantIds.filter((x) => x !== id) })} />
+                  <span className="truncate">{memberName(id)}</span>
+                  {m.roleOnProject && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{humanize(m.roleOnProject)}</span>}
+                </label>;
+              })}
+            </div>}
+        </div>
+        {visitConflicts.length > 0 && <div className="md:col-span-2 rounded-lg border border-state-review/30 bg-wash-review/60 p-3 text-sm">
+          <p className="flex items-center gap-2 font-semibold text-state-review"><AlertTriangle size={16} /> {t("siteVisit.conflictTitle")}</p>
+          <ul className="mt-2 list-disc pl-5 text-state-review">{visitConflicts.map((item) => <li key={item.id}>{conflictLine(item)}</li>)}</ul>
+          <p className="mt-2 text-state-review">{t("siteVisit.conflictHint")}</p>
         </div>}
-        <div className="md:col-span-2 flex justify-end gap-2">
+        {visitError && !visitConflicts.length && <p role="alert" className="md:col-span-2 rounded-lg border border-state-overdue/30 bg-wash-overdue/60 p-3 text-sm text-state-overdue">{visitError}</p>}
+        <div className="md:col-span-2 flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={() => { setVisitOpen(false); setVisitConflicts([]); setVisitError(""); }}>{t("common.cancel")}</Button>
           {visitConflicts.length > 0 && <Button variant="outline" disabled={busy === "create-visit"} onClick={() => createVisit(true)}>{t("siteVisit.scheduleAnyway")}</Button>}
-          <Button disabled={busy === "create-visit"} onClick={() => createVisit(false)}>{t("siteVisit.scheduleAndNotify")}</Button>
+          <Button disabled={busy === "create-visit" || !projectId} onClick={() => createVisit(false)}>
+            {busy === "create-visit" ? t("common.saving") : t("siteVisit.scheduleAndNotify")}
+          </Button>
         </div>
       </div>}
       <div className="mt-5 grid gap-3 md:grid-cols-2">{visibleVisits.map((visit) => <div key={visit.id} className={`rounded-xl border p-4 ${visit.id === focusedVisitId ? "border-primary" : ""}`}>

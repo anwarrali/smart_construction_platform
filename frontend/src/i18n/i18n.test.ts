@@ -4,18 +4,36 @@ import en from "./locales/en/translation.json";
 import ar from "./locales/ar/translation.json";
 import { SUPPORTED_LANGUAGES, directionOf } from "./index";
 
-type Tree = { [key: string]: string | Tree };
+// Landing-page copy stores repeated lines as arrays, so a node is a string, a
+// list of strings, or another subtree. Lists flatten to indexed keys, which
+// keeps every element covered by the parity and translation checks below.
+type Tree = { [key: string]: string | string[] | Tree };
 
 const flatten = (tree: Tree, prefix = ""): Record<string, string> =>
   Object.entries(tree).reduce<Record<string, string>>((acc, [key, value]) => {
     const path = prefix ? `${prefix}.${key}` : key;
     if (typeof value === "string") acc[path] = value;
+    else if (Array.isArray(value)) value.forEach((item, index) => { acc[`${path}.${index}`] = item; });
     else Object.assign(acc, flatten(value, path));
     return acc;
   }, {});
 
 const english = flatten(en as Tree);
 const arabic = flatten(ar as Tree);
+
+/**
+ * i18next selects a plural form by suffixing the key with a CLDR category, and
+ * the two languages do not have the same set: English has `one` and `other`,
+ * Arabic additionally has `zero`, `two`, `few` and `many`. Comparing raw keys
+ * would therefore report every Arabic plural as "extra" and every English one
+ * as "missing", so parity is checked on the base key instead.
+ */
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+const base = (key: string) => key.replace(PLURAL_SUFFIX, "");
+const baseKeys = (catalogue: Record<string, string>) => new Set(Object.keys(catalogue).map(base));
+
+const englishBases = baseKeys(english);
+const arabicBases = baseKeys(arabic);
 
 describe("language configuration", () => {
   it("declares the direction each language reads in", () => {
@@ -39,13 +57,26 @@ describe("translation catalogues", () => {
   });
 
   it("translates every English key into Arabic", () => {
-    const missing = Object.keys(english).filter((key) => !(key in arabic));
+    const missing = [...englishBases].filter((key) => !arabicBases.has(key));
     expect(missing, `missing Arabic keys: ${missing.join(", ")}`).toEqual([]);
   });
 
   it("has no Arabic key without an English counterpart", () => {
-    const extra = Object.keys(arabic).filter((key) => !(key in english));
+    const extra = [...arabicBases].filter((key) => !englishBases.has(key));
     expect(extra, `extra Arabic keys: ${extra.join(", ")}`).toEqual([]);
+  });
+
+  it("gives Arabic every plural form its grammar requires", () => {
+    // Arabic selects between six categories; a counted string that only
+    // defined the English pair would fall back to the raw key at runtime.
+    const required = ["zero", "one", "two", "few", "many", "other"];
+    const pluralBases = new Set(
+      Object.keys(arabic).filter((key) => PLURAL_SUFFIX.test(key)).map(base),
+    );
+    const incomplete = [...pluralBases].filter((key) =>
+      required.some((form) => !(`${key}_${form}` in arabic)),
+    );
+    expect(incomplete, `incomplete Arabic plurals: ${incomplete.join(", ")}`).toEqual([]);
   });
 
   it("leaves no Arabic value empty", () => {
@@ -63,9 +94,13 @@ describe("translation catalogues", () => {
   it("keeps interpolation placeholders identical in both languages", () => {
     const placeholders = (value: string) =>
       (value.match(/\{\{\s*\w+\s*\}\}/g) || []).map((item) => item.replace(/\s/g, "")).sort();
-    const mismatched = Object.keys(english).filter(
-      (key) => placeholders(english[key]).join() !== placeholders(arabic[key] || "").join(),
-    );
+    // Compared per base key: a plural form legitimately exists in one
+    // language and not the other, but the placeholders inside must agree.
+    const mismatched = Object.keys(english).filter((key) => {
+      const counterpart = arabic[key] ?? arabic[`${base(key)}_other`] ?? arabic[base(key)];
+      if (counterpart === undefined) return false;
+      return placeholders(english[key]).join() !== placeholders(counterpart).join();
+    });
     expect(mismatched, `placeholder mismatch: ${mismatched.join(", ")}`).toEqual([]);
   });
 

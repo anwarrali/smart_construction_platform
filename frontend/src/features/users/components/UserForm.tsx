@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
@@ -30,6 +32,7 @@ export const UserForm = ({
   onSubmit,
   user,
 }: UserFormProps) => {
+  const { t } = useTranslation();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -106,8 +109,7 @@ export const UserForm = ({
       });
       onClose();
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || "Failed to save user.";
-      setError(Array.isArray(msg) ? msg.map((item) => item.msg).join(", ") : msg);
+      setError(errorMessage(err, "Failed to save user."));
     } finally {
       setIsLoading(false);
     }
@@ -128,13 +130,13 @@ export const UserForm = ({
         )}
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
-            label="Full Name *"
+            label={t("userForm.full_name")}
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             required
           />
           {!isEditing && <Input
-            label="Password *"
+            label={t("userForm.password")}
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -144,26 +146,26 @@ export const UserForm = ({
             required
           />}
           <Input
-            label="Email *"
+            label={t("userForm.email")}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
           <Input
-            label="Phone Number"
+            label={t("userForm.phone_number")}
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
             placeholder="+970..."
           />
           <Input
-            label="Organization"
+            label={t("userForm.organization")}
             value={organization}
             onChange={(e) => setOrganization(e.target.value)}
-            placeholder="Company / office"
+            placeholder={t("userForm.company_office")}
           />
           <Select
-            label="Role *"
+            label={t("userForm.role")}
             options={ROLES_OPTIONS.filter((r) => r.value !== "consultant").map((r) => ({
               value: r.value,
               label: r.label,
@@ -172,7 +174,7 @@ export const UserForm = ({
             onChange={(e) => handleRoleChange(e.target.value as UserRole)}
           />
           {isEditing && <Select
-            label="Status"
+            label={t("userForm.status")}
             options={[
               { value: "active", label: "Active" },
               { value: "pending", label: "Pending" },
@@ -185,7 +187,7 @@ export const UserForm = ({
         </div>
         {needsSpecialization && (
           <div className="grid gap-4 sm:grid-cols-2"><Select
-            label="Engineer Affiliation *"
+            label={t("userForm.engineer_affiliation")}
             value={engineerAffiliation}
             onChange={(e) => {
               const affiliation = e.target.value as EngineerAffiliation;
@@ -199,7 +201,7 @@ export const UserForm = ({
             ]}
             required
           /><Select
-            label="Specialization *"
+            label={t("userForm.specialization")}
             value={specialization}
             onChange={(e) => setSpecialization(e.target.value as EngineerDiscipline)}
             options={SPECIALIZATION_OPTIONS}
@@ -207,10 +209,10 @@ export const UserForm = ({
           /></div>
         )}
         {engineerAffiliation === "external_consultant" && needsSpecialization && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">External consultants receive access only after an administrator assigns them to a specific project. Enter their external company in Organization.</p>}
-        {!isEditing && <p className="text-xs text-muted-foreground">The account is activated immediately. Store and share the password securely.</p>}
+        {!isEditing && <p className="text-xs text-muted-foreground">{t("userForm.the_account_is_activated_immediately")}</p>}
         <ModalActions>
           <Button variant="outline" onClick={onClose} type="button">
-            Cancel
+            {t("userForm.cancel")}
           </Button>
           <Button type="submit" isLoading={isLoading}>
             {isEditing ? "Save Changes" : "Create User"}

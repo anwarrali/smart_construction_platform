@@ -11,15 +11,19 @@ from sqlalchemy.orm import Session
 from app.api.tasks import _is_project_manager, _next_task_code
 from app.core.deps import get_current_user
 from app.db.database import get_db
-from app.models.enums import IssueSeverity, IssueStatus, TaskPriority, TaskStatus, UserRole
+from app.models.enums import IssueSeverity, IssueStatus, NotificationType, TaskPriority, TaskStatus, UserRole
 from app.models.ifc import AIInsight, IFCElement, IFCEntityLink, IFCModelVersion
 from app.models.issue import Issue
+from app.models.notification import Notification
+from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.ai_insight import AIInsightCreateTask, AIInsightOut, AIInsightReview
 from app.models.collaboration import AIInsightSource
 from app.services.ai_insight_engine import alignment_facts, run_project_intelligence
 from app.services.audit_service import record_audit
+from app.services.authorization import require
+from app.services.collaboration_policy import choose_discipline_assignee
 from app.services.ifc_policy import can_ifc
 
 router = APIRouter(prefix="/projects/{project_id}/ai-intelligence", tags=["AI Intelligence"])
@@ -34,6 +38,40 @@ def _insight(db: Session, project_id, insight_id) -> AIInsight:
     item=db.query(AIInsight).filter(AIInsight.id==insight_id,AIInsight.project_id==project_id).first()
     if not item:raise HTTPException(status_code=404,detail="AI insight not found")
     return item
+
+
+def _notify_issue_owners(db: Session, issue: Issue, *, actor_id: uuid.UUID, discipline: str | None) -> None:
+    """Tell the people who have to act on a newly raised issue.
+
+    An issue promoted out of an AI insight was previously written to the
+    database silently: it appeared in the Issues list, but nobody was told it
+    existed. Routing reuses the same discipline rule the owner-request workflow
+    uses, so the engineer responsible for that discipline is notified, together
+    with the project manager who is accountable for it — and nobody else.
+    """
+    project = db.get(Project, issue.project_id)
+    memberships = db.query(ProjectMember).filter(
+        ProjectMember.project_id == issue.project_id, ProjectMember.is_active == True,  # noqa: E712
+    ).all()
+    candidates = [{
+        "id": member.user_id, "role": member.role_on_project.value,
+        "discipline": member.project_discipline or (
+            member.user.engineer_profile.discipline.value if member.user.engineer_profile else None
+        ), "active": member.is_active,
+    } for member in memberships]
+    assignee = choose_discipline_assignee(discipline, candidates) if discipline else None
+
+    recipients = {value for value in (assignee, project.project_manager_id if project else None) if value}
+    for user_id in recipients - {actor_id}:
+        db.add(Notification(
+            user_id=user_id, project_id=issue.project_id,
+            title=f"Issue raised: {issue.title}"[:250],
+            message="An AI insight was reviewed and promoted to a project issue. Engineering review is required.",
+            type=NotificationType.SYSTEM, category="ISSUES",
+            requires_action=user_id == assignee,
+            related_entity_type="ISSUE", related_entity_id=issue.id,
+            action_url=f"/projects/{issue.project_id}/issues?issueId={issue.id}",
+        ))
 
 
 @router.get("/insights", response_model=list[AIInsightOut])
@@ -88,7 +126,7 @@ def review_insight(project_id:uuid.UUID,insight_id:uuid.UUID,payload:AIInsightRe
 @router.post("/insights/{insight_id}/create-issue",status_code=201)
 def insight_to_issue(project_id:uuid.UUID,insight_id:uuid.UUID,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
     _require(db,current_user,project_id,"REVIEW_FINDING")
-    if current_user.role not in {UserRole.PROJECT_MANAGER,UserRole.ENGINEER}:raise HTTPException(status_code=403,detail="This role cannot create a project issue")
+    require(db,current_user,"ai.promote_insight",project_id)
     item=_insight(db,project_id,insight_id)
     if item.applied_entity_id:raise HTTPException(status_code=409,detail="This insight has already created a project work item")
     severity=IssueSeverity.HIGH if item.severity in {"CRITICAL","WARNING"} else IssueSeverity.MEDIUM
@@ -98,6 +136,7 @@ def insight_to_issue(project_id:uuid.UUID,insight_id:uuid.UUID,db:Session=Depend
         try: eid=uuid.UUID(element_id)
         except (ValueError,TypeError):continue
         if db.get(IFCElement,eid):db.add(IFCEntityLink(project_id=project_id,version_id=item.model_revision_id,ifc_element_id=eid,linked_entity_type="ISSUE",linked_entity_id=issue.id,link_type="AI_INSIGHT",source="USER",confidence=1,confirmed_by_id=current_user.id,confirmed_at=datetime.now(timezone.utc)))
+    _notify_issue_owners(db,issue,actor_id=current_user.id,discipline=(item.evidence_json or {}).get("discipline"))
     record_audit(db,actor_id=current_user.id,action="issue_created_from_ai_insight",entity_type="issue",entity_id=issue.id,project_id=project_id,details={"insightId":str(item.id)});db.commit();return {"id":issue.id,"title":issue.title}
 
 

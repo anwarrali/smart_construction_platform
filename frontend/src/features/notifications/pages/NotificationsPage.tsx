@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
@@ -9,6 +10,7 @@ import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceCont
 import { useDebounce } from "../../../hooks/useDebounce";
 
 export const NotificationsPage = () => {
+  const { t } = useTranslation();
   const { notifications, isLoading, error, pagination, fetchNotifications, markAsRead, markAllAsRead } = useNotifications();
   const workspace = useProjectWorkspace();
   const [page, setPage] = useState(1);
@@ -46,7 +48,7 @@ export const NotificationsPage = () => {
       </div>
 
       <Card className="grid gap-3 p-4 md:grid-cols-[1fr_180px_210px]">
-        <Input placeholder="Search notifications..." value={search} onChange={(event) => setSearch(event.target.value)} />
+        <Input placeholder={t("notificationsPage.search_notifications")} value={search} onChange={(event) => setSearch(event.target.value)} />
         <Select value={readFilter} onChange={(event) => setReadFilter(event.target.value)} options={[
           { value: "", label: "All notifications" },
           { value: "unread", label: "Unread only" },
@@ -72,7 +74,7 @@ export const NotificationsPage = () => {
 
       {pagination.totalPages > 1 && <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Page {pagination.page} of {pagination.totalPages} · {pagination.total} notifications</p>
-        <div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button variant="outline" size="sm" disabled={page >= pagination.totalPages || isLoading} onClick={() => setPage((value) => value + 1)}>Next</Button></div>
+        <div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => setPage((value) => value - 1)}>{t("notificationsPage.previous")}</Button><Button variant="outline" size="sm" disabled={page >= pagination.totalPages || isLoading} onClick={() => setPage((value) => value + 1)}>{t("notificationsPage.next")}</Button></div>
       </div>}
     </div>
   );

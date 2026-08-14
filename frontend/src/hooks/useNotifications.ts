@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { errorMessage } from "../utils/errorMessage";
 import { useNotificationStore } from "../app/store/notification.store";
 import api from "../services/api";
 import { useRole } from "./useRole";
@@ -37,7 +38,7 @@ export const useNotifications = () => {
         setNotifications(items);
         setPagination({ page: data.page || page, total: data.total || 0, totalPages: data.totalPages || 0 });
       } catch (err: any) {
-        setError(err?.response?.data?.detail || "Unable to load notifications.");
+        setError(errorMessage(err, "Unable to load notifications."));
         setLoading(false);
       }
     },

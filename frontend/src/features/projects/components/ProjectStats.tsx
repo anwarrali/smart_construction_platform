@@ -25,15 +25,15 @@ export const ProjectStats = ({ summary, isLoading }: ProjectStatsProps) => {
     {
       label: "Total Projects",
       value: summary.totalProjects,
-      color: "text-blue-600",
+      color: "text-state-progress",
     },
-    { label: "Active", value: summary.activeProjects, color: "text-green-600" },
+    { label: "Active", value: summary.activeProjects, color: "text-state-verified" },
     {
       label: "Completed",
       value: summary.completedProjects,
-      color: "text-purple-600",
+      color: "text-state-blocked",
     },
-    { label: "Delayed", value: summary.delayedProjects, color: "text-red-600" },
+    { label: "Delayed", value: summary.delayedProjects, color: "text-state-overdue" },
   ];
 
   return (

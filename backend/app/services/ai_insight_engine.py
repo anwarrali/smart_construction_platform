@@ -67,14 +67,15 @@ def calculate_alignment(
 def _store(db: Session, *, project_id, version_id, rule: str, category: str, severity: str, confidence: float,
            title: str, description: str, reason: str, recommended_action: str, evidence: dict,
            affected: dict | None = None, task_ids: list | None = None, issue_ids: list | None = None,
-           evidence_ids: list | None = None, potential_impact: str | None = None, context: dict | None = None) -> AIInsight:
+           evidence_ids: list | None = None, potential_impact: str | None = None, context: dict | None = None,
+           params: dict | None = None) -> AIInsight:
     fingerprint = _fingerprint(rule, project_id, version_id, context or evidence)
     item = db.query(AIInsight).filter(AIInsight.fingerprint == fingerprint).first()
     if not item:
         item = AIInsight(project_id=project_id, model_revision_id=version_id, fingerprint=fingerprint,
                          insight_type=rule, category=category, severity=severity, confidence=confidence,
                          title=title, description=description, reason=reason, recommended_action=recommended_action,
-                         evidence_json=evidence, affected_json=affected or {},
+                         message_params_json=params or {}, evidence_json=evidence, affected_json=affected or {},
                          related_task_ids_json=[str(value) for value in task_ids or []],
                          related_issue_ids_json=[str(value) for value in issue_ids or []],
                          related_evidence_ids_json=[str(value) for value in evidence_ids or []],
@@ -83,6 +84,7 @@ def _store(db: Session, *, project_id, version_id, rule: str, category: str, sev
     elif item.status in {"NEW", "UNDER_REVIEW"}:
         item.severity=severity;item.confidence=confidence;item.description=description;item.reason=reason
         item.recommended_action=recommended_action;item.evidence_json=evidence;item.affected_json=affected or {}
+        item.message_params_json=params or {}
         item.related_task_ids_json=[str(value) for value in task_ids or []]
         item.related_issue_ids_json=[str(value) for value in issue_ids or []]
         item.related_evidence_ids_json=[str(value) for value in evidence_ids or []]
@@ -130,6 +132,7 @@ def run_project_intelligence(db: Session, project_id, version_id=None) -> dict:
                description=f"The IFC ↔ project alignment score is {facts['overall']}%. Significant modeled scope is not represented in linked execution data.",
                reason="The weighted structured coverage metrics fall below the 50% review threshold.",
                recommended_action="Verify that this IFC revision belongs to the project and review missing task/location/evidence mappings.",
+               params={"alignmentScore": facts["overall"]},
                potential_impact="Execution planning may not reflect the current design model.", evidence=facts,
                affected={"versionId":str(version.id)}, context={"overallBand":int(facts["overall"]//5)})
 
@@ -139,6 +142,7 @@ def run_project_intelligence(db: Session, project_id, version_id=None) -> dict:
                description=f"Only {facts['components']['verifiedEvidenceCoverage']}% of the project's verified field evidence is linked to this IFC revision.",
                reason="Explicit IFC evidence links were compared with verified field-submission records.",
                recommended_action="Review field submissions and link verified evidence to the relevant building, floor, room, task, or IFC objects.",
+               params={"coverage": facts["components"]["verifiedEvidenceCoverage"]},
                evidence={"linkedEvidenceCount":facts["linkedEvidenceCount"],"verifiedEvidenceCoverage":facts["components"]["verifiedEvidenceCoverage"]},
                affected={"versionId":str(version.id)}, context={"coverageBand":int(facts["components"]["verifiedEvidenceCoverage"]//5)})
 
@@ -153,6 +157,7 @@ def run_project_intelligence(db: Session, project_id, version_id=None) -> dict:
                description=f"The revision contains {element_count:,} {discipline.lower()} elements, while the project has zero tasks assigned to that discipline.",
                reason="Strong deterministic IFC discipline evidence exists and no matching task discipline was found.",
                recommended_action=f"Review grouped {discipline.lower()} installation and inspection task suggestions.",
+               params={"discipline": discipline.lower(), "elementCount": element_count},
                evidence={"modeledElementCount":element_count,"taskCount":0,"discipline":discipline},
                affected={"disciplines":[discipline]}, context={"discipline":discipline})
         by_storey=Counter(storeys.get(item.storey_node_id,"Unassigned") for item in elements if item.discipline==discipline)
@@ -164,6 +169,7 @@ def run_project_intelligence(db: Session, project_id, version_id=None) -> dict:
                    description=f"Review a grouped work package covering {count} modeled {discipline.lower()} elements on {storey}.",
                    reason="Elements are grouped by model revision, discipline, and storey; no matching discipline task exists.",
                    recommended_action="Review, edit, and create a task only if this work package matches the construction plan.",
+               params={"discipline": discipline.lower(), "storey": storey, "elementCount": count},
                    evidence={"discipline":discipline,"storey":storey,"elementCount":count,"grouping":["discipline","storey"]},
                    affected={"storeys":[storey],"elements":related,"disciplines":[discipline]},context={"discipline":discipline,"storey":storey})
 
