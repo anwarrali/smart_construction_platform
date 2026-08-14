@@ -6,6 +6,7 @@ import uuid
 from datetime import date, datetime, time, timezone
 
 from app.db.database import get_db
+from app.services.authorization import require
 from app.models.user import User
 from app.models.design_change import DesignChange, DesignChangeAffectedDiscipline
 from app.schemas.design_change import DesignChangeOut, DesignChangeCreate
@@ -115,8 +116,7 @@ def create_design_change(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role not in {UserRole.PROJECT_MANAGER, UserRole.ENGINEER}:
-        raise HTTPException(status_code=403, detail="Only assigned execution team members can propose design changes")
+    require(db, current_user, "design_change.propose", change_data.project_id)
     if not user_has_project_access(db, current_user, change_data.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     new_change = DesignChange(
@@ -215,8 +215,9 @@ def approve_design_change(
     if not change:
         raise HTTPException(status_code=404, detail="Design change not found")
         
-    if current_user.role != UserRole.CONSULTANT or not user_has_project_access(db, current_user, change.project_id):
-        raise HTTPException(status_code=403, detail="Only an assigned consultant can approve this design change")
+    # The capability is configurable. Project access is re-checked inside
+    # `require`, and the discipline restriction below still applies on top.
+    require(db, current_user, "design_change.approve", change.project_id)
     if current_user.role == UserRole.CONSULTANT and current_user.engineer_profile:
         relevant = {change.source_discipline, *(item.discipline for item in change.affected_disciplines)}
         if current_user.engineer_profile.discipline.value not in relevant:

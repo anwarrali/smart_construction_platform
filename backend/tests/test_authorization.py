@@ -388,3 +388,104 @@ def test_an_owner_cannot_shift_the_schedule_directly(world):
         shift_task_schedule(world["project"].id, ShiftTaskRequest(task_id=task.id, shift_days=3),
                             db=world["db"], current_user=world["owner"])
     assert raised.value.status_code == 403
+
+
+# --- migrated permission families -------------------------------------------
+# Each of these calls the endpoint function directly, which is what a crafted
+# HTTP request reaches. The frontend is never the boundary.
+
+def test_raising_an_issue_is_refused_once_the_permission_is_revoked(world):
+    from app.api.issues import create_issue
+    from app.schemas.issue import IssueCreate
+
+    payload = IssueCreate(projectId=world["project"].id, title="Cracked slab",
+                          description="Observed on the second floor.", severity="high")
+    world["db"].add(UserPermissionOverride(
+        user_id=world["civil"].id, permission_code="issue.create", allowed=False))
+    world["db"].flush()
+
+    with pytest.raises(HTTPException) as raised:
+        create_issue(payload, db=world["db"], current_user=world["civil"])
+    assert raised.value.status_code == 403
+
+
+def test_a_client_cannot_raise_an_issue_by_default(world):
+    from app.api.issues import create_issue
+    from app.schemas.issue import IssueCreate
+    payload = IssueCreate(projectId=world["project"].id, title="x", description="y", severity="low")
+    with pytest.raises(HTTPException) as raised:
+        create_issue(payload, db=world["db"], current_user=world["owner"])
+    assert raised.value.status_code == 403
+
+
+def test_an_administrator_can_grant_issue_creation_to_a_client(world):
+    """The point of the feature: an unusual structure can be supported."""
+    from app.api.issues import create_issue
+    from app.schemas.issue import IssueCreate
+    world["db"].add(UserPermissionOverride(
+        user_id=world["owner"].id, project_id=world["project"].id,
+        permission_code="issue.create", allowed=True))
+    world["db"].flush()
+    payload = IssueCreate(projectId=world["project"].id, title="Client observation",
+                          description="Raised by the client.", severity="low")
+    issue = create_issue(payload, db=world["db"], current_user=world["owner"])
+    assert issue is not None
+
+
+def test_proposing_a_design_change_respects_the_permission(world):
+    from app.api.design_changes import create_design_change
+    from app.schemas.design_change import DesignChangeCreate
+
+    payload = DesignChangeCreate(projectId=world["project"].id, title="Window move",
+                                 description="Shift the opening north.", reason="Client request",
+                                 sourceDiscipline="civil", affectedDisciplines=["civil"])
+    # Denied for a role that never had it.
+    with pytest.raises(HTTPException) as raised:
+        create_design_change(payload, db=world["db"], current_user=world["owner"])
+    assert raised.value.status_code == 403
+
+    # And revocable for a role that did.
+    world["db"].add(UserPermissionOverride(
+        user_id=world["civil"].id, permission_code="design_change.propose", allowed=False))
+    world["db"].flush()
+    with pytest.raises(HTTPException) as raised:
+        create_design_change(payload, db=world["db"], current_user=world["civil"])
+    assert raised.value.status_code == 403
+
+
+def test_task_creation_keeps_its_ownership_rule_after_migration(world):
+    """Migrating must not widen: only the assigned manager still creates tasks."""
+    from app.api.tasks import create_task
+    from app.schemas.task import TaskCreate
+    from datetime import date, timedelta
+
+    def payload():
+        return TaskCreate(projectId=world["project"].id, name="Pour slab",
+                          plannedStartDate=date.today(),
+                          plannedEndDate=date.today() + timedelta(days=3))
+
+    # An administrator holds task.create in the catalogue but is not the
+    # assigned manager, so the original rule still refuses — unchanged default.
+    with pytest.raises(HTTPException) as raised:
+        create_task(payload(), db=world["db"], current_user=world["admin"])
+    assert raised.value.status_code == 403
+
+    # The assigned manager still succeeds.
+    created = create_task(payload(), db=world["db"], current_user=world["manager"])
+    assert created is not None
+
+
+def test_task_creation_can_be_revoked_from_the_assigned_manager(world):
+    from app.api.tasks import create_task
+    from app.schemas.task import TaskCreate
+    from datetime import date, timedelta
+
+    world["db"].add(UserPermissionOverride(
+        user_id=world["manager"].id, permission_code="task.create", allowed=False))
+    world["db"].flush()
+    with pytest.raises(HTTPException) as raised:
+        create_task(TaskCreate(projectId=world["project"].id, name="Blocked",
+                               plannedStartDate=date.today(),
+                               plannedEndDate=date.today() + timedelta(days=1)),
+                    db=world["db"], current_user=world["manager"])
+    assert raised.value.status_code == 403

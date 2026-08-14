@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { formatDate, formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { useParams } from "react-router-dom";
@@ -155,7 +156,7 @@ export const EvidencePhotoArchivePage = () => {
             {!photo.categories.length && <span className="text-xs text-muted-foreground">{t("photoArchive.uncategorized")}</span>}
           </div>
           <p className="text-xs text-muted-foreground">
-            {photo.discipline || "General"} · {photo.workerName} · {new Date(photo.submissionCreatedAt).toLocaleDateString()}
+            {photo.discipline || "General"} · {photo.workerName} · {formatDate(photo.submissionCreatedAt)}
             {photo.direction ? ` · ${photo.direction.toLowerCase()}` : ""}
           </p>
         </div>
@@ -178,10 +179,10 @@ export const EvidencePhotoArchivePage = () => {
           <dt className="text-muted-foreground">{t("photoArchive.discipline")}</dt><dd>{selected.discipline || "General"}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.worker")}</dt><dd>{selected.workerName}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.uploader")}</dt><dd>{selected.uploaderName}</dd>
-          <dt className="text-muted-foreground">{t("photoArchive.submitted")}</dt><dd>{new Date(selected.submissionCreatedAt).toLocaleString()}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.submitted")}</dt><dd>{formatDateTime(selected.submissionCreatedAt)}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.status")}</dt><dd>{selected.submissionStatus}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.reviewer")}</dt><dd>{selected.reviewerName || "Not reviewed"}</dd>
-          <dt className="text-muted-foreground">{t("photoArchive.reviewed")}</dt><dd>{selected.reviewedAt ? new Date(selected.reviewedAt).toLocaleString() : "—"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.reviewed")}</dt><dd>{selected.reviewedAt ? formatDateTime(selected.reviewedAt) : "—"}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.direction")}</dt><dd>{selected.direction || "Unlabelled"}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.categories")}</dt><dd>{selected.categories.map((item) => item.name).join(", ") || "Uncategorized"}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.filename")}</dt><dd className="break-all">{selected.attachment.originalFilename}</dd>

@@ -3,6 +3,7 @@ import { Loader } from "../../../components/ui/Loader";
 import type { Task, TaskStatus } from "../../../types/task";
 import { ChevronLeft, ChevronRight, MoveHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface TaskBoardProps {
@@ -27,6 +28,7 @@ const COLUMN_STEP = 336; // one column (w-80) plus the gap
 
 export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps) => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const boardRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startScroll: number } | null>(null);
@@ -148,7 +150,7 @@ export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps
           const columnTasks = (tasks || []).filter((t) => t.status === col.status);
           return (
             <div
-              key={col.status}
+              key={vocabulary.taskStatus(col.status)}
               className={`flex-none w-80 snap-start bg-muted/30 rounded-lg border-t-2 ${col.color} min-h-[200px]`}
             >
               <div className="p-3 font-medium text-sm flex items-center justify-between">

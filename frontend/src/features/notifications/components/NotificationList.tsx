@@ -2,6 +2,7 @@ import { Button } from "../../../components/ui/Button";
 import { useTranslation } from "react-i18next";
 import { Loader } from "../../../components/ui/Loader";
 import { timeAgo } from "../../../utils/date";
+import { formatDate } from "../../../utils/dates";
 import { useNavigate } from "react-router-dom";
 
 interface Notification {
@@ -37,9 +38,10 @@ export const NotificationList = ({
     const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
+    // Group headings follow the selected language, not the browser locale.
     const key = date.toDateString() === today.toDateString()
-      ? "Today"
-      : date.toDateString() === yesterday.toDateString() ? "Yesterday" : date.toLocaleDateString();
+      ? t("common.today")
+      : date.toDateString() === yesterday.toDateString() ? t("common.yesterday") : formatDate(notification.createdAt);
     (result[key] ||= []).push(notification);
     return result;
   }, {});

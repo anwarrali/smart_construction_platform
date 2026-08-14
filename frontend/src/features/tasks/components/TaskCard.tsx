@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
@@ -37,6 +38,7 @@ const priorityVariant: Record<string, "neutral" | "warning" | "danger"> = {
 
 export const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const navigate = useNavigate();
   const workspace = useProjectWorkspace();
   const overdue =
@@ -57,7 +59,7 @@ export const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
             variant={priorityVariant[task.priority] || "neutral"}
             size="sm"
           >
-            {task.priority}
+            {vocabulary.priority(task.priority)}
           </Badge>
         </div>
 

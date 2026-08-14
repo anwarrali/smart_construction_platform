@@ -63,8 +63,11 @@ CATALOGUE: tuple[Permission, ...] = (
     # --- Project setup ------------------------------------------------------
     _p("project.manage_members", "project", "Manage the project team",
        "Add or remove people from a project and set their role on it.", {ADMIN, PM}),
+    # Editing project setup was administrator-only at the endpoint. The default
+    # records that, rather than widening access as a side effect of making the
+    # check configurable; an administrator can grant it to managers in one click.
     _p("project.edit", "project", "Edit project details",
-       "Change project information, dates and settings.", {ADMIN, PM}),
+       "Change project information, dates and settings.", {ADMIN}),
     _p("project.manage_reminders", "project", "Configure reminders",
        "Set reminder intervals, quiet hours and escalation.", {ADMIN, PM}),
 
@@ -86,8 +89,10 @@ CATALOGUE: tuple[Permission, ...] = (
     # --- Site work ----------------------------------------------------------
     _p("site_visit.schedule", "field", "Schedule site visits",
        "Book a site visit and notify its participants.", {ADMIN, PM, ENGINEER}),
+    # Filing a report is field work: the endpoint accepted the Project Manager
+    # and contractor-side Engineers, and not administrators.
     _p("site_report.submit", "field", "Submit site reports",
-       "File a daily or visit site report.", {ADMIN, PM, ENGINEER}),
+       "File a daily or visit site report.", {PM, ENGINEER}),
     _p("issue.create", "field", "Raise issues", "Open a project issue.",
        {ADMIN, PM, ENGINEER, CONSULTANT}),
     _p("issue.resolve", "field", "Resolve issues", "Close or resolve a project issue.",
@@ -100,8 +105,10 @@ CATALOGUE: tuple[Permission, ...] = (
        "Respond to, accept or reject a client request.", {ADMIN, PM, ENGINEER}),
     _p("design_change.propose", "requests", "Propose design changes",
        "Turn an accepted request into a proposed design change.", {ADMIN, PM, ENGINEER}),
+    # Official approval of a design change rested with the assigned consultant
+    # alone, and the discipline restriction still applies on top of this.
     _p("design_change.approve", "requests", "Approve design changes",
-       "Give a design change its official approval.", {ADMIN, PM, CONSULTANT}),
+       "Give a design change its official approval.", {CONSULTANT}),
 
     # --- Models and documents ----------------------------------------------
     _p("ifc.view", "models", "View IFC models", "Open models, hierarchy and properties.",

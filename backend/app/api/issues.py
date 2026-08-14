@@ -6,6 +6,7 @@ import uuid
 from datetime import date, datetime, time, timezone
 
 from app.db.database import get_db
+from app.services.authorization import require
 from app.models.user import User
 from app.models.issue import Issue
 from app.schemas.issue import IssueOut, IssueCreate, IssueUpdate
@@ -121,8 +122,7 @@ def create_issue(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role in {UserRole.ADMIN, UserRole.OWNER, UserRole.CONSULTANT, UserRole.WORKER}:
-        raise HTTPException(status_code=403, detail="This role cannot raise project issues")
+    require(db, current_user, "issue.create", issue_data.project_id)
     if current_user.role == UserRole.ENGINEER and not (
         is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)
     ):
@@ -264,7 +264,10 @@ def delete_issue(
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
     project = db.get(Project, issue.project_id)
-    if current_user.role != UserRole.ADMIN and (not project or project.project_manager_id != current_user.id):
+    require(db, current_user, "issue.resolve", issue.project_id)
+    # Holding the permission is not enough: an ordinary manager may only delete
+    # issues on a project they actually run.
+    if current_user.role == UserRole.PROJECT_MANAGER and (not project or project.project_manager_id != current_user.id):
         raise HTTPException(status_code=403, detail="Only the assigned Project Manager can delete issues")
     db.delete(issue)
     db.commit()

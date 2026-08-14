@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import toast from "react-hot-toast";
@@ -158,7 +159,7 @@ export const VoiceReportsPage = () => {
           <div>
             <p className="font-semibold">{submission.worker.fullName}</p>
             <p className="text-sm text-muted-foreground">
-              {task.taskCode} · {task.name} · {new Date(submission.createdAt).toLocaleString()}
+              {task.taskCode} · {task.name} · {formatDateTime(submission.createdAt)}
             </p>
           </div>
           <div className="flex gap-2">

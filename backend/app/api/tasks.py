@@ -55,6 +55,7 @@ from app.core.deps import (
 )
 from app.core.schedule_dates import inclusive_duration_days
 from app.services.audit_service import record_audit
+from app.services.authorization import require
 from app.services.consultant_approval_service import (
     authorized_consultant_ids,
     can_consultant_review_task,
@@ -489,6 +490,10 @@ def create_task(
 ):
     if not _is_project_manager(db, current_user, task_data.project_id):
         raise HTTPException(status_code=403, detail="Only the assigned Project Manager can create project tasks")
+    # The ownership rule above is unchanged; the permission is an additional,
+    # administrator-configurable gate. Combining them keeps the default access
+    # identical while making the capability revocable.
+    require(db, current_user, "task.create", task_data.project_id)
     if task_data.status not in {TaskStatus.BACKLOG, TaskStatus.TODO}:
         raise HTTPException(status_code=400, detail="New tasks must start in Backlog or To Do")
     assignees = _validate_task_assignees(
@@ -718,6 +723,7 @@ def delete_task(
     task = _get_task_or_403(task_id, db, current_user)
     if not _is_project_manager(db, current_user, task.project_id):
         raise HTTPException(status_code=403, detail="Only the assigned Project Manager can delete tasks")
+    require(db, current_user, "task.edit", task.project_id)
     record_audit(db, actor_id=current_user.id, action="deleted", entity_type="task", entity_id=task.id, project_id=task.project_id)
 
     # Clear both incoming and outgoing dependency edges explicitly. Besides
