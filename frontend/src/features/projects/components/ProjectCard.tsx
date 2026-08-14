@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ArrowRight, CalendarDays } from "lucide-react";
 
@@ -31,6 +32,7 @@ const STATE: Record<string, { chip: string; rule: string }> = {
 export const ProjectCard = ({ project }: ProjectCardProps) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const { role, isConsultantEngineer } = useRole();
   const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
   const daysRemaining = getDaysRemaining(project.plannedEndDate || "");
@@ -58,7 +60,7 @@ export const ProjectCard = ({ project }: ProjectCardProps) => {
             )}
           </div>
           <span className={state.chip}>
-            {t(`project.status.${project.status}`, { defaultValue: project.status.replace("_", " ") })}
+            {t(`project.status.${vocabulary.projectStatus(project.status)}`, { defaultValue: project.status.replace("_", " ") })}
           </span>
         </div>
 

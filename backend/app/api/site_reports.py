@@ -20,6 +20,7 @@ from app.core.deps import (
 from app.services.file_storage import save_upload, delete_upload
 from app.models.enums import VoiceProcessingStatus
 from app.models.enums import UserRole, NotificationType
+from app.services.authorization import require
 from app.models.project import Project
 from app.models.project import ProjectMember
 from app.models.notification import Notification
@@ -163,8 +164,10 @@ async def submit_site_report(
         visit_uuid = uuid.UUID(site_visit_id) if site_visit_id else None
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid projectId")
-    if current_user.role not in {UserRole.ENGINEER, UserRole.PROJECT_MANAGER}:
-        raise HTTPException(status_code=403, detail="Only assigned engineers or the Project Manager can submit site reports")
+    # Who may file a report is configurable; which project they may file it
+    # against, and the contractor-side and discipline-assignment rules below,
+    # are not — `require` re-checks project access for a project-scoped code.
+    require(db, current_user, "site_report.submit", proj_uuid)
     if current_user.role == UserRole.ENGINEER and not is_main_contractor_engineer(current_user):
         raise HTTPException(status_code=403, detail="Active Main Contractor Engineer access required")
     if not user_has_project_access(db, current_user, proj_uuid):

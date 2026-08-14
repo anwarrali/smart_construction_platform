@@ -5,6 +5,7 @@ from typing import List, Optional
 import uuid
 
 from app.db.database import get_db
+from app.services.authorization import require
 from app.models.user import User
 from app.models.document import Document
 from app.schemas.document import DocumentOut
@@ -148,8 +149,7 @@ async def upload_document(
         task_uuid = uuid.UUID(task_id) if task_id else None
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid projectId or taskId")
-    if current_user.role not in {UserRole.PROJECT_MANAGER, UserRole.ENGINEER}:
-        raise HTTPException(status_code=403, detail="Your role cannot upload project documents")
+    require(db, current_user, "document.upload", proj_uuid)
     if current_user.role == UserRole.ENGINEER and not is_main_contractor_engineer(current_user):
         raise HTTPException(status_code=403, detail="Consultant review files must be uploaded as review attachments")
     

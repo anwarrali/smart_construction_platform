@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { formatDateTime } from "../../../../utils/dates";
+import { useVocabulary } from "../../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../../utils/errorMessage";
 import { useNavigate } from "react-router-dom";
@@ -92,6 +94,7 @@ const TaskList = ({
   mode?: "normal" | "overdue" | "rework";
 }) => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   return (
   <div className="divide-y">
     {tasks.map((task) => (
@@ -99,7 +102,7 @@ const TaskList = ({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs font-semibold text-primary">{task.taskCode}</span>
-            <Badge size="sm" variant={priorityVariant(task.priority)}>{task.priority}</Badge>
+            <Badge size="sm" variant={priorityVariant(task.priority)}>{vocabulary.priority(task.priority)}</Badge>
             {task.isCriticalPath && <Badge size="sm" variant="danger">{t("engineerDash.critical")}</Badge>}
           </div>
           <p className="mt-1 truncate text-sm font-medium">{task.name}</p>
@@ -183,9 +186,9 @@ export const EngineerDashboard = () => {
       <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold text-state-overdue">{t("engineerDash.overdue_tasks")}</h2><TaskList tasks={data.overdueTasks} empty="No overdue assigned tasks." onOpen={openTask} mode="overdue" /></Card>
       <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold text-state-review">{t("engineerDash.rework_required")}</h2><TaskList tasks={data.reworkRequired} empty="No work has been returned for correction." onOpen={openTask} mode="rework" /></Card>
       <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">{t("engineerDash.pending_review")}</h2><TaskList tasks={data.pendingReview} empty="No submitted work is waiting for review." onOpen={openTask} /></Card>
-      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">{t("engineerDash.recent_activity")}</h2><div className="divide-y">{data.recentActivity.map((item) => <div key={item.id} className="px-4 py-3"><p className="text-sm font-medium">{item.action.replaceAll("_", " ")}</p><p className="text-xs text-muted-foreground">{item.actorName} · {new Date(item.timestamp).toLocaleString()}</p></div>)}{!data.recentActivity.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("engineerDash.no_recent_engineer_activity")}</p>}</div></Card>
+      <Card className="overflow-hidden p-0"><h2 className="border-b px-4 py-3 font-semibold">{t("engineerDash.recent_activity")}</h2><div className="divide-y">{data.recentActivity.map((item) => <div key={item.id} className="px-4 py-3"><p className="text-sm font-medium">{item.action.replaceAll("_", " ")}</p><p className="text-xs text-muted-foreground">{item.actorName} · {formatDateTime(item.timestamp)}</p></div>)}{!data.recentActivity.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("engineerDash.no_recent_engineer_activity")}</p>}</div></Card>
     </div>
 
-    <Card className="overflow-hidden p-0"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">{t("engineerDash.notifications")}</h2><Button size="sm" variant="ghost" onClick={() => navigate(workspace.path("notifications"))}>{t("engineerDash.view_all")}</Button></div><div className="divide-y">{data.notifications.map((item) => <div key={item.id} className={`px-4 py-3 ${item.isRead ? "" : "bg-primary/5"}`}><p className="text-sm font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.message} · {new Date(item.createdAt).toLocaleString()}</p></div>)}{!data.notifications.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("engineerDash.no_project_notifications")}</p>}</div></Card>
+    <Card className="overflow-hidden p-0"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">{t("engineerDash.notifications")}</h2><Button size="sm" variant="ghost" onClick={() => navigate(workspace.path("notifications"))}>{t("engineerDash.view_all")}</Button></div><div className="divide-y">{data.notifications.map((item) => <div key={item.id} className={`px-4 py-3 ${item.isRead ? "" : "bg-primary/5"}`}><p className="text-sm font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.message} · {formatDateTime(item.createdAt)}</p></div>)}{!data.notifications.length && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("engineerDash.no_project_notifications")}</p>}</div></Card>
   </div>;
 };

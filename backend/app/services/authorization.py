@@ -34,6 +34,7 @@ from app.models.permission import (
     RolePermissionOverride,
     UserPermissionOverride,
 )
+from app.models.project import Project
 from app.models.user import User
 
 
@@ -121,6 +122,35 @@ def require_permission(code: str):
         return current_user
 
     return dependency
+
+
+def manageable_project(
+    db: Session, user: User, project_id: uuid.UUID, code: str
+) -> Project:
+    """The project, if this person may perform `code` on it.
+
+    This is the configurable replacement for the hardcoded "administrator or the
+    assigned project manager" check. The capability became configurable; the two
+    restrictions around it did not:
+
+      * a project manager may only act on the project they are assigned to, even
+        if an administrator grants them the permission platform-wide;
+      * `require` re-checks project access for every project-scoped permission,
+        so a grant can never reach a project the person is not a member of.
+
+    A permission is therefore only ever an additional condition here, never a
+    way around membership or ownership.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if user.role == UserRole.PROJECT_MANAGER and project.project_manager_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only manage your assigned project",
+        )
+    require(db, user, code, project_id)
+    return project
 
 
 # --- Consultant scoping ----------------------------------------------------

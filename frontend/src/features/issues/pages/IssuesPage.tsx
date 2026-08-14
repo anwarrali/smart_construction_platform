@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
@@ -22,6 +23,7 @@ import { ContextDiscussion } from "../../messages/components/ContextDiscussion";
 
 export const IssuesPage = () => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const workspace = useProjectWorkspace();
   const { isProjectManager } = useRole();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -116,22 +118,24 @@ export const IssuesPage = () => {
     <div className="page-container space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Issues{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
+          <h1 className="text-2xl font-bold">{t("issue.issues")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
           <p className="text-muted-foreground">
             {t("issuesPage.track_and_resolve_project_issues")}
           </p>
         </div>
-        <Button onClick={() => setFormOpen(true)}>+ Raise Issue</Button>
+        <Button onClick={() => setFormOpen(true)}>+ {t("issue.newIssue")}</Button>
       </div>
       {focusedIssueId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("issuesPage.showing_the_issue_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("issuesPage.show_all_issues")}</Button></div>}
 
       <Card className="grid gap-3 p-4 md:grid-cols-6">
-        {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || "Selected project"}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:"All projects"},...projects.map(project=>({value:project.id,label:project.name}))]}/>} 
-        <Select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} options={[{value:"",label:"All statuses"},...['open','in_progress','resolved','closed'].map(value=>({value,label:value.replace('_',' ')}))]}/>
-        <Select value={filterDiscipline} onChange={e=>setFilterDiscipline(e.target.value)} options={[{value:"",label:"All categories"},...['technical','material','design','coordination','quality','schedule','equipment','site_condition','other'].map(value=>({value,label:value.replaceAll("_", " ")}))]}/>
+        {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || t("project.selectedProject")}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:t("project.allProjects")},...projects.map(project=>({value:project.id,label:project.name}))]}/>}
+        {/* The option values are the API's own status and category vocabulary, so
+            the labels come from the shared catalogue rather than a text tweak. */}
+        <Select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} options={[{value:"",label:t("issue.allStatuses")},...['open','in_progress','resolved','closed'].map(value=>({value,label:vocabulary.issueStatus(value)}))]}/>
+        <Select value={filterDiscipline} onChange={e=>setFilterDiscipline(e.target.value)} options={[{value:"",label:t("issue.allCategories")},...['technical','material','design','coordination','quality','schedule','equipment','site_condition','other'].map(value=>({value,label:vocabulary.issueCategory(value)}))]}/>
         <Input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
         <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyAttachments} onChange={e=>setOnlyAttachments(e.target.checked)}/> Has attachments</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyAttachments} onChange={e=>setOnlyAttachments(e.target.checked)}/> {t("issue.hasAttachments")}</label>
       </Card>
 
       {visibleIssues.length === 0 ? (
@@ -153,7 +157,7 @@ export const IssuesPage = () => {
                   </p>
                   <div className="flex items-center gap-2 mt-2">
                     <Badge size="sm" variant={severityVariant[issue.severity]}>
-                      {issue.severity}
+                      {vocabulary.severity(issue.severity)}
                     </Badge>
                     <Badge size="sm" variant={statusVariant[issue.status]}>
                       {issue.status.replace("_", " ")}
@@ -163,7 +167,7 @@ export const IssuesPage = () => {
                     </span>
                   </div>
                   <AttachmentPanel projectId={issue.projectId} entityType="ISSUE" entityId={issue.id} initialCount={issue.attachmentCount} />
-                  <Button className="mt-2 mr-2" size="sm" variant="outline" onClick={() => setDiscussionIssueId((current) => current === issue.id ? "" : issue.id)}>{discussionIssueId === issue.id ? "Hide Discussion" : "Open Discussion"}</Button>
+                  <Button className="mt-2 mr-2" size="sm" variant="outline" onClick={() => setDiscussionIssueId((current) => current === issue.id ? "" : issue.id)}>{discussionIssueId === issue.id ? t("issue.hideDiscussion") : t("issue.openDiscussion")}</Button>
                   {isProjectManager && ["open", "in_progress"].includes(issue.status) && <Button className="mt-2" size="sm" variant="outline" onClick={async () => { const resolution = window.prompt("Resolution note (required)"); if (!resolution?.trim()) return; try { await issuesService.update(issue.id, { status: "resolved", resolutionNotes: resolution.trim() }); await fetchIssues(); toast.success("Issue resolved. The assigned Engineer can resume if no blockers remain."); } catch (err: any) { toast.error(errorMessage(err, "Issue could not be resolved.")); } }}>{t("issuesPage.resolve")}</Button>}
                   {discussionIssueId === issue.id && <div className="mt-3"><ContextDiscussion projectId={issue.projectId} contextType="ISSUE" contextId={issue.id} title={t("issuesPage.issue_discussion")} /></div>}
                 </div>
@@ -178,7 +182,7 @@ export const IssuesPage = () => {
           <Input label={t("issuesPage.title")} value={title} onChange={e => setTitle(e.target.value)} required/>
           <Input label={t("issuesPage.description")} value={description} onChange={e => setDescription(e.target.value)}/>
           <Select label={t("issuesPage.category")} value={category} onChange={e => setCategory(e.target.value)} options={["technical","material","design","coordination","quality","schedule","equipment","site_condition","other"].map(value => ({value,label:value.replaceAll("_", " ")}))}/>
-          <Select label={t("issuesPage.related_task_optional")} value={taskId} onChange={e => setTaskId(e.target.value)} options={[{ value: "", label: "Project-level issue" }, ...tasks.map(task => ({ value: task.id, label: `${task.taskCode} — ${task.name}` }))]} />
+          <Select label={t("issuesPage.related_task_optional")} value={taskId} onChange={e => setTaskId(e.target.value)} options={[{ value: "", label: t("issue.projectLevel") }, ...tasks.map(task => ({ value: task.id, label: `${task.taskCode} — ${task.name}` }))]} />
           <Select label={t("issuesPage.severity")} value={severity} onChange={e => setSeverity(e.target.value)} options={["low","medium","high","critical"].map(value => ({value,label:value}))}/>
           <ModalActions><Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{t("issuesPage.cancel")}</Button><Button type="submit" disabled={!(activeProjectId || projectId) || !title.trim()}>{t("issuesPage.create_issue")}</Button></ModalActions>
         </form>

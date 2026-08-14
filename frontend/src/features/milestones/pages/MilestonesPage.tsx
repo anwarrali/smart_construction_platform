@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { useParams } from "react-router-dom";
@@ -17,6 +18,7 @@ import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceCont
 
 export const MilestonesPage = () => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const { projectId, id } = useParams<{ projectId?: string; id?: string }>();
   const workspace = useProjectWorkspace();
   const activeProjectId = projectId || id || workspace.projectId;
@@ -85,7 +87,7 @@ export const MilestonesPage = () => {
     {error && <Card><p className="text-sm text-destructive">{error}</p></Card>}
     {loading ? <p className="text-sm text-muted-foreground">{t("milestonesPage.loading_milestones")}</p> : <div className="grid gap-4 lg:grid-cols-2">
       {milestones.map((milestone) => <Card key={milestone.id} className="space-y-4">
-        <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-primary">{milestone.milestoneCode}</p><h2 className="font-semibold">{milestone.name}</h2><p className="text-sm text-muted-foreground">Due {milestone.plannedDate}</p></div><Badge variant={milestone.status === "completed" ? "success" : milestone.status === "delayed" ? "danger" : "warning"}>{milestone.status}</Badge></div>
+        <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-primary">{milestone.milestoneCode}</p><h2 className="font-semibold">{milestone.name}</h2><p className="text-sm text-muted-foreground">Due {milestone.plannedDate}</p></div><Badge variant={milestone.status === "completed" ? "success" : milestone.status === "delayed" ? "danger" : "warning"}>{vocabulary.milestoneStatus(milestone.status)}</Badge></div>
         {milestone.description && <p className="text-sm text-muted-foreground">{milestone.description}</p>}
         <div><div className="mb-1 flex justify-between text-xs"><span>{milestone.completedTaskCount}/{milestone.taskCount} tasks completed</span><span>{milestone.progressPercentage}%</span></div><div className="h-2 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{ width: `${milestone.progressPercentage}%` }} /></div></div>
         <div className="flex flex-wrap gap-1">{milestone.taskIds.map((taskId) => <span key={taskId} className="rounded bg-muted px-2 py-1 text-xs">{linkedNames.get(taskId) || "Linked task"}</span>)}{!milestone.taskIds.length && <span className="text-xs text-muted-foreground">{t("milestonesPage.no_tasks_linked_yet")}</span>}</div>

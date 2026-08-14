@@ -121,6 +121,33 @@ describe("translation catalogues", () => {
     }
   });
 
+  it("localizes every AI insight message-key family the backend actually writes", () => {
+    // These three were backfilled with a valid message_key by migration
+    // cff92f4479c8, but had no catalogue entry until now — an Arabic reader
+    // saw the stored English sentence regardless of the selected language.
+    const families: Record<string, string[]> = {
+      IFC_PROJECT_IDENTITY_MISSING: [],
+      IFC_ASSET_TYPE_MISMATCH: ["projectType", "ifcAssetType"],
+      IFC_MAJOR_REVISION_DRIFT: [],
+    };
+    for (const [family, params] of Object.entries(families)) {
+      for (const part of ["title", "description", "reason", "recommendedAction"]) {
+        const key = `aiInsight.${family}.${part}`;
+        expect(english[key], `English missing ${key}`).toBeTruthy();
+        expect(arabic[key], `Arabic missing ${key}`).toBeTruthy();
+        expect(english[key]).not.toBe(arabic[key]);
+        for (const param of params) {
+          const placeholder = `{{${param}}}`;
+          // Only fields that actually carry the parameter need to mention it;
+          // this only asserts that if English uses it, Arabic uses it too.
+          if (english[key].includes(placeholder)) {
+            expect(arabic[key], `Arabic ${key} drops {{${param}}}`).toContain(placeholder);
+          }
+        }
+      }
+    }
+  });
+
   it("uses construction terminology in Arabic rather than literal translation", () => {
     expect(arabic["nav.designChanges"]).toBe("التعديلات التصميمية");
     expect(arabic["roles.project_manager"]).toBe("مدير المشروع");

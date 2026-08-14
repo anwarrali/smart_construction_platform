@@ -182,7 +182,7 @@ export const ProjectSchedulePage = () => {
 
   const taskName = (taskId: string) => {
     const task = scheduleTasks.find((item) => item.id === taskId);
-    return task ? `${task.task_code} — ${task.name}` : "Unknown task";
+    return task ? `${task.task_code} — ${task.name}` : t("common.unknownTask");
   };
   const criticalEdgeKeys = new Set(
     (criticalPath?.criticalTaskIds || []).slice(1).map((taskId, index) => `${criticalPath!.criticalTaskIds[index]}:${taskId}`)
@@ -230,13 +230,13 @@ export const ProjectSchedulePage = () => {
       <div className="bg-card border rounded-xl shadow-sm p-4 overflow-x-auto">
         {savingTaskId && <p className="mb-3 text-sm font-medium text-primary">{t("projectSchedule.saving_schedule_change")}</p>}
         {unscheduledTasks.length > 0 && <div className="mb-4 rounded-lg border border-state-review/30 bg-wash-review p-3 text-sm text-state-review">
-          {unscheduledTasks.length} task{unscheduledTasks.length === 1 ? " has" : "s have"} no complete planned date range and {unscheduledTasks.length === 1 ? "is" : "are"} not drawn: {unscheduledTasks.map((task) => task.name).join(", ")}.
+          {t("projectSchedule.unscheduledTasks", { count: unscheduledTasks.length, names: unscheduledTasks.map((task) => task.name).join(", ") })}
         </div>}
         <div className="mb-4 flex flex-wrap gap-4 text-xs text-muted-foreground" aria-label={t("projectSchedule.gantt_legend")}>
-          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-progress" /> Scheduled</span>
-          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-verified" /> Completed</span>
-          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-review" /> Delayed</span>
-          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-overdue" /> Critical path</span>
+          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-progress" /> {t("schedule.legend.scheduled")}</span>
+          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-verified" /> {t("schedule.legend.completed")}</span>
+          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-review" /> {t("schedule.legend.delayed")}</span>
+          <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-state-overdue" /> {t("schedule.legend.criticalPath")}</span>
         </div>
         {tasks.length > 0 ? (
           <Gantt

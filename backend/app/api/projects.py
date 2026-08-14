@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import String, cast, func, or_
+from sqlalchemy import String, and_, cast, func, or_
 from typing import List, Optional
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -35,6 +35,7 @@ from app.schemas.project import (
 )
 from app.schemas.user import UserCreateResponse, UserOut
 from app.core.deps import (
+    CONSULTANT_AFFILIATION,
     get_current_user,
     get_project_or_403,
     get_manageable_project_or_403,
@@ -46,6 +47,7 @@ from app.core.deps import (
 from app.core.permissions import can_view_all_projects, is_admin
 from app.services.user_service import create_provisioned_user, add_user_to_project
 from app.services.audit_service import record_audit
+from app.services.authorization import manageable_project, require_permission
 from app.models.notification import Notification
 from app.models.enums import NotificationType
 from app.services.consultant_approval_service import normalize_discipline
@@ -212,7 +214,7 @@ def get_project_by_id(
 def create_project(
     project_data: ProjectCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_project_creation),
+    current_user: User = Depends(require_permission("platform.create_project")),
 ):
     pm_id = project_data.project_manager_id
     if current_user.role == UserRole.PROJECT_MANAGER:
@@ -280,9 +282,7 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only administrators can edit project setup")
-    project = get_manageable_project_or_403(project_id, db, current_user)
+    project = manageable_project(db, current_user, project_id, "project.edit")
 
     if project_data.name is not None:
         project.name = project_data.name
@@ -522,8 +522,16 @@ def get_available_team_members(
     assigned_ids = db.query(ProjectMember.user_id).filter(
         ProjectMember.project_id == project_id, ProjectMember.is_active == True
     )
+    # A consultant is either an account whose global role is Consultant, or an
+    # Engineer account marked as an external consultant. Only the second form was
+    # listed here, so a Consultant account an administrator had created could
+    # never be picked for a project even though the assignment endpoint accepts it.
+    consultant_user = or_(
+        User.role == UserRole.CONSULTANT,
+        and_(User.role == UserRole.ENGINEER, User.engineer_affiliation == CONSULTANT_AFFILIATION),
+    )
     query = db.query(User).outerjoin(EngineerProfile).filter(
-        User.role.in_([UserRole.ENGINEER, UserRole.WORKER]),
+        User.role.in_([UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.WORKER]),
         User.status == UserStatus.ACTIVE,
         ~User.id.in_(assigned_ids),
     )
@@ -538,9 +546,12 @@ def get_available_team_members(
             cast(EngineerProfile.discipline, String).ilike(term),
         ))
     if role == UserRole.CONSULTANT:
-        query = query.filter(User.engineer_affiliation == "external_consultant")
+        # Selecting on affiliation alone also matched Workers who carry the
+        # external-consultant affiliation. Assigning one of those as a Consultant
+        # was then rejected as a role mismatch by POST /members.
+        query = query.filter(consultant_user)
     elif role == UserRole.ENGINEER:
-        query = query.filter(User.role == UserRole.ENGINEER, User.engineer_affiliation != "external_consultant")
+        query = query.filter(User.role == UserRole.ENGINEER, User.engineer_affiliation != CONSULTANT_AFFILIATION)
     elif role == UserRole.WORKER:
         query = query.filter(User.role == UserRole.WORKER)
     if discipline:
@@ -557,7 +568,7 @@ def add_project_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_manageable_project_or_403(project_id, db, current_user)
+    project = manageable_project(db, current_user, project_id, "project.manage_members")
 
     user = db.query(User).filter(User.id == data.user_id).first()
     if not user:
@@ -623,7 +634,7 @@ def update_member_assignment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_manageable_project_or_403(project_id, db, current_user)
+    project = manageable_project(db, current_user, project_id, "project.manage_members")
     member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id,
         ProjectMember.user_id == user_id, ProjectMember.is_active == True).first()
     if not member:
@@ -691,7 +702,7 @@ def remove_project_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_manageable_project_or_403(project_id, db, current_user)
+    manageable_project(db, current_user, project_id, "project.manage_members")
 
     member = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,

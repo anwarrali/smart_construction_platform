@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import i18n from "../../../i18n";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
@@ -79,12 +81,12 @@ const EngineerTasksPage = () => {
     const due = new Date(`${task.plannedEndDate}T00:00:00`);
     const days = Math.round((due.getTime() - today.getTime()) / 86400000);
     if (days < 0 && !["done", "cancelled"].includes(task.status)) return `${Math.abs(days)} days overdue`;
-    if (days === 0) return "Due today";
+    if (days === 0) return i18n.t("tasksPage.due_today");
     return `${days} days remaining`;
   };
 
   return <div className="page-container space-y-6">
-    <div><h1 className="text-2xl font-bold">My Tasks{workspace.project ? ` · ${workspace.project.name}` : ""}</h1><p className="text-muted-foreground">{t("tasksPage.only_work_assigned_to_you_in_the")}</p></div>
+    <div><h1 className="text-2xl font-bold">{t("tasksPage.my_tasks")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1><p className="text-muted-foreground">{t("tasksPage.only_work_assigned_to_you_in_the")}</p></div>
     <Card className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
       <Input placeholder={t("tasksPage.search_title_id_or_description")} value={search} onChange={(event) => setSearch(event.target.value)} />
       <Select value={status} onChange={(event) => setStatus(event.target.value)} options={[{ value: "", label: "All statuses" }, ...["backlog", "todo", "in_progress", "under_review", "rework_required", "blocked", "done", "cancelled"].map((value) => ({ value, label: value.replaceAll("_", " ") }))]} />
@@ -107,6 +109,7 @@ const EngineerTasksPage = () => {
 
 const ManagedTasksPage = () => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -186,13 +189,13 @@ const ManagedTasksPage = () => {
     <div className="page-container space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Tasks{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
+          <h1 className="text-2xl font-bold">{t("nav.tasks")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
           <p className="text-muted-foreground">
             {t("tasksPage.manage_and_track_project_tasks")}
           </p>
         </div>
         {canCreate && (
-          <Button onClick={() => { setEditingTask(null); setIsFormOpen(true); }}>+ New Task</Button>
+          <Button onClick={() => { setEditingTask(null); setIsFormOpen(true); }}>+ {t("tasksPage.new_task")}</Button>
         )}
       </div>
 
@@ -207,13 +210,9 @@ const ManagedTasksPage = () => {
           </div>
           <Select
             options={[
-              { value: "", label: "All Statuses" },
-              { value: "backlog", label: "Backlog" },
-              { value: "todo", label: "To Do" },
-              { value: "in_progress", label: "In Progress" },
-              { value: "under_review", label: "Under Review" },
-              { value: "rework_required", label: "Rework Required" },
-              { value: "done", label: "Done" },
+              { value: "", label: t("tasksPage.all_statuses") },
+              ...["backlog", "todo", "in_progress", "under_review", "rework_required", "done"]
+                .map((value) => ({ value, label: vocabulary.taskStatus(value) })),
             ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -221,11 +220,9 @@ const ManagedTasksPage = () => {
           />
           <Select
             options={[
-              { value: "", label: "All Priorities" },
-              { value: "low", label: "Low" },
-              { value: "medium", label: "Medium" },
-              { value: "high", label: "High" },
-              { value: "critical", label: "Critical" },
+              { value: "", label: t("tasksPage.all_priorities") },
+              ...["low", "medium", "high", "critical"]
+                .map((value) => ({ value, label: vocabulary.priority(value) })),
             ]}
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}

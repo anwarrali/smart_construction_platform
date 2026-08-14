@@ -179,7 +179,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
       <StructIQMark size={28} frameClassName="text-white" />
       <div className="min-w-0">
         <p className="truncate text-[14px] font-semibold leading-none tracking-heading">
-          <span className="text-white">{t("sidebar.struct")}</span>
+          <span className="text-white">Struct</span>
           <span className="text-sidebar-mark">IQ</span>
         </p>
         <p className="mt-1 truncate text-[10px] leading-none text-sidebar-foreground/55">

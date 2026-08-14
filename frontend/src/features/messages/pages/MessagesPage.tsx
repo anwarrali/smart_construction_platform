@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import toast from "react-hot-toast";
@@ -180,7 +181,7 @@ export const MessagesPage = () => {
             <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{conversation.lastMessage?.content || "No messages"}</p>
             <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
               <span>{conversation.type.replaceAll("_", " ").toLowerCase()}</span>
-              <span>{new Date(conversation.lastActivityAt).toLocaleString()}</span>
+              <span>{formatDateTime(conversation.lastActivityAt)}</span>
             </div>
           </button>)}
           {!loading && !items.length && <p className="p-8 text-center text-sm text-muted-foreground">{t("messagesPage.no_conversations_match_this_view")}</p>}
@@ -201,7 +202,7 @@ export const MessagesPage = () => {
                 <div className={`max-w-[85%] rounded-xl px-4 py-2 text-sm ${mine ? "bg-primary text-primary-foreground" : "border bg-card"}`}>
                   {!mine && detail.type !== "DIRECT" && <p className="mb-1 text-xs font-semibold text-primary">{message.sender.fullName}</p>}
                   <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                  <p className={`mt-1 text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{new Date(message.createdAt).toLocaleString()}</p>
+                  <p className={`mt-1 text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{formatDateTime(message.createdAt)}</p>
                 </div>
               </div>;
             })}

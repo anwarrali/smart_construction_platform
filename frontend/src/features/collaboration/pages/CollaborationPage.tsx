@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { errorMessage } from "../../../utils/errorMessage";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { formatDateTime, formatTime } from "../../../utils/dates";
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, ExternalLink, MessageSquareWarning, Plus, RefreshCw, Sparkles, Users } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -29,7 +31,9 @@ type Member = { userId: string; fullName?: string; roleOnProject?: string; isAct
 type VisitConflict = { id: string; title: string; projectId: string; projectName?: string; scheduledStart: string; scheduledEnd: string; visitType: string; status: string };
 
 const humanize = (value: string) => value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase());
-const dateTime = (value: string) => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+/* Formatted in the language the user picked, not the browser's: an Arabic
+   reader on an English machine was shown "Aug 14, 2026" mid-sentence. */
+const dateTime = (value: string) => formatDateTime(value);
 const statusTone = (status: string) => status === "COMPLETED" || status === "ACCEPTED" ? "success" : status === "REJECTED" || status === "CANCELLED" ? "danger" : status === "NEEDS_CLARIFICATION" ? "warning" : "info";
 // Every failure shape (string, validation array, structured object) is
 // normalised centrally so a failed request can never crash the render.
@@ -81,6 +85,7 @@ const RequestTimeline = ({ request }: { request: OwnerRequest }) => {
 };
 
 export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab }) => {
+  const vocabulary = useVocabulary();
   const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const { user } = useAuth();
@@ -267,7 +272,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
   // The server now describes each clash, including ones in other projects that
   // this page never loaded — previously those rendered as an empty warning.
   const conflictLine = (item: VisitConflict) =>
-    `“${item.title}” · ${dateTime(item.scheduledStart)} – ${new Date(item.scheduledEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    `“${item.title}” · ${dateTime(item.scheduledStart)} – ${formatTime(item.scheduledEnd)}`
     + (item.projectName ? ` · ${item.projectName}` : "");
 
   return <div className="page-container space-y-6">
@@ -317,7 +322,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
     {!loading && tab === "requests" && <>
       {focusedRequest && <Card className="border-primary/40 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("ownerRequest.requestDetail")}</p><h2 className="mt-1 text-xl font-semibold">{focusedRequest.title}</h2><p className="mt-1 text-sm text-muted-foreground">{t("ownerRequest.category." + focusedRequest.category, { defaultValue: humanize(focusedRequest.category) })} · {humanize(focusedRequest.discipline || "general")} · {[focusedRequest.floor, focusedRequest.room].filter(Boolean).join(" / ") || t("common.notAvailable")}</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("ownerRequest.requestDetail")}</p><h2 className="mt-1 text-xl font-semibold">{focusedRequest.title}</h2><p className="mt-1 text-sm text-muted-foreground">{t("ownerRequest.category." + focusedRequest.category, { defaultValue: humanize(focusedRequest.category) })} · {vocabulary.discipline(focusedRequest.discipline || "general")} · {[focusedRequest.floor, focusedRequest.room].filter(Boolean).join(" / ") || t("common.notAvailable")}</p></div>
           <div className="flex gap-2"><Badge variant={statusTone(focusedRequest.status) as any}>{t("ownerRequest.status." + focusedRequest.status, { defaultValue: humanize(focusedRequest.status) })}</Badge><Button size="sm" variant="outline" onClick={clearFocus}>{t("common.close")}</Button></div>
         </div>
         <div className="mt-4 grid gap-5 lg:grid-cols-2">
@@ -350,7 +355,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
 
       <Card className="p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("ownerRequest.requests")}</h2><p className="text-sm text-muted-foreground">{t("ownerRequest.neverChangesDesign")}</p></div><div className="flex items-end gap-2"><Select label={t("common.status")} value={requestStatus} onChange={(e) => setRequestStatus(e.target.value)} options={[{ value: "", label: t("common.all") }, ...Array.from(new Set(requests.map((x) => x.status))).map((x) => ({ value: x, label: t("ownerRequest.status." + x, { defaultValue: humanize(x) }) }))]} />{canCreateRequest && <Button onClick={() => setRequestOpen((x) => !x)}><Plus size={16} /> {t("ownerRequest.newRequest")}</Button>}</div></div>
         {requestOpen && <div className="mt-5 grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-2"><Input label={t("ownerRequest.requestTitle")} value={requestForm.title} onChange={(e) => setRequestForm({ ...requestForm, title: e.target.value })} /><Select label={t("common.category")} value={requestForm.category} onChange={(e) => setRequestForm({ ...requestForm, category: e.target.value })} options={["DESIGN_MODIFICATION", "QUESTION", "MATERIAL_PREFERENCE", "ROOM_CHANGE", "ARCHITECTURAL_REQUEST", "ELECTRICAL_REQUEST", "MECHANICAL_REQUEST", "GENERAL_REQUEST"].map((x) => ({ value: x, label: t("ownerRequest.category." + x, { defaultValue: humanize(x) }) }))} /><Select label={t("common.discipline")} value={requestForm.discipline} onChange={(e) => setRequestForm({ ...requestForm, discipline: e.target.value })} options={[{ value: "", label: t("ownerRequest.routeForMe") }, ...["architectural", "civil", "electrical", "mechanical"].map((x) => ({ value: x, label: humanize(x) }))]} /><Select label={t("common.priority")} value={requestForm.priority} onChange={(e) => setRequestForm({ ...requestForm, priority: e.target.value })} options={["NORMAL", "HIGH", "CRITICAL"].map((x) => ({ value: x, label: t("task.priority." + x.toLowerCase(), { defaultValue: humanize(x) }) }))} /><Input label={t("ownerRequest.floor")} value={requestForm.floor} onChange={(e) => setRequestForm({ ...requestForm, floor: e.target.value })} /><Input label={t("ownerRequest.room")} value={requestForm.room} onChange={(e) => setRequestForm({ ...requestForm, room: e.target.value })} /><label className="md:col-span-2 text-sm font-medium">{t("ownerRequest.whatToAsk")}<textarea className="mt-1 min-h-28 w-full rounded-lg border bg-background p-3" value={requestForm.description} onChange={(e) => setRequestForm({ ...requestForm, description: e.target.value })} /></label><div className="md:col-span-2 flex justify-end"><Button disabled={busy === "create-request"} onClick={createRequest}>{t("ownerRequest.submitForReview")}</Button></div></div>}
-        <div className="mt-5 space-y-3">{filteredRequests.map((item) => <div key={item.id} className={`rounded-xl border p-4 ${item.id === focusedRequestId ? "border-primary" : ""}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><Link to={`?requestId=${item.id}`} className="font-semibold hover:text-primary hover:underline">{item.title}</Link><p className="mt-1 text-sm text-muted-foreground">{item.description}</p><p className="mt-2 text-xs text-muted-foreground">{t("ownerRequest.category." + item.category, { defaultValue: humanize(item.category) })} · {humanize(item.discipline || "general")} · {dateTime(item.createdAt)} · {t("ownerRequest.assignedTo", { name: memberName(item.assignedToId) })}</p></div><div className="flex gap-2"><Badge variant={item.priority === "CRITICAL" ? "danger" : item.priority === "HIGH" ? "warning" : "neutral"}>{t("task.priority." + item.priority.toLowerCase(), { defaultValue: humanize(item.priority) })}</Badge><Badge variant={statusTone(item.status) as any}>{t("ownerRequest.status." + item.status, { defaultValue: humanize(item.status) })}</Badge></div></div>{item.responseText && <div className="mt-3 rounded-lg bg-muted p-3 text-sm"><strong>{t("ownerRequest.engineeringResponse")}:</strong> {item.responseText}</div>}</div>)}{!filteredRequests.length && <div className="empty-state"><p className="empty-state-title">{t("empty.noRequests")}</p><p className="text-sm text-muted-foreground">{t("empty.noRequestsHint")}</p></div>}</div>
+        <div className="mt-5 space-y-3">{filteredRequests.map((item) => <div key={item.id} className={`rounded-xl border p-4 ${item.id === focusedRequestId ? "border-primary" : ""}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><Link to={`?requestId=${item.id}`} className="font-semibold hover:text-primary hover:underline">{item.title}</Link><p className="mt-1 text-sm text-muted-foreground">{item.description}</p><p className="mt-2 text-xs text-muted-foreground">{t("ownerRequest.category." + item.category, { defaultValue: humanize(item.category) })} · {vocabulary.discipline(item.discipline || "general")} · {dateTime(item.createdAt)} · {t("ownerRequest.assignedTo", { name: memberName(item.assignedToId) })}</p></div><div className="flex gap-2"><Badge variant={item.priority === "CRITICAL" ? "danger" : item.priority === "HIGH" ? "warning" : "neutral"}>{t("task.priority." + item.priority.toLowerCase(), { defaultValue: humanize(item.priority) })}</Badge><Badge variant={statusTone(item.status) as any}>{t("ownerRequest.status." + item.status, { defaultValue: humanize(item.status) })}</Badge></div></div>{item.responseText && <div className="mt-3 rounded-lg bg-muted p-3 text-sm"><strong>{t("ownerRequest.engineeringResponse")}:</strong> {item.responseText}</div>}</div>)}{!filteredRequests.length && <div className="empty-state"><p className="empty-state-title">{t("empty.noRequests")}</p><p className="text-sm text-muted-foreground">{t("empty.noRequestsHint")}</p></div>}</div>
       </Card>
     </>}
 
@@ -382,7 +387,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
                   <input type="checkbox" className="h-4 w-4 shrink-0" checked={checked}
                     onChange={(e) => editVisit({ participantIds: e.target.checked ? [...visitForm.participantIds, id] : visitForm.participantIds.filter((x) => x !== id) })} />
                   <span className="truncate">{memberName(id)}</span>
-                  {m.roleOnProject && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{humanize(m.roleOnProject)}</span>}
+                  {m.roleOnProject && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{vocabulary.projectRole(m.roleOnProject)}</span>}
                 </label>;
               })}
             </div>}
@@ -403,7 +408,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
       </div>}
       <div className="mt-5 grid gap-3 md:grid-cols-2">{visibleVisits.map((visit) => <div key={visit.id} className={`rounded-xl border p-4 ${visit.id === focusedVisitId ? "border-primary" : ""}`}>
         <div className="flex justify-between gap-2">
-          <div><p className="font-semibold">{visit.title}</p><p className="mt-1 text-sm text-muted-foreground">{dateTime(visit.scheduledStart)} — {new Date(visit.scheduledEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p><p className="text-xs text-muted-foreground">{t("siteVisit.type." + visit.visitType, { defaultValue: humanize(visit.visitType) })} · {visit.location || t("project.location")}</p></div>
+          <div><p className="font-semibold">{visit.title}</p><p className="mt-1 text-sm text-muted-foreground">{dateTime(visit.scheduledStart)} — {formatTime(visit.scheduledEnd)}</p><p className="text-xs text-muted-foreground">{t("siteVisit.type." + visit.visitType, { defaultValue: humanize(visit.visitType) })} · {visit.location || t("project.location")}</p></div>
           <Badge variant={statusTone(visit.status) as any}>{t("siteVisit.status." + visit.status, { defaultValue: humanize(visit.status) })}</Badge>
         </div>
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Users size={13} /> {memberName(visit.engineerId)}{visit.participantIds.length ? " " + t("siteVisit.participantCount", { count: visit.participantIds.length }) : " · " + t("siteVisit.noParticipants")}</p>
@@ -416,7 +421,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
     </Card>}
 
     {!loading && tab === "activity" && <Card className="p-5"><h2 className="text-xl font-semibold">{t("collaboration.activityFeed")}</h2><p className="text-sm text-muted-foreground">{t("collaboration.activityHint")}</p><div className="mt-5 space-y-1">{activity.map((item) => <div key={item.id} className="flex gap-4 border-l-2 border-primary/30 py-3 pl-4"><Clock3 size={16} className="mt-1 shrink-0 text-primary" /><div>{projectId && item.entityId
-      ? <Link to={projectEntityPath(projectId, item.entityType, item.entityId, role, affiliation)} className="font-medium hover:text-primary hover:underline">{humanize(item.action)}</Link>
-      : <p className="font-medium">{humanize(item.action)}</p>}<p className="text-sm text-muted-foreground">{humanize(item.entityType)} · {dateTime(item.occurredAt)}</p></div></div>)}{!projectId && <p className="text-sm text-muted-foreground">{t("empty.selectProject")}</p>}{projectId && !activity.length && <div className="empty-state"><CheckCircle2 className="mx-auto mb-2" /><p className="empty-state-title">{t("empty.noActivity")}</p><p className="text-sm text-muted-foreground">{t("empty.noActivityHint")}</p></div>}</div></Card>}
+      ? <Link to={projectEntityPath(projectId, item.entityType, item.entityId, role, affiliation)} className="font-medium hover:text-primary hover:underline">{t("activity.action." + item.action, { defaultValue: humanize(item.action) })}</Link>
+      : <p className="font-medium">{t("activity.action." + item.action, { defaultValue: humanize(item.action) })}</p>}<p className="text-sm text-muted-foreground">{t("activity.entity." + item.entityType, { defaultValue: humanize(item.entityType) })} · {dateTime(item.occurredAt)}</p></div></div>)}{!projectId && <p className="text-sm text-muted-foreground">{t("empty.selectProject")}</p>}{projectId && !activity.length && <div className="empty-state"><CheckCircle2 className="mx-auto mb-2" /><p className="empty-state-title">{t("empty.noActivity")}</p><p className="text-sm text-muted-foreground">{t("empty.noActivityHint")}</p></div>}</div></Card>}
   </div>;
 };

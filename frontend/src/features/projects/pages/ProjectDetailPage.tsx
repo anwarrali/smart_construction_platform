@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { useParams, useNavigate } from "react-router-dom";
@@ -19,6 +20,7 @@ import { useProjectWorkspace } from "../context/ProjectWorkspaceContext";
 
 export const ProjectDetailPage = () => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const { id, projectId: routeProjectId } = useParams<{ id?: string; projectId?: string }>();
   const workspace = useProjectWorkspace();
   const activeProjectId = routeProjectId || id || workspace.projectId;
@@ -97,21 +99,21 @@ export const ProjectDetailPage = () => {
       </div>
 
       {projectStats && <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {[
-          ["Tasks", `${projectStats.taskDone}/${projectStats.taskTotal}`],
-          ["In progress", projectStats.taskInProgress],
-          ["Blocked", projectStats.taskBlocked],
-          ["Due today", projectStats.tasksDueToday],
-          ["Task progress", `${projectStats.taskProgressPercentage}%`],
-          ["Delayed", projectStats.delayedTasks],
-          ["Critical path", projectStats.criticalPathTasks],
-          ["Open issues", projectStats.openIssues],
-          ["Urgent issues", projectStats.urgentIssues],
-          ["Design changes", projectStats.unresolvedDesignChanges],
-          ["Site reports", projectStats.siteReports],
-          ["Team", projectStats.teamMembers],
-          ["Milestones", `${projectStats.milestoneCompleted}/${projectStats.milestoneTotal}`],
-        ].map(([label, value]) => <Card key={String(label)} className="p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{value}</p></Card>)}
+        {([
+          ["tasks", `${projectStats.taskDone}/${projectStats.taskTotal}`],
+          ["inProgress", projectStats.taskInProgress],
+          ["blocked", projectStats.taskBlocked],
+          ["dueToday", projectStats.tasksDueToday],
+          ["taskProgress", `${projectStats.taskProgressPercentage}%`],
+          ["delayed", projectStats.delayedTasks],
+          ["criticalPath", projectStats.criticalPathTasks],
+          ["openIssues", projectStats.openIssues],
+          ["urgentIssues", projectStats.urgentIssues],
+          ["designChanges", projectStats.unresolvedDesignChanges],
+          ["siteReports", projectStats.siteReports],
+          ["team", projectStats.teamMembers],
+          ["milestones", `${projectStats.milestoneCompleted}/${projectStats.milestoneTotal}`],
+        ] as const).map(([key, value]) => <Card key={key} className="p-3"><p className="text-xs text-muted-foreground">{t(`projectDetail.stat.${key}`)}</p><p className="text-xl font-bold">{value}</p></Card>)}
       </div>}
 
       <div className="grid md:grid-cols-3 gap-6">
@@ -190,17 +192,17 @@ export const ProjectDetailPage = () => {
 
         <Card>
           <h3 className="font-semibold mb-4">
-            Team ({project.members?.length || 0})
+            {t("projectDetail.stat.team")} ({project.members?.length || 0})
           </h3>
           <div className="space-y-2">
-            {(isProjectManager || isAdmin) && availableEngineers.length > 0 && <div className="flex gap-2 pb-3 border-b"><Select value={engineerId} onChange={e=>setEngineerId(e.target.value)} options={availableEngineers.map(engineer=>({value:engineer.id,label:`${engineer.fullName} · ${engineer.role} · ${engineer.engineerProfile?.discipline || "no discipline"}`}))}/><Button size="sm" disabled={!engineerId} onClick={async()=>{const user=availableEngineers.find(item=>item.id===engineerId);if(!user)return;await api.projects.addMember(project.id,engineerId,user.role);await loadProject(project.id);}}>Add</Button></div>}
+            {(isProjectManager || isAdmin) && availableEngineers.length > 0 && <div className="flex gap-2 pb-3 border-b"><Select value={engineerId} onChange={e=>setEngineerId(e.target.value)} options={availableEngineers.map(engineer=>({value:engineer.id,label:`${engineer.fullName} · ${vocabulary.role(engineer.role)} · ${engineer.engineerProfile?.discipline ? vocabulary.discipline(engineer.engineerProfile.discipline) : t("projectTeam.no_discipline")}`}))}/><Button size="sm" disabled={!engineerId} onClick={async()=>{const user=availableEngineers.find(item=>item.id===engineerId);if(!user)return;await api.projects.addMember(project.id,engineerId,user.role);await loadProject(project.id);}}>{t("common.add")}</Button></div>}
             {project.members?.map((member) => (
               <div
                 key={member.id}
                 className="flex items-center justify-between"
               >
                 <span className="text-sm">{member.user?.fullName}</span>
-                <div className="flex items-center gap-2"><Badge size="sm">{member.roleOnProject}</Badge>{(isProjectManager || isAdmin) && ["engineer","consultant"].includes(member.roleOnProject) && <Button size="sm" variant="ghost" onClick={async()=>{await api.projects.removeMember(project.id,member.userId);await loadProject(project.id);}}>{t("projectDetail.remove")}</Button>}</div>
+                <div className="flex items-center gap-2"><Badge size="sm">{vocabulary.projectRole(member.roleOnProject)}</Badge>{(isProjectManager || isAdmin) && ["engineer","consultant"].includes(member.roleOnProject) && <Button size="sm" variant="ghost" onClick={async()=>{await api.projects.removeMember(project.id,member.userId);await loadProject(project.id);}}>{t("projectDetail.remove")}</Button>}</div>
               </div>
             ))}
             {(!project.members || project.members.length === 0) && (
@@ -213,9 +215,9 @@ export const ProjectDetailPage = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card><h3 className="font-semibold mb-3">{t("projectDetail.recent_design_changes")}</h3><div className="space-y-2">{recentChanges.map(change=><div key={change.id} className="border-b pb-2"><p className="text-sm font-medium">{change.title}</p><p className="text-xs text-muted-foreground capitalize">{change.status.replace('_',' ')}</p></div>)}{recentChanges.length===0&&<p className="text-sm text-muted-foreground">{t("projectDetail.no_design_changes")}</p>}</div></Card>
+        <Card><h3 className="font-semibold mb-3">{t("projectDetail.recent_design_changes")}</h3><div className="space-y-2">{recentChanges.map(change=><div key={change.id} className="border-b pb-2"><p className="text-sm font-medium">{change.title}</p><p className="text-xs text-muted-foreground">{vocabulary.designChangeStatus(change.status)}</p></div>)}{recentChanges.length===0&&<p className="text-sm text-muted-foreground">{t("projectDetail.no_design_changes")}</p>}</div></Card>
         <Card><h3 className="font-semibold mb-3">{t("projectDetail.recent_site_reports")}</h3><div className="space-y-2">{recentReports.map(report=><div key={report.id} className="border-b pb-2"><p className="text-sm font-medium">{formatDate(report.reportDate)}</p><p className="text-xs text-muted-foreground line-clamp-1">{report.summaryText || 'Site progress report'}</p></div>)}{recentReports.length===0&&<p className="text-sm text-muted-foreground">{t("projectDetail.no_site_reports")}</p>}</div></Card>
-        <Card><h3 className="font-semibold mb-3">{t("projectDetail.recent_activity")}</h3><div className="space-y-2">{(projectStats?.recentActivity||[]).map((activity,index)=><div key={`${activity.timestamp}-${index}`} className="border-b pb-2"><p className="text-sm capitalize">{activity.entityType.replace('_',' ')} · {activity.action.replace('_',' ')}</p><p className="text-xs text-muted-foreground">{formatDate(activity.timestamp)}</p></div>)}{!projectStats?.recentActivity?.length&&<p className="text-sm text-muted-foreground">{t("projectDetail.no_recent_activity")}</p>}</div></Card>
+        <Card><h3 className="font-semibold mb-3">{t("projectDetail.recent_activity")}</h3><div className="space-y-2">{(projectStats?.recentActivity||[]).map((activity,index)=><div key={`${activity.timestamp}-${index}`} className="border-b pb-2"><p className="text-sm">{t("activity.entity."+activity.entityType,{defaultValue:activity.entityType.replaceAll("_"," ")})} · {t("activity.action."+activity.action,{defaultValue:activity.action.replaceAll("_"," ")})}</p><p className="text-xs text-muted-foreground">{formatDate(activity.timestamp)}</p></div>)}{!projectStats?.recentActivity?.length&&<p className="text-sm text-muted-foreground">{t("projectDetail.no_recent_activity")}</p>}</div></Card>
       </div>
     </div>
   );

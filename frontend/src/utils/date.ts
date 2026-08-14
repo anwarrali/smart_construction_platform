@@ -10,6 +10,7 @@ import {
   type Locale,
 } from "date-fns";
 import { ar } from "date-fns/locale";
+import i18n from "../i18n";
 import {
   DATE_FORMAT,
   DATE_TIME_FORMAT,
@@ -18,19 +19,23 @@ import {
 } from "./constants";
 import { inclusiveDurationDays } from "./scheduleDates";
 
+/** The locale the user chose, not the one the browser happens to be set to. */
+const activeLocale = (): Locale | undefined =>
+  (i18n.resolvedLanguage || i18n.language || "en").startsWith("ar") ? ar : undefined;
+
 export const formatDate = (
   date: string | Date,
   formatStr: string = DISPLAY_DATE_FORMAT,
 ): string => {
   const parsedDate = typeof date === "string" ? parseISO(date) : date;
   if (!isValid(parsedDate)) return "—";
-  return format(parsedDate, formatStr);
+  return format(parsedDate, formatStr, { locale: activeLocale() });
 };
 
 export const formatDateTime = (date: string | Date): string => {
   const parsedDate = typeof date === "string" ? parseISO(date) : date;
   if (!isValid(parsedDate)) return "—";
-  return format(parsedDate, DISPLAY_DATE_TIME_FORMAT);
+  return format(parsedDate, DISPLAY_DATE_TIME_FORMAT, { locale: activeLocale() });
 };
 
 export const formatAPIDate = (date: Date): string => {

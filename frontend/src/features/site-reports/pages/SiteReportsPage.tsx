@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -42,6 +43,7 @@ interface SiteReport {
 
 export const SiteReportsPage = () => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const { id } = useParams<{ id: string }>();
   const workspace = useProjectWorkspace();
   const activeProjectId = workspace.projectId || id;
@@ -203,7 +205,7 @@ export const SiteReportsPage = () => {
                       {report.weatherConditions}
                     </Badge>
                   )}
-                  {report.reviewStatus && <Badge size="sm" className="mt-1 ml-2">{report.reviewStatus}</Badge>}
+                  {report.reviewStatus && <Badge size="sm" className="mt-1 ml-2">{vocabulary.reviewStatus(report.reviewStatus)}</Badge>}
                   {report.reviewStatus === "draft" && report.submittedById === user?.id && <Button className="ml-2" size="sm" variant="ghost" onClick={() => editDraft(report)}>{t("siteReports.edit_draft")}</Button>}
                   <AttachmentPanel projectId={report.projectId} entityType="SITE_REPORT" entityId={report.id} initialCount={report.attachmentCount} />
                 </div>

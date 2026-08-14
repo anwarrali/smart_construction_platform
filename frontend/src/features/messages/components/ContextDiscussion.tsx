@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import toast from "react-hot-toast";
@@ -49,7 +50,7 @@ export const ContextDiscussion = ({ projectId, contextType, contextId, title = "
     <div className="max-h-72 space-y-2 overflow-y-auto rounded border bg-muted/20 p-3">
       {conversation?.messages.map((message) => {
         const mine = message.senderId === user?.id;
-        return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-lg px-3 py-2 text-sm ${mine ? "bg-primary text-primary-foreground" : "border bg-card"}`}>{!mine && <p className="mb-1 text-xs font-semibold">{message.sender.fullName}</p>}<p className="whitespace-pre-wrap break-words">{message.content}</p><p className={`mt-1 text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{new Date(message.createdAt).toLocaleString()}</p></div></div>;
+        return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-lg px-3 py-2 text-sm ${mine ? "bg-primary text-primary-foreground" : "border bg-card"}`}>{!mine && <p className="mb-1 text-xs font-semibold">{message.sender.fullName}</p>}<p className="whitespace-pre-wrap break-words">{message.content}</p><p className={`mt-1 text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{formatDateTime(message.createdAt)}</p></div></div>;
       })}
       {!loading && !conversation?.messages.length && <p className="py-5 text-center text-sm text-muted-foreground">{t("contextDiscussion.no_discussion_yet")}</p>}
       {loading && <p className="py-5 text-center text-sm text-muted-foreground">{t("contextDiscussion.loading_discussion")}</p>}

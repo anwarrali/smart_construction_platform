@@ -28,7 +28,8 @@ from app.schemas.user import (
     EngineerCreateRequest,
     OwnerCreateRequest,
 )
-from app.core.deps import get_current_user, require_admin, require_can_create_user
+from app.core.deps import get_current_user, require_can_create_user
+from app.services.authorization import require_permission
 from app.core.permissions import can_create_team_role, can_manage_all_users, is_engineer
 from app.core.security import hash_password, verify_password
 from app.services.user_service import create_provisioned_user, generate_temporary_password
@@ -48,7 +49,7 @@ def list_users(
     status: Optional[UserStatus] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("platform.manage_users")),
 ):
     query = db.query(User)
     if current_user.company_id:
@@ -292,7 +293,7 @@ def update_user_by_admin(
     user_id: uuid.UUID,
     update_data: UserAdminUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("platform.manage_users")),
 ):
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -375,7 +376,7 @@ def update_user_by_admin(
 def deactivate_user(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("platform.manage_users")),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -392,7 +393,7 @@ def deactivate_user(
 def activate_user(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("platform.manage_users")),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -408,7 +409,7 @@ def activate_user(
 def permanently_delete_user(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("platform.manage_users")),
 ):
     user = db.get(User, user_id)
     if not user:
@@ -461,7 +462,7 @@ def permanently_delete_user(
 def admin_reset_password(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("platform.manage_users")),
 ):
     user = db.get(User, user_id)
     if not user:

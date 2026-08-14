@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatDate } from "../../../utils/dates";
+import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
@@ -17,6 +19,7 @@ const DISCIPLINES = ["civil", "architectural", "electrical", "mechanical"];
 
 export const ProjectTeamPage = () => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const workspace = useProjectWorkspace();
   const { projectId: routeProjectId } = useParams<{ projectId?: string }>();
   const { isAdmin } = useRole();
@@ -96,11 +99,13 @@ export const ProjectTeamPage = () => {
 
   const selectedUser = useMemo(() => available.find((user) => user.id === selectedUserId), [available, selectedUserId]);
   const otherProjects = projects.filter((project) => project.id !== projectId);
+  /* Everyone serving as a Consultant on this project is eligible to be its
+     reviewer. Requiring the external-consultant affiliation on top of the
+     project role also excluded accounts whose global role is Consultant, which
+     left the reviewer dropdown empty on projects staffed with those accounts. */
   const consultantMembers = useMemo(
     () => members.filter((member) =>
-      member.roleOnProject === "consultant"
-      && member.user?.engineerAffiliation === "external_consultant"
-      && member.user?.status === "active"),
+      member.roleOnProject === "consultant" && member.user?.status === "active"),
     [members],
   );
 
@@ -146,11 +151,25 @@ export const ProjectTeamPage = () => {
     }
   };
 
+  /* The server derives the project role from the account and rejects a mismatch,
+     so this must use the same rule: only an *Engineer* marked as an external
+     consultant is assigned as a Consultant. A Worker who carries that
+     affiliation stays a Worker. */
+  const isExternalConsultantEngineer = (user: User) =>
+    user.role === "engineer" && user.engineerAffiliation === "external_consultant";
+  const canBeSiteEngineer = (user?: User | null) =>
+    !!user && user.role === "engineer" && !isExternalConsultantEngineer(user);
+
   const addMember = async () => {
     if (!selectedUser) return;
-    const projectRole = selectedUser.engineerAffiliation === "external_consultant" ? "consultant" : selectedUser.role;
+    const projectRole = isExternalConsultantEngineer(selectedUser) ? "consultant" : selectedUser.role;
+    /* The Site Engineer box is hidden for anyone who cannot hold that
+       responsibility, but hiding it left the last value behind: after looking at
+       an engineer the flag stayed set, and assigning a consultant next was
+       rejected with 400. Send it only when it can apply. */
     const ok = await run(() => api.projects.addMember(projectId, selectedUser.id, projectRole,
-      assignmentTitle || undefined, siteEngineer, projectDiscipline || selectedUser.engineerProfile?.discipline,
+      assignmentTitle || undefined, canBeSiteEngineer(selectedUser) && siteEngineer,
+      projectDiscipline || selectedUser.engineerProfile?.discipline,
       projectNotes || undefined));
     if (ok) { setAddOpen(false); resetAssignmentForm(); }
   };
@@ -225,7 +244,7 @@ export const ProjectTeamPage = () => {
         <td className="p-3"><p className="capitalize">{member.user?.role?.replaceAll("_", " ")}</p><p className="capitalize text-muted-foreground">{member.projectDiscipline || member.user?.engineerProfile?.discipline || "—"}</p></td>
         <td className="p-3"><p>{member.user?.organization || "—"}</p>{member.user?.engineerAffiliation && <Badge size="sm" variant={member.user.engineerAffiliation === "external_consultant" ? "warning" : "neutral"}>{member.user.engineerAffiliation === "external_consultant" ? "External Consultant" : member.user.engineerAffiliation === "main_contractor" ? "Main Contractor" : "Internal Engineer"}</Badge>}</td>
         <td className="p-3"><p>{member.assignmentTitle || "Project participant"}</p>{member.isSiteEngineer && <Badge size="sm" variant="success">{t("projectTeam.site_engineer")}</Badge>}<p className="mt-1 max-w-xs text-xs text-muted-foreground">{member.projectNotes}</p></td>
-        <td className="p-3 text-muted-foreground">{new Date(member.createdAt || "").toLocaleDateString()}</td>
+        <td className="p-3 text-muted-foreground">{formatDate(member.createdAt || "")}</td>
         <td className="p-3">{["engineer", "consultant", "worker"].includes(member.user?.role || "") && <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => openEdit(member)}>{t("projectTeam.edit_project_assignment")}</Button>
           {otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setAnotherMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.add_to_another_project")}</Button>}
@@ -240,12 +259,12 @@ export const ProjectTeamPage = () => {
         <Select label={t("projectTeam.global_role")} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} options={[{ value: "", label: "Engineer, Consultant, or Worker" }, { value: "engineer", label: "Engineer" }, { value: "consultant", label: "Consultant" }, { value: "worker", label: "Worker" }]} />
         <Select label={t("projectTeam.discipline")} value={disciplineFilter} onChange={(event) => setDisciplineFilter(event.target.value)} options={[{ value: "", label: "All disciplines" }, ...DISCIPLINES.map((value) => ({ value, label: value }))]} />
         <Select label={t("projectTeam.company_affiliation")} value={affiliationFilter} onChange={(event) => setAffiliationFilter(event.target.value)} options={[{ value: "", label: "All affiliations" }, { value: "internal_engineer", label: "Internal Engineer" }, { value: "main_contractor", label: "Main Contractor" }, { value: "external_consultant", label: "External Consultant" }]} /></div>
-      <Select label={t("projectTeam.eligible_active_user")} value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${user.role} · ${user.engineerProfile?.discipline || "no discipline"} · ${user.organization || "no organization"}` }))} />
-      {selectedUser && <div className="rounded border p-3 text-sm"><p className="font-medium">{selectedUser.fullName}</p><p>{selectedUser.email} · {selectedUser.role} · {selectedUser.engineerProfile?.discipline}</p><p>{selectedUser.organization || "No organization"} · {selectedUser.engineerAffiliation?.replaceAll("_", " ")}</p></div>}
+      <Select label={t("projectTeam.eligible_active_user")} value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${vocabulary.role(user.role)} · ${user.engineerProfile?.discipline || "no discipline"} · ${user.organization || "no organization"}` }))} />
+      {selectedUser && <div className="rounded border p-3 text-sm"><p className="font-medium">{selectedUser.fullName}</p><p>{selectedUser.email} · {vocabulary.role(selectedUser.role)} · {selectedUser.engineerProfile?.discipline}</p><p>{selectedUser.organization || "No organization"} · {selectedUser.engineerAffiliation?.replaceAll("_", " ")}</p></div>}
       <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.project_responsibility_title")} value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder={t("projectTeam.technical_reviewer_project_engineer")} />
         <Select label={t("projectTeam.project_discipline")} value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={[{ value: "", label: "Use account discipline" }, ...DISCIPLINES.map((value) => ({ value, label: value }))]} /></div>
       <label className="block text-sm"><span className="font-medium">{t("projectTeam.project_specific_notes")}</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
-      {selectedUser?.role === "engineer" && selectedUser.engineerAffiliation !== "external_consultant" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> Assign as Site Engineer</label>}
+      {canBeSiteEngineer(selectedUser) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> {t("projectTeam.assign_as_site_engineer")}</label>}
       {!available.length && <p className="text-sm text-muted-foreground">{t("projectTeam.no_eligible_active_users_match_these")}</p>}
       <ModalActions><Button variant="outline" onClick={() => setAddOpen(false)}>{t("projectTeam.cancel")}</Button><Button disabled={!selectedUserId || busy} onClick={addMember}>{t("projectTeam.add_team_member")}</Button></ModalActions>
     </div></Modal>
@@ -255,7 +274,7 @@ export const ProjectTeamPage = () => {
       <Input label={t("projectTeam.project_responsibility_title")} value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} />
       <Select label={t("projectTeam.project_discipline")} value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={DISCIPLINES.map((value) => ({ value, label: value }))} />
       <label className="block text-sm"><span className="font-medium">{t("projectTeam.project_specific_notes")}</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
-      {editing?.user?.role === "engineer" && editing.user.engineerAffiliation !== "external_consultant" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> Site Engineer responsibility</label>}
+      {editing?.user?.role === "engineer" && editing.user.engineerAffiliation !== "external_consultant" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> {t("projectTeam.site_engineer_responsibility")}</label>}
       <ModalActions><Button variant="outline" onClick={() => setEditing(null)}>{t("projectTeam.cancel")}</Button><Button disabled={busy} onClick={async () => { if (!editing) return; const ok = await run(() => api.projects.updateMemberAssignment(projectId, editing.userId, { assignmentTitle, projectDiscipline, projectNotes, isSiteEngineer: editing.user?.role === "engineer" ? siteEngineer : false })); if (ok) setEditing(null); }}>{t("projectTeam.save_project_assignment")}</Button></ModalActions>
     </div></Modal>
 
