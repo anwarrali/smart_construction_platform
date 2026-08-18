@@ -101,6 +101,37 @@ class Message(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     responded_to_message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Forwarding: `content` on a forward is the forwarder's own note (or a
+    # short default when they added none) — it never overwrites or duplicates
+    # the original. `forwarded_from_message_id` is the message the forwarder
+    # actually selected (which may itself be a forward); `forward_origin_message_id`
+    # is resolved once at forward time to the first, non-forwarded message in
+    # the chain, so a message forwarded several times still shows its true
+    # original sender without a recursive walk on every read.
+    forwarded_from_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    forward_origin_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Entity sharing (Issues, Tasks, Site Reports, Design Changes, Documents,
+    # …): mirrors `Conversation.context_type`/`context_id` — same shape,
+    # deliberately not a foreign key, since it points across whichever table
+    # `shared_entity_type` names. This is a property of this one message
+    # (which project entity prompted it), not of the whole conversation, so it
+    # cannot simply reuse the conversation's own context fields: one DIRECT
+    # thread can carry shares of several different entities over time, and
+    # sharing must never enroll the recipient in the entity's own contextual
+    # discussion (that would silently change who can see/post there — a
+    # bigger side effect than "send this person a message").
+    shared_entity_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    shared_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship(foreign_keys=[sender_id])
+    forwarded_from: Mapped["Message | None"] = relationship(
+        remote_side="Message.id", foreign_keys=[forwarded_from_message_id]
+    )
+    forward_origin: Mapped["Message | None"] = relationship(
+        remote_side="Message.id", foreign_keys=[forward_origin_message_id]
+    )

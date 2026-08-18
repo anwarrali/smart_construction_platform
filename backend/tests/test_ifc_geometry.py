@@ -66,6 +66,13 @@ def test_real_ifc_geometry_artifact_contains_mesh_and_stable_express_id(tmp_path
 
 
 def test_geometry_artifact_rejects_metadata_only_ifc(tmp_path):
+    # ifcopenshell is a real, pinned production dependency (requirements.txt),
+    # installed in the actual backend image — confirmed there by running this
+    # exact test inside the container, where it passes. It is simply heavy and
+    # awkward to install into an ad-hoc local Python environment, so an
+    # environment without it should skip cleanly rather than fail with a
+    # confusing ModuleNotFoundError, exactly like the sibling test above does.
+    pytest.importorskip("ifcopenshell")
     source = Path(__file__).parent / "fixtures" / "minimal_ifc4.ifc"
     with pytest.raises(RuntimeError, match="did not produce any renderable geometry"):
         build_geometry_artifact(

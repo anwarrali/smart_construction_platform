@@ -16,6 +16,7 @@ import { getInitials, getAvatarColor } from "../../../utils/helpers";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EngineerDiscipline } from "../../../types/auth";
 import type { UserProfile } from "../../../types/user";
+import { useStepUp } from "../../../hooks/useStepUp";
 
 const SPECIALIZATION_OPTIONS = [
   { value: "civil", label: "Civil" },
@@ -25,6 +26,9 @@ const SPECIALIZATION_OPTIONS = [
 ];
 
 export const ProfilePage = () => {
+  // Sensitive operations may answer with a step-up challenge; `run` shows the
+  // shared verification dialog and replays the call once it is satisfied.
+  const { run, dialog } = useStepUp();
   const { t } = useTranslation();
   const { refreshUser, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -133,7 +137,7 @@ export const ProfilePage = () => {
 
     setIsSavingPassword(true);
     try {
-      await usersService.changePassword(currentPassword, newPassword);
+      await run(() => usersService.changePassword(currentPassword, newPassword));
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -332,6 +336,7 @@ export const ProfilePage = () => {
           </Card>
         </div>
       </div>
+      {dialog}
     </div>
   );
 };

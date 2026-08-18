@@ -20,6 +20,9 @@ class NotificationOut(CamelModel):
     category: str = "SYSTEM"
     requires_action: bool = False
     action_url: Optional[str] = None
+    priority: str = "NORMAL"
+    message_key: Optional[str] = None
+    message_params_json: dict = {}
     created_at: datetime
     updated_at: datetime
 

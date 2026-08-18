@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/l10n/l10n_labels.dart';
 import '../../app/dependency_injection.dart';
 import '../../core/network/network_exceptions.dart';
 import '../../models/field_submission.dart';
@@ -37,7 +38,7 @@ class _WorkerFieldSubmissionScreenState
   final Set<String> _selectedCategoryIds = {};
   List<PhotoCategory> _categories = [];
   bool _busy = false;
-  String? _error;
+  Object? _error;
 
   @override
   void initState() {
@@ -54,7 +55,7 @@ class _WorkerFieldSubmissionScreenState
           .categories(project.id);
       if (mounted) setState(() => _categories = values);
     } on NetworkException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error);
     }
   }
 
@@ -105,12 +106,12 @@ class _WorkerFieldSubmissionScreenState
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Field evidence sent to your Engineer.')),
+          SnackBar(content: Text(context.l10n.evidenceSent)),
         );
         context.pop(true);
       }
     } on NetworkException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -119,23 +120,26 @@ class _WorkerFieldSubmissionScreenState
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(widget.resubmissionOfId == null ? 'New Field Update' : 'Corrected Evidence'),
+      title: Text(widget.resubmissionOfId == null
+          ? context.l10n.evidenceNewTitle
+          : context.l10n.evidenceCorrectedTitle),
     ),
     body: SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            'Document completed site work',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          Text(
+            context.l10n.evidenceDocumentWork,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Your Engineer will verify this evidence. It does not change official task progress.',
-          ),
+          Text(context.l10n.evidenceVerifyHint),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(
+              context.l10n.describeError(_error),
+              style: const TextStyle(color: Colors.red),
+            ),
           ],
           const SizedBox(height: 18),
           TextField(
@@ -143,9 +147,9 @@ class _WorkerFieldSubmissionScreenState
             onChanged: (_) => setState(() {}),
             minLines: 3,
             maxLines: 6,
-            decoration: const InputDecoration(
-              labelText: 'What work was completed?',
-              hintText: 'Short, practical site note…',
+            decoration: InputDecoration(
+              labelText: context.l10n.evidenceWhatWork,
+              hintText: context.l10n.evidenceHint,
               alignLabelWithHint: true,
             ),
           ),
@@ -156,7 +160,7 @@ class _WorkerFieldSubmissionScreenState
                 child: FilledButton.icon(
                   onPressed: _busy ? null : _camera,
                   icon: const Icon(Icons.camera_alt),
-                  label: const Text('Take Photo'),
+                  label: Text(context.l10n.evidenceTakePhoto),
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
                 ),
               ),
@@ -165,7 +169,7 @@ class _WorkerFieldSubmissionScreenState
                 child: OutlinedButton.icon(
                   onPressed: _busy ? null : _gallery,
                   icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('Add Photos'),
+                  label: Text(context.l10n.evidenceAddPhotos),
                   style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
                 ),
               ),
@@ -173,14 +177,17 @@ class _WorkerFieldSubmissionScreenState
           ),
           const SizedBox(height: 14),
           if (_categories.isNotEmpty) ...[
-            const Text(
-              'Category (optional)',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            Text(
+              context.l10n.evidenceCategoryOptional,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Choose any tags that apply. Your Engineer can correct them.',
-              style: TextStyle(fontSize: 13),
+            Text(
+              context.l10n.evidenceCategoryHint,
+              style: const TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -219,16 +226,19 @@ class _WorkerFieldSubmissionScreenState
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       value: _photoDirections[index],
-                      decoration: const InputDecoration(labelText: 'View (optional)'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.evidenceViewOptional,
+                      ),
+                      // The stored value stays the upper-case code.
                       items: _directions.map((value) => DropdownMenuItem(
                         value: value,
-                        child: Text(value.toLowerCase()),
+                        child: Text(context.l10n.photoViewLabel(value)),
                       )).toList(),
                       onChanged: (value) => setState(() => _photoDirections[index] = value),
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Remove photo',
+                    tooltip: context.l10n.evidenceRemovePhoto,
                     onPressed: () => setState(() {
                       _photos.removeAt(index);
                       _photoDirections.removeAt(index);
@@ -249,7 +259,9 @@ class _WorkerFieldSubmissionScreenState
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.cloud_upload_outlined),
-            label: Text(_busy ? 'Submitting…' : 'Submit Evidence'),
+            label: Text(_busy
+                ? context.l10n.commonSubmitting
+                : context.l10n.evidenceSubmit),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(58)),
           ),
         ],

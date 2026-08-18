@@ -10,7 +10,7 @@ from app.services.authorization import require
 from app.models.user import User
 from app.models.design_change import DesignChange, DesignChangeAffectedDiscipline
 from app.schemas.design_change import DesignChangeOut, DesignChangeCreate
-from app.core.deps import get_current_user, user_has_project_access, accessible_project_ids
+from app.core.deps import get_current_user, is_consultant_engineer, user_has_project_access, accessible_project_ids
 from app.models.enums import DesignChangeStatus, UserRole
 from app.models.attachment import Attachment
 from app.models.project import Project, ProjectMember
@@ -51,7 +51,12 @@ def list_design_changes(
     if status:
         query = query.filter(DesignChange.status == status)
     effective_discipline = discipline
-    if current_user.role == UserRole.CONSULTANT and current_user.engineer_profile:
+    # `User.role` is never literally CONSULTANT: `UserCreateByAdmin` persists
+    # that request as ENGINEER with `engineer_affiliation="external_consultant"`
+    # (see app.schemas.user, "persist the unified Engineer role"), so this must
+    # check `is_consultant_engineer`, not the retired role value, to actually
+    # auto-scope a Consultant Engineer's own list to their discipline.
+    if is_consultant_engineer(current_user) and current_user.engineer_profile:
         effective_discipline = current_user.engineer_profile.discipline.value
     if effective_discipline:
         affected_ids = db.query(DesignChangeAffectedDiscipline.design_change_id).filter(
@@ -103,7 +108,7 @@ def get_design_change_by_id(
         db.query(DesignChange).filter(DesignChange.id == change.id)
     ).first():
         raise HTTPException(status_code=403, detail="This design change is not classified as owner-relevant")
-    if current_user.role == UserRole.CONSULTANT and current_user.engineer_profile:
+    if is_consultant_engineer(current_user) and current_user.engineer_profile:
         disciplines = {change.source_discipline, *(item.discipline for item in change.affected_disciplines)}
         if current_user.engineer_profile.discipline.value not in disciplines:
             raise HTTPException(status_code=403, detail="This design change is outside your discipline")
@@ -218,7 +223,15 @@ def approve_design_change(
     # The capability is configurable. Project access is re-checked inside
     # `require`, and the discipline restriction below still applies on top.
     require(db, current_user, "design_change.approve", change.project_id)
-    if current_user.role == UserRole.CONSULTANT and current_user.engineer_profile:
+    # "Official approval rests with the assigned consultant alone" (see the
+    # catalogue entry): the catalogue default now covers ENGINEER broadly, the
+    # same shape as `ifc.upload`/`ifc.view`, because a Consultant Engineer's
+    # `User.role` is ENGINEER, not the retired UserRole.CONSULTANT value — so
+    # this hard gate is what actually keeps a non-consultant (e.g. Main
+    # Contractor) Engineer from approving, matching `reject_design_change`.
+    if not is_consultant_engineer(current_user):
+        raise HTTPException(status_code=403, detail="Only an assigned consultant can approve this design change")
+    if current_user.engineer_profile:
         relevant = {change.source_discipline, *(item.discipline for item in change.affected_disciplines)}
         if current_user.engineer_profile.discipline.value not in relevant:
             raise HTTPException(status_code=403, detail="This design change is outside your discipline")
@@ -248,9 +261,9 @@ def reject_design_change(
     change = db.get(DesignChange, change_id)
     if not change:
         raise HTTPException(status_code=404, detail="Design change not found")
-    if current_user.role != UserRole.CONSULTANT or not user_has_project_access(db, current_user, change.project_id):
+    if not is_consultant_engineer(current_user) or not user_has_project_access(db, current_user, change.project_id):
         raise HTTPException(status_code=403, detail="Only an assigned consultant can reject this design change")
-    if current_user.role == UserRole.CONSULTANT and current_user.engineer_profile:
+    if current_user.engineer_profile:
         relevant = {change.source_discipline, *(item.discipline for item in change.affected_disciplines)}
         if current_user.engineer_profile.discipline.value not in relevant:
             raise HTTPException(status_code=403, detail="This design change is outside your discipline")

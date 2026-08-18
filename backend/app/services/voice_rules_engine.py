@@ -12,6 +12,7 @@ from app.core.deps import is_consultant_engineer
 from app.models.enums import TaskStatus, UserRole, UserStatus, VoiceAnalysisStatus
 from app.models.task import Task
 from app.models.attachment import Attachment
+from app.ai.action_payload_contract import allowed_fields, rejection_detail
 from app.models.user import User
 from app.models.voice_action import VoiceActionDraft, VoiceExecutionLog
 from app.models.voice_analysis import VoiceAnalysis
@@ -108,42 +109,15 @@ class VoiceRulesEngine:
             if draft.user_edited_payload is not None
             else draft.extracted_payload
         )
-        payload_allowlist = {
-            SuggestedActionType.CREATE_TASK: {"title", "description", "sourceDiscipline"},
-            SuggestedActionType.START_TASK: set(),
-            SuggestedActionType.UPDATE_TASK_PROGRESS: {
-                "progressPercentage", "note", "correctionConfirmed",
-            },
-            SuggestedActionType.SUBMIT_TASK_FOR_REVIEW: {"completionNote"},
-            SuggestedActionType.CREATE_FIELD_SUBMISSION: {"description"},
-            SuggestedActionType.CREATE_ISSUE: {
-                "title", "description", "category", "severity", "affectsSchedule",
-                "location", "recipientIds",
-            },
-            SuggestedActionType.ADD_TASK_NOTE: {"content"},
-            SuggestedActionType.CREATE_SITE_REPORT_DRAFT: {
-                "summaryText", "workCompleted", "delays", "issues", "notes",
-            },
-            SuggestedActionType.CREATE_TASK_MESSAGE: {"content"},
-            SuggestedActionType.PREPARE_CONSULTANT_REVIEW: {
-                "decision", "comments", "rejectionReason", "requiredCorrections",
-            },
-            SuggestedActionType.CREATE_DESIGN_CHANGE_REPORT: {
-                "title", "description", "reason", "sourceDiscipline",
-                "affectedDisciplines", "relatedDrawings", "location", "approved",
-            },
-            SuggestedActionType.SEND_PROJECT_MESSAGE: {
-                "recipientIds", "recipientRoles", "subject", "content",
-            },
-            SuggestedActionType.SEND_OWNER_UPDATE: {
-                "recipientIds", "recipientRoles", "subject", "content",
-            },
-        }
-        unknown_keys = set(payload) - payload_allowlist[action_type]
+        # The allowlist and the AI prompt are generated from one table —
+        # see `app.ai.action_payload_contract`. They used to be maintained
+        # separately, which is how the model came to emit fields this engine
+        # had never been told to expect.
+        unknown_keys = set(payload) - allowed_fields(action_type)
         if unknown_keys:
             raise HTTPException(
                 status_code=422,
-                detail=f"Unsupported fields for {action_type.value}: {', '.join(sorted(unknown_keys))}",
+                detail=rejection_detail(action_type, unknown_keys),
             )
         if action_type == SuggestedActionType.START_TASK:
             if task.status != TaskStatus.TODO:

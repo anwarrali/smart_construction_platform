@@ -20,15 +20,7 @@ interface DocumentUploaderProps {
   projects: Array<{ id: string; name: string }>;
 }
 
-const DOCUMENT_TYPE_OPTIONS = [
-  { value: "drawing", label: "Drawing" },
-  { value: "report", label: "Report" },
-  { value: "contract", label: "Contract" },
-  { value: "permit", label: "Permit" },
-  { value: "specification", label: "Specification" },
-  { value: "invoice", label: "Invoice" },
-  { value: "other", label: "Other" },
-];
+const DOCUMENT_TYPES = ["drawing", "report", "contract", "permit", "specification", "invoice", "other"];
 
 export const DocumentUploader = ({
   isOpen,
@@ -61,11 +53,11 @@ export const DocumentUploader = ({
     setError("");
 
     if (!file) {
-      setError("Please select a file");
+      setError(t("docUploader.select_a_file"));
       return;
     }
     if (!selectedProjectId) {
-      setError("Please select a project");
+      setError(t("docUploader.select_a_project"));
       return;
     }
 
@@ -83,7 +75,7 @@ export const DocumentUploader = ({
       onClose();
     } catch (err: any) {
       const detail = errorMessage(err);
-      setError(Array.isArray(detail) ? detail.map((item:any)=>item.msg).join(", ") : detail || "Document upload failed. Check the selected project and file.");
+      setError(Array.isArray(detail) ? detail.map((item:any)=>item.msg).join(", ") : detail || t("docUploader.upload_failed"));
     } finally {
       setIsLoading(false);
     }
@@ -136,12 +128,12 @@ export const DocumentUploader = ({
           label={t("docUploader.project")}
           value={selectedProjectId}
           onChange={(e) => setSelectedProjectId(e.target.value)}
-          options={[{value:"",label:"Select project"}, ...projects.map(project=>({value:project.id,label:project.name}))]}
+          options={[{value:"",label:t("docUploader.select_project")}, ...projects.map(project=>({value:project.id,label:project.name}))]}
           required
         />
         <Select
           label={t("docUploader.document_type")}
-          options={DOCUMENT_TYPE_OPTIONS}
+          options={DOCUMENT_TYPES.map((value) => ({ value, label: t(`docUploader.documentType.${value}`) }))}
           value={documentType}
           onChange={(e) => setDocumentType(e.target.value)}
         />

@@ -1,5 +1,28 @@
 import 'user.dart';
 
+/// The original message a forward ultimately traces back to.
+///
+/// The backend resolves this to the *root* of the chain, not the immediate
+/// parent, so a message forwarded several times still shows who actually
+/// wrote it. Mobile therefore displays it as given rather than walking the
+/// chain itself.
+class ForwardOrigin {
+  const ForwardOrigin({
+    required this.messageId,
+    required this.sender,
+    required this.content,
+  });
+  final String messageId;
+  final User sender;
+  final String content;
+
+  factory ForwardOrigin.fromJson(Map<String, dynamic> json) => ForwardOrigin(
+    messageId: '${json['messageId']}',
+    sender: User.fromJson(json['sender'] as Map<String, dynamic>? ?? const {}),
+    content: json['content'] as String? ?? '',
+  );
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
@@ -8,6 +31,10 @@ class ChatMessage {
     required this.content,
     required this.sender,
     required this.createdAt,
+    this.forwardedFromMessageId,
+    this.forwardOrigin,
+    this.sharedEntityType,
+    this.sharedEntityId,
   });
   final String id;
   final String conversationId;
@@ -16,6 +43,20 @@ class ChatMessage {
   final User sender;
   final DateTime createdAt;
 
+  /// Set when this message was created by forwarding another one.
+  final String? forwardedFromMessageId;
+
+  /// The true original, resolved server-side.
+  final ForwardOrigin? forwardOrigin;
+
+  /// Set when this message was created by sharing a project entity —
+  /// ISSUE | TASK | SITE_REPORT | DESIGN_CHANGE | DOCUMENT.
+  final String? sharedEntityType;
+  final String? sharedEntityId;
+
+  bool get isForward => forwardedFromMessageId != null;
+  bool get isEntityShare => sharedEntityType != null && sharedEntityId != null;
+
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
     id: '${json['id']}',
     conversationId: '${json['conversationId']}',
@@ -23,6 +64,12 @@ class ChatMessage {
     content: json['content'] as String? ?? '',
     sender: User.fromJson(json['sender'] as Map<String, dynamic>? ?? const {}),
     createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+    forwardedFromMessageId: json['forwardedFromMessageId']?.toString(),
+    forwardOrigin: json['forwardOrigin'] is Map<String, dynamic>
+        ? ForwardOrigin.fromJson(json['forwardOrigin'] as Map<String, dynamic>)
+        : null,
+    sharedEntityType: json['sharedEntityType'] as String?,
+    sharedEntityId: json['sharedEntityId']?.toString(),
   );
 }
 

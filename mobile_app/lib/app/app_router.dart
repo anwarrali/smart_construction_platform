@@ -3,6 +3,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/auth/session_manager.dart';
+import '../core/auth/voice_access.dart';
+import '../core/l10n/l10n_labels.dart';
+import '../core/widgets/async_views.dart';
 import '../core/widgets/mobile_shell.dart';
 import '../features/authentication/login_screen.dart';
 import '../features/contact_admin/contact_admin_screen.dart';
@@ -31,6 +34,7 @@ import '../features/collaboration/collaboration_screen.dart';
 import '../core/constants/api_endpoints.dart';
 import '../models/notification_item.dart';
 import '../models/chat_message.dart';
+import '../models/user.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = _RouterRefresh(ref);
@@ -70,130 +74,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) {
           final user = ref.read(sessionProvider).user;
-          final destinations = user?.isConsultant == true
-              ? const [
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    label: 'Home',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.rate_review_outlined),
-                    label: 'Reviews',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.folder_outlined),
-                    label: 'Documents',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.message_outlined),
-                    label: 'Messages',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline),
-                    label: 'Profile',
-                  ),
-                ]
-              : user?.isWorker == true
-              ? const [
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    label: 'Home',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.task_outlined),
-                    label: 'My Tasks',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.photo_camera_back_outlined),
-                    label: 'Evidence',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.message_outlined),
-                    label: 'Messages',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline),
-                    label: 'Profile',
-                  ),
-                ]
-              : user?.isOwner == true
-              ? const [
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    label: 'Home',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.description_outlined),
-                    label: 'Reports',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.apartment),
-                    label: 'Projects',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.message_outlined),
-                    label: 'Messages',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline),
-                    label: 'Profile',
-                  ),
-                ]
-              : user?.isProjectManager == true
-              ? const [
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    label: 'Home',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.task_outlined),
-                    label: 'Tasks',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.report_problem_outlined),
-                    label: 'Issues',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.message_outlined),
-                    label: 'Messages',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline),
-                    label: 'Profile',
-                  ),
-                ]
-              : const [
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    selectedIcon: Icon(Icons.home_rounded),
-                    label: 'Home',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.task_outlined),
-                    selectedIcon: Icon(Icons.task_rounded),
-                    label: 'My Tasks',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.description_outlined),
-                    selectedIcon: Icon(Icons.description_rounded),
-                    label: 'Reports',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.message_outlined),
-                    selectedIcon: Icon(Icons.message_rounded),
-                    label: 'Messages',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline),
-                    selectedIcon: Icon(Icons.person_rounded),
-                    label: 'Profile',
-                  ),
-                ];
           return MobileShell(
             location: state.uri.path,
-            destinations: destinations,
-            showRecordAction:
-                user?.isSiteEngineer == true || user?.isWorker == true,
+            destinations: _destinationsFor(user),
+            // Voice is for every normal system user, not for two field roles
+            // — see `canUseVoice`.
+            showVoiceAction: canUseVoice(user),
             child: child,
           );
         },
@@ -205,14 +91,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/tasks', builder: (_, __) => const TasksScreen()),
           GoRoute(
             path: '/reports',
-            builder: (_, __) {
+            builder: (context, __) {
               final user = ref.read(sessionProvider).user;
               return _projectCollection(
                 ref,
-                'Site Reports',
+                context,
+                context.l10n.siteReportsTitle,
                 ApiEndpoints.siteReports,
-                'No site reports have been submitted.',
+                context.l10n.siteReportsEmpty,
                 Icons.description_outlined,
+                entityType: 'SITE_REPORT',
                 createRoute:
                     user?.isSiteEngineer == true ||
                         user?.isProjectManager == true
@@ -233,14 +121,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/issues',
-            builder: (_, __) {
+            builder: (context, __) {
               final user = ref.read(sessionProvider).user;
               return _projectCollection(
                 ref,
-                'Issues & Blockers',
+                context,
+                context.l10n.issuesTitle,
                 ApiEndpoints.issues,
-                'No issues have been reported.',
+                context.l10n.issuesEmpty,
                 Icons.report_problem_outlined,
+                entityType: 'ISSUE',
                 createRoute:
                     user?.role == 'engineer' || user?.isProjectManager == true
                     ? '/issues/new'
@@ -249,13 +139,27 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
-            path: '/documents',
-            builder: (_, __) => _projectCollection(
+            path: '/design-changes',
+            builder: (context, __) => _projectCollection(
               ref,
-              'Documents',
+              context,
+              context.l10n.navDesignChanges,
+              (id) => '/design-changes/project/$id',
+              context.l10n.designChangesEmpty,
+              Icons.architecture_rounded,
+              entityType: 'DESIGN_CHANGE',
+            ),
+          ),
+          GoRoute(
+            path: '/documents',
+            builder: (context, __) => _projectCollection(
+              ref,
+              context,
+              context.l10n.documentsTitle,
               (id) => '/documents/project/$id',
-              'No documents are available.',
+              context.l10n.documentsEmpty,
               Icons.folder_outlined,
+              entityType: 'DOCUMENT',
             ),
           ),
           GoRoute(
@@ -332,23 +236,153 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
+/// The bottom-navigation destinations for a role.
+///
+/// Presentation only. Every destination leads to a screen that fetches from
+/// an authorized endpoint, so a role that should not see a section is stopped
+/// by the backend, not by its absence from this list.
+///
+/// **Four destinations, not five.** The fifth slot is the raised voice action
+/// in the middle of the bar, and Profile — which nobody opens while standing
+/// on a slab — moved to the dashboard header. What is left is the question
+/// "what does this person do on site all day", answered per role:
+/// their work, their exceptions, and the people they need to reach.
+List<ShellDestination> _destinationsFor(User? user) {
+  ShellDestination home() => ShellDestination(
+    path: '/home',
+    icon: Icons.home_outlined,
+    selectedIcon: Icons.home_rounded,
+    label: (context) => context.l10n.navHome,
+  );
+  ShellDestination messages() => ShellDestination(
+    path: '/messages',
+    icon: Icons.forum_outlined,
+    selectedIcon: Icons.forum_rounded,
+    label: (context) => context.l10n.navMessages,
+  );
+
+  if (user?.isConsultant == true) {
+    return [
+      home(),
+      ShellDestination(
+        path: '/reviews',
+        icon: Icons.fact_check_outlined,
+        selectedIcon: Icons.fact_check_rounded,
+        label: (context) => context.l10n.navReviews,
+      ),
+      ShellDestination(
+        path: '/documents',
+        icon: Icons.folder_outlined,
+        selectedIcon: Icons.folder_rounded,
+        label: (context) => context.l10n.navDocuments,
+      ),
+      messages(),
+    ];
+  }
+  if (user?.isWorker == true) {
+    return [
+      home(),
+      ShellDestination(
+        path: '/tasks',
+        icon: Icons.task_outlined,
+        selectedIcon: Icons.task_rounded,
+        label: (context) => context.l10n.navMyTasks,
+      ),
+      ShellDestination(
+        path: '/evidence',
+        icon: Icons.photo_camera_back_outlined,
+        selectedIcon: Icons.photo_camera_back_rounded,
+        label: (context) => context.l10n.navEvidence,
+      ),
+      messages(),
+    ];
+  }
+  if (user?.isOwner == true) {
+    return [
+      home(),
+      ShellDestination(
+        path: '/reports',
+        icon: Icons.description_outlined,
+        selectedIcon: Icons.description_rounded,
+        label: (context) => context.l10n.navReports,
+      ),
+      // Not '/projects': that route lives outside the shell, so making it a
+      // destination dropped the user out of the navigation entirely.
+      ShellDestination(
+        path: '/actions',
+        icon: Icons.checklist_outlined,
+        selectedIcon: Icons.checklist_rounded,
+        label: (context) => context.l10n.navMyActions,
+      ),
+      messages(),
+    ];
+  }
+  if (user?.isProjectManager == true) {
+    return [
+      home(),
+      ShellDestination(
+        path: '/tasks',
+        icon: Icons.task_outlined,
+        selectedIcon: Icons.task_rounded,
+        label: (context) => context.l10n.navTasks,
+      ),
+      ShellDestination(
+        path: '/issues',
+        icon: Icons.report_problem_outlined,
+        selectedIcon: Icons.report_problem_rounded,
+        label: (context) => context.l10n.navIssues,
+      ),
+      messages(),
+    ];
+  }
+  return [
+    home(),
+    ShellDestination(
+      path: '/tasks',
+      icon: Icons.task_outlined,
+      selectedIcon: Icons.task_rounded,
+      label: (context) => context.l10n.navMyTasks,
+    ),
+    ShellDestination(
+      path: '/reports',
+      icon: Icons.description_outlined,
+      selectedIcon: Icons.description_rounded,
+      label: (context) => context.l10n.navReports,
+    ),
+    messages(),
+  ];
+}
+
 Widget _projectCollection(
   Ref ref,
+  BuildContext context,
   String title,
   String Function(String) path,
   String empty,
   IconData icon, {
   String? createRoute,
+  String? entityType,
 }) {
   final project = ref.read(projectContextProvider).selected;
   return project == null
-      ? const Scaffold(body: Center(child: Text('Select a project first.')))
+      // Was a bare sentence centred in white space; every other
+      // "nothing to show" in the app is a MessageView with an icon and a
+      // next step, and this one is reached from the navigation bar.
+      ? Scaffold(
+          appBar: AppBar(title: Text(title)),
+          body: MessageView(
+            icon: Icons.apartment_rounded,
+            title: context.l10n.commonNoProjectSelected,
+            message: context.l10n.commonSelectProjectFirst,
+          ),
+        )
       : RemoteCollectionScreen(
           title: title,
           path: path(project.id),
           emptyMessage: empty,
           icon: icon,
           createRoute: createRoute,
+          entityType: entityType,
         );
 }
 

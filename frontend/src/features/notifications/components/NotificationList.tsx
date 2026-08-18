@@ -13,7 +13,27 @@ interface Notification {
   isRead: boolean;
   link?: string;
   createdAt: string;
+  priority?: string;
+  category?: string;
+  requiresAction?: boolean;
+  messageKey?: string;
+  messageParamsJson?: Record<string, unknown>;
 }
+
+/* Only the two loud levels get a visible badge. Marking every ordinary
+   notification "Normal" would make the list noisier, not clearer — the point
+   of the badge is that something stands out from the ordinary. */
+const priorityBadge: Record<string, { className: string; labelKey: string }> = {
+  IMPORTANT: { className: "bg-wash-review text-state-review", labelKey: "notificationList.priority.important" },
+  CRITICAL: { className: "bg-wash-overdue text-state-overdue", labelKey: "notificationList.priority.critical" },
+};
+
+/* A left border keeps the severity readable while scanning, without competing
+   with the unread dot. */
+const priorityAccent: Record<string, string> = {
+  IMPORTANT: "border-s-2 border-state-review",
+  CRITICAL: "border-s-2 border-state-overdue",
+};
 
 interface NotificationListProps {
   notifications: Notification[];
@@ -28,7 +48,7 @@ export const NotificationList = ({
   onMarkRead,
   onMarkAllRead,
 }: NotificationListProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   if (isLoading) return <Loader text="Loading notifications..." />;
 
@@ -71,19 +91,47 @@ export const NotificationList = ({
               key={notification.id}
               className={`w-full text-left p-3 rounded-md transition-colors hover:bg-accent ${
                 !notification.isRead ? "bg-muted/30" : ""
-              }`}
+              } ${priorityAccent[notification.priority || ""] || ""}`}
               onClick={() => { onMarkRead(notification.id); if (notification.link) navigate(notification.link); }}
             >
               <div className="flex items-start gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {notification.title}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">
+                      {/* The server sends a localizable key plus params, with
+                          the rendered English kept as the fallback for older
+                          rows and any key this build does not yet know. */}
+                      {notification.messageKey
+                        ? t(`notification.${notification.messageKey}.title`, {
+                            ...(notification.messageParamsJson || {}),
+                            defaultValue: notification.title,
+                          })
+                        : notification.title}
+                    </p>
+                    {priorityBadge[notification.priority || ""] && (
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${priorityBadge[notification.priority!].className}`}>
+                        {t(priorityBadge[notification.priority!].labelKey)}
+                      </span>
+                    )}
+                    {notification.category === "REMINDERS" && (
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {t("notificationList.reminder")}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                    {notification.message}
+                    {notification.messageKey
+                      ? t(`notification.${notification.messageKey}.body`, {
+                          ...(notification.messageParamsJson || {}),
+                          defaultValue: notification.message,
+                        })
+                      : notification.message}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {timeAgo(notification.createdAt)}
+                    {/* `timeAgo` has always accepted a locale; this list just
+                        never passed one, so every relative timestamp rendered
+                        in English even in Arabic. */}
+                    {timeAgo(notification.createdAt, i18n.language?.startsWith("ar") ? "ar" : "en")}
                   </p>
                 </div>
                 {!notification.isRead && (

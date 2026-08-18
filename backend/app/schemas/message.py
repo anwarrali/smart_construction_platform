@@ -48,6 +48,58 @@ class MessageSend(CamelModel):
     responded_to_message_id: Optional[UUID] = None
 
 
+class ForwardMessageCreate(CamelModel):
+    """Forward an existing message into a (new or existing) conversation.
+
+    Reuses the same recipient shapes `ConversationCreate` already supports —
+    an explicit list, or a project group — so a forward is authorized through
+    the exact same `can_message_user` / `resolve_group_recipient_ids` checks
+    as composing a new conversation, not a parallel set of rules.
+    """
+    recipient_ids: list[UUID] = Field(default_factory=list, max_length=100)
+    group_code: Optional[str] = Field(default=None, max_length=80)
+    note: Optional[str] = Field(default=None, max_length=4000)
+    title: Optional[str] = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if not self.recipient_ids and not self.group_code:
+            raise ValueError("Select at least one recipient or a project group")
+        return self
+
+
+class ForwardOriginOut(CamelModel):
+    """The original, non-forwarded message a forward ultimately traces back to."""
+    message_id: UUID
+    conversation_id: UUID
+    sender: UserOut
+    content: str
+    created_at: datetime
+
+
+class ShareEntityCreate(CamelModel):
+    """Share a project entity (Issue, Task, Site Report, Design Change,
+    Document, …) as a message — "Forward" or "Ask for Opinion" from that
+    entity's own page, without leaving it.
+
+    Recipient shapes match `ForwardMessageCreate` for the same reason: this
+    goes through the exact same `_create_conversation` authorization, not a
+    parallel set of rules.
+    """
+    entity_type: str = Field(max_length=40)
+    entity_id: UUID
+    recipient_ids: list[UUID] = Field(default_factory=list, max_length=100)
+    group_code: Optional[str] = Field(default=None, max_length=80)
+    note: Optional[str] = Field(default=None, max_length=4000)
+    title: Optional[str] = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if not self.recipient_ids and not self.group_code:
+            raise ValueError("Select at least one recipient or a project group")
+        return self
+
+
 class MessageOut(CamelModel):
     id: UUID
     conversation_id: UUID
@@ -63,6 +115,10 @@ class MessageOut(CamelModel):
     updated_at: datetime
     edited_at: Optional[datetime] = None
     deleted_at: Optional[datetime] = None
+    forwarded_from_message_id: Optional[UUID] = None
+    forward_origin: Optional[ForwardOriginOut] = None
+    shared_entity_type: Optional[str] = None
+    shared_entity_id: Optional[UUID] = None
 
 
 class ConversationParticipantOut(CamelModel):

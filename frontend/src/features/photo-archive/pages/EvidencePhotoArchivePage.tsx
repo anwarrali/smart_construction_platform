@@ -116,14 +116,14 @@ export const EvidencePhotoArchivePage = () => {
       </form>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <Select label={t("photoArchive.category")} value={filters.category || ""} onChange={(event) => setFilter("category", event.target.value)}
-          options={[{ value: "", label: "All categories" }, ...categories.filter((item) => item.active).map((item) => ({ value: item.id, label: item.name }))]} />
-        <Input label={t("photoArchive.discipline")} value={filters.discipline || ""} onChange={(event) => setFilter("discipline", event.target.value)} placeholder="e.g. electrical" />
+          options={[{ value: "", label: t("photoArchive.all_categories") }, ...categories.filter((item) => item.active).map((item) => ({ value: item.id, label: item.name }))]} />
+        <Input label={t("photoArchive.discipline")} value={filters.discipline || ""} onChange={(event) => setFilter("discipline", event.target.value)} placeholder={t("photoArchive.discipline_placeholder")} />
         <Select label={t("photoArchive.status")} value={filters.status || ""} onChange={(event) => setFilter("status", event.target.value)}
-          options={[{ value: "", label: "All statuses" }, ...statuses.map((value) => ({ value, label: value.toLowerCase() }))]} />
+          options={[{ value: "", label: t("photoArchive.all_statuses") }, ...statuses.map((value) => ({ value, label: t(`photoArchive.statusValue.${value}`) }))]} />
         <Select label={t("photoArchive.direction")} value={filters.direction || ""} onChange={(event) => setFilter("direction", event.target.value)}
-          options={[{ value: "", label: "All directions" }, ...directions.map((value) => ({ value, label: value.toLowerCase() }))]} />
+          options={[{ value: "", label: t("photoArchive.all_directions") }, ...directions.map((value) => ({ value, label: t(`photoArchive.directionValue.${value}`) }))]} />
         <Input label={t("photoArchive.from")} type="date" value={filters.dateFrom || ""} onChange={(event) => setFilter("dateFrom", event.target.value)} />
-        <Input label="To" type="date" value={filters.dateTo || ""} onChange={(event) => setFilter("dateTo", event.target.value)} />
+        <Input label={t("photoArchive.to")} type="date" value={filters.dateTo || ""} onChange={(event) => setFilter("dateTo", event.target.value)} />
       </div>
       <div className="flex justify-end">
         <Button variant="ghost" onClick={() => {
@@ -148,7 +148,7 @@ export const EvidencePhotoArchivePage = () => {
           <div className="flex items-start justify-between gap-2">
             <div><p className="font-semibold">{photo.taskCode}</p><p className="line-clamp-1 text-sm">{photo.taskTitle}</p></div>
             <Badge size="sm" variant={photo.submissionStatus === "VERIFIED" ? "success" : photo.submissionStatus === "REJECTED" ? "danger" : "warning"}>
-              {photo.submissionStatus.toLowerCase()}
+              {t(`photoArchive.statusValue.${photo.submissionStatus}`)}
             </Badge>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -156,8 +156,8 @@ export const EvidencePhotoArchivePage = () => {
             {!photo.categories.length && <span className="text-xs text-muted-foreground">{t("photoArchive.uncategorized")}</span>}
           </div>
           <p className="text-xs text-muted-foreground">
-            {photo.discipline || "General"} · {photo.workerName} · {formatDate(photo.submissionCreatedAt)}
-            {photo.direction ? ` · ${photo.direction.toLowerCase()}` : ""}
+            {photo.discipline || t("photoArchive.general")} · {photo.workerName} · {formatDate(photo.submissionCreatedAt)}
+            {photo.direction ? ` · ${t(`photoArchive.directionValue.${photo.direction}`)}` : ""}
           </p>
         </div>
       </button>)}
@@ -176,15 +176,15 @@ export const EvidencePhotoArchivePage = () => {
         </a>
         <dl className="grid content-start grid-cols-[130px_1fr] gap-2 text-sm">
           <dt className="text-muted-foreground">{t("photoArchive.task")}</dt><dd>{selected.taskCode} — {selected.taskTitle}</dd>
-          <dt className="text-muted-foreground">{t("photoArchive.discipline")}</dt><dd>{selected.discipline || "General"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.discipline")}</dt><dd>{selected.discipline || t("photoArchive.general")}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.worker")}</dt><dd>{selected.workerName}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.uploader")}</dt><dd>{selected.uploaderName}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.submitted")}</dt><dd>{formatDateTime(selected.submissionCreatedAt)}</dd>
-          <dt className="text-muted-foreground">{t("photoArchive.status")}</dt><dd>{selected.submissionStatus}</dd>
-          <dt className="text-muted-foreground">{t("photoArchive.reviewer")}</dt><dd>{selected.reviewerName || "Not reviewed"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.status")}</dt><dd>{t(`photoArchive.statusValue.${selected.submissionStatus}`)}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.reviewer")}</dt><dd>{selected.reviewerName || t("photoArchive.not_reviewed")}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.reviewed")}</dt><dd>{selected.reviewedAt ? formatDateTime(selected.reviewedAt) : "—"}</dd>
-          <dt className="text-muted-foreground">{t("photoArchive.direction")}</dt><dd>{selected.direction || "Unlabelled"}</dd>
-          <dt className="text-muted-foreground">{t("photoArchive.categories")}</dt><dd>{selected.categories.map((item) => item.name).join(", ") || "Uncategorized"}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.direction")}</dt><dd>{selected.direction ? t(`photoArchive.directionValue.${selected.direction}`) : t("photoArchive.unlabelled")}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.categories")}</dt><dd>{selected.categories.map((item) => item.name).join(", ") || t("photoArchive.uncategorized")}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.filename")}</dt><dd className="break-all">{selected.attachment.originalFilename}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.submission_id")}</dt><dd className="break-all font-mono text-xs">{selected.fieldSubmissionId}</dd>
         </dl>

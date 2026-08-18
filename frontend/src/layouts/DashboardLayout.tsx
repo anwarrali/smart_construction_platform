@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -6,6 +6,7 @@ import { Sidebar } from "../components/shared/Sidebar/Sidebar";
 import { Topbar } from "../components/shared/Topbar/Topbar";
 import { ProjectWorkspaceProvider } from "../features/projects/context/ProjectWorkspaceContext";
 import { Breadcrumbs } from "../components/shared/Breadcrumbs/Breadcrumbs";
+import { RouteFallback } from "../components/shared/RouteFallback";
 import { useDirection } from "../hooks/useDirection";
 
 export const DashboardLayout = () => {
@@ -57,7 +58,12 @@ export const DashboardLayout = () => {
           <main className="flex-1 overflow-y-auto bg-background">
             <div className="page-container">
               <Breadcrumbs />
-              <Outlet />
+              {/* Only the routed page itself lazy-loads; this boundary is scoped
+                  to the Outlet alone so the Sidebar/Topbar above never unmount
+                  or flicker while a route's chunk is still downloading. */}
+              <Suspense fallback={<RouteFallback />}>
+                <Outlet />
+              </Suspense>
             </div>
           </main>
         </div>

@@ -66,8 +66,16 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     owned_projects: Mapped[list["Project"]] = relationship(
         back_populates="owner", foreign_keys="Project.owner_id"
     )
+    # `project_members.user_id` is NOT NULL with `ondelete="CASCADE"` at the
+    # database level. Without `passive_deletes=True`, SQLAlchemy's
+    # unit-of-work does not trust that constraint: on `db.delete(user)` it
+    # loads this collection itself and tries to *nullify* `user_id` on each
+    # row first (the default ORM behaviour for a collection with no delete
+    # cascade), which fails with a NOT NULL violation before the DB's own
+    # CASCADE ever gets a chance to run. `passive_deletes=True` defers
+    # entirely to the database, which already does the right thing.
     project_memberships: Mapped[list["ProjectMember"]] = relationship(
-        back_populates="user", foreign_keys="ProjectMember.user_id"
+        back_populates="user", foreign_keys="ProjectMember.user_id", passive_deletes=True
     )
     assigned_tasks: Mapped[list["Task"]] = relationship(
         secondary="task_assignees", back_populates="assignees"

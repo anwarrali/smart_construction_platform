@@ -9,7 +9,7 @@ from app.db.database import get_db
 from app.models.user import User, EngineerProfile
 from app.models.site_report import SiteReport
 from app.models.voice_recording import VoiceRecording
-from app.schemas.site_report import SiteReportOut, SiteReportCreate, SiteReportUpdate
+from app.schemas.site_report import SiteReportOut, SiteReportCreate, SiteReportUpdate, SiteReportReviewRequest
 from app.core.deps import (
     get_current_user,
     user_has_project_access,
@@ -20,13 +20,16 @@ from app.core.deps import (
 from app.services.file_storage import save_upload, delete_upload
 from app.models.enums import VoiceProcessingStatus
 from app.models.enums import UserRole, NotificationType
-from app.services.authorization import require
+from app.services.authorization import require, manageable_project
 from app.models.project import Project
 from app.models.project import ProjectMember
 from app.models.notification import Notification
 from app.models.task import Task
 from app.models.attachment import Attachment
 from app.services.audit_service import record_audit
+from app.services.notification_service import (
+    CATEGORY_DIRECT, CATEGORY_WORKFLOW, PRIORITY_IMPORTANT, PRIORITY_NORMAL, notify,
+)
 
 router = APIRouter(tags=["Site Reports"])
 
@@ -228,9 +231,19 @@ async def submit_site_report(
     db.flush()
     project = db.get(Project, proj_uuid)
     if review_status == "submitted" and project and project.project_manager_id and project.project_manager_id != current_user.id:
-        db.add(Notification(user_id=project.project_manager_id, title="Site Report Requires Review",
-            message=f"A new Site Report was submitted for {project.name}.", type=NotificationType.REPORT_READY,
-            project_id=proj_uuid, related_entity_type="SITE_REPORT", related_entity_id=new_report.id))
+        notify(
+            db, user_id=project.project_manager_id,
+            title="Site report awaiting your verification",
+            message=f"A new Site Report was submitted for {project.name}.",
+            notification_type=NotificationType.REPORT_READY,
+            category=CATEGORY_WORKFLOW, priority=PRIORITY_NORMAL, requires_action=True,
+            project_id=proj_uuid, entity_type="SITE_REPORT", entity_id=new_report.id,
+            # One "awaiting verification" per report; the follow-ups come from
+            # the reminder sweep, not from re-notifying here.
+            dedupe_key=f"site-report-verify:{new_report.id}",
+            message_key="siteReport.awaitingVerification",
+            message_params={"project": project.name},
+        )
     
     # Store photos through the generic contextual attachment system.
     for index, photo in enumerate(photos):
@@ -254,26 +267,62 @@ async def submit_site_report(
     return new_report
 
 @router.put("/site-reports/{report_id}/review", response_model=SiteReportOut)
+@router.put("/reports/{report_id}/review", response_model=SiteReportOut)
 def review_site_report(
     report_id: uuid.UUID,
-    approved: bool,
+    data: SiteReportReviewRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     report = db.get(SiteReport, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Site report not found")
-    project = db.get(Project, report.project_id)
-    if current_user.role != UserRole.PROJECT_MANAGER or not project or project.project_manager_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the assigned Project Manager can review site reports")
-    report.review_status = "approved" if approved else "rejected"
+    # The capability is configurable (`site_report.verify`), but
+    # `manageable_project` still pins it to the Project Manager actually
+    # assigned to this project — a grant can never let a PM verify a report
+    # on someone else's project, and it re-checks project access for every
+    # other role. Admin, which holds no default here, can still be granted
+    # the permission explicitly through Access Control without this check
+    # narrowing them to a single project (the PM-only branch inside
+    # `manageable_project` only applies to `UserRole.PROJECT_MANAGER`).
+    manageable_project(db, current_user, report.project_id, "site_report.verify")
+    if report.review_status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only a submitted site report awaiting verification can be reviewed",
+        )
+    reason = (data.rejection_reason or "").strip()
+    if not data.approved and not reason:
+        raise HTTPException(status_code=400, detail="A rejection reason is required")
+
+    report.review_status = "approved" if data.approved else "rejected"
     report.reviewed_by_id = current_user.id
     report.reviewed_at = datetime.now(timezone.utc)
-    db.add(Notification(user_id=report.submitted_by_id, title="Site report reviewed",
-                        message=f"Your site report was {report.review_status}", type=NotificationType.REPORT_READY,
-                        project_id=report.project_id, related_entity_type="SITE_REPORT", related_entity_id=report.id))
-    record_audit(db, actor_id=current_user.id, action=f"{report.review_status}", entity_type="site_report",
-                 entity_id=report.id, project_id=report.project_id)
+    report.rejection_reason = reason if not data.approved else None
+
+    if data.approved:
+        title, message = "Site report verified", f"Your site report for {report.report_date} was verified by {current_user.full_name}."
+    else:
+        title, message = "Site report rejected", f"Your site report for {report.report_date} was rejected by {current_user.full_name}: {reason}"
+    if report.submitted_by_id != current_user.id:
+        notify(
+            db, user_id=report.submitted_by_id, title=title, message=message,
+            notification_type=NotificationType.REPORT_READY,
+            category=CATEGORY_DIRECT,
+            # A rejection needs the author to do something; an approval is
+            # information they should see but need not act on.
+            priority=PRIORITY_IMPORTANT if not data.approved else PRIORITY_NORMAL,
+            requires_action=not data.approved,
+            project_id=report.project_id,
+            entity_type="SITE_REPORT", entity_id=report.id,
+            message_key="siteReport.rejected" if not data.approved else "siteReport.verified",
+            message_params={"date": str(report.report_date),
+                            "reviewer": current_user.full_name, "reason": reason},
+        )
+    record_audit(db, actor_id=current_user.id,
+                 action="site_report_verified" if data.approved else "site_report_rejected",
+                 entity_type="site_report", entity_id=report.id, project_id=report.project_id,
+                 details={"rejection_reason": reason} if not data.approved else None)
     db.commit()
     db.refresh(report)
     return report
@@ -320,9 +369,17 @@ def update_site_report_draft(
     if report.review_status == "submitted":
         project = db.get(Project, report.project_id)
         if project and project.project_manager_id and project.project_manager_id != current_user.id:
-            db.add(Notification(user_id=project.project_manager_id, title="Site Report Requires Review",
-                message=f"A Site Report was submitted for {project.name}.", type=NotificationType.REPORT_READY,
-                project_id=report.project_id, related_entity_type="SITE_REPORT", related_entity_id=report.id))
+            notify(
+                db, user_id=project.project_manager_id,
+                title="Site report awaiting your verification",
+                message=f"A Site Report was submitted for {project.name}.",
+                notification_type=NotificationType.REPORT_READY,
+                category=CATEGORY_WORKFLOW, priority=PRIORITY_NORMAL, requires_action=True,
+                project_id=report.project_id, entity_type="SITE_REPORT", entity_id=report.id,
+                dedupe_key=f"site-report-verify:{report.id}",
+                message_key="siteReport.awaitingVerification",
+                message_params={"project": project.name},
+            )
     record_audit(db, actor_id=current_user.id,
                  action="submitted" if report.review_status == "submitted" else "draft_updated",
                  entity_type="site_report", entity_id=report.id, project_id=report.project_id)

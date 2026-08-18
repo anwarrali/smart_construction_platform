@@ -59,7 +59,8 @@
     "today": "Today",
     "yesterday": "Yesterday",
     "add": "Add",
-    "unknownTask": "Unknown task"
+    "unknownTask": "Unknown task",
+    "reload": "Reload"
   },
   "empty": {
     "noData": "No data to show",
@@ -518,7 +519,8 @@
       "SUGGESTION": "Suggestion",
       "INFORMATION": "Information",
       "INFO": "Information"
-    }
+    },
+    "refreshSucceeded": "Structured project intelligence refreshed"
   },
   "owner": {
     "dashboard": "Owner dashboard",
@@ -583,7 +585,9 @@
     "visitFailed": "Visit could not be scheduled.",
     "visitLoadFailed": "The linked site visit could not be loaded; start the report manually.",
     "requiredFields": "Project, title and description are required.",
-    "visitRequiredFields": "Project, title, start and end are required."
+    "visitRequiredFields": "Project, title, start and end are required.",
+    "intelligenceRunFailed": "Intelligence analysis could not be completed.",
+    "appCrashedHint": "The page ran into an unexpected problem. Reloading usually fixes it; your data was not affected."
   },
   "validation": {
     "required": "This field is required.",
@@ -1472,7 +1476,24 @@
     "transfer_project_member": "Transfer Project Member",
     "assign_as_site_engineer": "Assign as Site Engineer",
     "site_engineer_responsibility": "Site Engineer responsibility",
-    "no_discipline": "No discipline"
+    "no_discipline": "No discipline",
+    "project_participant": "Project participant",
+    "update_failed": "Team update failed.",
+    "confirm_remove_member": "Remove {{name}} from this project? The global account will be preserved.",
+    "member_removed": "Member removed from this project; the global account was preserved.",
+    "engineer_consultant_or_worker": "Engineer, Consultant, or Worker",
+    "all_disciplines": "All disciplines",
+    "all_affiliations": "All affiliations",
+    "no_organization": "No organization",
+    "add_consultant_before_approval": "Add an active external Consultant Engineer to this project before configuring approval authority.",
+    "select_consultant": "Select Consultant",
+    "no_specialty": "No specialty",
+    "not_assigned": "Not assigned",
+    "discipline_reviewer": "{{discipline}} reviewer",
+    "saving": "Saving…",
+    "save_approval_workflow": "Save Approval Workflow",
+    "unknown_status": "Unknown",
+    "use_account_discipline": "Use account discipline"
   },
   "adminDash": {
     "administrator_dashboard": "Administrator Dashboard",
@@ -1490,6 +1511,7 @@
     "manage_company_users_and_access": "Manage company users and access",
     "manage_project_registry": "Manage project registry",
     "open_system_settings": "Open system settings",
+    "no_location_set": "No location set",
     "totalUsers": "Total users",
     "activeUsers": "Active users",
     "inactiveUsers": "Inactive users",
@@ -1607,7 +1629,28 @@
     "critical": "Critical",
     "no_downstream_block": "No downstream block",
     "loading_review_submissions": "Loading review submissions…",
-    "search_task_id_description_or_contractor": "Search task, ID, description, or contractor engineer…"
+    "search_task_id_description_or_contractor": "Search task, ID, description, or contractor engineer…",
+    "unable_to_load_reviews": "Unable to load reviews.",
+    "review_history": "Review History",
+    "pending_reviews": "Pending Reviews",
+    "subtitle": "{{project}} · only submissions matching your specialization",
+    "all_priorities": "All priorities",
+    "all_decisions": "All decisions",
+    "all_active_states": "All active states",
+    "critical_only": "Critical only",
+    "overdue_only": "Overdue only",
+    "resubmissions": "Resubmissions",
+    "blocking_dependencies": "Blocking dependencies",
+    "contractor_engineer": "Contractor Engineer",
+    "attempt_number": "Attempt {{count}}",
+    "overdue_prefix": "Overdue · ",
+    "due_prefix": "Due · ",
+    "blocked_count": "{{count}} blocked",
+    "prior_rejections": "{{count}} prior rejection(s)",
+    "view_record": "View Record",
+    "open_review": "Open Review",
+    "no_history_matches": "No review history matches these filters.",
+    "no_work_waiting": "No work is currently waiting for review."
   },
   "contextDiscussion": {
     "no_discussion_yet": "No discussion yet.",
@@ -1634,7 +1677,12 @@
     "reason": "Reason",
     "expected_cost_impact": "Expected cost impact",
     "schedule_impact_days": "Schedule impact (days)",
-    "source_discipline": "Source discipline"
+    "source_discipline": "Source discipline",
+    "affected_count": "+{{count}} affected",
+    "quick_reject_reason": "Rejected after review",
+    "all_statuses": "All statuses",
+    "all_disciplines": "All disciplines",
+    "has_attachments": "Has attachments"
   },
   "docUploader": {
     "click_to_select_a_file": "Click to select a file",
@@ -1646,7 +1694,20 @@
     "project": "Project *",
     "document_type": "Document Type",
     "notes": "Notes",
-    "optional_notes": "Optional notes"
+    "optional_notes": "Optional notes",
+    "select_a_file": "Please select a file",
+    "select_a_project": "Please select a project",
+    "upload_failed": "Document upload failed. Check the selected project and file.",
+    "select_project": "Select project",
+    "documentType": {
+      "drawing": "Drawing",
+      "report": "Report",
+      "contract": "Contract",
+      "permit": "Permit",
+      "specification": "Specification",
+      "invoice": "Invoice",
+      "other": "Other"
+    }
   },
   "documentList": {
     "no_documents_found": "No documents found",
@@ -1657,7 +1718,8 @@
     "project_documents_and_files": "Project documents and files",
     "showing_the_document_opened_from_your": "Showing the document opened from your notification.",
     "show_all_documents": "Show all documents",
-    "search_documents": "Search documents..."
+    "search_documents": "Search documents...",
+    "all_types": "All Types"
   },
   "engineerDash": {
     "critical": "Critical",
@@ -1738,7 +1800,12 @@
     "assigned_project_portfolio": "Assigned project portfolio",
     "critical_delays": "Critical delays",
     "critical_issues": "Critical issues",
-    "major_changes": "Major changes"
+    "major_changes": "Major changes",
+    "subtitle": "A concise cross-project summary separate from the project dashboard.",
+    "assigned_projects": "Assigned projects",
+    "average_completion": "Average completion",
+    "open_critical_issues": "Open critical issues",
+    "pending_consultant_approvals": "Pending consultant approvals"
   },
   "forgotPasswordPage": {
     "reset_password": "Reset Password",
@@ -1789,7 +1856,35 @@
     "finding_discipline": "Finding discipline",
     "no_model_quality_findings": "No model quality findings",
     "loading_improvement_suggestions": "Loading improvement suggestions…",
-    "no_improvement_suggestions_were": "No improvement suggestions were generated for this model."
+    "no_improvement_suggestions_were": "No improvement suggestions were generated for this model.",
+    "properties": "Properties",
+    "quantities": "Quantities",
+    "coordinates_spatial_assignment": "Coordinates / spatial assignment",
+    "representation": "Representation",
+    "stable_globalids_are_used": "Stable IFC GlobalIds are used where available. No fuzzy match is presented as certain.",
+    "base": "Base",
+    "comparison": "Comparison",
+    "confidence_low": "Low",
+    "confidence_high": "High",
+    "confidence_pending": "Pending",
+    "confidence_suffix": "{{level}} confidence",
+    "unstable_identifiers_warning": "Stable identifiers are missing or changed for {{count}} elements. Review added and removed results carefully.",
+    "comparison_requires_two_revisions": "Comparison requires at least two revisions from the same Model Group.",
+    "select_a_base_and_comparison": "Select a base and comparison revision to review added, removed, modified and moved elements.",
+    "no_findings_match_the_current": "No findings match the current revision and filters.",
+    "the_model_analysis_remains": "The model analysis remains available in the other tabs.",
+    "ai_review_note": "AI-generated suggestions should be reviewed by a qualified engineer before being used for design or construction decisions.",
+    "suggestion_accepted": "Suggestion accepted",
+    "suggestion_rejected": "Suggestion rejected",
+    "revision_comparison_completed": "Revision comparison completed",
+    "revision_comparisons_could_not_be_loaded": "Revision comparisons could not be loaded.",
+    "model_quality_findings_could_not_be_loaded": "Model quality findings could not be loaded.",
+    "suggestions_could_not_be_loaded": "Suggestions could not be loaded. The rest of the model analysis is still available.",
+    "suggestion_default_title": "Model review suggestion",
+    "no_reason_was_supplied": "No reason was supplied.",
+    "review_may_improve_model": "Review may improve model data quality.",
+    "review_the_available_ifc_evidence": "Review the available IFC evidence.",
+    "ifc_model_analysis": "IFC model analysis"
   },
   "ifcElements": {
     "not_defined_in_source_ifc": "Not defined in source IFC.",
@@ -1917,7 +2012,38 @@
     "loading_ifc_model_groups": "Loading IFC Model Groups…",
     "no_ifc_models_yet": "No IFC models yet",
     "model_analysis_will_appear_here_when": "Model analysis will appear here when processing finishes.",
-    "upload_ifc_revision": "Upload IFC revision"
+    "upload_ifc_revision": "Upload IFC revision",
+    "model_group_created": "Model Group created",
+    "ifc_uploaded_processing_started": "IFC uploaded. Processing has started.",
+    "ifc_processing_queued_again": "IFC processing was queued again",
+    "readable_model_facts": "Readable model facts, data-quality checks and revision intelligence for engineering teams.",
+    "create_or_select_a_model_group": "Create or select a Model Group, choose the version type, enter the revision, then upload an .ifc file.",
+    "upload_ifc_button": "Upload IFC",
+    "create_a_model_group_then_upload": "Create a Model Group, then upload an IFC2X3, IFC4 or IFC4X3 file.",
+    "parsing_or_extraction_failed": "Parsing or extraction failed. No successful result has been reported.",
+    "processing_completed_and_ready": "Processing completed and model intelligence is ready.",
+    "revision_summary": "Revision {{revision}} · {{count}} extracted elements · {{disciplines}} disciplines detected",
+    "advanced_suffix": "· Advanced",
+    "ifc_model_could_not_be_parsed": "The IFC model could not be parsed or extracted.",
+    "tab_overview": "Overview",
+    "tab_model_hierarchy": "Model Hierarchy",
+    "tab_elements": "Elements",
+    "tab_disciplines": "Disciplines",
+    "tab_properties_and_quantities": "Properties and Quantities",
+    "tab_georeferencing": "Georeferencing",
+    "tab_3d_viewer": "3D Viewer",
+    "tab_findings": "Findings",
+    "tab_suggestions": "Suggestions",
+    "tab_technical_data": "Technical Data",
+    "stage_uploading_file": "Uploading file",
+    "stage_validating_ifc": "Validating IFC",
+    "stage_reading_ifc_schema": "Reading IFC schema",
+    "stage_extracting_model_hierarchy": "Extracting model hierarchy",
+    "stage_extracting_elements": "Extracting elements",
+    "stage_extracting_properties_and_quantities": "Extracting properties and quantities",
+    "stage_running_model_quality_checks": "Running model-quality checks",
+    "stage_generating_intelligence_summary": "Generating intelligence summary",
+    "stage_completed": "Completed"
   },
   "issuesPage": {
     "track_and_resolve_project_issues": "Track and resolve project issues",
@@ -1954,7 +2080,42 @@
     "new_project_conversation": "New Project Conversation",
     "send_to": "Send to",
     "recipient_group": "Recipient group",
-    "title_optional": "Title (optional)"
+    "title_optional": "Title (optional)",
+    "forward": "Forward",
+    "forward_message": "Forward message",
+    "forwarded_from": "Forwarded from {{name}}",
+    "forward_note_optional": "Note (optional)",
+    "forward_note_placeholder": "Add context for the recipient, e.g. \"Can you review this and give me your opinion?\"",
+    "message_forwarded": "Message forwarded.",
+    "forward_failed": "The message could not be forwarded."
+  },
+  "communication": {
+    "forward": "Forward",
+    "askOpinion": "Ask for Opinion",
+    "forwardTitle": "Forward to a project participant",
+    "askOpinionTitle": "Ask a project participant for their opinion",
+    "forwardDescription": "Send this item's details to another authorized project participant.",
+    "askOpinionDescription": "Share this item and ask for feedback. This does not hand over ownership or change anything about the item.",
+    "sendTo": "Send to",
+    "individual": "Individual",
+    "multiplePeople": "Multiple People",
+    "projectRecipients": "Project recipients",
+    "noRecipients": "No authorized recipients are available on this project.",
+    "note": "Note (optional)",
+    "notePlaceholder": "Add context for the recipient…",
+    "opinionDefaultNote": "Can you review this and give me your opinion?",
+    "ownershipHint": "Sharing is a conversation only — ownership, assignment and status stay exactly as they are.",
+    "cancel": "Cancel",
+    "shared": "Shared. Opening the conversation…",
+    "opinionSent": "Opinion requested. Opening the conversation…",
+    "shareFailed": "This could not be shared.",
+    "viewOriginal": {
+      "ISSUE": "View original issue",
+      "TASK": "View original task",
+      "SITE_REPORT": "View original site report",
+      "DESIGN_CHANGE": "View original design change",
+      "DOCUMENT": "View original document"
+    }
   },
   "modal": {
     "close": "Close"
@@ -1973,12 +2134,87 @@
   "notificationList": {
     "notifications": "Notifications",
     "mark_all_read": "Mark all read",
-    "no_notifications": "No notifications"
+    "no_notifications": "No notifications",
+    "reminder": "Reminder",
+    "priority": {
+      "important": "Important",
+      "critical": "Critical"
+    }
+  },
+  "notification": {
+    "taskDeadline": {
+      "DUE_TOMORROW": {
+        "title": "Task due tomorrow",
+        "body": "{{name}} is due tomorrow."
+      },
+      "DUE_TODAY": {
+        "title": "Task due today",
+        "body": "{{name}} is due today."
+      },
+      "OVERDUE": {
+        "title": "Task overdue",
+        "body": "{{name}} is overdue."
+      },
+      "OVERDUE_SEVERAL": {
+        "title": "Task overdue",
+        "body": "{{name}} has been overdue for several days."
+      },
+      "OVERDUE_WEEK": {
+        "title": "Task overdue",
+        "body": "{{name}} has been overdue for more than a week."
+      }
+    },
+    "siteReport": {
+      "awaitingVerification": {
+        "title": "Site report awaiting your verification",
+        "body": "A site report was submitted for {{project}}."
+      },
+      "verified": {
+        "title": "Site report verified",
+        "body": "Your site report for {{date}} was verified by {{reviewer}}."
+      },
+      "rejected": {
+        "title": "Site report rejected",
+        "body": "Your site report for {{date}} was rejected by {{reviewer}}: {{reason}}"
+      }
+    },
+    "reminder": {
+      "waiting": {
+        "title": "Response reminder: {{label}}",
+        "body": "This {{target}} is still waiting for action. Reminder {{sequence}}."
+      },
+      "escalation": {
+        "title": "Escalation: {{label}}",
+        "body": "This {{target}} has been waiting too long and has been escalated."
+      }
+    },
+    "stepUp": {
+      "codeRequested": {
+        "title": "Verification code requested",
+        "body": "A verification code was requested to confirm: {{action}}. If this was not you, change your password immediately."
+      }
+    }
   },
   "notificationsPage": {
     "previous": "Previous",
     "next": "Next",
-    "search_notifications": "Search notifications..."
+    "search_notifications": "Search notifications...",
+    "project_notifications": "Project Notifications",
+    "notification_center": "Notification Center",
+    "subtitle": "Search, filter, and manage real system events.",
+    "all_notifications": "All notifications",
+    "unread_only": "Unread only",
+    "read_only": "Read only",
+    "all_event_types": "All event types",
+    "task_assignments": "Task assignments",
+    "task_and_issue_updates": "Task and issue updates",
+    "overdue_tasks": "Overdue tasks",
+    "design_changes": "Design changes",
+    "approvals": "Approvals",
+    "site_reports": "Site reports",
+    "messages": "Messages",
+    "project_and_document_events": "Project and document events",
+    "page_summary": "Page {{page}} of {{totalPages}} · {{total}} notifications"
   },
   "photoArchive": {
     "no_project_is_selected": "No project is selected.",
@@ -2009,7 +2245,29 @@
     "from": "From",
     "evidence_photo_provenance": "Evidence Photo Provenance",
     "project_photo_categories": "Project Photo Categories",
-    "new_project_category_e_g_waterproofing": "New project category, e.g. Waterproofing"
+    "new_project_category_e_g_waterproofing": "New project category, e.g. Waterproofing",
+    "all_categories": "All categories",
+    "discipline_placeholder": "e.g. electrical",
+    "all_statuses": "All statuses",
+    "statusValue": {
+      "SUBMITTED": "Submitted",
+      "VERIFIED": "Verified",
+      "REJECTED": "Rejected"
+    },
+    "all_directions": "All directions",
+    "directionValue": {
+      "FRONT": "Front",
+      "BACK": "Back",
+      "LEFT": "Left",
+      "RIGHT": "Right",
+      "TOP": "Top",
+      "DETAIL": "Detail",
+      "OTHER": "Other"
+    },
+    "to": "To",
+    "general": "General",
+    "not_reviewed": "Not reviewed",
+    "unlabelled": "Unlabelled"
   },
   "projectDetail": {
     "back_to_projects": "Back to projects",
@@ -2101,6 +2359,41 @@
     "budget_total": "Budget Total",
     "owner": "Owner *",
     "project_manager": "Project Manager *",
+    "columnProject": "Project",
+    "columnLocation": "Location",
+    "columnStatus": "Status",
+    "columnProgress": "Progress",
+    "columnOwner": "Owner",
+    "columnProjectManager": "Project Manager",
+    "columnDates": "Dates",
+    "allStatuses": "All Statuses",
+    "addProject": "Add Project",
+    "editProject": "Edit Project",
+    "subtitlePm": "Select an assigned project to open its project dashboard",
+    "subtitleEngineer": "Select one of your active project assignments",
+    "subtitleDefault": "Manage project setup, owner, project manager, consultants, and members",
+    "saveChanges": "Save Changes",
+    "createProject": "Create Project",
+    "membersTitle": "{{name}} Members",
+    "membersTitleDefault": "Project Members",
+    "unknownUser": "Unknown user",
+    "active": "Active",
+    "inactive": "Inactive",
+    "noDescription": "No description",
+    "openIssuesCount": "{{count}} open issues",
+    "nameRequired": "Project name is required.",
+    "ownerRequired": "Assign an owner.",
+    "projectManagerRequired": "Assign a project manager.",
+    "projectUpdated": "Project updated successfully.",
+    "projectCreated": "Project created successfully.",
+    "loadFailed": "Failed to load projects.",
+    "loadMembersFailed": "Failed to load project members.",
+    "saveFailed": "Failed to save project.",
+    "projectTypePlaceholder": "residential, commercial...",
+    "dateRange": "{{start}} to {{end}}",
+    "selectOwner": "Select owner",
+    "selectProjectManager": "Select project manager",
+    "noConsultantSelected": "No consultant selected",
     "initial_consultant": "Initial Consultant"
   },
   "resetPassword": {
@@ -2140,7 +2433,29 @@
     "work_in_progress": "Work in progress",
     "delay_notes": "Delay notes",
     "issue_references_summary": "Issue references / summary",
-    "additional_notes": "Additional notes"
+    "additional_notes": "Additional notes",
+    "site_reports": "Site Reports",
+    "site_reports_singular": "Site Report",
+    "all_statuses": "All statuses",
+    "all_disciplines": "All disciplines",
+    "has_attachments": "Has attachments",
+    "draft_saved": "Site report draft saved.",
+    "report_submitted": "Site report submitted.",
+    "save_failed": "Site report could not be saved.",
+    "edit_draft_title": "Edit site report draft",
+    "create_title": "Create site report",
+    "visit_summary": "{{type}} · visit date {{date}}",
+    "general_daily_report": "General daily report",
+    "verification_needed": "Awaiting your verification",
+    "verify": "Verify",
+    "reject": "Reject",
+    "rejection_reason": "Rejection reason",
+    "reviewed_by": "Reviewed by {{name}} on {{date}}",
+    "reject_report_title": "Reject site report",
+    "reject_report_description": "Tell the submitter why this report is being rejected. They will be notified with this reason.",
+    "report_verified": "Site report verified.",
+    "report_rejected": "Site report rejected.",
+    "review_failed": "The report could not be reviewed."
   },
   "taskCard": {
     "critical": "Critical",
@@ -2216,6 +2531,20 @@
     "search_tasks": "Search tasks...",
     "all_statuses": "All statuses",
     "all_priorities": "All priorities",
+    "all_disciplines": "All disciplines",
+    "critical_only": "Critical only",
+    "overdue_only": "Overdue only",
+    "no_due_date": "No due date",
+    "days_overdue": "{{count}} days overdue",
+    "days_remaining": "{{count}} days remaining",
+    "select_project_before_my_tasks": "Select an assigned project before opening My Tasks.",
+    "unable_to_load_assigned_tasks": "Unable to load your assigned tasks.",
+    "unable_to_load_tasks": "Unable to load tasks.",
+    "task_created": "{{code}} created.",
+    "task_updated": "{{code}} updated.",
+    "task_deleted": "Task deleted.",
+    "unable_to_delete_task": "Unable to delete task.",
+    "confirm_delete_task": "Delete task \"{{name}}\"?",
     "new_task": "New Task",
     "due_today": "Due today",
     "my_tasks": "My Tasks"
@@ -2287,7 +2616,9 @@
       "in_review": "In review",
       "approved": "Approved",
       "rejected": "Rejected",
-      "clarification_requested": "Clarification requested"
+      "clarification_requested": "Clarification requested",
+      "draft": "Draft",
+      "submitted": "Submitted"
     }
   },
   "milestone": {
@@ -2363,6 +2694,10 @@
       "label": "Submit site reports",
       "description": "File a daily or visit site report."
     },
+    "site_report.verify": {
+      "label": "Verify site reports",
+      "description": "Approve or reject a submitted site report."
+    },
     "issue.create": {
       "label": "Raise issues",
       "description": "Open a project issue."
@@ -2423,5 +2758,18 @@
       "delayed": "Delayed",
       "criticalPath": "Critical path"
     }
+  },
+  "stepUp": {
+    "title": "Security verification required",
+    "protectedAction": "You are about to:",
+    "explanation": "For your security, we sent a verification code to your email address. Enter it below to continue. The code expires shortly and can be used once.",
+    "codeLabel": "Verification code",
+    "verify": "Verify and continue",
+    "cancel": "Cancel",
+    "resend": "Send a new code",
+    "resendIn": "Resend available in {{seconds}}s",
+    "invalidCode": "That code is not valid or has expired. Request a new one if needed.",
+    "requestFailed": "The verification code could not be sent. Please try again shortly.",
+    "deliveryUnavailable": "Email delivery is not configured on this environment, so the code could not be sent."
   }
 }

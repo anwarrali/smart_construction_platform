@@ -51,7 +51,9 @@ import type {
   ConversationType,
   ProjectMessage,
   RecipientOptions,
+  SharedEntityType,
 } from "../types/message";
+import type { StepUpChallenge, StepUpVerifyResult } from "../types/stepUp";
 import type { ConsultantDashboardData, ConsultantReviewDetail, ConsultantReviewSummary } from "../types/consultant";
 import type { VoiceCommand } from "../types/voice";
 import type { FieldSubmission } from "../types/fieldSubmission";
@@ -398,6 +400,15 @@ const api = {
     delete: (id: string) => axiosInstance.delete(ENDPOINTS.MILESTONES.BY_ID(id)).then((res) => res.data),
   },
 
+  stepUp: {
+    purposes: () => axiosInstance
+      .get<{ code: string; label: string }[]>(ENDPOINTS.STEP_UP.PURPOSES).then((res) => res.data),
+    request: (purpose: string) => axiosInstance
+      .post<StepUpChallenge>(ENDPOINTS.STEP_UP.REQUEST, { purpose }).then((res) => res.data),
+    verify: (purpose: string, code: string) => axiosInstance
+      .post<StepUpVerifyResult>(ENDPOINTS.STEP_UP.VERIFY, { purpose, code }).then((res) => res.data),
+  },
+
   messages: {
     participants: (projectId: string) => axiosInstance
       .get<User[]>(`${ENDPOINTS.MESSAGES.PARTICIPANTS}?${parseQueryParams({ projectId })}`).then((res) => res.data),
@@ -445,6 +456,20 @@ const api = {
     }).then((res) => res.data),
     unreadCount: (projectId?: string) => axiosInstance
       .get<{ count: number }>(`${ENDPOINTS.MESSAGES.UNREAD_COUNT}?${parseQueryParams({ projectId })}`).then((res) => res.data),
+    forward: (messageId: string, data: {
+      recipientIds?: string[];
+      groupCode?: string;
+      note?: string;
+      title?: string;
+    }) => axiosInstance.post<Conversation>(ENDPOINTS.MESSAGES.FORWARD(messageId), data).then((res) => res.data),
+    shareEntity: (data: {
+      entityType: SharedEntityType;
+      entityId: string;
+      recipientIds?: string[];
+      groupCode?: string;
+      note?: string;
+      title?: string;
+    }) => axiosInstance.post<Conversation>(ENDPOINTS.MESSAGES.SHARE, data).then((res) => res.data),
   },
 
   documents: {
@@ -604,6 +629,10 @@ const api = {
     getByProject: (projectId: string) =>
       axiosInstance
         .get(ENDPOINTS.SITE_REPORTS.BY_PROJECT(projectId))
+        .then((res) => res.data),
+    review: (id: string, data: { approved: boolean; rejectionReason?: string }) =>
+      axiosInstance
+        .put(ENDPOINTS.SITE_REPORTS.REVIEW(id), data)
         .then((res) => res.data),
   },
 

@@ -7,6 +7,7 @@ change who could do what: the defaults must still match the roles the
 application shipped with.
 """
 
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -22,6 +23,7 @@ from app.models.permission import (
 )
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
 from app.models.task import Task
+from app.models.step_up import StepUpGrant
 from app.models.user import User
 from app.services.authorization import (
     consultant_covers_engineers, effective_permissions, has_permission, require,
@@ -343,6 +345,14 @@ def test_an_administrator_can_read_and_change_permissions(world):
     assert len(list_permissions(db=world["db"], current_user=world["admin"])) == len(CATALOGUE)
     assert len(role_matrix(db=world["db"], current_user=world["admin"])) == len(UserRole) * len(CATALOGUE)
 
+    # Changing the permission matrix requires step-up verification (Task 4).
+    # This test is about the permission API itself, so it satisfies the gate
+    # directly; the OTP mechanics have their own suite, which includes a test
+    # that this endpoint refuses without a grant.
+    world["db"].add(StepUpGrant(
+        user_id=world["admin"].id, purpose="admin.change_permissions",
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5)))
+    world["db"].flush()
     result = set_role_permission(
         RolePermissionUpdate(role="engineer", permissionCode="schedule.edit", allowed=True),
         db=world["db"], current_user=world["admin"])

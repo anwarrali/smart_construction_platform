@@ -49,6 +49,13 @@ abstract final class ApiEndpoints {
       '/messages/conversations/$id/read';
   static String messageContext(String type, String id) =>
       '/messages/context/$type/$id';
+
+  /// Forward an existing message into a new/existing conversation.
+  static String forwardMessage(String id) => '/messages/$id/forward';
+
+  /// Share a project entity (Issue, Task, Site Report, Design Change,
+  /// Document) as a message — the "Forward" / "Ask for Opinion" action.
+  static const shareEntity = '/messages/share';
   static const profile = '/users/profile';
   static const attachments = '/attachments/upload';
   static const fieldSubmissions = '/field-submissions';

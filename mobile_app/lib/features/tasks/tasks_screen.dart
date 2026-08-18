@@ -5,6 +5,8 @@ import '../../app/dependency_injection.dart';
 import '../../core/auth/session_manager.dart';
 import '../../core/widgets/async_views.dart';
 import '../../core/widgets/task_card.dart';
+import '../../core/l10n/l10n_formats.dart';
+import '../../core/l10n/l10n_labels.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/task.dart';
@@ -23,10 +25,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final project = ref.watch(projectContextProvider).selected;
     final user = ref.watch(sessionProvider).user!;
     if (project == null) {
-      return const MessageView(
+      return MessageView(
         icon: Icons.apartment,
-        title: 'No project selected',
-        message: 'Select a project first.',
+        title: context.l10n.commonNoProjectSelected,
+        message: context.l10n.commonSelectProjectFirst,
       );
     }
     return Scaffold(
@@ -34,7 +36,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(user.isSiteEngineer || user.isWorker ? 'My Tasks' : 'Project Tasks'),
+            Text(
+              user.isSiteEngineer || user.isWorker
+                  ? context.l10n.tasksMyTasks
+                  : context.l10n.tasksProjectTasks,
+            ),
             Text(
               project.name,
               maxLines: 1,
@@ -54,13 +60,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             .list(project.id, assignedOnly: user.isSiteEngineer || user.isWorker),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const LoadingView(label: 'Loading tasks');
+            return LoadingView(label: context.l10n.tasksLoading);
           }
           if (snapshot.hasError) {
             return MessageView(
               icon: Icons.cloud_off,
-              title: 'Tasks unavailable',
-              message: '${snapshot.error}',
+              title: context.l10n.commonUnavailable(context.l10n.tasksTitle),
+              message: context.l10n.describeError(snapshot.error),
               onAction: () => setState(() {}),
             );
           }
@@ -88,40 +94,48 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                   children: [
                     Expanded(
                       child: _TaskSummary(
-                        value: '${allTasks.length}',
-                        label: 'Total',
-                        tone: AppColors.navy,
+                        value: context.formatInt(allTasks.length),
+                        label: context.l10n.tasksTotal,
+                        tone: AppColors.primary,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: _TaskSummary(
-                        value:
-                            '${allTasks.where((task) => task.isOverdue).length}',
-                        label: 'Overdue',
-                        tone: AppColors.danger,
+                        value: context.formatInt(
+                          allTasks.where((task) => task.isOverdue).length,
+                        ),
+                        label: context.l10n.tasksOverdue,
+                        tone: AppColors.destructive,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: _TaskSummary(
-                        value:
-                            '${allTasks.where((task) => task.status == 'blocked').length}',
-                        label: 'Blocked',
-                        tone: AppColors.warning,
+                        value: context.formatInt(
+                          allTasks
+                              .where((task) => task.status == 'blocked')
+                              .length,
+                        ),
+                        label: context.l10n.tasksBlocked,
+                        tone: AppColors.stateReview,
                       ),
                     ),
                   ],
                 ),
               ),
-              SizedBox(
-                height: 60,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.page,
-                    vertical: 10,
-                  ),
+              // Was a fixed 60dp box around a horizontal ListView, which
+              // clipped the chips as soon as a translated label or an
+              // accessibility text scale made them taller — the same class of
+              // failure as the fixed-height dashboard header. A scroll view
+              // wrapping a Row sizes to its content instead.
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.page,
+                  vertical: 10,
+                ),
+                child: Row(
                   children:
                       [
                             'all',
@@ -137,23 +151,25 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                           ]
                           .map(
                             (value) => Padding(
-                              padding: const EdgeInsets.only(right: 8),
+                              // Directional: the gap follows the reading
+                              // order, so the chips do not bunch up in Arabic.
+                              padding: const EdgeInsetsDirectional.only(end: 8),
                               child: FilterChip(
-                                label: Text(_filterLabel(value)),
+                                label: Text(_filterLabel(context, value)),
                                 selected: _filter == value,
                                 showCheckmark: true,
                                 checkmarkColor: Colors.white,
                                 backgroundColor: Colors.white,
-                                selectedColor: AppColors.navy,
+                                selectedColor: AppColors.primary,
                                 side: BorderSide(
                                   color: _filter == value
-                                      ? AppColors.navy
+                                      ? AppColors.primary
                                       : AppColors.border,
                                 ),
                                 labelStyle: TextStyle(
                                   color: _filter == value
                                       ? Colors.white
-                                      : AppColors.textPrimary,
+                                      : AppColors.foreground,
                                   fontWeight: _filter == value
                                       ? FontWeight.w800
                                       : FontWeight.w600,
@@ -168,10 +184,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               ),
               Expanded(
                 child: tasks.isEmpty
-                    ? const MessageView(
+                    ? MessageView(
                         icon: Icons.task_alt,
-                        title: 'No matching tasks',
-                        message: 'There are no assigned tasks in this view.',
+                        title: context.l10n.tasksNoMatching,
+                        message: context.l10n.tasksNoAssigned,
                       )
                     : RefreshIndicator(
                         onRefresh: () async => setState(() {}),
@@ -199,13 +215,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     );
   }
 
-  String _filterLabel(String value) => switch (value) {
-    'all' => 'All',
-    'todo' => 'To do',
-    'in_progress' => 'In progress',
-    'under_review' => 'Under review',
-    'rework_required' => 'Rework',
-    _ => '${value[0].toUpperCase()}${value.substring(1)}',
+  /// Filter chips are narrow, so `rework_required` gets a short form; every
+  /// other value uses the shared status vocabulary rather than a second one.
+  String _filterLabel(BuildContext context, String value) => switch (value) {
+    'all' => context.l10n.commonAll,
+    'rework_required' => context.l10n.tasksFilterRework,
+    _ => context.l10n.statusLabel(value),
   };
 }
 
@@ -245,7 +260,7 @@ class _TaskSummary extends StatelessWidget {
             style: const TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
+              color: AppColors.mutedForeground,
             ),
           ),
         ),

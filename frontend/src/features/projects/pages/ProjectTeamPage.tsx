@@ -112,7 +112,7 @@ export const ProjectTeamPage = () => {
   const run = async (operation: () => Promise<unknown>, success?: string) => {
     setBusy(true); setError("");
     try { await operation(); await loadTeam(); if (success) setError(success); return true; }
-    catch (err: any) { setError(err?.response?.data?.detail || "Team update failed."); return false; }
+    catch (err: any) { setError(err?.response?.data?.detail || t("projectTeam.update_failed")); return false; }
     finally { setBusy(false); }
   };
 
@@ -211,28 +211,28 @@ export const ProjectTeamPage = () => {
         </button>
       </div>
       {!consultantMembers.length ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-        Add an active external Consultant Engineer to this project before configuring approval authority.
+        {t("projectTeam.add_consultant_before_approval")}
       </p> : approvalMode === "CENTRALIZED_REVIEW" ? (
         <Select label={t("projectTeam.centralized_consultant_reviewer")} value={centralizedReviewerId}
           onChange={(event) => setCentralizedReviewerId(event.target.value)}
-          options={[{ value: "", label: "Select Consultant" }, ...consultantMembers.map((member) => ({
+          options={[{ value: "", label: t("projectTeam.select_consultant") }, ...consultantMembers.map((member) => ({
             value: member.userId,
-            label: `${member.user.fullName} · ${member.user.engineerProfile?.discipline || "no specialty"}`,
+            label: `${member.user.fullName} · ${member.user.engineerProfile?.discipline ? vocabulary.discipline(member.user.engineerProfile.discipline) : t("projectTeam.no_specialty")}`,
           }))]} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {DISCIPLINES.map((discipline) => <Select key={discipline} label={`${discipline[0].toUpperCase()}${discipline.slice(1)} reviewer`}
+          {DISCIPLINES.map((discipline) => <Select key={discipline} label={t("projectTeam.discipline_reviewer", { discipline: vocabulary.discipline(discipline) })}
             value={disciplineReviewers[discipline] || ""}
             onChange={(event) => setDisciplineReviewers((current) => ({ ...current, [discipline]: event.target.value }))}
-            options={[{ value: "", label: "Not assigned" }, ...consultantMembers.map((member) => ({
+            options={[{ value: "", label: t("projectTeam.not_assigned") }, ...consultantMembers.map((member) => ({
               value: member.userId,
-              label: `${member.user.fullName} · ${member.user.engineerProfile?.discipline || "no specialty"}`,
+              label: `${member.user.fullName} · ${member.user.engineerProfile?.discipline ? vocabulary.discipline(member.user.engineerProfile.discipline) : t("projectTeam.no_specialty")}`,
             }))]} />)}
         </div>
       )}
       <div className="flex justify-end">
         <Button disabled={approvalBusy || !consultantMembers.length} onClick={saveApprovalWorkflow}>
-          {approvalBusy ? "Saving…" : "Save Approval Workflow"}
+          {approvalBusy ? t("projectTeam.saving") : t("projectTeam.save_approval_workflow")}
         </Button>
       </div>
     </Card>}
@@ -240,29 +240,29 @@ export const ProjectTeamPage = () => {
       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead><tr className="border-b text-muted-foreground">
         <th className="p-3">{t("projectTeam.member")}</th><th className="p-3">{t("projectTeam.role_discipline")}</th><th className="p-3">{t("projectTeam.company_affiliation")}</th><th className="p-3">{t("projectTeam.project_responsibility")}</th><th className="p-3">{t("projectTeam.assigned")}</th><th className="p-3">{t("projectTeam.actions")}</th>
       </tr></thead><tbody>{members.map((member) => <tr key={member.id} className="border-b align-top last:border-0">
-        <td className="p-3"><p className="font-medium">{member.user?.fullName}</p><p className="text-xs text-muted-foreground">{member.user?.email}</p><Badge size="sm" variant={member.user?.status === "active" ? "success" : "neutral"}>{member.user?.status || "unknown"}</Badge></td>
-        <td className="p-3"><p className="capitalize">{member.user?.role?.replaceAll("_", " ")}</p><p className="capitalize text-muted-foreground">{member.projectDiscipline || member.user?.engineerProfile?.discipline || "—"}</p></td>
-        <td className="p-3"><p>{member.user?.organization || "—"}</p>{member.user?.engineerAffiliation && <Badge size="sm" variant={member.user.engineerAffiliation === "external_consultant" ? "warning" : "neutral"}>{member.user.engineerAffiliation === "external_consultant" ? "External Consultant" : member.user.engineerAffiliation === "main_contractor" ? "Main Contractor" : "Internal Engineer"}</Badge>}</td>
-        <td className="p-3"><p>{member.assignmentTitle || "Project participant"}</p>{member.isSiteEngineer && <Badge size="sm" variant="success">{t("projectTeam.site_engineer")}</Badge>}<p className="mt-1 max-w-xs text-xs text-muted-foreground">{member.projectNotes}</p></td>
+        <td className="p-3"><p className="font-medium">{member.user?.fullName}</p><p className="text-xs text-muted-foreground">{member.user?.email}</p><Badge size="sm" variant={member.user?.status === "active" ? "success" : "neutral"}>{member.user?.status ? vocabulary.term(member.user.status) : t("projectTeam.unknown_status")}</Badge></td>
+        <td className="p-3"><p>{vocabulary.role(member.user?.role)}</p><p className="text-muted-foreground">{member.projectDiscipline || member.user?.engineerProfile?.discipline ? vocabulary.discipline(member.projectDiscipline || member.user?.engineerProfile?.discipline) : "—"}</p></td>
+        <td className="p-3"><p>{member.user?.organization || "—"}</p>{member.user?.engineerAffiliation && <Badge size="sm" variant={member.user.engineerAffiliation === "external_consultant" ? "warning" : "neutral"}>{vocabulary.role(member.user.engineerAffiliation)}</Badge>}</td>
+        <td className="p-3"><p>{member.assignmentTitle || t("projectTeam.project_participant")}</p>{member.isSiteEngineer && <Badge size="sm" variant="success">{t("projectTeam.site_engineer")}</Badge>}<p className="mt-1 max-w-xs text-xs text-muted-foreground">{member.projectNotes}</p></td>
         <td className="p-3 text-muted-foreground">{formatDate(member.createdAt || "")}</td>
         <td className="p-3">{["engineer", "consultant", "worker"].includes(member.user?.role || "") && <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => openEdit(member)}>{t("projectTeam.edit_project_assignment")}</Button>
           {otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setAnotherMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.add_to_another_project")}</Button>}
           {isAdmin && otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setTransferMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.transfer")}</Button>}
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm(`Remove ${member.user.fullName} from this project? The global account will be preserved.`)) run(() => api.projects.removeMember(projectId, member.userId), "Member removed from this project; the global account was preserved."); }}>{t("projectTeam.remove_from_project")}</Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm(t("projectTeam.confirm_remove_member", { name: member.user.fullName }))) run(() => api.projects.removeMember(projectId, member.userId), t("projectTeam.member_removed")); }}>{t("projectTeam.remove_from_project")}</Button>
         </div>}</td>
       </tr>)}{!busy && members.length === 0 && <tr><td className="p-6 text-center text-muted-foreground" colSpan={6}>{t("projectTeam.no_participants_assigned")}</td></tr>}</tbody></table></div>
     </Card>
 
     <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title={t("projectTeam.add_team_member")} size="lg"><div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.search_database_users")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("projectTeam.name_or_email")} />
-        <Select label={t("projectTeam.global_role")} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} options={[{ value: "", label: "Engineer, Consultant, or Worker" }, { value: "engineer", label: "Engineer" }, { value: "consultant", label: "Consultant" }, { value: "worker", label: "Worker" }]} />
-        <Select label={t("projectTeam.discipline")} value={disciplineFilter} onChange={(event) => setDisciplineFilter(event.target.value)} options={[{ value: "", label: "All disciplines" }, ...DISCIPLINES.map((value) => ({ value, label: value }))]} />
-        <Select label={t("projectTeam.company_affiliation")} value={affiliationFilter} onChange={(event) => setAffiliationFilter(event.target.value)} options={[{ value: "", label: "All affiliations" }, { value: "internal_engineer", label: "Internal Engineer" }, { value: "main_contractor", label: "Main Contractor" }, { value: "external_consultant", label: "External Consultant" }]} /></div>
-      <Select label={t("projectTeam.eligible_active_user")} value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${vocabulary.role(user.role)} · ${user.engineerProfile?.discipline || "no discipline"} · ${user.organization || "no organization"}` }))} />
-      {selectedUser && <div className="rounded border p-3 text-sm"><p className="font-medium">{selectedUser.fullName}</p><p>{selectedUser.email} · {vocabulary.role(selectedUser.role)} · {selectedUser.engineerProfile?.discipline}</p><p>{selectedUser.organization || "No organization"} · {selectedUser.engineerAffiliation?.replaceAll("_", " ")}</p></div>}
+        <Select label={t("projectTeam.global_role")} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} options={[{ value: "", label: t("projectTeam.engineer_consultant_or_worker") }, { value: "engineer", label: vocabulary.role("engineer") }, { value: "consultant", label: vocabulary.role("consultant") }, { value: "worker", label: vocabulary.role("worker") }]} />
+        <Select label={t("projectTeam.discipline")} value={disciplineFilter} onChange={(event) => setDisciplineFilter(event.target.value)} options={[{ value: "", label: t("projectTeam.all_disciplines") }, ...DISCIPLINES.map((value) => ({ value, label: vocabulary.discipline(value) }))]} />
+        <Select label={t("projectTeam.company_affiliation")} value={affiliationFilter} onChange={(event) => setAffiliationFilter(event.target.value)} options={[{ value: "", label: t("projectTeam.all_affiliations") }, { value: "internal_engineer", label: vocabulary.role("internal_engineer") }, { value: "main_contractor", label: vocabulary.role("main_contractor") }, { value: "external_consultant", label: vocabulary.role("external_consultant") }]} /></div>
+      <Select label={t("projectTeam.eligible_active_user")} value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${vocabulary.role(user.role)} · ${user.engineerProfile?.discipline ? vocabulary.discipline(user.engineerProfile.discipline) : t("projectTeam.no_discipline")} · ${user.organization || t("projectTeam.no_organization")}` }))} />
+      {selectedUser && <div className="rounded border p-3 text-sm"><p className="font-medium">{selectedUser.fullName}</p><p>{selectedUser.email} · {vocabulary.role(selectedUser.role)} · {selectedUser.engineerProfile?.discipline}</p><p>{selectedUser.organization || t("projectTeam.no_organization")} · {selectedUser.engineerAffiliation ? vocabulary.role(selectedUser.engineerAffiliation) : ""}</p></div>}
       <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.project_responsibility_title")} value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder={t("projectTeam.technical_reviewer_project_engineer")} />
-        <Select label={t("projectTeam.project_discipline")} value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={[{ value: "", label: "Use account discipline" }, ...DISCIPLINES.map((value) => ({ value, label: value }))]} /></div>
+        <Select label={t("projectTeam.project_discipline")} value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={[{ value: "", label: t("projectTeam.use_account_discipline") }, ...DISCIPLINES.map((value) => ({ value, label: vocabulary.discipline(value) }))]} /></div>
       <label className="block text-sm"><span className="font-medium">{t("projectTeam.project_specific_notes")}</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
       {canBeSiteEngineer(selectedUser) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> {t("projectTeam.assign_as_site_engineer")}</label>}
       {!available.length && <p className="text-sm text-muted-foreground">{t("projectTeam.no_eligible_active_users_match_these")}</p>}

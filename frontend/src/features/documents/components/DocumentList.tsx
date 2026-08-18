@@ -6,6 +6,7 @@ import { Loader } from "../../../components/ui/Loader";
 import { formatDate } from "../../../utils/date";
 import { formatFileSize } from "../../../utils/helpers";
 import type { Document } from "../../../types/document";
+import { CommunicationActions } from "../../../components/shared/CommunicationActions";
 
 interface DocumentListProps {
   documents: Document[];
@@ -69,6 +70,14 @@ export const DocumentList = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Share only. The backend refuses a share whose recipient cannot
+                access the document, so this never widens document access. */}
+            <CommunicationActions
+              entityType="DOCUMENT"
+              entityId={doc.id}
+              projectId={doc.projectId}
+              intents={["forward"]}
+            />
             {onDownload && (
               <Button variant="ghost" size="sm" onClick={() => onDownload(doc)}>
                 {t("documentList.download")}

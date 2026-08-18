@@ -10,12 +10,15 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import get_current_user, is_worker, user_has_project_access
 from app.db.database import get_db
+from app.models.design_change import DesignChange
+from app.models.document import Document
 from app.models.enums import ConversationType, NotificationType, UserStatus
 from app.models.issue import Issue
 from app.models.message import Conversation, ConversationParticipant, Message
 from app.models.collaboration import MessageRecipientState
 from app.models.notification import Notification
 from app.models.project import Project
+from app.models.site_report import SiteReport
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.message import (
@@ -24,13 +27,18 @@ from app.schemas.message import (
     ConversationOut,
     ConversationPage,
     DirectMessageCreate,
+    ForwardMessageCreate,
     MessageOut,
     MessageSend,
     ProjectAnnouncementCreate,
     RecipientOptionsOut,
+    ShareEntityCreate,
 )
 from app.schemas.user import UserOut
 from app.services.audit_service import record_audit
+from app.services.notification_service import (
+    CATEGORY_DIRECT, CATEGORY_WORKFLOW, PRIORITY_NORMAL, notify,
+)
 from app.services.messaging_authorization import (
     active_project_participant_ids,
     available_group_codes,
@@ -82,6 +90,7 @@ def _ensure_participant(
 
 
 def _message_payload(message: Message) -> dict:
+    origin = message.forward_origin
     return {
         "id": message.id,
         "conversation_id": message.conversation_id,
@@ -97,6 +106,20 @@ def _message_payload(message: Message) -> dict:
         "updated_at": message.updated_at,
         "edited_at": message.edited_at,
         "deleted_at": message.deleted_at,
+        "forwarded_from_message_id": message.forwarded_from_message_id,
+        # Never the immediate forwarded-from message — always the first,
+        # non-forwarded message in the chain, so the recipient sees who
+        # actually wrote it even after several hops (2.3 / 2.9 "multiple
+        # forwarding" — the chain must resolve to the true original sender).
+        "forward_origin": {
+            "message_id": origin.id,
+            "conversation_id": origin.conversation_id,
+            "sender": origin.sender,
+            "content": origin.content,
+            "created_at": origin.created_at,
+        } if origin else None,
+        "shared_entity_type": message.shared_entity_type,
+        "shared_entity_id": message.shared_entity_id,
     }
 
 
@@ -155,32 +178,73 @@ def _notify_message_recipients(
             ConversationParticipant.user_id != sender.id,
         ).all()
     }
-    if conversation.type == ConversationType.PROJECT_CHANNEL:
+    if message.forwarded_from_message_id:
+        # 2.6: a forwarded message must not read like an ordinary new message —
+        # the notification says up front that this is forwarded content, and
+        # names who it originally came from when that is still known. The
+        # forwarder's own note (`message.content`) and the original content
+        # (`origin.content`) are different pieces of information — quoting
+        # the note back as if it were "originally from" the other person
+        # would misattribute it, so both are shown, each labelled.
+        origin = message.forward_origin
+        title = f"{sender.full_name} forwarded you a message"
+        if origin and origin.sender:
+            notify_body = (
+                f"{message.content[:150]} "
+                f"(forwarded from {origin.sender.full_name}: {origin.content[:150]})"
+            )
+        else:
+            notify_body = message.content[:240]
+    elif message.shared_entity_type:
+        # A shared entity gets its own wording so the recipient can tell, from
+        # the notification alone, that someone sent them an Issue/Task/etc.
+        # rather than an ordinary message.
+        label = SHARED_ENTITY_LABELS.get(
+            message.shared_entity_type,
+            message.shared_entity_type.replace("_", " ").lower(),
+        ).lower()
+        article = "an" if label[:1] in "aeiou" else "a"
+        title = f"{sender.full_name} shared {article} {label} with you"
+        notify_body = message.content[:240]
+    elif conversation.type == ConversationType.PROJECT_CHANNEL:
         title = conversation.title or "New project announcement"
+        notify_body = message.content[:240]
     elif conversation.type == ConversationType.CONTEXTUAL:
         title = f"New {conversation.context_type.lower()} discussion message"
+        notify_body = message.content[:240]
     elif conversation.type == ConversationType.GROUP:
         title = conversation.title or "New group message"
+        notify_body = message.content[:240]
     else:
         title = f"New message from {sender.full_name}"
+        notify_body = message.content[:240]
+    # A share explicitly asks the recipient to look at something, so it is
+    # workflow rather than a passing message; everything else here happened
+    # directly to the user.
+    is_share = bool(message.shared_entity_type)
     for user_id in participant_ids:
-        db.add(Notification(
+        notify(
+            db,
             user_id=user_id,
             project_id=conversation.project_id,
             task_id=conversation.context_id if conversation.context_type == "TASK" else None,
             title=title,
-            message=message.content[:240],
-            type=NotificationType.MESSAGE,
-            related_entity_type="CONVERSATION",
-            related_entity_id=conversation.id,
-        ))
+            message=notify_body,
+            notification_type=NotificationType.MESSAGE,
+            category=CATEGORY_WORKFLOW if is_share else CATEGORY_DIRECT,
+            priority=PRIORITY_NORMAL,
+            requires_action=is_share or message.requires_response,
+            entity_type="CONVERSATION",
+            entity_id=conversation.id,
+        )
 
 
 def _send_message(
     db: Session, conversation: Conversation, sender: User, content: str,
     *, priority: str = "NORMAL", requires_acknowledgement: bool = False,
     requires_response: bool = False, response_due_at=None,
-    responded_to_message_id=None,
+    responded_to_message_id=None, forward_source: Message | None = None,
+    entity_share: tuple[str, uuid.UUID] | None = None,
 ) -> Message:
     if not can_send_to_conversation(db, sender, conversation):
         raise HTTPException(status_code=403, detail="You cannot send to this conversation")
@@ -194,6 +258,16 @@ def _send_message(
         requires_response=requires_response,
         response_due_at=response_due_at,
         responded_to_message_id=responded_to_message_id,
+        forwarded_from_message_id=forward_source.id if forward_source else None,
+        # Inherit the root of the chain when the source was itself already a
+        # forward, rather than pointing at it again — see the module-level
+        # note on `Message.forward_origin_message_id`.
+        forward_origin_message_id=(
+            (forward_source.forward_origin_message_id or forward_source.id)
+            if forward_source else None
+        ),
+        shared_entity_type=entity_share[0] if entity_share else None,
+        shared_entity_id=entity_share[1] if entity_share else None,
     )
     db.add(message)
     db.flush()
@@ -258,9 +332,100 @@ def _context_default_recipients(
     return {value for value in result if value}
 
 
+# --- Entity sharing (Forward / Ask for Opinion from an entity's own page) --
+#
+# One generic pipeline for every supported entity, rather than a bespoke
+# forward endpoint per entity: resolve the entity and its project, format a
+# plain-text summary (matching what the recipient would see if they opened
+# the entity themselves), and hand off to the exact same `_create_conversation`
+# / `_send_message` machinery a plain compose or a message-forward already
+# uses. Sharing never writes to the entity's own row — it only ever creates a
+# Message — so ownership, status and approval state are structurally
+# untouched, not just "not touched by convention".
+
+SHARED_ENTITY_LABELS = {
+    "ISSUE": "Issue",
+    "TASK": "Task",
+    "SITE_REPORT": "Site Report",
+    "DESIGN_CHANGE": "Design Change",
+    "DOCUMENT": "Document",
+}
+
+
+def _resolve_shared_entity(db: Session, entity_type: str, entity_id: uuid.UUID):
+    """The entity and the project it belongs to, or (None, None) if unknown."""
+    model = {
+        "ISSUE": Issue, "TASK": Task, "SITE_REPORT": SiteReport,
+        "DESIGN_CHANGE": DesignChange, "DOCUMENT": Document,
+    }.get(entity_type)
+    if not model:
+        return None, None
+    entity = db.get(model, entity_id)
+    return (entity, entity.project_id) if entity else (None, None)
+
+
+def _format_shared_entity(
+    entity_type: str, entity, project: Project, sender: User, note: str | None,
+) -> str:
+    """A plain-text summary block, matching what the recipient would see on
+    the entity's own page — not just a bare link, so the message is useful
+    even before they click through."""
+    label = SHARED_ENTITY_LABELS.get(entity_type, entity_type.replace("_", " ").title())
+    fields: list[tuple[str, str]] = [("Project", project.name)]
+    body: str | None = None
+
+    if entity_type == "ISSUE":
+        fields += [
+            ("Issue", entity.title),
+            ("Status", entity.status.value.replace("_", " ").title()),
+            ("Severity", entity.severity.value.title()),
+            ("Original owner", entity.raised_by.full_name if entity.raised_by else "—"),
+        ]
+        body = entity.description
+    elif entity_type == "TASK":
+        assignees = ", ".join(person.full_name for person in entity.assignees) or "Unassigned"
+        fields += [
+            ("Task", f"{entity.task_code} — {entity.name}"),
+            ("Status", entity.status.value.replace("_", " ").title()),
+            ("Assigned to", assignees),
+        ]
+        body = entity.description
+    elif entity_type == "SITE_REPORT":
+        fields += [
+            ("Report date", str(entity.report_date)),
+            ("Submitted by", entity.submitted_by.full_name if entity.submitted_by else "—"),
+            ("Status", entity.review_status.replace("_", " ").title()),
+        ]
+        body = entity.summary_text
+    elif entity_type == "DESIGN_CHANGE":
+        fields += [
+            ("Design Change", entity.title),
+            ("Discipline", entity.source_discipline.title()),
+            ("Status", entity.status.value.replace("_", " ").title()),
+            ("Proposed by", entity.proposed_by.full_name if entity.proposed_by else "—"),
+        ]
+        body = entity.description
+    elif entity_type == "DOCUMENT":
+        fields += [
+            ("Document", entity.title),
+            ("Type", entity.document_type.value.title()),
+            ("Uploaded by", entity.uploaded_by.full_name if entity.uploaded_by else "—"),
+        ]
+
+    lines = [f"Shared {label}", ""]
+    lines += [f"{key}: {value}" for key, value in fields]
+    if body and body.strip():
+        lines += ["", "Description:", body.strip()]
+    lines += ["", f"Shared by: {sender.full_name}"]
+    if note and note.strip():
+        lines += ["", "Note:", f'"{note.strip()}"']
+    return "\n".join(lines)
+
+
 def _create_conversation(
     db: Session, data: ConversationCreate, current_user: User,
-    *, force_announcement: bool = False,
+    *, force_announcement: bool = False, forward_source: Message | None = None,
+    entity_share: tuple[str, uuid.UUID] | None = None,
 ) -> Conversation:
     project = db.get(Project, data.project_id)
     if not project:
@@ -314,7 +479,8 @@ def _create_conversation(
         )
         if existing:
             if data.content:
-                _send_message(db, existing, current_user, data.content)
+                _send_message(db, existing, current_user, data.content,
+                              forward_source=forward_source, entity_share=entity_share)
             return existing
     if conversation_type == ConversationType.CONTEXTUAL:
         existing = db.query(Conversation).filter(
@@ -328,7 +494,8 @@ def _create_conversation(
                 _ensure_participant(db, existing, recipient_id)
             _ensure_participant(db, existing, current_user.id)
             if data.content:
-                _send_message(db, existing, current_user, data.content)
+                _send_message(db, existing, current_user, data.content,
+                              forward_source=forward_source, entity_share=entity_share)
             return existing
 
     conversation = Conversation(
@@ -345,10 +512,14 @@ def _create_conversation(
     for user_id in {current_user.id, *recipient_ids}:
         _ensure_participant(db, conversation, user_id)
     if data.content:
-        _send_message(db, conversation, current_user, data.content)
+        _send_message(db, conversation, current_user, data.content,
+                      forward_source=forward_source, entity_share=entity_share)
     record_audit(
         db, actor_id=current_user.id,
-        action="project_announcement_created" if force_announcement else "conversation_created",
+        action="project_announcement_created" if force_announcement else (
+            "message_forwarded" if forward_source else
+            "entity_shared" if entity_share else "conversation_created"
+        ),
         entity_type="conversation", entity_id=conversation.id,
         project_id=project.id,
         details={
@@ -356,6 +527,8 @@ def _create_conversation(
             "recipient_count": len(recipient_ids),
             "context_type": context_type,
             "context_id": data.context_id,
+            **({"forwarded_message_id": str(forward_source.id)} if forward_source else {}),
+            **({"shared_entity_type": entity_share[0], "shared_entity_id": str(entity_share[1])} if entity_share else {}),
         },
     )
     return conversation
@@ -511,6 +684,141 @@ def create_project_announcement(
     db.commit()
     db.refresh(conversation)
     return _conversation_payload(db, conversation, current_user)
+
+
+@router.post("/{message_id}/forward", response_model=ConversationDetail, status_code=201)
+def forward_message(
+    message_id: uuid.UUID,
+    data: ForwardMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Forward a message as its own new message, into a (new or existing)
+    conversation with the chosen recipients.
+
+    This is communication, not a task/issue/report handoff: it creates a
+    Message, nothing else. The original message is untouched, its
+    conversation is untouched, and nothing about who owns or is responsible
+    for any entity the message happened to reference ever changes here — see
+    the module docstring on `Message.forward_origin_message_id` for how the
+    chain itself is tracked.
+    """
+    source = db.query(Message).filter(Message.id == message_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if source.deleted_at:
+        raise HTTPException(status_code=409, detail="A deleted message cannot be forwarded")
+    source_conversation = _conversation_or_404(db, source.conversation_id)
+    # Reading the source is its own check, independent of who the forward is
+    # going to: `_create_conversation` below authorizes each recipient, but
+    # nothing else re-confirms the forwarder was ever allowed to see this
+    # message in the first place.
+    if not can_view_conversation(db, current_user, source_conversation):
+        raise HTTPException(status_code=403, detail="You cannot forward a message you do not have access to")
+
+    note = (data.note or "").strip() or f"{current_user.full_name} forwarded a message."
+    # `_create_conversation` performs every recipient/group authorization
+    # check a normal compose does (`can_message_user`, `resolve_group_recipient_ids`),
+    # scoped to the source message's own project — so a forward can never
+    # reach a recipient outside that project, and never a recipient the
+    # forwarder could not otherwise message on it (2.7 / project isolation).
+    target = _create_conversation(
+        db,
+        ConversationCreate(
+            project_id=source_conversation.project_id,
+            recipient_ids=data.recipient_ids,
+            group_code=data.group_code,
+            title=data.title,
+            content=note,
+        ),
+        current_user,
+        forward_source=source,
+    )
+    db.commit()
+    db.refresh(target)
+    return _conversation_payload(db, target, current_user, include_messages=True)
+
+
+@router.post("/share", response_model=ConversationDetail, status_code=201)
+def share_entity(
+    data: ShareEntityCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Share a project entity as a message — the "Forward" / "Ask for Opinion"
+    action offered from an Issue, Task, Site Report, Design Change or Document.
+
+    Consultation, not handoff: this only ever creates a Message. It does not
+    write to the shared entity, so ownership, assignee, status, verification
+    and approval state are all untouched by construction, and no duplicate
+    entity is ever created.
+    """
+    entity_type = data.entity_type.upper()
+    if entity_type not in SHARED_ENTITY_LABELS:
+        raise HTTPException(status_code=422, detail="This entity type cannot be shared")
+    entity, project_id = _resolve_shared_entity(db, entity_type, data.entity_id)
+    if not entity or not project_id:
+        raise HTTPException(status_code=404, detail="The item you are sharing was not found")
+
+    # Three independent checks, none of which the others imply:
+    #   1. the sender may see this project at all;
+    #   2. the sender may see *this specific entity* — `can_access_context`
+    #      applies the same per-entity rules the entity's own discussion uses
+    #      (e.g. Workers are excluded from Issues, Engineers only reach tasks
+    #      assigned to them), so sharing cannot become a way to read out an
+    #      entity you could not otherwise open;
+    #   3. every recipient is authorized — enforced inside `_create_conversation`.
+    if not user_has_project_access(db, current_user, project_id):
+        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    if not can_access_context(db, current_user, project_id, entity_type, data.entity_id):
+        raise HTTPException(status_code=403, detail="You cannot share an item you do not have access to")
+
+    # Resolve any group code here rather than leaving it to
+    # `_create_conversation`, so every eventual recipient can be checked for
+    # entity access *before* the content is written into a message. Sharing
+    # sends a summary of the entity, so a recipient who could not open the
+    # entity themselves must not receive it — this is what stops sharing from
+    # becoming a way to leak a restricted Document (or Issue) to someone the
+    # entity's own permissions exclude. `_create_conversation` still re-checks
+    # project-level messaging permission for each id it is handed.
+    recipient_ids = set(data.recipient_ids)
+    if data.group_code:
+        resolved = resolve_group_recipient_ids(db, current_user, project_id, data.group_code)
+        if not resolved:
+            raise HTTPException(status_code=403, detail="This recipient group is unavailable or empty")
+        recipient_ids.update(resolved)
+    recipient_ids.discard(current_user.id)
+    if not recipient_ids:
+        raise HTTPException(status_code=422, detail="At least one authorized recipient is required")
+    recipients = db.query(User).filter(User.id.in_(recipient_ids)).all()
+    if len(recipients) != len(recipient_ids):
+        raise HTTPException(status_code=404, detail="One or more recipients were not found")
+    blocked = [
+        person.full_name for person in recipients
+        if not can_access_context(db, person, project_id, entity_type, data.entity_id)
+    ]
+    if blocked:
+        raise HTTPException(
+            status_code=403,
+            detail=f"These recipients cannot access this item: {', '.join(sorted(blocked))}",
+        )
+
+    project = db.get(Project, project_id)
+    content = _format_shared_entity(entity_type, entity, project, current_user, data.note)
+    target = _create_conversation(
+        db,
+        ConversationCreate(
+            project_id=project_id,
+            recipient_ids=sorted(recipient_ids),
+            title=data.title,
+            content=content,
+        ),
+        current_user,
+        entity_share=(entity_type, data.entity_id),
+    )
+    db.commit()
+    db.refresh(target)
+    return _conversation_payload(db, target, current_user, include_messages=True)
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetail)

@@ -16,6 +16,7 @@ import api from "../../../services/api";
 import axios from "../../../services/axios";
 import { useRole } from "../../../hooks/useRole";
 import { AttachmentPanel } from "../../../components/shared/AttachmentPanel";
+import { CommunicationActions } from "../../../components/shared/CommunicationActions";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
 import toast from "react-hot-toast";
 import type { Task } from "../../../types/task";
@@ -39,6 +40,9 @@ interface SiteReport {
   issuesSummary?: string;
   notes?: string;
   attachmentCount: number;
+  rejectionReason?: string;
+  reviewedBy?: { id: string; fullName: string };
+  reviewedAt?: string;
 }
 
 export const SiteReportsPage = () => {
@@ -76,6 +80,9 @@ export const SiteReportsPage = () => {
   const [filterProject, setFilterProject] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDiscipline, setFilterDiscipline] = useState("");
+  const [rejectingReport, setRejectingReport] = useState<SiteReport | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [verifyingId, setVerifyingId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [onlyAttachments, setOnlyAttachments] = useState(false);
@@ -146,9 +153,9 @@ export const SiteReportsPage = () => {
       }
       setFormOpen(false); setEditingId(""); setSummary(""); setPhotos([]); setTaskId(""); setEquipment(""); setWorkCompleted(""); setWorkInProgress(""); setDelays(""); setIssuesSummary(""); setNotes("");
       await fetchReports();
-      toast.success(reviewStatus === "draft" ? "Site report draft saved." : "Site report submitted.");
+      toast.success(reviewStatus === "draft" ? t("siteReports.draft_saved") : t("siteReports.report_submitted"));
     } catch (err: any) {
-      toast.error(errorMessage(err, "Site report could not be saved."));
+      toast.error(errorMessage(err, t("siteReports.save_failed")));
     } finally {
       setIsSaving(false);
     }
@@ -161,6 +168,38 @@ export const SiteReportsPage = () => {
     setIssuesSummary(report.issuesSummary || ""); setNotes(report.notes || ""); setPhotos([]); setFormOpen(true);
   };
 
+  // Verification is a Manager-only backend action (`site_report.verify`); this
+  // button only ever appears for a report already in the "submitted" state, but
+  // the server re-validates the role, the project assignment and the state
+  // transition regardless of what the UI shows.
+  const verifyReport = async (report: SiteReport) => {
+    setVerifyingId(report.id);
+    try {
+      await api.siteReports.review(report.id, { approved: true });
+      await fetchReports();
+      toast.success(t("siteReports.report_verified"));
+    } catch (err: any) {
+      toast.error(errorMessage(err, t("siteReports.review_failed")));
+    } finally {
+      setVerifyingId("");
+    }
+  };
+  const submitRejection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectingReport || !rejectionReason.trim()) return;
+    setVerifyingId(rejectingReport.id);
+    try {
+      await api.siteReports.review(rejectingReport.id, { approved: false, rejectionReason: rejectionReason.trim() });
+      setRejectingReport(null); setRejectionReason("");
+      await fetchReports();
+      toast.success(t("siteReports.report_rejected"));
+    } catch (err: any) {
+      toast.error(errorMessage(err, t("siteReports.review_failed")));
+    } finally {
+      setVerifyingId("");
+    }
+  };
+
   if (isLoading) return <Loader fullPage />;
   const visibleReports = focusedReportId ? reports.filter((report) => report.id === focusedReportId) : reports;
 
@@ -168,19 +207,19 @@ export const SiteReportsPage = () => {
     <div className="page-container space-y-6">
       <div className="flex items-center justify-between">
         <div>
-        <h1 className="text-2xl font-bold">Site Reports{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
+        <h1 className="text-2xl font-bold">{t("siteReports.site_reports")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
         <p className="text-muted-foreground">{t("siteReports.daily_site_progress_reports")}</p>
-        </div>{canSubmit && <Button onClick={() => setFormOpen(true)}>+ Site Report</Button>}
+        </div>{canSubmit && <Button onClick={() => setFormOpen(true)}>+ {t("siteReports.site_reports_singular")}</Button>}
       </div>
       {focusedReportId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("siteReports.showing_the_site_report_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("siteReports.show_all_reports")}</Button></div>}
 
       <Card className="grid gap-3 p-4 md:grid-cols-6">
-        {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || "Selected project"}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:"All projects"},...projects.map(project=>({value:project.id,label:project.name}))]}/>} 
-        <Select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} options={[{value:"",label:"All statuses"},...['draft','submitted','approved','rejected'].map(value=>({value,label:value}))]}/>
-        <Select value={filterDiscipline} onChange={e=>setFilterDiscipline(e.target.value)} options={[{value:"",label:"All disciplines"},...['civil','architectural','electrical','mechanical'].map(value=>({value,label:value}))]}/>
+        {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || t("project.selectedProject")}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:t("project.allProjects")},...projects.map(project=>({value:project.id,label:project.name}))]}/>}
+        <Select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} options={[{value:"",label:t("siteReports.all_statuses")},...['draft','submitted','approved','rejected'].map(value=>({value,label:vocabulary.reviewStatus(value)}))]}/>
+        <Select value={filterDiscipline} onChange={e=>setFilterDiscipline(e.target.value)} options={[{value:"",label:t("siteReports.all_disciplines")},...['civil','architectural','electrical','mechanical'].map(value=>({value,label:vocabulary.discipline(value)}))]}/>
         <Input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
         <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyAttachments} onChange={e=>setOnlyAttachments(e.target.checked)}/> Has attachments</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyAttachments} onChange={e=>setOnlyAttachments(e.target.checked)}/> {t("siteReports.has_attachments")}</label>
       </Card>
 
       {visibleReports.length === 0 ? (
@@ -205,9 +244,35 @@ export const SiteReportsPage = () => {
                       {report.weatherConditions}
                     </Badge>
                   )}
-                  {report.reviewStatus && <Badge size="sm" className="mt-1 ml-2">{vocabulary.reviewStatus(report.reviewStatus)}</Badge>}
+                  {report.reviewStatus && <Badge size="sm" className="mt-1 ml-2" variant={report.reviewStatus === "approved" ? "success" : report.reviewStatus === "rejected" ? "danger" : "neutral"}>{vocabulary.reviewStatus(report.reviewStatus)}</Badge>}
                   {report.reviewStatus === "draft" && report.submittedById === user?.id && <Button className="ml-2" size="sm" variant="ghost" onClick={() => editDraft(report)}>{t("siteReports.edit_draft")}</Button>}
                   <AttachmentPanel projectId={report.projectId} entityType="SITE_REPORT" entityId={report.id} initialCount={report.attachmentCount} />
+                  {/* Forward only: a site report is circulated for awareness,
+                      while its formal review is the separate PM verification
+                      action below — offering "Ask for Opinion" here would blur
+                      the two. */}
+                  <CommunicationActions className="mt-2" entityType="SITE_REPORT" entityId={report.id} projectId={report.projectId} intents={["forward"]} />
+
+                  {/* Verification: server-enforced for the assigned Project
+                      Manager only (site_report.verify); this UI merely hides
+                      the action for everyone else — it is not the guard. */}
+                  {role === "project_manager" && report.reviewStatus === "submitted" && (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg border bg-muted/20 p-3">
+                      <span className="text-sm font-medium">{t("siteReports.verification_needed")}</span>
+                      <Button size="sm" isLoading={verifyingId === report.id} onClick={() => verifyReport(report)}>{t("siteReports.verify")}</Button>
+                      <Button size="sm" variant="outline" disabled={verifyingId === report.id} onClick={() => { setRejectingReport(report); setRejectionReason(""); }}>{t("siteReports.reject")}</Button>
+                    </div>
+                  )}
+                  {report.reviewStatus === "rejected" && report.rejectionReason && (
+                    <p className="mt-2 rounded-lg border border-state-overdue/30 bg-wash-overdue px-3 py-2 text-sm text-state-overdue">
+                      <span className="font-medium">{t("siteReports.rejection_reason")}:</span> {report.rejectionReason}
+                    </p>
+                  )}
+                  {(report.reviewStatus === "approved" || report.reviewStatus === "rejected") && report.reviewedBy && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("siteReports.reviewed_by", { name: report.reviewedBy.fullName, date: report.reviewedAt ? formatDate(report.reviewedAt) : "" })}
+                    </p>
+                  )}
                 </div>
                 {report.progressPercentageReported !== undefined && report.progressPercentageReported !== null && <div className="text-right">
                   <p className="text-lg font-bold">
@@ -220,12 +285,22 @@ export const SiteReportsPage = () => {
           ))}
         </div>
       )}
-      <Modal isOpen={formOpen} onClose={() => { setFormOpen(false); setEditingId(""); setPrefilledVisit(null); if (siteVisitId) { const next = new URLSearchParams(searchParams); next.delete("siteVisitId"); setSearchParams(next, { replace: true }); } }} title={editingId ? "Edit site report draft" : "Create site report"}>
+      <Modal isOpen={!!rejectingReport} onClose={() => setRejectingReport(null)} title={t("siteReports.reject_report_title")}>
+        <form onSubmit={submitRejection} className="space-y-4">
+          <p className="text-sm text-muted-foreground">{t("siteReports.reject_report_description")}</p>
+          <Input label={t("siteReports.rejection_reason")} value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} required />
+          <ModalActions>
+            <Button type="button" variant="outline" onClick={() => setRejectingReport(null)}>{t("siteReports.cancel")}</Button>
+            <Button type="submit" isLoading={!!rejectingReport && verifyingId === rejectingReport.id} disabled={!rejectionReason.trim()}>{t("siteReports.reject")}</Button>
+          </ModalActions>
+        </form>
+      </Modal>
+      <Modal isOpen={formOpen} onClose={() => { setFormOpen(false); setEditingId(""); setPrefilledVisit(null); if (siteVisitId) { const next = new URLSearchParams(searchParams); next.delete("siteVisitId"); setSearchParams(next, { replace: true }); } }} title={editingId ? t("siteReports.edit_draft_title") : t("siteReports.create_title")}>
         <form onSubmit={submitReport} className="space-y-4">
-          {prefilledVisit && <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm"><p className="font-medium">{t("siteReports.prefilled_from_a_scheduled_site_visit")}</p><p className="mt-0.5 text-muted-foreground">{prefilledVisit.visitType.replaceAll("_", " ").toLowerCase()} · visit date {prefilledVisit.reportDate}</p></div>}
+          {prefilledVisit && <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm"><p className="font-medium">{t("siteReports.prefilled_from_a_scheduled_site_visit")}</p><p className="mt-0.5 text-muted-foreground">{t("siteReports.visit_summary", { type: vocabulary.siteVisitType(prefilledVisit.visitType), date: prefilledVisit.reportDate })}</p></div>}
           {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">{t("siteReports.project")}</span> {workspace.project?.name}</p> : <Select label={t("siteReports.project_2")} value={projectId} onChange={e=>setProjectId(e.target.value)} options={projects.filter(project => role === "project_manager" || siteProjectIds.includes(project.id)).map(p=>({value:p.id,label:p.name}))}/>}
           <Input label={t("siteReports.work_summary")} value={summary} onChange={e=>setSummary(e.target.value)} required/>
-          <Select label={t("siteReports.related_task_optional")} value={taskId} onChange={e=>setTaskId(e.target.value)} options={[{value:"",label:"General daily report"},...tasks.map(task=>({value:task.id,label:`${task.taskCode} — ${task.name}`}))]}/>
+          <Select label={t("siteReports.related_task_optional")} value={taskId} onChange={e=>setTaskId(e.target.value)} options={[{value:"",label:t("siteReports.general_daily_report")},...tasks.map(task=>({value:task.id,label:`${task.taskCode} — ${task.name}`}))]}/>
           <Input label={t("siteReports.weather")} value={weather} onChange={e=>setWeather(e.target.value)}/>
           <Input label={t("siteReports.workers_count")} type="number" min="0" value={workers} onChange={e=>setWorkers(e.target.value)}/>
           <Input label={t("siteReports.equipment")} value={equipment} onChange={e=>setEquipment(e.target.value)}/>

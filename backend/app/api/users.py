@@ -13,10 +13,16 @@ from app.models.issue import Issue
 from app.models.document import Document, MediaAsset
 from app.models.site_report import SiteReport
 from app.models.design_change import DesignChange
-from app.models.message import Message
+from app.models.message import Conversation, Message
 from app.models.attachment import Attachment
 from app.models.cost_validation import CostValidation
 from app.models.voice_recording import VoiceRecording
+from app.models.field_submission import FieldSubmission
+from app.models.ifc import IFCComparison, IFCModelGroup, IFCModelVersion
+from app.models.collaboration import OwnerRequest, SiteVisit
+from app.models.voice_analysis import VoiceAnalysis
+from app.models.voice_action import VoiceExecutionLog
+from app.models.ai_governance import AIActionVersion
 from app.models.enums import UserRole, UserStatus, EngineerDiscipline
 from app.schemas.user import (
     UserOut,
@@ -35,6 +41,7 @@ from app.core.security import hash_password, verify_password
 from app.services.user_service import create_provisioned_user, generate_temporary_password
 from app.services.file_storage import save_upload
 from app.services.audit_service import record_audit
+from app.services.step_up_service import require_step_up
 from app.models.notification import Notification
 from app.models.password_reset import PasswordResetToken
 from app.models.enums import NotificationType
@@ -249,12 +256,33 @@ def change_password(
     if not verify_password(data.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect current password")
 
+    # Knowing the current password proves the session is not merely open; a
+    # code sent out-of-band proves the account's inbox is still controlled by
+    # its owner. A stolen session satisfies the first and not the second.
+    #
+    # The forced first-login change is exempt: the user has not signed in
+    # normally yet, may be acting on a temporary password from that same
+    # inbox, and blocking them here would lock them out of the platform
+    # entirely. `must_change_password` is already gated to this one endpoint
+    # by `get_current_user`.
+    # Captured before the flag is cleared below, so the audit records which
+    # path actually ran rather than always reporting the post-change state.
+    forced_first_change = current_user.must_change_password
+    if not forced_first_change:
+        require_step_up(db, current_user, "security.change_password")
+
     current_user.hashed_password = hash_password(data.new_password)
     current_user.must_change_password = False
     if not current_user.invitation_accepted:
         current_user.invitation_accepted = True
     if current_user.status == UserStatus.PENDING:
         current_user.status = UserStatus.ACTIVE
+    # A password change had no audit record at all before this — one of the
+    # gaps the security audit turned up.
+    record_audit(db, actor_id=current_user.id, action="password_changed",
+                 entity_type="user", entity_id=current_user.id,
+                 details={"stepUp": not forced_first_change,
+                          "forcedFirstChange": forced_first_change})
     db.commit()
     return {"message": "Password updated successfully"}
 
@@ -321,7 +349,13 @@ def update_user_by_admin(
         if update_data.role is not None:
             if user.id == current_user.id and update_data.role != UserRole.ADMIN:
                 raise HTTPException(status_code=400, detail="You cannot remove your own administrator role")
-            user.role = UserRole.ENGINEER if update_data.role == UserRole.CONSULTANT else update_data.role
+            # Only an actual change of role demands step-up: re-saving a
+            # profile form that happens to echo the current role should not
+            # pester the administrator for a code.
+            resolved_role = UserRole.ENGINEER if update_data.role == UserRole.CONSULTANT else update_data.role
+            if resolved_role != user.role:
+                require_step_up(db, current_user, "admin.change_user_role")
+            user.role = resolved_role
 
         if user.role == UserRole.ENGINEER:
             affiliation = update_data.engineer_affiliation or (
@@ -383,6 +417,10 @@ def deactivate_user(
         raise HTTPException(status_code=404, detail="User not found")
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+    # Locking someone out of the platform is high-impact and irreversible from
+    # their side, so it needs proof the administrator's session is genuinely
+    # theirs — not just that it is open.
+    require_step_up(db, current_user, "admin.deactivate_user")
     user.status = UserStatus.INACTIVE
     record_audit(db, actor_id=current_user.id, action="deactivated", entity_type="user", entity_id=user.id)
     db.commit()
@@ -416,6 +454,8 @@ def permanently_delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot permanently delete your own administrator account")
+    # The most destructive operation the platform exposes, and unrecoverable.
+    require_step_up(db, current_user, "admin.delete_user")
 
     detachable_links = {
         "ownedProjects": db.query(Project.id).filter(Project.owner_id == user.id).count(),
@@ -423,6 +463,30 @@ def permanently_delete_user(
         "projectMemberships": db.query(ProjectMember.id).filter(ProjectMember.user_id == user.id).count(),
         "taskAssignments": db.query(task_assignees.c.task_id).filter(task_assignees.c.user_id == user.id).count(),
     }
+    # Every one of these mirrors a real `ondelete="RESTRICT"` foreign key onto
+    # `users.id` — i.e. a row the database itself will never let this DELETE
+    # silently orphan or cascade away, because it is project history that has
+    # to survive the person who made it. This dict must stay a complete
+    # mirror of that set or `db.delete(user)` below throws a raw
+    # `IntegrityError` (or, before this fix, an unrelated `AttributeError` —
+    # `Message.receiver_id` doesn't exist on the current conversation-based
+    # messaging schema; only `sender_id` does) instead of the clean 409 this
+    # endpoint exists to give. `test_permanently_delete_user.py::
+    # test_every_restrict_foreign_key_to_users_has_a_blocker_check` pins
+    # completeness against the live schema so a new RESTRICT column added
+    # later fails a test instead of a delete request.
+    #
+    # Deliberately NOT checked here (each is `ondelete="SET NULL"` or
+    # `"CASCADE"` on `users.id`, so the database itself lets the delete
+    # through and either preserves the row with the actor blanked — audit_logs
+    # chief among them: the new "permanently_deleted" entry below is written
+    # before the delete and is never itself deleted, only older rows that
+    # named this user as actor lose that attribution — or removes a pure
+    # membership/association row that carries no content of its own):
+    # notifications, project_members, task_assignees, conversation_participants,
+    # engineer_profiles, user_permission_overrides, audit_logs.actor_id,
+    # projects.owner_id/project_manager_id, issues.assigned_to_id, and every
+    # other reviewed_by/approved_by/assigned_by attribution column.
     blockers = {
         "created tasks": db.query(Task.id).filter(Task.created_by_id == user.id).first(),
         "task comments": db.query(TaskComment.id).filter(TaskComment.author_id == user.id).first(),
@@ -431,10 +495,22 @@ def permanently_delete_user(
             or db.query(MediaAsset.id).filter(MediaAsset.uploaded_by_id == user.id).first(),
         "site reports": db.query(SiteReport.id).filter(SiteReport.submitted_by_id == user.id).first(),
         "design changes": db.query(DesignChange.id).filter(DesignChange.proposed_by_id == user.id).first(),
-        "messages": db.query(Message.id).filter(or_(Message.sender_id == user.id, Message.receiver_id == user.id)).first(),
+        "messages": db.query(Message.id).filter(Message.sender_id == user.id).first(),
+        "conversations created": db.query(Conversation.id).filter(Conversation.created_by_id == user.id).first(),
         "attachments": db.query(Attachment.id).filter(Attachment.uploaded_by_id == user.id).first(),
         "cost records": db.query(CostValidation.id).filter(CostValidation.requested_by_id == user.id).first(),
         "voice recordings": db.query(VoiceRecording.id).filter(VoiceRecording.recorded_by_id == user.id).first(),
+        "field submissions": db.query(FieldSubmission.id).filter(FieldSubmission.worker_id == user.id).first(),
+        "IFC model groups": db.query(IFCModelGroup.id).filter(IFCModelGroup.created_by_id == user.id).first(),
+        "IFC model versions": db.query(IFCModelVersion.id).filter(IFCModelVersion.uploaded_by_id == user.id).first(),
+        "IFC comparisons": db.query(IFCComparison.id).filter(IFCComparison.created_by_id == user.id).first(),
+        "client requests": db.query(OwnerRequest.id).filter(OwnerRequest.created_by_id == user.id).first(),
+        "site visits": db.query(SiteVisit.id).filter(
+            or_(SiteVisit.created_by_id == user.id, SiteVisit.engineer_id == user.id)
+        ).first(),
+        "voice analyses": db.query(VoiceAnalysis.id).filter(VoiceAnalysis.user_id == user.id).first(),
+        "voice execution logs": db.query(VoiceExecutionLog.id).filter(VoiceExecutionLog.actor_user_id == user.id).first(),
+        "AI action history": db.query(AIActionVersion.id).filter(AIActionVersion.actor_user_id == user.id).first(),
     }
     active_blockers = [label for label, found in blockers.items() if found]
     if active_blockers:
@@ -467,6 +543,9 @@ def admin_reset_password(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    # Resetting someone else's password hands over their account, so it is
+    # gated on the administrator re-proving control of their own.
+    require_step_up(db, current_user, "admin.reset_user_password")
     temporary_password = generate_temporary_password()
     user.hashed_password = hash_password(temporary_password)
     user.must_change_password = True

@@ -65,7 +65,7 @@ export const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
 
         <div className="flex items-center gap-1">
           <Badge variant={statusVariant[task.status] || "neutral"} size="sm">
-            {task.status.replace("_", " ")}
+            {vocabulary.taskStatus(task.status)}
           </Badge>
           {task.isCriticalPath && (
             <Badge variant="danger" size="sm" dot>

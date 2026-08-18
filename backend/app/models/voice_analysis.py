@@ -85,7 +85,10 @@ class VoiceAnalysis(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     action_drafts: Mapped[list["VoiceActionDraft"]] = relationship(
         back_populates="voice_analysis",
         cascade="all, delete-orphan",
-        order_by="VoiceActionDraft.created_at",
+        # Was `created_at`, which is identical for every draft of one
+        # analysis and therefore not an ordering at all. `sequence` is the
+        # model's own action order and is unique per analysis.
+        order_by="VoiceActionDraft.sequence",
     )
     clarifications: Mapped[list["VoiceClarification"]] = relationship(
         back_populates="voice_analysis",

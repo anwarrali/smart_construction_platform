@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { EngineeringBackdrop } from "../components/shared/EngineeringBackdrop";
 import { LanguageSwitcher } from "../components/shared/LanguageSwitcher";
+import { RouteFallback } from "../components/shared/RouteFallback";
 
 /**
  * Full-screen authentication ground.
@@ -24,7 +26,9 @@ export const AuthLayout = () => {
 
       <main className="relative flex flex-1 items-center justify-center px-5 pb-16">
         <div className="w-full max-w-[26rem]">
-          <Outlet />
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 

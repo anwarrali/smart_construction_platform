@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+<!--
+  The cold-start window on Android 11 and below. Android 12+ ignores this and
+  uses the splash-screen attributes in values-v31/styles.xml instead.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+  Brand ink with the mark centred, so the very first frame the user sees is
+  Struct IQ rather than a flash of white.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher_background" />
+
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@mipmap/ic_launcher" />
+    </item>
 </layer-list>

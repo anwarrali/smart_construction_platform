@@ -40,7 +40,8 @@ class FieldEvidencePhoto {
     return FieldEvidencePhoto(
       id: '${json['id']}',
       fileUrl: attachment['fileUrl'] as String? ?? '',
-      filename: attachment['originalFilename'] as String? ?? 'Field photo',
+      // See the note in `TaskDependency`: a model must not carry copy.
+      filename: attachment['originalFilename'] as String? ?? '',
       direction: json['direction'] as String?,
       categories: (json['categories'] as List? ?? const [])
           .whereType<Map<String, dynamic>>()

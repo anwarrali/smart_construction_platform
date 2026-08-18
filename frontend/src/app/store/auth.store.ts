@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { User, AuthTokens } from "../../types/auth";
+import { usePermissionStore } from "./permission.store";
 
 interface AuthState {
   user: User | null;
@@ -56,5 +57,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem("scp_access_token");
     localStorage.removeItem("scp_refresh_token");
     set({ user: null, tokens: null, isAuthenticated: false, isLoading: false });
+    // Explicit, not just left to a mounted component's effect: the cached
+    // effective-permission list must not survive into whatever session (or
+    // whatever user, on a shared machine) logs in next.
+    usePermissionStore.getState().clear();
   },
 }));

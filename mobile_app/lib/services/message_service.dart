@@ -93,6 +93,54 @@ class MessageService {
         data: {'content': content},
       ));
 
+  /// Forward a message. Communication only: `POST /messages/{id}/forward`
+  /// creates a new Message and touches nothing else — not the original, not
+  /// its conversation, and not any entity the text happens to mention.
+  Future<ProjectConversation> forward({
+    required String messageId,
+    required List<String> recipientIds,
+    String? groupCode,
+    String? note,
+    String? title,
+  }) async => ProjectConversation.fromJson(
+    await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.forwardMessage(messageId),
+      data: {
+        'recipientIds': recipientIds,
+        if (groupCode != null) 'groupCode': groupCode,
+        if (note != null && note.isNotEmpty) 'note': note,
+        if (title != null && title.isNotEmpty) 'title': title,
+      },
+    ),
+  );
+
+  /// Share a project entity into a conversation.
+  ///
+  /// Consultation, not handoff — the server is explicit that this only ever
+  /// writes a Message, so ownership, assignee, status and verification state
+  /// of the shared record are all untouched. The wording in the UI has to
+  /// match that: "Ask for Opinion", never "Reassign".
+  Future<ProjectConversation> shareEntity({
+    required String entityType,
+    required String entityId,
+    required List<String> recipientIds,
+    String? groupCode,
+    String? note,
+    String? title,
+  }) async => ProjectConversation.fromJson(
+    await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.shareEntity,
+      data: {
+        'entityType': entityType,
+        'entityId': entityId,
+        'recipientIds': recipientIds,
+        if (groupCode != null) 'groupCode': groupCode,
+        if (note != null && note.isNotEmpty) 'note': note,
+        if (title != null && title.isNotEmpty) 'title': title,
+      },
+    ),
+  );
+
   Future<void> markRead(String conversationId) async {
     await _api.put<Map<String, dynamic>>(
       ApiEndpoints.conversationRead(conversationId),

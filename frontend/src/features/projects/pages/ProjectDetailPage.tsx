@@ -88,13 +88,13 @@ export const ProjectDetailPage = () => {
         size="sm"
         onClick={() => navigate(isProjectManager ? ROUTES.PM_PROJECTS : ROUTES.PROJECTS)}
       >
-        ← Back to Projects
+        ← {t("projectDetail.back_to_projects")}
       </Button>
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{project.name}</h1>
         <div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => navigate(isProjectManager ? workspace.path("ifc") : `/projects/${project.id}/ifc`)}>{t("projectDetail.ifc_intelligence")}</Button><Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/projects/${project.id}/evidence` : workspace.path("evidence"))}>{t("projectDetail.evidence_photos")}</Button>{isProjectManager && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("schedule"))}>{t("projectDetail.schedule")}</Button>}{(isProjectManager || isAdmin) && <Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/projects/${project.id}/milestones` : workspace.path("milestones"))}>{t("projectDetail.milestones")}</Button>}{isProjectManager && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("messages"))}>{t("projectDetail.messages")}</Button>}{(isProjectManager || isAdmin) && <Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/admin/projects/${project.id}/team` : workspace.path("team"))}>{t("projectDetail.team")}</Button>}<Badge variant={project.status === "active" ? "success" : "neutral"}>
-          {project.status.replace("_", " ")}
+          {vocabulary.projectStatus(project.status)}
         </Badge></div>
       </div>
 

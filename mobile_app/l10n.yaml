@@ -1,0 +1,14 @@
+# Flutter's standard gen_l10n configuration.
+#
+# `app_en.arb` is the template: it carries the descriptions and placeholder
+# metadata, and `app_ar.arb` supplies the Arabic for the same keys.
+#
+# `untranslated-messages-file` makes a gap in the Arabic resource visible as a
+# build artefact rather than a silently-English string at runtime; the
+# localization test asserts it stays empty.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: AppL10n
+untranslated-messages-file: build/untranslated_messages.json
+nullable-getter: false

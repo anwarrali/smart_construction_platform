@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../app/dependency_injection.dart';
 import '../../core/constants/api_endpoints.dart';
@@ -11,6 +10,8 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/async_views.dart';
 import '../../core/widgets/status_badge.dart';
 import '../projects/project_context_view_model.dart';
+import '../../core/l10n/l10n_formats.dart';
+import '../../core/l10n/l10n_labels.dart';
 
 class ConsultantReviewsScreen extends ConsumerStatefulWidget {
   const ConsultantReviewsScreen({super.key});
@@ -48,34 +49,35 @@ class _ConsultantReviewsScreenState
   Widget build(BuildContext context) {
     final project = ref.watch(projectContextProvider).selected;
     return Scaffold(
-      appBar: AppBar(title: const Text('Pending Reviews')),
+      appBar: AppBar(title: Text(context.l10n.reviewsPendingTitle)),
       body: project == null
-          ? const MessageView(
+          ? MessageView(
               icon: Icons.apartment_rounded,
-              title: 'Select a project',
-              message: 'Choose a project before opening consultant reviews.',
+              title: context.l10n.commonSelectProject,
+              message: context.l10n.reviewsSelectProjectBody,
             )
           : FutureBuilder<List<Map<String, dynamic>>>(
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const LoadingView(label: 'Loading review submissions');
+                  return LoadingView(label: context.l10n.reviewsLoading);
                 }
                 if (snapshot.hasError) {
                   return MessageView(
                     icon: Icons.cloud_off_rounded,
-                    title: 'Reviews unavailable',
-                    message: '${snapshot.error}',
+                    title: context.l10n.commonUnavailable(
+                      context.l10n.reviewsTitle,
+                    ),
+                    message: context.l10n.describeError(snapshot.error),
                     onAction: _refresh,
                   );
                 }
                 final items = snapshot.data ?? const [];
                 if (items.isEmpty) {
-                  return const MessageView(
+                  return MessageView(
                     icon: Icons.fact_check_outlined,
-                    title: 'Nothing waiting for review',
-                    message:
-                        'New submissions matching your discipline will appear here.',
+                    title: context.l10n.reviewsEmptyTitle,
+                    message: context.l10n.reviewsEmptyBody,
                   );
                 }
                 return RefreshIndicator(
@@ -111,7 +113,7 @@ class _ReviewCard extends StatelessWidget {
     final submitted = DateTime.tryParse('${item['submittedAt'] ?? ''}');
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.large),
+        borderRadius: BorderRadius.circular(AppRadius.panel),
         onTap: () => context.push('/reviews/${item['id']}'),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -126,15 +128,15 @@ class _ReviewCard extends StatelessWidget {
                     height: 42,
                     decoration: BoxDecoration(
                       color: critical
-                          ? AppColors.dangerSoft
-                          : AppColors.surfaceMuted,
-                      borderRadius: BorderRadius.circular(AppRadius.medium),
+                          ? AppColors.stateOverdueWash
+                          : AppColors.muted,
+                      borderRadius: BorderRadius.circular(AppRadius.panel),
                     ),
                     child: Icon(
                       critical
                           ? Icons.priority_high_rounded
                           : Icons.fact_check_outlined,
-                      color: critical ? AppColors.danger : AppColors.navy,
+                      color: critical ? AppColors.destructive : AppColors.primary,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -143,12 +145,15 @@ class _ReviewCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${item['taskCode'] ?? ''} · ${item['taskTitle'] ?? 'Review submission'}',
+                          '${item['taskCode'] ?? ''} · '
+                          '${item['taskTitle'] ?? context.l10n.reviewSubmissionFallback}',
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${_label(item['discipline'])} · ${_label(item['priority'])}',
+                          '${context.l10n.disciplineLabel('${item['discipline'] ?? ''}')}'
+                          ' · '
+                          '${context.l10n.priorityLabel('${item['priority'] ?? ''}')}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -163,17 +168,29 @@ class _ReviewCard extends StatelessWidget {
                 runSpacing: 7,
                 children: [
                   StatusBadge('${item['reviewStatus'] ?? 'pending'}'),
-                  if (critical) const _Tag(label: 'Critical', danger: true),
-                  if (overdue) const _Tag(label: 'Overdue', danger: true),
+                  if (critical)
+                    _Tag(label: context.l10n.reviewCritical, danger: true),
+                  if (overdue)
+                    _Tag(label: context.l10n.reviewOverdue, danger: true),
                   if (item['isResubmission'] == true)
-                    _Tag(label: 'Attempt ${item['submissionNumber'] ?? 2}'),
-                  _Tag(label: '${item['evidenceCount'] ?? 0} evidence'),
+                    _Tag(
+                      label: context.l10n.reviewAttempt(
+                        context.formatInt(item['submissionNumber'] ?? 2),
+                      ),
+                    ),
+                  _Tag(
+                    label: context.l10n.reviewEvidenceCount(
+                      (item['evidenceCount'] ?? 0) as int,
+                    ),
+                  ),
                 ],
               ),
               if (submitted != null) ...[
                 const SizedBox(height: 10),
                 Text(
-                  'Submitted ${DateFormat.MMMd().add_jm().format(submitted.toLocal())}',
+                  context.l10n.reviewSubmittedAt(
+                    context.formatDateTime(submitted),
+                  ),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -194,7 +211,7 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
     decoration: BoxDecoration(
-      color: danger ? AppColors.dangerSoft : AppColors.surfaceMuted,
+      color: danger ? AppColors.stateOverdueWash : AppColors.muted,
       borderRadius: BorderRadius.circular(30),
     ),
     child: Text(
@@ -202,17 +219,10 @@ class _Tag extends StatelessWidget {
       style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
-        color: danger ? AppColors.danger : AppColors.textSecondary,
+        color: danger ? AppColors.destructive : AppColors.mutedForeground,
       ),
     ),
   );
 }
 
-String _label(dynamic value) => '${value ?? '—'}'
-    .replaceAll('_', ' ')
-    .split(' ')
-    .map(
-      (word) =>
-          word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}',
-    )
-    .join(' ');
+

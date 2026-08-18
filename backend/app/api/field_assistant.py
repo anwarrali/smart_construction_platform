@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.deps import accessible_project_ids, get_current_user, user_has_project_access
+from app.core.deps import accessible_project_ids, get_current_user, is_consultant_engineer, user_has_project_access
 from app.db.database import get_db
 from app.models.enums import UserRole
 from app.models.project import Project, ProjectMember
@@ -30,7 +30,10 @@ def get_mobile_field_context(db: Session = Depends(get_db), current_user: User =
 def _validate_proposal(db: Session, user: User, proposal: ActionProposal) -> str | None:
     if not user_has_project_access(db, user, proposal.project_id):
         raise HTTPException(status_code=403, detail="The authenticated user is not assigned to this project")
-    if proposal.discipline and user.role == UserRole.CONSULTANT and user.engineer_profile:
+    # `user.role` is never literally CONSULTANT (a Consultant Engineer is
+    # persisted as ENGINEER with `engineer_affiliation="external_consultant"`,
+    # see app.schemas.user.UserCreateByAdmin), hence `is_consultant_engineer`.
+    if proposal.discipline and is_consultant_engineer(user) and user.engineer_profile:
         if proposal.discipline != user.engineer_profile.discipline.value:
             raise HTTPException(status_code=403, detail="Consultants cannot act outside their assigned discipline")
     if proposal.action_type == "ISSUE":

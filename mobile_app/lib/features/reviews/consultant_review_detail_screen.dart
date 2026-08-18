@@ -10,6 +10,8 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/async_views.dart';
 import '../../core/widgets/status_badge.dart';
 import '../projects/project_context_view_model.dart';
+import '../../core/l10n/l10n_formats.dart';
+import '../../core/l10n/l10n_labels.dart';
 
 enum _ReviewAction { approve, reject, clarification }
 
@@ -27,7 +29,7 @@ class _ConsultantReviewDetailScreenState
   Map<String, dynamic>? _data;
   bool _loading = true;
   bool _busy = false;
-  String? _error;
+  Object? _error;
 
   @override
   void initState() {
@@ -65,7 +67,7 @@ class _ConsultantReviewDetailScreenState
     } on NetworkException catch (error) {
       if (mounted) {
         setState(() {
-          _error = error.message;
+          _error = error;
           _loading = false;
         });
       }
@@ -78,14 +80,16 @@ class _ConsultantReviewDetailScreenState
     final review = data?['review'] as Map<String, dynamic>?;
     final task = data?['task'] as Map<String, dynamic>?;
     return Scaffold(
-      appBar: AppBar(title: const Text('Review Submission')),
+      appBar: AppBar(title: Text(context.l10n.reviewSubmissionTitle)),
       body: _loading
-          ? const LoadingView(label: 'Loading submission and evidence')
+          ? LoadingView(label: context.l10n.reviewLoadingSubmission)
           : _error != null || data == null || review == null || task == null
           ? MessageView(
               icon: Icons.error_outline_rounded,
-              title: 'Unable to open review',
-              message: _error ?? 'Review submission not found.',
+              title: context.l10n.reviewUnableToOpen,
+              message: _error != null
+                  ? context.l10n.describeError(_error)
+                  : context.l10n.reviewNotFound,
               onAction: _load,
             )
           : _content(data, review, task),
@@ -113,7 +117,8 @@ class _ConsultantReviewDetailScreenState
         ),
         children: [
           Text(
-            '${task['taskCode'] ?? ''} · ${task['title'] ?? 'Task review'}',
+            '${task['taskCode'] ?? ''} · '
+            '${task['title'] ?? context.l10n.reviewTaskReview}',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
@@ -128,43 +133,58 @@ class _ConsultantReviewDetailScreenState
           ),
           const SizedBox(height: AppSpacing.lg),
           _InfoCard(
-            title: 'Task and submission',
+            title: context.l10n.reviewTaskAndSubmission,
             children: [
               _InfoRow(
-                label: 'Project',
+                label: context.l10n.commonProject,
                 value: '${task['projectName'] ?? '—'}',
               ),
-              _InfoRow(label: 'Discipline', value: _title(task['discipline'])),
-              _InfoRow(label: 'Priority', value: _title(task['priority'])),
               _InfoRow(
-                label: 'Progress',
-                value: '${task['progressPercentage'] ?? 0}%',
+                label: context.l10n.commonDiscipline,
+                value: context.l10n.disciplineLabel(
+                  '${task['discipline'] ?? ''}',
+                ),
               ),
               _InfoRow(
-                label: 'Submission',
+                label: context.l10n.commonPriority,
+                value: context.l10n.priorityLabel('${task['priority'] ?? ''}'),
+              ),
+              _InfoRow(
+                label: context.l10n.commonProgress,
+                value: context.formatPercent(
+                  (task['progressPercentage'] ?? 0) as num,
+                ),
+              ),
+              _InfoRow(
+                label: context.l10n.reviewSubmission,
                 value: '#${review['submissionNumber'] ?? 1}',
               ),
               if ('${review['completionNote'] ?? ''}'.trim().isNotEmpty)
                 _InfoRow(
-                  label: 'Completion note',
+                  label: context.l10n.reviewCompletionNote,
                   value: '${review['completionNote']}',
                 ),
               if ('${task['description'] ?? ''}'.trim().isNotEmpty)
-                _InfoRow(label: 'Description', value: '${task['description']}'),
+                _InfoRow(
+                  label: context.l10n.commonDescription,
+                  value: '${task['description']}',
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           _InfoCard(
-            title: 'Submitted evidence (${evidence.length})',
+            title: context.l10n.reviewSubmittedEvidence(evidence.length),
             children: evidence.isEmpty
-                ? const [Text('No evidence was attached to this submission.')]
+                ? [Text(context.l10n.reviewNoEvidence)]
                 : evidence
                       .whereType<Map>()
                       .map(
                         (item) => ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(Icons.attach_file_rounded),
-                          title: Text('${item['filename'] ?? 'Attachment'}'),
+                          title: Text(
+                            '${item['filename'] ?? context.l10n.reviewAttachment}',
+                          ),
                           subtitle: Text(
                             '${item['mimeType'] ?? item['mime_type'] ?? ''}',
                           ),
@@ -174,17 +194,17 @@ class _ConsultantReviewDetailScreenState
           ),
           const SizedBox(height: AppSpacing.md),
           _InfoCard(
-            title: 'Dependency impact',
+            title: context.l10n.reviewDependencyImpact,
             children: [
-              Text('${dependencies.length} predecessors'),
+              Text(context.l10n.reviewPredecessors(dependencies.length)),
               const SizedBox(height: 6),
-              Text('${dependents.length} dependent tasks'),
+              Text(context.l10n.reviewDependentTasks(dependents.length)),
               if (review['blocksDependentWork'] == true) ...[
                 const SizedBox(height: 9),
-                const Text(
-                  'Approval is currently gating downstream work.',
-                  style: TextStyle(
-                    color: AppColors.warning,
+                Text(
+                  context.l10n.reviewGatingWork,
+                  style: const TextStyle(
+                    color: AppColors.stateReview,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -199,7 +219,7 @@ class _ConsultantReviewDetailScreenState
                     ? null
                     : () => _startReview('${review['taskId']}'),
                 icon: const Icon(Icons.play_arrow_rounded),
-                label: const Text('Start Review'),
+                label: Text(context.l10n.reviewStart),
               ),
             const SizedBox(height: 10),
             FilledButton.icon(
@@ -210,8 +230,8 @@ class _ConsultantReviewDetailScreenState
                       '${review['taskId']}',
                     ),
               icon: const Icon(Icons.check_circle_outline_rounded),
-              label: const Text('Approve Submission'),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.success),
+              label: Text(context.l10n.reviewApproveSubmission),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.stateVerified),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -222,7 +242,7 @@ class _ConsultantReviewDetailScreenState
                       '${review['taskId']}',
                     ),
               icon: const Icon(Icons.help_outline_rounded),
-              label: const Text('Request Clarification'),
+              label: Text(context.l10n.reviewRequestClarification),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -233,9 +253,9 @@ class _ConsultantReviewDetailScreenState
                       '${review['taskId']}',
                     ),
               icon: const Icon(Icons.replay_rounded),
-              label: const Text('Request Rework'),
+              label: Text(context.l10n.reviewRequestRework),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.danger,
+                foregroundColor: AppColors.destructive,
               ),
             ),
           ],
@@ -249,7 +269,7 @@ class _ConsultantReviewDetailScreenState
       () => ref
           .read(apiClientProvider)
           .put<Object?>(ApiEndpoints.startReview(taskId)),
-      'Review started.',
+      context.l10n.reviewStarted,
     );
   }
 
@@ -261,23 +281,22 @@ class _ConsultantReviewDetailScreenState
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(switch (action) {
-          _ReviewAction.approve => 'Approve Submission',
-          _ReviewAction.reject => 'Request Rework',
-          _ReviewAction.clarification => 'Request Clarification',
+          _ReviewAction.approve => context.l10n.reviewApproveSubmission,
+          _ReviewAction.reject => context.l10n.reviewRequestRework,
+          _ReviewAction.clarification =>
+            context.l10n.reviewRequestClarification,
         }),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (action == _ReviewAction.approve)
-                const Text(
-                  'Approval marks this task complete and may unlock dependent work.',
-                ),
+                Text(context.l10n.reviewApprovalHint),
               if (action == _ReviewAction.reject) ...[
                 TextField(
                   controller: reason,
-                  decoration: const InputDecoration(
-                    labelText: 'Rejection reason *',
+                  decoration: InputDecoration(
+                    labelText: context.l10n.reviewRejectionReasonRequired,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -285,8 +304,8 @@ class _ConsultantReviewDetailScreenState
                   controller: corrections,
                   minLines: 2,
                   maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Required corrections *',
+                  decoration: InputDecoration(
+                    labelText: context.l10n.reviewRequiredCorrections,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -309,7 +328,7 @@ class _ConsultantReviewDetailScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () {
@@ -318,8 +337,10 @@ class _ConsultantReviewDetailScreenState
                       corrections.text.trim().isEmpty ||
                       comments.text.trim().isEmpty)) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(
-                    content: Text('Complete all required fields.'),
+                  SnackBar(
+                    content: Text(
+                      context.l10n.validationCompleteRequiredFields,
+                    ),
                   ),
                 );
                 return;
@@ -327,15 +348,19 @@ class _ConsultantReviewDetailScreenState
               if (action == _ReviewAction.clarification &&
                   comments.text.trim().length < 3) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(
-                    content: Text('Enter a clarification question.'),
+                  SnackBar(
+                    content: Text(
+                      context.l10n.validationEnterClarificationQuestion,
+                    ),
                   ),
                 );
                 return;
               }
               Navigator.pop(dialogContext, true);
             },
-            child: Text(action == _ReviewAction.approve ? 'Approve' : 'Submit'),
+            child: Text(action == _ReviewAction.approve
+                ? context.l10n.commonApprove
+                : context.l10n.commonSubmit),
           ),
         ],
       ),
@@ -354,7 +379,7 @@ class _ConsultantReviewDetailScreenState
             ApiEndpoints.approveTask(taskId),
             data: {'comments': comments.text.trim()},
           ),
-          'Submission approved successfully.',
+          context.l10n.reviewApproved,
         );
       case _ReviewAction.reject:
         await _execute(
@@ -366,7 +391,7 @@ class _ConsultantReviewDetailScreenState
               'requiredCorrections': corrections.text.trim(),
             },
           ),
-          'Rework request recorded.',
+          context.l10n.reviewReworkRecorded,
         );
       case _ReviewAction.clarification:
         await _execute(
@@ -374,7 +399,7 @@ class _ConsultantReviewDetailScreenState
             ApiEndpoints.requestClarification(taskId),
             data: {'question': comments.text.trim()},
           ),
-          'Clarification requested.',
+          context.l10n.reviewClarificationRequested,
         );
     }
     comments.dispose();
@@ -391,15 +416,15 @@ class _ConsultantReviewDetailScreenState
       await action();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(success), backgroundColor: AppColors.success),
+        SnackBar(content: Text(success), backgroundColor: AppColors.stateVerified),
       );
       await _load();
     } on NetworkException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(error.message),
-            backgroundColor: AppColors.danger,
+            content: Text(context.l10n.describeError(error)),
+            backgroundColor: AppColors.destructive,
           ),
         );
       }
@@ -419,7 +444,7 @@ class _InfoCard extends StatelessWidget {
     padding: const EdgeInsets.all(AppSpacing.md),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(AppRadius.large),
+      borderRadius: BorderRadius.circular(AppRadius.panel),
       border: Border.all(color: AppColors.border),
     ),
     child: Column(
@@ -449,7 +474,7 @@ class _InfoRow extends StatelessWidget {
           child: Text(
             label,
             style: const TextStyle(
-              color: AppColors.textSecondary,
+              color: AppColors.mutedForeground,
               fontWeight: FontWeight.w700,
               fontSize: 12,
             ),
@@ -460,12 +485,3 @@ class _InfoRow extends StatelessWidget {
     ),
   );
 }
-
-String _title(dynamic value) => '${value ?? '—'}'
-    .replaceAll('_', ' ')
-    .split(' ')
-    .map(
-      (word) =>
-          word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}',
-    )
-    .join(' ');

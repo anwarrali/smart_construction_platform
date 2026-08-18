@@ -33,6 +33,13 @@ router = APIRouter(prefix="/projects/{project_id}/ai-intelligence", tags=["AI In
 def _require(db: Session, user: User, project_id: uuid.UUID, permission: str = "VIEW") -> None:
     if not can_ifc(db, user, project_id, permission):
         raise HTTPException(status_code=403, detail="Project intelligence permission required")
+    # can_ifc's "VIEW" verb covers general IFC-model visibility (it also gates
+    # the model workspace, so it deliberately includes Worker). Reading AI
+    # insights specifically is its own configurable capability on top of that —
+    # an administrator can narrow who sees automated findings without touching
+    # who can open the model itself.
+    if permission == "VIEW":
+        require(db, user, "ai.view_insights", project_id)
 
 
 def _insight(db: Session, project_id, insight_id) -> AIInsight:

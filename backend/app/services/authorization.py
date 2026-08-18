@@ -98,6 +98,45 @@ def has_permission(
     return True
 
 
+def can_view_all_projects_effective(db: Session, user: User) -> bool:
+    """Whether this person may read any project without being a member of it.
+
+    Resolves the catalogue's `platform.view_all_projects`. This used to be a
+    hardcoded `role == UserRole.ADMIN` check (`can_view_all_projects` in
+    `app.core.permissions`, since removed as dead code once nothing called
+    it) that toggling the permission in Access Control had no effect on.
+    `app.core.deps.user_has_project_access` / `accessible_project_ids` and
+    `app.api.projects._scoped_projects_query` now call this as the sole gate
+    for "sees everything" — not `can_view_all_projects_effective(...) or
+    <the old hardcoded check>`, because an unconditional static OR would make
+    a revoke impossible no matter what an administrator configures (it would
+    always win first). The default is unaffected: `platform.view_all_projects`
+    defaults to {ADMIN} in the catalogue, so an unconfigured Administrator
+    resolves to the exact same answer the hardcoded check used to give.
+
+    Why this cannot recurse: `has_permission` only calls back into
+    `user_has_project_access` for a *project-scoped* permission, and only when
+    given a `project_id`. `platform.view_all_projects` is declared
+    `project_scoped=False` in the catalogue (see
+    test_platform_view_all_projects.py::test_platform_view_all_projects_is_not_project_scoped),
+    and this function never passes a `project_id` regardless — so the
+    recursive branch in `has_permission` is structurally unreachable from here
+    even if that flag were ever changed by mistake.
+
+    Cached on the `User` instance for the request's lifetime: `deps.py` calls
+    this from `user_has_project_access`, which is itself called several times
+    per request in some handlers, and `get_current_user` is cached per-request
+    by FastAPI's dependency injection, so the same `User` object is safe to
+    stash the answer on without leaking across requests or users.
+    """
+    cached = getattr(user, "_view_all_projects_effective", None)
+    if cached is not None:
+        return cached[0]
+    result = has_permission(db, user, "platform.view_all_projects")
+    user._view_all_projects_effective = (result,)
+    return result
+
+
 def require(db: Session, user: User, code: str, project_id: uuid.UUID | None = None) -> None:
     """Raise the standard 403 unless the person holds the permission."""
     if not has_permission(db, user, code, project_id):

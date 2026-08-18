@@ -13,7 +13,9 @@ class ProjectContextState {
   final List<Project> projects;
   final Project? selected;
   final bool loading;
-  final String? error;
+  /// The failure itself, not a rendered sentence, so the screen can
+  /// translate it at build time.
+  final Object? error;
 }
 
 final projectContextProvider =
@@ -48,7 +50,7 @@ class ProjectContextViewModel extends StateNotifier<ProjectContextState> {
         loading: false,
       );
     } catch (error) {
-      state = ProjectContextState(loading: false, error: '$error');
+      state = ProjectContextState(loading: false, error: error);
     }
   }
 

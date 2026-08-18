@@ -5,6 +5,8 @@ import 'package:construction_field/models/project.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:construction_field/l10n/app_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 class _ProjectRepository {
   Future<List<Project>> listAssigned() async => <Project>[];
@@ -50,7 +52,19 @@ void main() {
               (ref) => SessionManager(authRepository),
             ),
           ],
-          child: const MaterialApp(home: ProjectsScreen()),
+          // The screen resolves its copy from the message catalogue, so the
+          // harness has to be a localized app.
+          child: const MaterialApp(
+            locale: Locale('en'),
+            localizationsDelegates: [
+              AppL10n.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: [Locale('en'), Locale('ar')],
+            home: ProjectsScreen(),
+          ),
         ),
       );
       await tester.pumpAndSettle();

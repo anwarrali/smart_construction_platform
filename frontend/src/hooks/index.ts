@@ -1,5 +1,6 @@
 export { useAuth } from "./useAuth";
 export { useRole } from "./useRole";
+export { usePermissions } from "./usePermissions";
 export { usePagination } from "./usePagination";
 export { useDebounce } from "./useDebounce";
 export { useDirection } from "./useDirection";

@@ -75,6 +75,12 @@ export const ENDPOINTS = {
     BY_ID: (id: string) => `/milestones/${id}`,
   },
 
+  STEP_UP: {
+    PURPOSES: "/auth/step-up/purposes",
+    REQUEST: "/auth/step-up/request",
+    VERIFY: "/auth/step-up/verify",
+  },
+
   MESSAGES: {
     BASE: "/messages",
     PARTICIPANTS: "/messages/participants",
@@ -87,6 +93,8 @@ export const ENDPOINTS = {
     SEARCH: "/messages/search",
     CONTEXT: (type: string, id: string) => `/messages/context/${type}/${id}`,
     UNREAD_COUNT: "/messages/unread-count",
+    FORWARD: (id: string) => `/messages/${id}/forward`,
+    SHARE: "/messages/share",
     MARK_READ: (id: string) => `/messages/${id}/read`,
   },
 
@@ -159,6 +167,7 @@ export const ENDPOINTS = {
     BY_ID: (id: string) => `/site-reports/${id}`,
     BY_PROJECT: (projectId: string) => `/site-reports/project/${projectId}`,
     SUBMIT: "/site-reports/submit",
+    REVIEW: (id: string) => `/site-reports/${id}/review`,
   },
 
   ATTACHMENTS: {

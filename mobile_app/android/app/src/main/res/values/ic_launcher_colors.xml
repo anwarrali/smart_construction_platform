@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand ink (CSS token brand-ink: 216 60% 15%), the same navy the app
+         bar and the web nav rail use. -->
+    <color name="ic_launcher_background">#0F2340</color>
+</resources>

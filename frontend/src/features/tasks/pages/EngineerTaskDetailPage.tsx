@@ -18,6 +18,7 @@ import type { Issue } from "../../../types/issue";
 import type { FieldSubmission } from "../../../types/fieldSubmission";
 import type { PhotoCategory } from "../../../types/photoArchive";
 import { ContextDiscussion } from "../../messages/components/ContextDiscussion";
+import { CommunicationActions } from "../../../components/shared/CommunicationActions";
 
 interface Comment { id: string; content: string; createdAt: string; author?: { fullName: string } }
 interface Review { id: string; status: string; comments?: string; rejectionReason?: string; requiredCorrections?: string; clarificationQuestion?: string; clarificationResponse?: string; submissionNumber?: number; createdAt: string; submittedBy?: { fullName: string }; reviewedBy?: { fullName: string } }
@@ -153,7 +154,9 @@ export const EngineerTaskDetailPage = () => {
 
   return <div className="page-container space-y-6">
     <Button variant="ghost" onClick={() => navigate(workspace.path("tasks"))}>← Back to My Tasks</Button>
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-sm font-semibold text-primary">{task.taskCode}</p><h1 className="text-2xl font-bold">{task.name}</h1><p className="mt-1 max-w-3xl text-muted-foreground">{task.description || "No description provided."}</p></div><div className="flex gap-2"><Badge variant={task.status === "blocked" || task.status === "rework_required" ? "danger" : task.status === "done" ? "success" : "info"}>{task.status.replaceAll("_", " ")}</Badge>{task.isCriticalPath && <Badge variant="danger">{t("engineerTask.critical_path")}</Badge>}</div></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-sm font-semibold text-primary">{task.taskCode}</p><h1 className="text-2xl font-bold">{task.name}</h1><p className="mt-1 max-w-3xl text-muted-foreground">{task.description || "No description provided."}</p></div><div className="flex flex-col items-end gap-2"><div className="flex gap-2"><Badge variant={task.status === "blocked" || task.status === "rework_required" ? "danger" : task.status === "done" ? "success" : "info"}>{task.status.replaceAll("_", " ")}</Badge>{task.isCriticalPath && <Badge variant="danger">{t("engineerTask.critical_path")}</Badge>}</div>
+      {/* Consultation only — sharing never reassigns this task. */}
+      <CommunicationActions entityType="TASK" entityId={task.id} projectId={task.projectId} intents={["opinion"]} /></div></div>
     {error && <Card className="border-destructive/30 p-3 text-sm text-destructive">{error}</Card>}
 
     {task.status === "rework_required" && <Card className="border-state-review/30 bg-wash-review p-4"><h2 className="font-semibold text-state-review">{t("engineerTask.rework_required")}</h2><p className="mt-2 text-sm text-state-review">{latestRejectedReview?.rejectionReason || task.rejectionReason || "Review corrections are required."}</p>{latestRejectedReview?.comments && <p className="mt-1 text-sm text-state-review">{latestRejectedReview.comments}</p>}<Button className="mt-3" disabled={busy} onClick={() => run(() => api.tasks.startRework(task.id), "Corrective work started.")}>{t("engineerTask.start_corrective_work")}</Button></Card>}

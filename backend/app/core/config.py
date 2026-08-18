@@ -61,6 +61,30 @@ class Settings(BaseSettings):
     PRIVATE_STORAGE_BACKEND: str = os.getenv("PRIVATE_STORAGE_BACKEND", "local")
     REMINDER_SCHEDULER_ENABLED: bool = os.getenv("REMINDER_SCHEDULER_ENABLED", "true").lower() == "true"
     REMINDER_SCHEDULER_INTERVAL_SECONDS: int = int(os.getenv("REMINDER_SCHEDULER_INTERVAL_SECONDS", "300"))
+
+    # --- Step-up authentication (OTP) ---------------------------------------
+    # Every security threshold lives here rather than being spelled out at the
+    # call sites, so tightening a limit is a configuration change, not a hunt
+    # through the codebase.
+    OTP_LENGTH: int = int(os.getenv("OTP_LENGTH", "6"))
+    OTP_EXPIRE_MINUTES: int = int(os.getenv("OTP_EXPIRE_MINUTES", "10"))
+    OTP_MAX_VERIFY_ATTEMPTS: int = int(os.getenv("OTP_MAX_VERIFY_ATTEMPTS", "5"))
+    #: How many codes one account may request for one purpose per window.
+    OTP_MAX_SENDS_PER_WINDOW: int = int(os.getenv("OTP_MAX_SENDS_PER_WINDOW", "5"))
+    OTP_SEND_WINDOW_MINUTES: int = int(os.getenv("OTP_SEND_WINDOW_MINUTES", "15"))
+    #: Minimum gap between two sends, so "resend" cannot be used to spam.
+    OTP_RESEND_COOLDOWN_SECONDS: int = int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "60"))
+    #: How long a completed verification authorizes its one operation.
+    #: Deliberately far shorter than the login session.
+    STEP_UP_VALIDITY_MINUTES: int = int(os.getenv("STEP_UP_VALIDITY_MINUTES", "10"))
+    #: Development only. When true the send endpoint echoes the code so the
+    #: flow can be exercised without SMTP. Must stay false anywhere real.
+    OTP_DEV_ECHO_ENABLED: bool = os.getenv("OTP_DEV_ECHO_ENABLED", "false").lower() == "true"
+
+    # --- Login brute-force protection ---------------------------------------
+    # The audit found no rate limiting of any kind; these are the first.
+    LOGIN_MAX_ATTEMPTS: int = int(os.getenv("LOGIN_MAX_ATTEMPTS", "10"))
+    LOGIN_ATTEMPT_WINDOW_MINUTES: int = int(os.getenv("LOGIN_ATTEMPT_WINDOW_MINUTES", "15"))
     
     # Database
     DATABASE_URL: str
@@ -86,6 +110,17 @@ class Settings(BaseSettings):
             raise ValueError("IFC_GEOMETRY_MAX_VERTICES must be between 100000 and 50000000")
         if not 1 <= self.IFC_GEOMETRY_WORKERS <= 8:
             raise ValueError("IFC_GEOMETRY_WORKERS must be between 1 and 8")
+        # Refuse to boot on a step-up configuration that would be insecure,
+        # rather than silently accepting it: a one-digit code or a step-up
+        # window measured in hours defeats the point of the whole feature.
+        if not 6 <= self.OTP_LENGTH <= 10:
+            raise ValueError("OTP_LENGTH must be between 6 and 10")
+        if not 1 <= self.OTP_EXPIRE_MINUTES <= 30:
+            raise ValueError("OTP_EXPIRE_MINUTES must be between 1 and 30")
+        if not 1 <= self.OTP_MAX_VERIFY_ATTEMPTS <= 10:
+            raise ValueError("OTP_MAX_VERIFY_ATTEMPTS must be between 1 and 10")
+        if not 1 <= self.STEP_UP_VALIDITY_MINUTES <= 60:
+            raise ValueError("STEP_UP_VALIDITY_MINUTES must be between 1 and 60")
         return self
     
     class Config:

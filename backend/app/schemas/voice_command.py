@@ -18,6 +18,10 @@ class VoiceDraftUpdate(StrictVoiceModel):
 class VoiceDraftOut(StrictVoiceModel):
     id: UUID
     client_action_id: str
+    #: Position in the analysis's `suggestedActions`. Clients must bind a
+    #: reviewed action to its draft by this (or by `id`), never by the
+    #: draft's position in the serialized list.
+    sequence: int
     action_type: SuggestedActionType
     target_entity_type: str | None = None
     target_entity_id: UUID | None = None

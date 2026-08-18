@@ -28,6 +28,7 @@ from app.schemas.permission import (
     RolePermissionUpdate, UserPermissionSummary, UserPermissionUpdate,
 )
 from app.services.audit_service import record_audit
+from app.services.step_up_service import require_step_up
 from app.services.authorization import effective_permissions, require
 
 router = APIRouter(prefix="/access-control", tags=["Access Control"])
@@ -103,6 +104,13 @@ def set_role_permission(payload: RolePermissionUpdate, db: Session = Depends(get
             detail="This permission keeps the platform administrable and cannot be removed from an administrator",
         )
 
+    # Rewriting the permission matrix can hand any capability to any role, so
+    # it is the single most powerful thing an administrator session can do.
+    # Challenged only after the request is known to be well-formed and legal:
+    # making someone fetch a code for an operation that is going to be refused
+    # anyway wastes their time and burns a send against their rate limit.
+    require_step_up(db, current_user, "admin.change_permissions")
+
     row = db.query(RolePermissionOverride).filter(
         RolePermissionOverride.role == role,
         RolePermissionOverride.permission_code == item.code,
@@ -173,6 +181,9 @@ def set_user_permission(user_id: uuid.UUID, payload: UserPermissionUpdate,
             status_code=409,
             detail="This permission keeps the platform administrable and cannot be removed from an administrator",
         )
+
+    # See `set_role_permission`: validate first, challenge second.
+    require_step_up(db, current_user, "admin.change_permissions")
 
     row = db.query(UserPermissionOverride).filter(
         UserPermissionOverride.user_id == user_id,

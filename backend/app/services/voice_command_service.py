@@ -179,6 +179,9 @@ def build_action_drafts(
             client_action_id=(
                 suggestion.client_action_id or f"a{index + 1}-{uuid4().hex[:12]}"
             ),
+            # The draft's position in `suggestedActions`, so every downstream
+            # list agrees on one order.
+            sequence=index,
             action_type=suggestion.type.value,
             target_entity_type="TASK" if task else None,
             target_entity_id=task.id if task else None,
@@ -204,6 +207,8 @@ def build_action_drafts(
         command.action_drafts.append(VoiceActionDraft(
             voice_analysis_id=command.id,
             client_action_id=f"a1-{uuid4().hex[:12]}",
+            # The only draft on this path, so it is position zero.
+            sequence=0,
             action_type=(
                 SuggestedActionType.UPDATE_TASK_PROGRESS.value
                 if ambiguous

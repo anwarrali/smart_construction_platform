@@ -107,13 +107,13 @@ export const DocumentsPage = () => {
           </div>
           <Select
             options={[
-              { value: "", label: "All Types" },
-              { value: "drawing", label: "Drawings" },
-              { value: "report", label: "Reports" },
-              { value: "contract", label: "Contracts" },
-              { value: "permit", label: "Permits" },
-              { value: "specification", label: "Specifications" },
-              { value: "invoice", label: "Invoices" },
+              { value: "", label: t("documentsPage.all_types") },
+              { value: "drawing", label: t("docUploader.documentType.drawing") },
+              { value: "report", label: t("docUploader.documentType.report") },
+              { value: "contract", label: t("docUploader.documentType.contract") },
+              { value: "permit", label: t("docUploader.documentType.permit") },
+              { value: "specification", label: t("docUploader.documentType.specification") },
+              { value: "invoice", label: t("docUploader.documentType.invoice") },
             ]}
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}

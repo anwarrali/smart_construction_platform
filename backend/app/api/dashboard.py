@@ -17,8 +17,8 @@ from app.models.notification import Notification
 from app.models.task import TaskReview
 from app.core.deps import get_current_user, user_has_project_access
 from app.core.deps import is_main_contractor_engineer
+from app.services.authorization import can_view_all_projects_effective
 from app.models.enums import ProjectStatus, IssueStatus, IssueSeverity, TaskStatus, UserStatus, UserRole, DesignChangeStatus
-from app.services.notification_service import sync_overdue_task_notifications, sync_upcoming_task_notifications
 from app.core.schedule_dates import inclusive_duration_days
 import json
 
@@ -74,9 +74,11 @@ def get_engineer_project_dashboard(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    sync_overdue_task_notifications(db, [project_id])
-    sync_upcoming_task_notifications(db, [project_id])
-
+    # Deadline notifications are no longer generated here. Reading a dashboard
+    # used to create and commit notifications as a side effect, which meant a
+    # deadline was only ever noticed when somebody happened to open this page
+    # (and never at all for users who do not). The reminder scheduler now owns
+    # that evaluation — see `reminder_service.evaluate_project_reminders`.
     today = date.today()
     tasks = db.query(Task).filter(
         Task.project_id == project_id,
@@ -200,16 +202,23 @@ def get_dashboard_stats(
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Engineer dashboard requires an active project context")
     projects_query = db.query(Project)
-    if current_user.role == UserRole.PROJECT_MANAGER:
-        projects_query = projects_query.filter(Project.project_manager_id == current_user.id)
-    elif current_user.role != UserRole.ADMIN:
-        member_ids = db.query(ProjectMember.project_id).filter(
-            ProjectMember.user_id == current_user.id, ProjectMember.is_active == True
-        )
-        projects_query = projects_query.filter(or_(
-            Project.id.in_(member_ids), Project.owner_id == current_user.id,
-            Project.project_manager_id == current_user.id,
-        ))
+    # Same "view-all gate first" shape as `_scoped_projects_query`
+    # (app.api.projects) and `accessible_project_ids` (app.core.deps): this
+    # used to hardcode `role != ADMIN` here, its own third copy of the same
+    # scoping logic, which meant granting `platform.view_all_projects` to a
+    # non-admin changed nothing on this specific dashboard. Default behaviour
+    # is unchanged - only ADMIN holds the permission by default.
+    if not can_view_all_projects_effective(db, current_user):
+        if current_user.role == UserRole.PROJECT_MANAGER:
+            projects_query = projects_query.filter(Project.project_manager_id == current_user.id)
+        else:
+            member_ids = db.query(ProjectMember.project_id).filter(
+                ProjectMember.user_id == current_user.id, ProjectMember.is_active == True
+            )
+            projects_query = projects_query.filter(or_(
+                Project.id.in_(member_ids), Project.owner_id == current_user.id,
+                Project.project_manager_id == current_user.id,
+            ))
     project_ids = [row.id for row in projects_query.all()]
     scheduled_ranges = db.query(Task.planned_start_date, Task.planned_end_date).filter(
         Task.project_id.in_(project_ids),
@@ -220,7 +229,8 @@ def get_dashboard_stats(
         inclusive_duration_days(start_date, end_date)
         for start_date, end_date in scheduled_ranges
     )
-    sync_overdue_task_notifications(db, project_ids)
+    # See the note in `get_engineer_project_dashboard`: deadline evaluation
+    # belongs to the scheduler, not to a read request.
     active_projects_count = projects_query.filter(Project.status == ProjectStatus.ACTIVE).count()
     
     # 2. Open Issues

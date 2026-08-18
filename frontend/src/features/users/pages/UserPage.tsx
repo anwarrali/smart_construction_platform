@@ -13,6 +13,7 @@ import type { UserProfile } from "../../../types/user";
 import type { EngineerDiscipline, UserRole, UserStatus } from "../../../types/auth";
 import toast from "react-hot-toast";
 import { useAuth } from "../../../hooks/useAuth";
+import { useStepUp } from "../../../hooks/useStepUp";
 
 const ROLE_FILTER_OPTIONS = [
   { value: "", label: "All Roles" },
@@ -38,6 +39,9 @@ const normalizeUsers = (response: unknown): UserProfile[] => {
 };
 
 export const UsersPage = () => {
+  // Sensitive operations may answer with a step-up challenge; `run` shows the
+  // shared verification dialog and replays the call once it is satisfied.
+  const { run, dialog } = useStepUp();
   const { t } = useTranslation();
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -88,7 +92,7 @@ export const UsersPage = () => {
   const handleToggleStatus = async (user: UserProfile) => {
     try {
       if (user.status === "active") {
-        await usersService.deactivate(user.id);
+        await run(() => usersService.deactivate(user.id));
         toast.success("User deactivated.");
       } else {
         await usersService.activate(user.id);
@@ -103,7 +107,7 @@ export const UsersPage = () => {
   const handleResetPassword = async (user: UserProfile) => {
     if (!window.confirm(`Reset the password for ${user.fullName}? Their current password will stop working immediately.`)) return;
     try {
-      const response = await usersService.resetPassword(user.id);
+      const response = await run(() => usersService.resetPassword(user.id));
       toast.success(`Temporary password for ${user.fullName}: ${response.temporaryPassword}`, { duration: 20000 });
       fetchUsers();
     } catch (err: any) {
@@ -219,6 +223,7 @@ export const UsersPage = () => {
         onSubmit={handleSubmit}
         user={editingUser}
       />
+      {dialog}
     </div>
   );
 };
