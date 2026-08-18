@@ -107,9 +107,27 @@ class VoiceSuggestedAction {
       );
 }
 
+/// One reviewed action, addressed by the identity the server assigned it.
+///
+/// Deliberately carries no index. An index is a position in a list, and the
+/// pipeline has three lists (the model's suggestions, the server's drafts,
+/// the execution results) that are only *usually* in the same order.
+class VoiceDraftConfirmation {
+  const VoiceDraftConfirmation({
+    required this.draftId,
+    this.targetId,
+    this.payload,
+  });
+
+  final String draftId;
+  final String? targetId;
+  final Map<String, dynamic>? payload;
+}
+
 class VoiceActionDraftItem {
   VoiceActionDraftItem({
     required this.id,
+    required this.sequence,
     required this.actionType,
     required this.extractedPayload,
     required this.confidence,
@@ -121,7 +139,17 @@ class VoiceActionDraftItem {
     this.requiredEvidence = const [],
   });
 
+  /// The draft's own identifier — the only thing that identifies an action
+  /// across the review/confirm/execute round trip. Positions must never be
+  /// used: the server's draft list and the model's `suggestedActions` are two
+  /// different lists, and binding one to the other by position is exactly
+  /// what wrote a review payload onto a progress action.
   final String id;
+
+  /// Position in the analysis's `suggestedActions`, supplied by the server.
+  /// Used only to pair a draft with its human-readable reason.
+  final int sequence;
+
   final String actionType;
   final String? targetEntityId;
   final Map<String, dynamic> extractedPayload;
@@ -135,6 +163,7 @@ class VoiceActionDraftItem {
   factory VoiceActionDraftItem.fromJson(Map<String, dynamic> json) =>
       VoiceActionDraftItem(
         id: '${json['id']}',
+        sequence: json['sequence'] as int? ?? 0,
         actionType: '${json['actionType'] ?? ''}',
         targetEntityId: json['targetEntityId']?.toString(),
         extractedPayload: Map<String, dynamic>.from(

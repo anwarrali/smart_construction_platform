@@ -26,6 +26,7 @@ import type {
 
 const EngineerTasksPage = () => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const workspace = useProjectWorkspace();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -41,7 +42,7 @@ const EngineerTasksPage = () => {
 
   const load = useCallback(async () => {
     if (!workspace.projectId) {
-      setError("Select an assigned project before opening My Tasks.");
+      setError(t("tasksPage.select_project_before_my_tasks"));
       setIsLoading(false);
       return;
     }
@@ -52,11 +53,11 @@ const EngineerTasksPage = () => {
       setTasks(Array.isArray(response) ? response : response.data || response.items || []);
     } catch (err: any) {
       setTasks([]);
-      setError(errorMessage(err, "Unable to load your assigned tasks."));
+      setError(errorMessage(err, t("tasksPage.unable_to_load_assigned_tasks")));
     } finally {
       setIsLoading(false);
     }
-  }, [workspace.projectId]);
+  }, [workspace.projectId, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -77,24 +78,24 @@ const EngineerTasksPage = () => {
   });
 
   const timing = (task: Task) => {
-    if (!task.plannedEndDate) return "No due date";
+    if (!task.plannedEndDate) return t("tasksPage.no_due_date");
     const due = new Date(`${task.plannedEndDate}T00:00:00`);
     const days = Math.round((due.getTime() - today.getTime()) / 86400000);
-    if (days < 0 && !["done", "cancelled"].includes(task.status)) return `${Math.abs(days)} days overdue`;
+    if (days < 0 && !["done", "cancelled"].includes(task.status)) return t("tasksPage.days_overdue", { count: Math.abs(days) });
     if (days === 0) return i18n.t("tasksPage.due_today");
-    return `${days} days remaining`;
+    return t("tasksPage.days_remaining", { count: days });
   };
 
   return <div className="page-container space-y-6">
     <div><h1 className="text-2xl font-bold">{t("tasksPage.my_tasks")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1><p className="text-muted-foreground">{t("tasksPage.only_work_assigned_to_you_in_the")}</p></div>
     <Card className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
       <Input placeholder={t("tasksPage.search_title_id_or_description")} value={search} onChange={(event) => setSearch(event.target.value)} />
-      <Select value={status} onChange={(event) => setStatus(event.target.value)} options={[{ value: "", label: "All statuses" }, ...["backlog", "todo", "in_progress", "under_review", "rework_required", "blocked", "done", "cancelled"].map((value) => ({ value, label: value.replaceAll("_", " ") }))]} />
-      <Select value={priority} onChange={(event) => setPriority(event.target.value)} options={[{ value: "", label: "All priorities" }, ...["low", "medium", "high", "critical"].map((value) => ({ value, label: value }))]} />
-      <Select value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={[{ value: "", label: "All disciplines" }, ...["civil", "architectural", "electrical", "mechanical"].map((value) => ({ value, label: value }))]} />
+      <Select value={status} onChange={(event) => setStatus(event.target.value)} options={[{ value: "", label: t("tasksPage.all_statuses") }, ...["backlog", "todo", "in_progress", "under_review", "rework_required", "blocked", "done", "cancelled"].map((value) => ({ value, label: vocabulary.taskStatus(value) }))]} />
+      <Select value={priority} onChange={(event) => setPriority(event.target.value)} options={[{ value: "", label: t("tasksPage.all_priorities") }, ...["low", "medium", "high", "critical"].map((value) => ({ value, label: vocabulary.priority(value) }))]} />
+      <Select value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={[{ value: "", label: t("tasksPage.all_disciplines") }, ...["civil", "architectural", "electrical", "mechanical"].map((value) => ({ value, label: vocabulary.discipline(value) }))]} />
       <Input label={t("tasksPage.due_date")} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={criticalOnly} onChange={(event) => setCriticalOnly(event.target.checked)} /> Critical only</label>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} /> Overdue only</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={criticalOnly} onChange={(event) => setCriticalOnly(event.target.checked)} /> {t("tasksPage.critical_only")}</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} /> {t("tasksPage.overdue_only")}</label>
     </Card>
     {error && <Card className="border-destructive/30 p-4 text-destructive">{error}</Card>}
     {isLoading ? <Card className="p-8 text-center text-muted-foreground">{t("tasksPage.loading_assigned_tasks")}</Card> : !filtered.length ? <Card className="p-10 text-center"><p className="font-medium">{t("tasksPage.no_tasks_assigned")}</p><p className="mt-1 text-sm text-muted-foreground">{t("tasksPage.no_authorized_tasks_match_the_selected")}</p></Card> : <div className="grid gap-4 lg:grid-cols-2">
@@ -138,9 +139,9 @@ const ManagedTasksPage = () => {
       setTasks(Array.isArray(response) ? response : response.data || response.items || []);
     } catch (err: any) {
       setTasks([]);
-      toast.error(errorMessage(err, "Unable to load tasks."));
+      toast.error(errorMessage(err, t("tasksPage.unable_to_load_tasks")));
     } finally { setIsLoading(false); }
-  }, [activeProjectId, debouncedSearch, statusFilter, priorityFilter]);
+  }, [activeProjectId, debouncedSearch, statusFilter, priorityFilter, t]);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -160,7 +161,7 @@ const ManagedTasksPage = () => {
     const payload = activeProjectId ? { ...data, projectId: activeProjectId } : data;
     const created = await tasksService.create(payload);
     await fetchTasks();
-    toast.success(`${created.taskCode} created.`);
+    toast.success(t("tasksPage.task_created", { code: created.taskCode }));
   };
 
   const handleSave = async (data: CreateTaskRequest) => {
@@ -176,13 +177,13 @@ const ManagedTasksPage = () => {
     });
     setEditingTask(null);
     await fetchTasks();
-    toast.success(`${updated.taskCode} updated.`);
+    toast.success(t("tasksPage.task_updated", { code: updated.taskCode }));
   };
 
   const handleDelete = async (task: Task) => {
-    if (!window.confirm(`Delete task "${task.name}"?`)) return;
-    try { await tasksService.delete(task.id); await fetchTasks(); toast.success("Task deleted."); }
-    catch (err: any) { toast.error(errorMessage(err, "Unable to delete task.")); }
+    if (!window.confirm(t("tasksPage.confirm_delete_task", { name: task.name }))) return;
+    try { await tasksService.delete(task.id); await fetchTasks(); toast.success(t("tasksPage.task_deleted")); }
+    catch (err: any) { toast.error(errorMessage(err, t("tasksPage.unable_to_delete_task"))); }
   };
 
   return (

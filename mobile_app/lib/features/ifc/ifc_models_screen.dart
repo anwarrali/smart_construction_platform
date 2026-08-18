@@ -6,6 +6,8 @@ import '../../core/constants/api_endpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/async_views.dart';
 import '../projects/project_context_view_model.dart';
+import '../../core/l10n/l10n_formats.dart';
+import '../../core/l10n/l10n_labels.dart';
 
 class IfcModelsScreen extends ConsumerStatefulWidget {
   const IfcModelsScreen({super.key});
@@ -22,21 +24,44 @@ class _IfcModelsScreenState extends ConsumerState<IfcModelsScreen> {
   Widget build(BuildContext context) {
     final project = ref.watch(projectContextProvider).selected;
     if (project == null) {
-      return const Scaffold(body: MessageView(icon: Icons.apartment, title: 'Select a project', message: 'Choose a project before opening IFC Intelligence.'));
+      return Scaffold(
+        body: MessageView(
+          icon: Icons.apartment,
+          title: context.l10n.commonSelectProject,
+          message: context.l10n.ifcSelectProjectBody,
+        ),
+      );
     }
     if (_projectId != project.id || _future == null) {
       _projectId = project.id;
       _future = _load(project.id);
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('IFC Intelligence')),
+      appBar: AppBar(title: Text(context.l10n.ifcTitle)),
       body: FutureBuilder<List<_IfcGroup>>(
         future: _future,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const LoadingView(label: 'Loading IFC models');
-          if (snapshot.hasError) return MessageView(icon: Icons.cloud_off, title: 'IFC models unavailable', message: '${snapshot.error}', onAction: () => setState(() => _future = _load(project.id)));
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return LoadingView(label: context.l10n.ifcLoading);
+          }
+          if (snapshot.hasError) {
+            return MessageView(
+              icon: Icons.cloud_off,
+              title: context.l10n.commonUnavailable(
+                context.l10n.ifcModelsTitle,
+              ),
+              message: context.l10n.describeError(snapshot.error),
+              onAction: () => setState(() => _future = _load(project.id)),
+            );
+          }
           final groups = snapshot.data ?? const [];
-          if (groups.isEmpty) return const MessageView(icon: Icons.view_in_ar_outlined, title: 'No IFC models', message: 'A project manager can create a model group and upload the first IFC version from the web workspace.');
+          if (groups.isEmpty) {
+            return MessageView(
+              icon: Icons.view_in_ar_outlined,
+              title: context.l10n.ifcEmptyTitle,
+              message: context.l10n.ifcEmptyBody,
+            );
+          }
           return RefreshIndicator(
             onRefresh: () async { setState(() => _future = _load(project.id)); await _future; },
             child: ListView(
@@ -44,21 +69,37 @@ class _IfcModelsScreenState extends ConsumerState<IfcModelsScreen> {
               children: [
                 Text(project.name, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
-                const Text('Read-only field view of approved model facts and processing status.', style: TextStyle(color: AppColors.textSecondary)),
+                Text(
+                  context.l10n.ifcReadOnlyHint,
+                  style: const TextStyle(color: AppColors.mutedForeground),
+                ),
                 const SizedBox(height: 16),
                 ...groups.map((group) => Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ExpansionTile(
                     leading: const CircleAvatar(child: Icon(Icons.account_tree_outlined)),
                     title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text(group.discipline ?? 'Federated model'),
+                    subtitle: Text(group.discipline == null
+                        ? context.l10n.ifcFederatedModel
+                        : context.l10n.disciplineLabel(group.discipline)),
                     children: group.versions.isEmpty
-                        ? const [ListTile(title: Text('No versions uploaded'))]
+                        ? [ListTile(title: Text(context.l10n.ifcNoVersions))]
                         : group.versions.map((version) => ListTile(
-                            leading: Icon(version.ready ? Icons.check_circle : version.failed ? Icons.error : Icons.sync, color: version.ready ? AppColors.success : version.failed ? AppColors.danger : AppColors.info),
-                            title: Text('v${version.number} · ${version.title}'),
-                            subtitle: Text('${version.status.replaceAll('_', ' ')} · ${version.entityCount} elements${version.schema == null ? '' : ' · ${version.schema}'}'),
-                            trailing: version.active ? const Chip(label: Text('Active')) : null,
+                            leading: Icon(version.ready ? Icons.check_circle : version.failed ? Icons.error : Icons.sync, color: version.ready ? AppColors.stateVerified : version.failed ? AppColors.destructive : AppColors.stateProgress),
+                            title: Text(context.l10n.ifcVersionLine(
+                              context.formatInt(version.number),
+                              version.title,
+                            )),
+                            // The IFC schema name (e.g. IFC4) is a format
+                            // identifier and stays as the file declares it.
+                            subtitle: Text(
+                              '${context.l10n.statusLabel(version.status)} · '
+                              '${context.l10n.ifcElementCount(version.entityCount)}'
+                              '${version.schema == null ? '' : ' · ${version.schema}'}',
+                            ),
+                            trailing: version.active
+                                ? Chip(label: Text(context.l10n.ifcActive))
+                                : null,
                           )).toList(),
                   ),
                 )),
@@ -90,7 +131,7 @@ class _IfcGroup {
 
 class _IfcVersion {
   const _IfcVersion(this.number, this.title, this.status, this.entityCount, this.schema, this.active);
-  factory _IfcVersion.fromJson(Map<String, dynamic> value) => _IfcVersion(value['versionNumber'] as int? ?? 0, '${value['title'] ?? 'Untitled'}', '${value['processingStatus'] ?? 'UPLOADED'}', value['entityCount'] as int? ?? 0, value['ifcSchema'] as String?, value['isActive'] as bool? ?? false);
+  factory _IfcVersion.fromJson(Map<String, dynamic> value) => _IfcVersion(value['versionNumber'] as int? ?? 0, '${value['title'] ?? ''}', '${value['processingStatus'] ?? 'UPLOADED'}', value['entityCount'] as int? ?? 0, value['ifcSchema'] as String?, value['isActive'] as bool? ?? false);
   final int number;
   final String title;
   final String status;

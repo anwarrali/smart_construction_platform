@@ -8,6 +8,8 @@ import '../../core/network/network_exceptions.dart';
 import '../../core/widgets/async_views.dart';
 import '../../models/chat_message.dart';
 import '../projects/project_context_view_model.dart';
+import '../../core/l10n/l10n_formats.dart';
+import '../../core/l10n/l10n_labels.dart';
 
 class MessagesScreen extends ConsumerStatefulWidget {
   const MessagesScreen({super.key});
@@ -19,7 +21,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   List<ProjectConversation> _items = const [];
   RecipientOptions _options = const RecipientOptions(users: [], groups: []);
   bool _loading = true;
-  String? _error;
+  Object? _error;
+
+  /// Distinguishes "nothing selected yet" from "the request failed", so the
+  /// screen shows the right empty state and neither is a stored sentence.
+  bool _noProject = false;
 
   @override
   void initState() {
@@ -30,10 +36,15 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   Future<void> _load() async {
     final project = ref.read(projectContextProvider).selected;
     if (project == null) {
-      if (mounted) setState(() { _loading = false; _error = 'Select a project first.'; });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _noProject = true;
+        });
+      }
       return;
     }
-    if (mounted) setState(() { _loading = true; _error = null; });
+    if (mounted) setState(() { _loading = true; _error = null; _noProject = false; });
     try {
       final results = await Future.wait([
         ref.read(messageRepositoryProvider).conversations(project.id),
@@ -47,17 +58,21 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
         });
       }
     } on NetworkException catch (error) {
-      if (mounted) setState(() { _error = error.message; _loading = false; });
+      if (mounted) setState(() { _error = error; _loading = false; });
     }
   }
 
-  String _title(ProjectConversation item, String? currentUserId) {
+  String _title(
+    BuildContext context,
+    ProjectConversation item,
+    String? currentUserId,
+  ) {
     if (item.title?.isNotEmpty == true) return item.title!;
     final names = item.participants
         .where((participant) => participant.userId != currentUserId)
         .map((participant) => participant.user.fullName)
         .join(', ');
-    return names.isEmpty ? 'Project discussion' : names;
+    return names.isEmpty ? context.l10n.messagesProjectDiscussion : names;
   }
 
   Future<void> _compose() async {
@@ -84,12 +99,15 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('New Project Conversation',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                Text(context.l10n.messagesNewConversation,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    )),
                 if (user?.isProjectManager == true || user?.role == 'admin')
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Project/team announcement'),
+                    title: Text(context.l10n.messagesAnnouncement),
                     value: announcement,
                     onChanged: (value) => setSheetState(() {
                       announcement = value;
@@ -99,9 +117,15 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                   ),
                 if (_options.groups.isNotEmpty && !announcement)
                   SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('People')),
-                      ButtonSegment(value: true, label: Text('Team / Group')),
+                    segments: [
+                      ButtonSegment(
+                        value: false,
+                        label: Text(context.l10n.messagesPeople),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        label: Text(context.l10n.messagesTeamGroup),
+                      ),
                     ],
                     selected: {useGroup},
                     onSelectionChanged: (value) =>
@@ -112,10 +136,16 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                   DropdownButtonFormField<String>(
                     value: groupCode.isEmpty ? null : groupCode,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Recipient group'),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.messagesRecipientGroup,
+                    ),
                     items: _options.groups.map((group) => DropdownMenuItem(
                       value: group.code,
-                      child: Text('${group.label} (${group.recipientCount})',
+                      child: Text(
+                          context.l10n.messagesGroupWithCount(
+                            group.label,
+                            group.recipientCount,
+                          ),
                           overflow: TextOverflow.ellipsis),
                     )).toList(),
                     onChanged: (value) => setSheetState(() => groupCode = value ?? ''),
@@ -130,7 +160,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                         contentPadding: EdgeInsets.zero,
                         value: selected.contains(recipient.id),
                         title: Text(recipient.fullName, overflow: TextOverflow.ellipsis),
-                        subtitle: Text(recipient.role.replaceAll('_', ' ')),
+                        subtitle: Text(context.l10n.roleLabel(recipient.role)),
                         onChanged: (checked) => setSheetState(() {
                           if (checked == true) {
                             selected.add(recipient.id);
@@ -142,11 +172,18 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                     ),
                   ),
                 const SizedBox(height: 10),
-                TextField(controller: title, decoration: const InputDecoration(labelText: 'Title (optional)')),
+                TextField(
+                  controller: title,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.messagesTitleOptional,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: content, minLines: 3, maxLines: 6,
-                  decoration: const InputDecoration(labelText: 'Message'),
+                  decoration: InputDecoration(
+                    labelText: context.l10n.messagesMessage,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 FilledButton(
@@ -174,12 +211,14 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                     } on NetworkException catch (error) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(error.message)),
+                          SnackBar(
+                            content: Text(context.l10n.describeError(error)),
+                          ),
                         );
                       }
                     }
                   },
-                  child: const Text('Send'),
+                  child: Text(context.l10n.messagesSend),
                 ),
               ],
             ),
@@ -200,23 +239,41 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     final project = ref.watch(projectContextProvider).selected;
     final currentUserId = ref.watch(sessionProvider).user?.id;
     return Scaffold(
-      appBar: AppBar(title: Text(project == null ? 'Messages' : 'Messages · ${project.name}',
+      appBar: AppBar(title: Text(project == null
+              ? context.l10n.messagesTitle
+              : context.l10n.messagesTitleWithProject(project.name),
           overflow: TextOverflow.ellipsis)),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _compose, icon: const Icon(Icons.edit_outlined),
-        label: const Text('New'),
+        label: Text(context.l10n.messagesNew),
       ),
-      body: _loading
-          ? const LoadingView(label: 'Loading conversations')
+      body: _noProject
+          ? MessageView(
+              icon: Icons.apartment,
+              title: context.l10n.commonNoProjectSelected,
+              message: context.l10n.commonSelectProjectFirst,
+            )
+          : _loading
+          ? LoadingView(label: context.l10n.messagesLoading)
           : _error != null
-              ? MessageView(icon: Icons.cloud_off, title: 'Messages unavailable',
-                  message: _error!, onAction: _load)
+              ? MessageView(icon: Icons.cloud_off,
+                  title: context.l10n.commonUnavailable(
+                    context.l10n.messagesTitle,
+                  ),
+                  message: context.l10n.describeError(_error),
+                  onAction: _load)
               : RefreshIndicator(
                   onRefresh: _load,
                   child: _items.isEmpty
-                      ? ListView(children: const [
-                          SizedBox(height: 180),
-                          Center(child: Text('No project conversations yet.')),
+                      // Every other empty state in the app is a MessageView;
+                      // this one was a bare sentence floating in white space.
+                      ? ListView(children: [
+                          const SizedBox(height: 120),
+                          MessageView(
+                            icon: Icons.forum_outlined,
+                            title: context.l10n.messagesEmptyTitle,
+                            message: context.l10n.messagesEmptyBody,
+                          ),
                         ])
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
@@ -237,12 +294,19 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                                           ? Icons.groups_outlined
                                           : Icons.person_outline,
                                 )),
-                                title: Text(_title(item, currentUserId),
+                                title: Text(
+                                    _title(context, item, currentUserId),
                                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text(item.lastMessage?.content ?? 'No messages',
+                                subtitle: Text(
+                                    item.lastMessage?.content ??
+                                        context.l10n.messagesNoMessages,
                                     maxLines: 2, overflow: TextOverflow.ellipsis),
                                 trailing: item.unreadCount > 0
-                                    ? Badge(label: Text('${item.unreadCount}'))
+                                    ? Badge(
+                                        label: Text(
+                                          context.formatInt(item.unreadCount),
+                                        ),
+                                      )
                                     : const Icon(Icons.chevron_right),
                               ),
                             );

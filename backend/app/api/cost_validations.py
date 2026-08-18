@@ -8,7 +8,7 @@ from app.models.user import User
 from app.models.cost_validation import CostValidation
 from app.models.project import Project
 from app.schemas.cost_validation import CostValidationOut, CostValidationCreate, CostValidationReview
-from app.core.deps import get_current_user, user_has_project_access, accessible_project_ids
+from app.core.deps import get_current_user, is_consultant_engineer, user_has_project_access, accessible_project_ids
 from app.models.enums import CostValidationStatus, UserRole
 
 router = APIRouter(prefix="/cost-validations", tags=["Cost Validations"])
@@ -49,6 +49,11 @@ def get_cost_validation_by_id(
     val = db.query(CostValidation).filter(CostValidation.id == validation_id).first()
     if not val:
         raise HTTPException(status_code=404, detail="Cost validation request not found")
+    # Same project-membership rule as the sibling by-project listing above —
+    # a claim's UUID alone must not let an unrelated authenticated user read
+    # another project's cost/pricing data.
+    if not user_has_project_access(db, current_user, val.project_id):
+        raise HTTPException(status_code=403, detail="You do not have access to this project")
     return val
 
 @router.post("", response_model=CostValidationOut)
@@ -98,7 +103,11 @@ def review_cost_validation(
     if not val:
         raise HTTPException(status_code=404, detail="Cost validation request not found")
         
-    if current_user.role != UserRole.CONSULTANT or not user_has_project_access(db, current_user, val.project_id):
+    # `User.role` is never literally CONSULTANT — a Consultant Engineer is
+    # persisted as ENGINEER with `engineer_affiliation="external_consultant"`
+    # (see app.schemas.user.UserCreateByAdmin) — so this must check
+    # `is_consultant_engineer`, matching app.api.design_changes.
+    if not is_consultant_engineer(current_user) or not user_has_project_access(db, current_user, val.project_id):
         raise HTTPException(status_code=403, detail="Only an assigned consultant can certify payment claims")
     if review_data.status == CostValidationStatus.APPROVED and review_data.certified_amount is None:
         raise HTTPException(status_code=400, detail="certifiedAmount is required when approving a claim")

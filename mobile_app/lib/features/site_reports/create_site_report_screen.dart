@@ -8,6 +8,8 @@ import '../../core/constants/api_endpoints.dart';
 import '../../core/network/network_exceptions.dart';
 import '../../core/theme/app_spacing.dart';
 import '../projects/project_context_view_model.dart';
+import '../../core/l10n/l10n_formats.dart';
+import '../../core/l10n/l10n_labels.dart';
 
 class CreateSiteReportScreen extends ConsumerStatefulWidget {
   const CreateSiteReportScreen({super.key});
@@ -48,7 +50,7 @@ class _CreateSiteReportScreenState
   Widget build(BuildContext context) {
     final project = ref.watch(projectContextProvider).selected;
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Site Report')),
+      appBar: AppBar(title: Text(context.l10n.siteReportCreate)),
       body: SafeArea(
         top: false,
         child: Form(
@@ -63,15 +65,15 @@ class _CreateSiteReportScreenState
             ),
             children: [
               Text(
-                project?.name ?? 'No project selected',
+                project?.name ?? context.l10n.commonNoProjectSelected,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: AppSpacing.lg),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.calendar_today_outlined),
-                title: const Text('Report date'),
-                subtitle: Text(DateFormat.yMMMMd().format(_date)),
+                title: Text(context.l10n.siteReportDate),
+                subtitle: Text(context.formatShortDate(_date)),
                 trailing: const Icon(Icons.edit_calendar_outlined),
                 onTap: _selectDate,
               ),
@@ -80,16 +82,16 @@ class _CreateSiteReportScreenState
                 controller: _summary,
                 minLines: 4,
                 maxLines: 8,
-                decoration: const InputDecoration(
-                  labelText: 'Work summary',
+                decoration: InputDecoration(
+                  labelText: context.l10n.siteReportWorkSummary,
                   alignLabelWithHint: true,
-                  prefixIcon: Padding(
+                  prefixIcon: const Padding(
                     padding: EdgeInsets.only(bottom: 75),
                     child: Icon(Icons.description_outlined),
                   ),
                 ),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Add the report summary.'
+                    ? context.l10n.validationAddReportSummary
                     : null,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -97,34 +99,36 @@ class _CreateSiteReportScreenState
                 controller: _completed,
                 minLines: 2,
                 maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'Work completed',
+                decoration: InputDecoration(
+                  labelText: context.l10n.siteReportWorkCompleted,
                   alignLabelWithHint: true,
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _weather,
-                decoration: const InputDecoration(
-                  labelText: 'Weather conditions',
-                  prefixIcon: Icon(Icons.cloud_outlined),
+                decoration: InputDecoration(
+                  labelText: context.l10n.siteReportWeather,
+                  prefixIcon: const Icon(Icons.cloud_outlined),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _workers,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Workers count',
-                  prefixIcon: Icon(Icons.groups_outlined),
+                decoration: InputDecoration(
+                  labelText: context.l10n.siteReportWorkersCount,
+                  prefixIcon: const Icon(Icons.groups_outlined),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _equipment,
-                decoration: const InputDecoration(
-                  labelText: 'Equipment used',
-                  prefixIcon: Icon(Icons.precision_manufacturing_outlined),
+                decoration: InputDecoration(
+                  labelText: context.l10n.siteReportEquipment,
+                  prefixIcon: const Icon(
+                    Icons.precision_manufacturing_outlined,
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -132,8 +136,8 @@ class _CreateSiteReportScreenState
                 controller: _delays,
                 minLines: 2,
                 maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'Delays or constraints',
+                decoration: InputDecoration(
+                  labelText: context.l10n.siteReportDelays,
                   alignLabelWithHint: true,
                 ),
               ),
@@ -143,7 +147,7 @@ class _CreateSiteReportScreenState
                     ? null
                     : () => _submit('draft'),
                 icon: const Icon(Icons.save_outlined),
-                label: const Text('Save Draft'),
+                label: Text(context.l10n.commonSaveDraft),
               ),
               const SizedBox(height: AppSpacing.sm),
               FilledButton.icon(
@@ -151,7 +155,11 @@ class _CreateSiteReportScreenState
                     ? null
                     : () => _submit('submitted'),
                 icon: const Icon(Icons.send_rounded),
-                label: Text(_submitting ? 'Submitting…' : 'Submit Report'),
+                label: Text(
+                  _submitting
+                      ? context.l10n.commonSubmitting
+                      : context.l10n.siteReportSubmit,
+                ),
               ),
             ],
           ),
@@ -199,8 +207,8 @@ class _CreateSiteReportScreenState
           SnackBar(
             content: Text(
               status == 'draft'
-                  ? 'Report draft saved.'
-                  : 'Site report submitted.',
+                  ? context.l10n.siteReportDraftSaved
+                  : context.l10n.siteReportSubmitted,
             ),
           ),
         );
@@ -211,7 +219,9 @@ class _CreateSiteReportScreenState
         setState(() => _submitting = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
+        ).showSnackBar(
+          SnackBar(content: Text(context.l10n.describeError(error))),
+        );
       }
     }
   }

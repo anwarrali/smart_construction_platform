@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Struct IQ mark, as the adaptive-icon foreground.
+
+  Same geometry as the web logo (frontend/src/components/brand/StructIQLogo.tsx)
+  and the Flutter painter (lib/core/widgets/brand_mark.dart), transcribed from
+  the shared 32-unit grid onto the 108-unit adaptive viewport: a point (x, y)
+  maps to (54 + (x - 16.85) * 1.85, 54 + (y - 15.85) * 1.85). That scale is
+  chosen so the furthest point of the mark — the filled decision node — lands
+  just inside the 66% safe circle and survives every launcher mask.
+
+  This is the inverted variant, matching StructIQLogo(inverted: true): white
+  frame and the lighter verdant used on navy surfaces.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- The chamfered structural frame. -->
+    <path
+        android:pathData="M42.25,29.49 L55.20,29.49 L67.97,42.25 L67.97,55.20 L55.20,67.97 L42.25,67.97 L29.49,55.20 L29.49,42.25 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5.55"
+        android:strokeLineJoin="round" />
+
+    <!-- The connection tail: two segments with a gap, so the junction reads
+         as an open node rather than a blob. -->
+    <path
+        android:pathData="M62.97,62.97 L65.56,65.56"
+        android:strokeColor="#56B06B"
+        android:strokeWidth="5.55"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M72.96,72.96 L74.44,74.44"
+        android:strokeColor="#56B06B"
+        android:strokeWidth="5.55"
+        android:strokeLineCap="round" />
+
+    <!-- The junction node. -->
+    <path
+        android:pathData="M65.84,69.26 a3.42,3.42 0 1,0 6.84,0 a3.42,3.42 0 1,0 -6.84,0"
+        android:strokeColor="#56B06B"
+        android:strokeWidth="2.96" />
+
+    <!-- The resolved decision point. -->
+    <path
+        android:pathData="M71.67,76.48 a4.81,4.81 0 1,0 9.62,0 a4.81,4.81 0 1,0 -9.62,0"
+        android:fillColor="#56B06B" />
+</vector>

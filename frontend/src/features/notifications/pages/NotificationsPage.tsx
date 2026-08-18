@@ -43,27 +43,27 @@ export const NotificationsPage = () => {
   return (
     <div className="page-container max-w-4xl space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">{workspace.project ? "Project Notifications" : "Notification Center"}</h1>
-        <p className="text-sm text-muted-foreground">{workspace.project?.name || "Search, filter, and manage real system events."}</p>
+        <h1 className="text-2xl font-bold">{workspace.project ? t("notificationsPage.project_notifications") : t("notificationsPage.notification_center")}</h1>
+        <p className="text-sm text-muted-foreground">{workspace.project?.name || t("notificationsPage.subtitle")}</p>
       </div>
 
       <Card className="grid gap-3 p-4 md:grid-cols-[1fr_180px_210px]">
         <Input placeholder={t("notificationsPage.search_notifications")} value={search} onChange={(event) => setSearch(event.target.value)} />
         <Select value={readFilter} onChange={(event) => setReadFilter(event.target.value)} options={[
-          { value: "", label: "All notifications" },
-          { value: "unread", label: "Unread only" },
-          { value: "read", label: "Read only" },
+          { value: "", label: t("notificationsPage.all_notifications") },
+          { value: "unread", label: t("notificationsPage.unread_only") },
+          { value: "read", label: t("notificationsPage.read_only") },
         ]} />
         <Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} options={[
-          { value: "", label: "All event types" },
-          { value: "task_assigned", label: "Task assignments" },
-          { value: "task_updated", label: "Task and issue updates" },
-          { value: "task_overdue", label: "Overdue tasks" },
-          { value: "design_change", label: "Design changes" },
-          { value: "approval_request", label: "Approvals" },
-          { value: "report_ready", label: "Site reports" },
-          { value: "message", label: "Messages" },
-          { value: "system", label: "Project and document events" },
+          { value: "", label: t("notificationsPage.all_event_types") },
+          { value: "task_assigned", label: t("notificationsPage.task_assignments") },
+          { value: "task_updated", label: t("notificationsPage.task_and_issue_updates") },
+          { value: "task_overdue", label: t("notificationsPage.overdue_tasks") },
+          { value: "design_change", label: t("notificationsPage.design_changes") },
+          { value: "approval_request", label: t("notificationsPage.approvals") },
+          { value: "report_ready", label: t("notificationsPage.site_reports") },
+          { value: "message", label: t("notificationsPage.messages") },
+          { value: "system", label: t("notificationsPage.project_and_document_events") },
         ]} />
       </Card>
 
@@ -73,7 +73,7 @@ export const NotificationsPage = () => {
       </Card>
 
       {pagination.totalPages > 1 && <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Page {pagination.page} of {pagination.totalPages} · {pagination.total} notifications</p>
+        <p className="text-sm text-muted-foreground">{t("notificationsPage.page_summary", { page: pagination.page, totalPages: pagination.totalPages, total: pagination.total })}</p>
         <div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => setPage((value) => value - 1)}>{t("notificationsPage.previous")}</Button><Button variant="outline" size="sm" disabled={page >= pagination.totalPages || isLoading} onClick={() => setPage((value) => value + 1)}>{t("notificationsPage.next")}</Button></div>
       </div>}
     </div>

@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import '../../models/voice_draft.dart';
 import '../../services/voice_service.dart';
+import 'voice_errors.dart';
 
 class VoiceViewModel {
   VoiceViewModel(this.projectId, this._processing) {
@@ -46,7 +47,7 @@ class VoiceViewModel {
 
   Future<void> start() async {
     if (!await _recorder.hasPermission()) {
-      throw StateError('Microphone permission is required.');
+      throw const VoiceException(VoiceFailure.microphonePermission);
     }
     final directory = await getTemporaryDirectory();
     path =
@@ -95,7 +96,9 @@ class VoiceViewModel {
   }
 
   Future<VoiceTranscription> transcribe(void Function() onChanged) async {
-    if (path == null) throw StateError('Record audio before transcribing.');
+    if (path == null) {
+      throw const VoiceException(VoiceFailure.recordBeforeTranscribing);
+    }
     status = VoiceDraftStatus.uploading;
     onChanged();
     try {
@@ -125,7 +128,9 @@ class VoiceViewModel {
     String? taskId,
     required void Function() onChanged,
   }) async {
-    if (path == null) throw StateError('Record audio before analysis.');
+    if (path == null) {
+      throw const VoiceException(VoiceFailure.recordBeforeAnalysis);
+    }
     status = VoiceDraftStatus.uploading;
     onChanged();
     try {
@@ -158,7 +163,9 @@ class VoiceViewModel {
 
   Future<VoiceAnalysis> retryAnalysis(void Function() onChanged) async {
     final current = analysis;
-    if (current == null) throw StateError('No analysis to retry.');
+    if (current == null) {
+      throw const VoiceException(VoiceFailure.nothingToRetry);
+    }
     status = VoiceDraftStatus.transcribing;
     onChanged();
     final value = await _processing.retryAnalysis(current.id);
@@ -171,10 +178,12 @@ class VoiceViewModel {
   }
 
   Future<List<Map<String, dynamic>>> confirm(
-    List<Map<String, dynamic>> actions,
+    List<VoiceDraftConfirmation> actions,
   ) {
     final current = analysis;
-    if (current == null) throw StateError('No analysis to confirm.');
+    if (current == null) {
+      throw const VoiceException(VoiceFailure.nothingToConfirm);
+    }
     return _processing.confirmActions(current.id, actions, current);
   }
 
@@ -183,7 +192,9 @@ class VoiceViewModel {
     String answer,
   ) async {
     final current = analysis;
-    if (current == null) throw StateError('No analysis to clarify.');
+    if (current == null) {
+      throw const VoiceException(VoiceFailure.nothingToClarify);
+    }
     final updated = await _processing.answerClarification(
       analysis: current,
       clarificationId: clarificationId,

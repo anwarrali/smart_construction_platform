@@ -20,6 +20,7 @@ import type { Task } from "../../../types/task";
 import { useRole } from "../../../hooks/useRole";
 import { useSearchParams } from "react-router-dom";
 import { ContextDiscussion } from "../../messages/components/ContextDiscussion";
+import { CommunicationActions } from "../../../components/shared/CommunicationActions";
 
 export const IssuesPage = () => {
   const { t } = useTranslation();
@@ -160,13 +161,14 @@ export const IssuesPage = () => {
                       {vocabulary.severity(issue.severity)}
                     </Badge>
                     <Badge size="sm" variant={statusVariant[issue.status]}>
-                      {issue.status.replace("_", " ")}
+                      {vocabulary.issueStatus(issue.status)}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {formatDate(issue.createdAt)}
                     </span>
                   </div>
                   <AttachmentPanel projectId={issue.projectId} entityType="ISSUE" entityId={issue.id} initialCount={issue.attachmentCount} />
+                  <CommunicationActions className="mt-2 me-2 align-middle" entityType="ISSUE" entityId={issue.id} projectId={issue.projectId} />
                   <Button className="mt-2 mr-2" size="sm" variant="outline" onClick={() => setDiscussionIssueId((current) => current === issue.id ? "" : issue.id)}>{discussionIssueId === issue.id ? t("issue.hideDiscussion") : t("issue.openDiscussion")}</Button>
                   {isProjectManager && ["open", "in_progress"].includes(issue.status) && <Button className="mt-2" size="sm" variant="outline" onClick={async () => { const resolution = window.prompt("Resolution note (required)"); if (!resolution?.trim()) return; try { await issuesService.update(issue.id, { status: "resolved", resolutionNotes: resolution.trim() }); await fetchIssues(); toast.success("Issue resolved. The assigned Engineer can resume if no blockers remain."); } catch (err: any) { toast.error(errorMessage(err, "Issue could not be resolved.")); } }}>{t("issuesPage.resolve")}</Button>}
                   {discussionIssueId === issue.id && <div className="mt-3"><ContextDiscussion projectId={issue.projectId} contextType="ISSUE" contextId={issue.id} title={t("issuesPage.issue_discussion")} /></div>}
@@ -181,9 +183,9 @@ export const IssuesPage = () => {
           {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">{t("issuesPage.project")}</span> {workspace.project?.name}</p> : <Select label={t("issuesPage.project_2")} value={projectId} onChange={e => setProjectId(e.target.value)} options={projects.map(p => ({value:p.id,label:p.name}))}/>} 
           <Input label={t("issuesPage.title")} value={title} onChange={e => setTitle(e.target.value)} required/>
           <Input label={t("issuesPage.description")} value={description} onChange={e => setDescription(e.target.value)}/>
-          <Select label={t("issuesPage.category")} value={category} onChange={e => setCategory(e.target.value)} options={["technical","material","design","coordination","quality","schedule","equipment","site_condition","other"].map(value => ({value,label:value.replaceAll("_", " ")}))}/>
+          <Select label={t("issuesPage.category")} value={category} onChange={e => setCategory(e.target.value)} options={["technical","material","design","coordination","quality","schedule","equipment","site_condition","other"].map(value => ({value,label:vocabulary.issueCategory(value)}))}/>
           <Select label={t("issuesPage.related_task_optional")} value={taskId} onChange={e => setTaskId(e.target.value)} options={[{ value: "", label: t("issue.projectLevel") }, ...tasks.map(task => ({ value: task.id, label: `${task.taskCode} — ${task.name}` }))]} />
-          <Select label={t("issuesPage.severity")} value={severity} onChange={e => setSeverity(e.target.value)} options={["low","medium","high","critical"].map(value => ({value,label:value}))}/>
+          <Select label={t("issuesPage.severity")} value={severity} onChange={e => setSeverity(e.target.value)} options={["low","medium","high","critical"].map(value => ({value,label:vocabulary.severity(value)}))}/>
           <ModalActions><Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{t("issuesPage.cancel")}</Button><Button type="submit" disabled={!(activeProjectId || projectId) || !title.trim()}>{t("issuesPage.create_issue")}</Button></ModalActions>
         </form>
       </Modal>

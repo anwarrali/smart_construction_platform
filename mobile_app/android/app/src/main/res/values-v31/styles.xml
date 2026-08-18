@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ replaced the windowBackground splash with the SplashScreen API,
+  which by default shows the *launcher icon* on the theme's splash background.
+  Before this file existed that meant the stock Flutter logo on white — the
+  first thing the user saw was not the product.
+
+  These attributes are read from the activity theme, so LaunchTheme is the
+  right place for them.
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

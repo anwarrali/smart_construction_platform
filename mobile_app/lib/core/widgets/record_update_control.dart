@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_shadows.dart';
+import '../l10n/l10n_formats.dart';
+import '../l10n/l10n_labels.dart';
 
 enum RecordControlState {
   idle,
@@ -32,10 +34,10 @@ class RecordUpdateControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = state == RecordControlState.recording;
     final tone = active
-        ? AppColors.danger
+        ? AppColors.destructive
         : state == RecordControlState.error
-        ? AppColors.warning
-        : AppColors.bronze;
+        ? AppColors.stateReview
+        : AppColors.accent;
     final icon = switch (state) {
       RecordControlState.recording => Icons.stop_rounded,
       RecordControlState.paused => Icons.play_arrow_rounded,
@@ -46,13 +48,13 @@ class RecordUpdateControl extends StatelessWidget {
       RecordControlState.idle => Icons.mic_rounded,
     };
     final label = switch (state) {
-      RecordControlState.recording => 'Stop recording',
-      RecordControlState.paused => 'Resume recording',
-      RecordControlState.processing => 'Processing…',
-      RecordControlState.completed => 'Play recording',
-      RecordControlState.playing => 'Pause playback',
-      RecordControlState.error => 'Try again',
-      RecordControlState.idle => 'Record Update',
+      RecordControlState.recording => context.l10n.recordStop,
+      RecordControlState.paused => context.l10n.recordResume,
+      RecordControlState.processing => context.l10n.recordProcessing,
+      RecordControlState.completed => context.l10n.recordPlay,
+      RecordControlState.playing => context.l10n.recordPausePlayback,
+      RecordControlState.error => context.l10n.recordTryAgain,
+      RecordControlState.idle => context.l10n.navRecordUpdate,
     };
     final size = compact ? 64.0 : 92.0;
     return Semantics(
@@ -97,8 +99,10 @@ class RecordUpdateControl extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               duration == null
-                  ? 'Capture a hands-free field update'
-                  : _duration(duration!),
+                  ? context.l10n.recordCapture
+                  // Shared clock formatting, so the recorder and the playback
+                  // transport cannot drift apart.
+                  : context.formatClock(duration!),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -107,8 +111,6 @@ class RecordUpdateControl extends StatelessWidget {
     );
   }
 
-  String _duration(Duration value) =>
-      '${value.inMinutes.toString().padLeft(2, '0')}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
 }
 
 class RecordUpdateCard extends StatelessWidget {
@@ -120,7 +122,7 @@ class RecordUpdateCard extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(AppRadius.large),
+      borderRadius: BorderRadius.circular(AppRadius.panel),
       border: Border.all(color: AppColors.border),
       boxShadow: AppShadows.card,
     ),
@@ -134,18 +136,25 @@ class RecordUpdateCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: AppColors.surfaceMuted,
+            color: AppColors.muted,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.shield_outlined, size: 16, color: AppColors.success),
-              SizedBox(width: 6),
+              const Icon(
+                Icons.shield_outlined,
+                size: 16,
+                color: AppColors.stateVerified,
+              ),
+              const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  'You review every proposal before submission',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  context.l10n.recordReviewHint,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

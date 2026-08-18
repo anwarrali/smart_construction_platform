@@ -233,7 +233,16 @@ def test_migrated_defaults_match_the_behaviour_the_endpoints_had(db, world):
     assert BY_CODE["project.edit"].default_roles == frozenset({UserRole.ADMIN})
     assert BY_CODE["site_report.submit"].default_roles == frozenset(
         {UserRole.PROJECT_MANAGER, UserRole.ENGINEER})
-    assert BY_CODE["design_change.approve"].default_roles == frozenset({UserRole.CONSULTANT})
+    # Corrected, not widened: a Consultant Engineer's `User.role` is ENGINEER
+    # (with `engineer_affiliation="external_consultant"`) — CONSULTANT can
+    # never be a real stored role, `UserCreateByAdmin` persists any request
+    # for it as unified Engineer — so `{CONSULTANT}` alone was never actually
+    # reachable by any account that could exist. Default is now ENGINEER;
+    # `approve_design_change`/`reject_design_change` hold the real
+    # "assigned consultant alone" gate via `is_consultant_engineer`, so a
+    # Main Contractor Engineer still cannot approve
+    # (test_consultant_engineer_dead_role_fix.py pins both directions).
+    assert BY_CODE["design_change.approve"].default_roles == frozenset({UserRole.ENGINEER})
     assert BY_CODE["project.manage_members"].default_roles == frozenset(
         {UserRole.ADMIN, UserRole.PROJECT_MANAGER})
     assert BY_CODE["platform.manage_users"].default_roles == frozenset({UserRole.ADMIN})

@@ -16,6 +16,7 @@ import { Link } from "react-router-dom";
 import api from "../../../../services/api";
 import { Badge } from "../../../../components/ui/Badge";
 import { getRoleLabel } from "../../../../utils/roleMapper";
+import { useVocabulary } from "../../../../utils/vocabulary";
 import { formatDate } from "../../../../utils/date";
 import { ROUTES } from "../../../../utils/constants";
 import type { Project } from "../../../../types/project";
@@ -42,6 +43,7 @@ const byCreatedDateDesc = <T extends { createdAt?: string }>(items: T[]) =>
 
 export const AdminDashboard = () => {
   const { t } = useTranslation();
+  const vocabulary = useVocabulary();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -229,11 +231,11 @@ export const AdminDashboard = () => {
               <div key={project.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
                 <div>
                   <p className="font-medium">{project.name}</p>
-                  <p className="text-xs text-muted-foreground">{project.location || "No location set"}</p>
+                  <p className="text-xs text-muted-foreground">{project.location || t("adminDash.no_location_set")}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant={project.status === "active" ? "success" : "info"}>
-                    {project.status.replace("_", " ")}
+                    {vocabulary.projectStatus(project.status)}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
                     {project.createdAt ? formatDate(project.createdAt) : "-"}

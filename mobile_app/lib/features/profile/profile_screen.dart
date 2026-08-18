@@ -6,6 +6,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
 import '../projects/project_context_view_model.dart';
+import '../../core/l10n/l10n_labels.dart';
+import '../../app/locale_controller.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -17,10 +19,10 @@ class ProfileScreen extends ConsumerWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final role = user.isSiteEngineer
-        ? 'Main Contractor · Site Engineer'
+        ? context.l10n.roleCaptionSiteEngineer
         : user.isConsultant
-        ? 'Consultant Engineer'
-        : user.role.replaceAll('_', ' ');
+        ? context.l10n.roleCaptionConsultantShort
+        : context.l10n.roleLabel(user.role);
     final screenHeight = MediaQuery.sizeOf(context).height;
     final headerHeight = (screenHeight * .32).clamp(210.0, 260.0);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
@@ -31,9 +33,9 @@ class ProfileScreen extends ConsumerWidget {
           Container(
             height: headerHeight,
             decoration: const BoxDecoration(
-              color: AppColors.navy,
+              color: AppColors.primary,
               borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(AppRadius.extraLarge),
+                bottom: Radius.circular(AppRadius.sheet),
               ),
             ),
             child: Stack(
@@ -55,7 +57,7 @@ class ProfileScreen extends ConsumerWidget {
                           width: 88,
                           height: 88,
                           decoration: BoxDecoration(
-                            color: AppColors.bronze,
+                            color: AppColors.accent,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 4),
                           ),
@@ -87,7 +89,7 @@ class ProfileScreen extends ConsumerWidget {
                           role,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            color: AppColors.bronzeSoft,
+                            color: AppColors.accentWash,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -110,7 +112,7 @@ class ProfileScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Account information',
+                  context.l10n.profileAccountInformation,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -119,62 +121,79 @@ class ProfileScreen extends ConsumerWidget {
                     children: [
                       _ProfileTile(
                         icon: Icons.email_outlined,
-                        title: 'Email',
+                        title: context.l10n.profileEmail,
                         value: user.email,
                       ),
                       if (user.phoneNumber != null)
                         _ProfileTile(
                           icon: Icons.phone_outlined,
-                          title: 'Phone',
+                          title: context.l10n.profilePhone,
                           value: user.phoneNumber!,
                         ),
                       if (user.discipline != null)
                         _ProfileTile(
                           icon: Icons.engineering_outlined,
-                          title: 'Discipline',
-                          value: user.discipline!,
+                          title: context.l10n.commonDiscipline,
+                          value: context.l10n.disciplineLabel(user.discipline),
                         ),
                       if (user.organization != null)
                         _ProfileTile(
                           icon: Icons.business_outlined,
-                          title: 'Organization',
+                          title: context.l10n.profileOrganization,
                           value: user.organization!,
                         ),
                       _ProfileTile(
                         icon: Icons.verified_user_outlined,
-                        title: 'Account status',
-                        value: user.status,
+                        title: context.l10n.profileAccountStatus,
+                        value: context.l10n.statusLabel(user.status),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                Text('Security', style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  context.l10n.profileLanguage,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  context.l10n.profileLanguageBody,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: AppSpacing.sm),
-                const Card(
+                const _LanguageCard(),
+                const SizedBox(height: AppSpacing.xl),
+                Text(
+                  context.l10n.profileSecurity,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Card(
                   child: Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.lock_outline_rounded,
-                          color: AppColors.success,
+                          color: AppColors.stateVerified,
                         ),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Secure mobile session',
-                                style: TextStyle(fontWeight: FontWeight.w700),
+                                context.l10n.profileSecureSession,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                              SizedBox(height: 3),
+                              const SizedBox(height: 3),
                               Text(
-                                'Authentication tokens are stored in encrypted device storage.',
-                                style: TextStyle(
+                                context.l10n.profileSecureSessionBody,
+                                style: const TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
                             ],
@@ -187,8 +206,8 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.xl),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.danger,
-                    side: const BorderSide(color: AppColors.danger),
+                    foregroundColor: AppColors.destructive,
+                    side: const BorderSide(color: AppColors.destructive),
                   ),
                   onPressed: () async {
                     await ref
@@ -197,7 +216,7 @@ class ProfileScreen extends ConsumerWidget {
                     await ref.read(sessionProvider.notifier).logout();
                   },
                   icon: const Icon(Icons.logout_rounded),
-                  label: const Text('Log out'),
+                  label: Text(context.l10n.commonLogOut),
                 ),
               ],
             ),
@@ -223,14 +242,14 @@ class _ProfileTile extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: AppColors.muted,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(icon, color: AppColors.navy, size: 20),
+      child: Icon(icon, color: AppColors.primary, size: 20),
     ),
     title: Text(
       title,
-      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+      style: const TextStyle(fontSize: 11, color: AppColors.mutedForeground),
     ),
     subtitle: Text(
       value.replaceAll('_', ' '),
@@ -238,8 +257,51 @@ class _ProfileTile extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: const TextStyle(
         fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
+        color: AppColors.foreground,
       ),
     ),
   );
+}
+
+/// The language chooser.
+///
+/// Three explicit options rather than a toggle, because "follow the device"
+/// is a real third state: it is the default, and a user who has never chosen
+/// should keep tracking their phone if they change its language later.
+class _LanguageCard extends ConsumerWidget {
+  const _LanguageCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(localeControllerProvider);
+    final controller = ref.read(localeControllerProvider.notifier);
+    final options = <(Locale?, String)>[
+      (null, context.l10n.languageSystem),
+      (const Locale('en'), context.l10n.languageEnglish),
+      (const Locale('ar'), context.l10n.languageArabic),
+    ];
+    return Card(
+      child: Column(
+        children: [
+          for (final (locale, label) in options)
+            RadioListTile<String?>(
+              value: locale?.languageCode,
+              groupValue: state.override?.languageCode,
+              onChanged: (_) => controller.select(locale),
+              // A language name is written in its own script, so this one
+              // label opts out of the surrounding text direction.
+              title: Text(
+                label,
+                textDirection: locale?.languageCode == 'ar'
+                    ? TextDirection.rtl
+                    : locale == null
+                    ? null
+                    : TextDirection.ltr,
+              ),
+              dense: true,
+            ),
+        ],
+      ),
+    );
+  }
 }

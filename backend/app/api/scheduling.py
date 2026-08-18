@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from app.models.enums import TaskStatus
 
 from app.db.database import get_db
-from app.core.deps import get_current_user, user_has_project_access
+from app.core.deps import get_current_user
 from app.models.enums import UserRole
 from app.models.project import Project
 from app.models.user import User
@@ -23,22 +23,20 @@ from app.core.schedule_dates import inclusive_duration_days
 router = APIRouter(tags=["scheduling"])
 
 
-def _deny_engineer_portfolio_schedule(current_user: User) -> None:
-    if current_user.role == UserRole.ENGINEER:
-        raise HTTPException(
-            status_code=403,
-            detail="Engineers can view scheduling information on their assigned tasks only",
-        )
-
+# `schedule.view` (ADMIN, PM, CONSULTANT, OWNER) already excludes Engineers and
+# Workers from the portfolio schedule view by default — Engineers see their own
+# assigned tasks through task.view instead. This used to be a hardcoded
+# Engineer-only block plus a bare membership check, which let a Worker member
+# reach the full Gantt/critical-path/delay views even though the intended
+# default never included that role. `require` closes that gap and makes the
+# boundary configurable without changing who is allowed today.
 @router.get("/{project_id}/gantt", response_model=GanttDataResponse)
 def get_gantt_data(
     project_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
-    _deny_engineer_portfolio_schedule(current_user)
-    if not user_has_project_access(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    require(db, current_user, "schedule.view", project_id)
     tasks = db.execute(select(Task).where(Task.project_id == project_id)).scalars().all()
     
     task_ids = [t.id for t in tasks]
@@ -119,9 +117,7 @@ def calculate_critical_path(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """Calculate a dependency-driven CPM path and persist its task highlights."""
-    _deny_engineer_portfolio_schedule(current_user)
-    if not user_has_project_access(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    require(db, current_user, "schedule.view", project_id)
     tasks = db.execute(select(Task).where(Task.project_id == project_id)).scalars().all()
     if not tasks:
         return {"projectDurationDays": 0, "criticalTaskCount": 0, "criticalTaskIds": [],
@@ -166,9 +162,7 @@ def calculate_critical_path(
 
 @router.get("/{project_id}/delay-analysis")
 def get_delay_analysis(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _deny_engineer_portfolio_schedule(current_user)
-    if not user_has_project_access(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    require(db, current_user, "schedule.view", project_id)
     overdue = db.query(Task).filter(Task.project_id == project_id, Task.planned_end_date < date.today(),
         Task.status.notin_([TaskStatus.DONE, TaskStatus.CANCELLED])).all()
     dependencies = db.query(TaskDependency).join(Task, Task.id == TaskDependency.task_id).filter(Task.project_id == project_id).all()

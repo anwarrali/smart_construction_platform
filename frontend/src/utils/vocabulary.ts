@@ -33,6 +33,7 @@ export const useVocabulary = () => {
     taskStatus: (value: unknown) => lookup("task.status", value),
     priority: (value: unknown) => lookup("task.priority", value),
     projectStatus: (value: unknown) => lookup("project.status", value),
+    projectHealth: (value: unknown) => lookup("project.health", value),
     issueStatus: (value: unknown) => lookup("issue.status", value),
     issueCategory: (value: unknown) => lookup("issue.category", value),
     severity: (value: unknown) => lookup("issue.severityLevel", value),

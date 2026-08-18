@@ -59,7 +59,8 @@
     "today": "اليوم",
     "yesterday": "أمس",
     "add": "إضافة",
-    "unknownTask": "مهمة غير معروفة"
+    "unknownTask": "مهمة غير معروفة",
+    "reload": "إعادة التحميل"
   },
   "empty": {
     "noData": "لا توجد بيانات للعرض",
@@ -518,7 +519,8 @@
       "SUGGESTION": "اقتراح",
       "INFORMATION": "معلومة",
       "INFO": "معلومة"
-    }
+    },
+    "refreshSucceeded": "تم تحديث تحليل الذكاء الاصطناعي المُهيكل للمشروع"
   },
   "owner": {
     "dashboard": "لوحة تحكم المالك",
@@ -583,7 +585,9 @@
     "visitFailed": "تعذّر جدولة الزيارة.",
     "visitLoadFailed": "تعذّر تحميل زيارة الموقع المرتبطة؛ يُرجى إنشاء التقرير يدويًا.",
     "requiredFields": "المشروع والعنوان والوصف حقول مطلوبة.",
-    "visitRequiredFields": "المشروع والعنوان ووقت البداية والنهاية حقول مطلوبة."
+    "visitRequiredFields": "المشروع والعنوان ووقت البداية والنهاية حقول مطلوبة.",
+    "intelligenceRunFailed": "تعذّر إكمال تحليل الذكاء الاصطناعي.",
+    "appCrashedHint": "واجهت الصفحة مشكلة غير متوقعة. عادةً ما تحل إعادة التحميل المشكلة؛ بياناتك لم تتأثر."
   },
   "validation": {
     "required": "هذا الحقل مطلوب.",
@@ -1524,7 +1528,24 @@
     "transfer_project_member": "نقل عضو المشروع",
     "assign_as_site_engineer": "تعيين كمهندس موقع",
     "site_engineer_responsibility": "مسؤولية مهندس الموقع",
-    "no_discipline": "بدون تخصص"
+    "no_discipline": "بدون تخصص",
+    "project_participant": "مشارك في المشروع",
+    "update_failed": "تعذّر تحديث الفريق.",
+    "confirm_remove_member": "إزالة {{name}} من هذا المشروع؟ سيتم الاحتفاظ بالحساب العام.",
+    "member_removed": "تمت إزالة العضو من هذا المشروع، مع الاحتفاظ بالحساب العام.",
+    "engineer_consultant_or_worker": "مهندس أو استشاري أو عامل",
+    "all_disciplines": "كل التخصصات",
+    "all_affiliations": "كل الجهات التابعة",
+    "no_organization": "لا توجد جهة",
+    "add_consultant_before_approval": "أضِف مهندسًا استشاريًا خارجيًا نشطًا إلى هذا المشروع قبل ضبط صلاحية الاعتماد.",
+    "select_consultant": "اختر استشاريًا",
+    "no_specialty": "بدون تخصص محدد",
+    "not_assigned": "غير مُسند",
+    "discipline_reviewer": "مراجع {{discipline}}",
+    "saving": "جارٍ الحفظ…",
+    "save_approval_workflow": "حفظ سير عمل الاعتماد",
+    "unknown_status": "غير معروف",
+    "use_account_discipline": "استخدام تخصص الحساب"
   },
   "adminDash": {
     "administrator_dashboard": "لوحة مدير النظام",
@@ -1542,6 +1563,7 @@
     "manage_company_users_and_access": "إدارة مستخدمي الشركة والوصول",
     "manage_project_registry": "إدارة سجل المشاريع",
     "open_system_settings": "فتح إعدادات النظام",
+    "no_location_set": "لم يُحدَّد موقع",
     "totalUsers": "إجمالي المستخدمين",
     "activeUsers": "المستخدمون النشطون",
     "inactiveUsers": "المستخدمون غير النشطين",
@@ -1659,7 +1681,28 @@
     "critical": "حرجة",
     "no_downstream_block": "لا يوجد إعاقة للأعمال اللاحقة",
     "loading_review_submissions": "جارٍ تحميل طلبات المراجعة…",
-    "search_task_id_description_or_contractor": "البحث بالمهمة أو المعرّف أو الوصف أو مهندس المقاول…"
+    "search_task_id_description_or_contractor": "البحث بالمهمة أو المعرّف أو الوصف أو مهندس المقاول…",
+    "unable_to_load_reviews": "تعذّر تحميل المراجعات.",
+    "review_history": "سجل المراجعات",
+    "pending_reviews": "المراجعات المعلّقة",
+    "subtitle": "{{project}} · تُعرض فقط الأعمال المطابقة لتخصصك",
+    "all_priorities": "كل الأولويات",
+    "all_decisions": "كل القرارات",
+    "all_active_states": "كل الحالات النشطة",
+    "critical_only": "الحرجة فقط",
+    "overdue_only": "المتأخرة فقط",
+    "resubmissions": "إعادة الإرسال",
+    "blocking_dependencies": "التبعيات المعيقة",
+    "contractor_engineer": "مهندس المقاول",
+    "attempt_number": "المحاولة {{count}}",
+    "overdue_prefix": "متأخر · ",
+    "due_prefix": "الاستحقاق · ",
+    "blocked_count": "{{count}} معطَّلة",
+    "prior_rejections": "{{count}} رفض سابق",
+    "view_record": "عرض السجل",
+    "open_review": "فتح المراجعة",
+    "no_history_matches": "لا يوجد سجل مراجعات يطابق عوامل التصفية هذه.",
+    "no_work_waiting": "لا يوجد عمل بانتظار المراجعة حاليًا."
   },
   "contextDiscussion": {
     "no_discussion_yet": "لا يوجد نقاش بعد.",
@@ -1686,7 +1729,12 @@
     "reason": "المبرر",
     "expected_cost_impact": "الأثر المتوقع على التكلفة",
     "schedule_impact_days": "الأثر على الجدول (بالأيام)",
-    "source_discipline": "التخصص المصدر"
+    "source_discipline": "التخصص المصدر",
+    "affected_count": "+{{count}} متأثرة",
+    "quick_reject_reason": "رُفض بعد المراجعة",
+    "all_statuses": "كل الحالات",
+    "all_disciplines": "كل التخصصات",
+    "has_attachments": "به مرفقات"
   },
   "docUploader": {
     "click_to_select_a_file": "انقر لاختيار ملف",
@@ -1698,7 +1746,20 @@
     "project": "المشروع *",
     "document_type": "نوع المستند",
     "notes": "ملاحظات",
-    "optional_notes": "ملاحظات اختيارية"
+    "optional_notes": "ملاحظات اختيارية",
+    "select_a_file": "الرجاء اختيار ملف",
+    "select_a_project": "الرجاء اختيار مشروع",
+    "upload_failed": "تعذّر رفع المستند. تحقق من المشروع المحدد والملف.",
+    "select_project": "اختر مشروعًا",
+    "documentType": {
+      "drawing": "مخطط",
+      "report": "تقرير",
+      "contract": "عقد",
+      "permit": "تصريح",
+      "specification": "مواصفة",
+      "invoice": "فاتورة",
+      "other": "أخرى"
+    }
   },
   "documentList": {
     "no_documents_found": "لم يتم العثور على مستندات",
@@ -1709,7 +1770,8 @@
     "project_documents_and_files": "مستندات المشروع وملفاته",
     "showing_the_document_opened_from_your": "عرض المستند الذي فُتح من إشعارك.",
     "show_all_documents": "عرض جميع المستندات",
-    "search_documents": "البحث في المستندات..."
+    "search_documents": "البحث في المستندات...",
+    "all_types": "كل الأنواع"
   },
   "engineerDash": {
     "critical": "حرجة",
@@ -1790,7 +1852,12 @@
     "assigned_project_portfolio": "محفظة المشاريع المُسندة",
     "critical_delays": "التأخيرات الحرجة",
     "critical_issues": "المشكلات الحرجة",
-    "major_changes": "التغييرات الرئيسية"
+    "major_changes": "التغييرات الرئيسية",
+    "subtitle": "ملخص موجز عبر المشاريع، منفصل عن لوحة تحكم المشروع.",
+    "assigned_projects": "المشاريع المُسندة",
+    "average_completion": "متوسط الإنجاز",
+    "open_critical_issues": "المشكلات الحرجة المفتوحة",
+    "pending_consultant_approvals": "اعتمادات الاستشاري المعلّقة"
   },
   "forgotPasswordPage": {
     "reset_password": "إعادة تعيين كلمة المرور",
@@ -1841,7 +1908,35 @@
     "finding_discipline": "تخصص الملاحظة",
     "no_model_quality_findings": "لا توجد ملاحظات على جودة النموذج",
     "loading_improvement_suggestions": "جارٍ تحميل اقتراحات التحسين…",
-    "no_improvement_suggestions_were": "لم تُولَّد أي اقتراحات تحسين لهذا النموذج."
+    "no_improvement_suggestions_were": "لم تُولَّد أي اقتراحات تحسين لهذا النموذج.",
+    "properties": "الخصائص",
+    "quantities": "الكميات",
+    "coordinates_spatial_assignment": "الإحداثيات / التخصيص المكاني",
+    "representation": "التمثيل الهندسي",
+    "stable_globalids_are_used": "تُستخدم معرّفات IFC GlobalId الثابتة عند توفرها. لا تُعرض أي مطابقة تقريبية على أنها مؤكدة.",
+    "base": "الأساس",
+    "comparison": "المقارنة",
+    "confidence_low": "منخفضة",
+    "confidence_high": "عالية",
+    "confidence_pending": "قيد الانتظار",
+    "confidence_suffix": "ثقة {{level}}",
+    "unstable_identifiers_warning": "المعرّفات الثابتة مفقودة أو متغيّرة لدى {{count}} عنصر. يُرجى مراجعة نتائج العناصر المضافة والمحذوفة بعناية.",
+    "comparison_requires_two_revisions": "تتطلب المقارنة نسختين على الأقل من نفس مجموعة النموذج.",
+    "select_a_base_and_comparison": "اختر نسخة أساسية ونسخة مقارنة لمراجعة العناصر المضافة والمحذوفة والمعدّلة والمنقولة.",
+    "no_findings_match_the_current": "لا توجد ملاحظات مطابقة للنسخة والمرشحات الحالية.",
+    "the_model_analysis_remains": "يظل تحليل النموذج متاحًا في علامات التبويب الأخرى.",
+    "ai_review_note": "يجب أن يراجع مهندس مؤهل الاقتراحات المولَّدة بالذكاء الاصطناعي قبل استخدامها في قرارات التصميم أو التنفيذ.",
+    "suggestion_accepted": "تم قبول الاقتراح",
+    "suggestion_rejected": "تم رفض الاقتراح",
+    "revision_comparison_completed": "اكتملت مقارنة النسخ",
+    "revision_comparisons_could_not_be_loaded": "تعذّر تحميل مقارنات النسخ.",
+    "model_quality_findings_could_not_be_loaded": "تعذّر تحميل ملاحظات جودة النموذج.",
+    "suggestions_could_not_be_loaded": "تعذّر تحميل الاقتراحات. تبقى بقية تحليلات النموذج متاحة.",
+    "suggestion_default_title": "اقتراح مراجعة النموذج",
+    "no_reason_was_supplied": "لم يُقدَّم سبب.",
+    "review_may_improve_model": "قد تحسّن المراجعة جودة بيانات النموذج.",
+    "review_the_available_ifc_evidence": "راجع أدلة IFC المتاحة.",
+    "ifc_model_analysis": "تحليل نموذج IFC"
   },
   "ifcElements": {
     "not_defined_in_source_ifc": "غير معرَّف في ملف IFC المصدر.",
@@ -1969,7 +2064,38 @@
     "loading_ifc_model_groups": "جارٍ تحميل مجموعات نماذج IFC…",
     "no_ifc_models_yet": "لا توجد نماذج IFC بعد",
     "model_analysis_will_appear_here_when": "سيظهر تحليل النموذج هنا عند انتهاء المعالجة.",
-    "upload_ifc_revision": "رفع نسخة IFC"
+    "upload_ifc_revision": "رفع نسخة IFC",
+    "model_group_created": "تم إنشاء مجموعة النموذج",
+    "ifc_uploaded_processing_started": "تم رفع ملف IFC. بدأت المعالجة.",
+    "ifc_processing_queued_again": "تمت إعادة جدولة معالجة IFC",
+    "readable_model_facts": "حقائق نموذج قابلة للقراءة، وفحوصات جودة البيانات، وذكاء النسخ لفرق الهندسة.",
+    "create_or_select_a_model_group": "أنشئ أو اختر مجموعة نموذج، واختر نوع النسخة، وأدخل رقم النسخة، ثم ارفع ملف .ifc.",
+    "upload_ifc_button": "رفع IFC",
+    "create_a_model_group_then_upload": "أنشئ مجموعة نموذج، ثم ارفع ملف IFC2X3 أو IFC4 أو IFC4X3.",
+    "parsing_or_extraction_failed": "فشل التحليل أو الاستخلاص. لم يتم الإبلاغ عن نتيجة ناجحة.",
+    "processing_completed_and_ready": "اكتملت المعالجة وذكاء النموذج جاهز.",
+    "revision_summary": "النسخة {{revision}} · {{count}} عنصر مستخلص · {{disciplines}} تخصصات مكتشفة",
+    "advanced_suffix": "· متقدم",
+    "ifc_model_could_not_be_parsed": "تعذّر تحليل نموذج IFC أو استخلاصه.",
+    "tab_overview": "نظرة عامة",
+    "tab_model_hierarchy": "التسلسل الهرمي للنموذج",
+    "tab_elements": "العناصر",
+    "tab_disciplines": "التخصصات",
+    "tab_properties_and_quantities": "الخصائص والكميات",
+    "tab_georeferencing": "الإسناد الجغرافي",
+    "tab_3d_viewer": "العارض ثلاثي الأبعاد",
+    "tab_findings": "الملاحظات",
+    "tab_suggestions": "الاقتراحات",
+    "tab_technical_data": "البيانات الفنية",
+    "stage_uploading_file": "جارٍ رفع الملف",
+    "stage_validating_ifc": "جارٍ التحقق من IFC",
+    "stage_reading_ifc_schema": "جارٍ قراءة مخطط IFC",
+    "stage_extracting_model_hierarchy": "جارٍ استخلاص التسلسل الهرمي للنموذج",
+    "stage_extracting_elements": "جارٍ استخلاص العناصر",
+    "stage_extracting_properties_and_quantities": "جارٍ استخلاص الخصائص والكميات",
+    "stage_running_model_quality_checks": "جارٍ تشغيل فحوصات جودة النموذج",
+    "stage_generating_intelligence_summary": "جارٍ إنشاء ملخص الذكاء",
+    "stage_completed": "اكتمل"
   },
   "issuesPage": {
     "track_and_resolve_project_issues": "تتبّع مشكلات المشروع وحلّها",
@@ -2006,7 +2132,42 @@
     "new_project_conversation": "محادثة مشروع جديدة",
     "send_to": "إرسال إلى",
     "recipient_group": "مجموعة المستلمين",
-    "title_optional": "العنوان (اختياري)"
+    "title_optional": "العنوان (اختياري)",
+    "forward": "إعادة توجيه",
+    "forward_message": "إعادة توجيه الرسالة",
+    "forwarded_from": "مُعاد توجيهها من {{name}}",
+    "forward_note_optional": "ملاحظة (اختياري)",
+    "forward_note_placeholder": "أضف سياقًا للمستلم، مثل: \"هل يمكنك مراجعة هذا وإعطائي رأيك؟\"",
+    "message_forwarded": "تم إعادة توجيه الرسالة.",
+    "forward_failed": "تعذّرت إعادة توجيه الرسالة."
+  },
+  "communication": {
+    "forward": "إعادة توجيه",
+    "askOpinion": "اطلب رأيًا",
+    "forwardTitle": "إعادة التوجيه إلى مشارك في المشروع",
+    "askOpinionTitle": "اطلب رأي أحد المشاركين في المشروع",
+    "forwardDescription": "أرسل تفاصيل هذا العنصر إلى مشارك آخر مخوّل في المشروع.",
+    "askOpinionDescription": "شارك هذا العنصر واطلب ملاحظات. هذا لا ينقل الملكية ولا يغيّر أي شيء في العنصر.",
+    "sendTo": "إرسال إلى",
+    "individual": "فرد",
+    "multiplePeople": "عدة أشخاص",
+    "projectRecipients": "مستلمو المشروع",
+    "noRecipients": "لا يوجد مستلمون مخوّلون في هذا المشروع.",
+    "note": "ملاحظة (اختياري)",
+    "notePlaceholder": "أضف سياقًا للمستلم…",
+    "opinionDefaultNote": "هل يمكنك مراجعة هذا وإعطائي رأيك؟",
+    "ownershipHint": "المشاركة هي تواصل فقط — تبقى الملكية والإسناد والحالة كما هي تمامًا.",
+    "cancel": "إلغاء",
+    "shared": "تمت المشاركة. جارٍ فتح المحادثة…",
+    "opinionSent": "تم طلب الرأي. جارٍ فتح المحادثة…",
+    "shareFailed": "تعذّرت مشاركة هذا العنصر.",
+    "viewOriginal": {
+      "ISSUE": "عرض المشكلة الأصلية",
+      "TASK": "عرض المهمة الأصلية",
+      "SITE_REPORT": "عرض تقرير الموقع الأصلي",
+      "DESIGN_CHANGE": "عرض التعديل التصميمي الأصلي",
+      "DOCUMENT": "عرض المستند الأصلي"
+    }
   },
   "modal": {
     "close": "إغلاق"
@@ -2025,12 +2186,87 @@
   "notificationList": {
     "notifications": "الإشعارات",
     "mark_all_read": "تعليم الكل كمقروء",
-    "no_notifications": "لا توجد إشعارات"
+    "no_notifications": "لا توجد إشعارات",
+    "reminder": "تذكير",
+    "priority": {
+      "important": "مهم",
+      "critical": "حرج"
+    }
+  },
+  "notification": {
+    "taskDeadline": {
+      "DUE_TOMORROW": {
+        "title": "مهمة مستحقة غدًا",
+        "body": "{{name}} مستحقة غدًا."
+      },
+      "DUE_TODAY": {
+        "title": "مهمة مستحقة اليوم",
+        "body": "{{name}} مستحقة اليوم."
+      },
+      "OVERDUE": {
+        "title": "مهمة متأخرة",
+        "body": "{{name}} متأخرة عن موعدها."
+      },
+      "OVERDUE_SEVERAL": {
+        "title": "مهمة متأخرة",
+        "body": "{{name}} متأخرة منذ عدة أيام."
+      },
+      "OVERDUE_WEEK": {
+        "title": "مهمة متأخرة",
+        "body": "{{name}} متأخرة منذ أكثر من أسبوع."
+      }
+    },
+    "siteReport": {
+      "awaitingVerification": {
+        "title": "تقرير موقع بانتظار تحققك",
+        "body": "تم تقديم تقرير موقع لمشروع {{project}}."
+      },
+      "verified": {
+        "title": "تم التحقق من تقرير الموقع",
+        "body": "تم التحقق من تقرير الموقع بتاريخ {{date}} بواسطة {{reviewer}}."
+      },
+      "rejected": {
+        "title": "تم رفض تقرير الموقع",
+        "body": "تم رفض تقرير الموقع بتاريخ {{date}} بواسطة {{reviewer}}: {{reason}}"
+      }
+    },
+    "reminder": {
+      "waiting": {
+        "title": "تذكير بالرد: {{label}}",
+        "body": "لا يزال هذا العنصر ({{target}}) بانتظار إجراء. التذكير {{sequence}}."
+      },
+      "escalation": {
+        "title": "تصعيد: {{label}}",
+        "body": "انتظر هذا العنصر ({{target}}) وقتًا طويلًا وتم تصعيده."
+      }
+    },
+    "stepUp": {
+      "codeRequested": {
+        "title": "تم طلب رمز تحقق",
+        "body": "تم طلب رمز تحقق لتأكيد: {{action}}. إذا لم تكن أنت، غيّر كلمة المرور فورًا."
+      }
+    }
   },
   "notificationsPage": {
     "previous": "السابق",
     "next": "التالي",
-    "search_notifications": "البحث في الإشعارات..."
+    "search_notifications": "البحث في الإشعارات...",
+    "project_notifications": "إشعارات المشروع",
+    "notification_center": "مركز الإشعارات",
+    "subtitle": "ابحث وصفِّ وأدر أحداث النظام الفعلية.",
+    "all_notifications": "كل الإشعارات",
+    "unread_only": "غير المقروءة فقط",
+    "read_only": "المقروءة فقط",
+    "all_event_types": "كل أنواع الأحداث",
+    "task_assignments": "إسناد المهام",
+    "task_and_issue_updates": "تحديثات المهام والمشكلات",
+    "overdue_tasks": "المهام المتأخرة",
+    "design_changes": "التعديلات التصميمية",
+    "approvals": "الاعتمادات",
+    "site_reports": "تقارير الموقع",
+    "messages": "الرسائل",
+    "project_and_document_events": "أحداث المشروع والمستندات",
+    "page_summary": "صفحة {{page}} من {{totalPages}} · {{total}} إشعار"
   },
   "photoArchive": {
     "no_project_is_selected": "لم يتم اختيار مشروع.",
@@ -2061,7 +2297,29 @@
     "from": "من",
     "evidence_photo_provenance": "مصدر صور الأدلة",
     "project_photo_categories": "فئات صور المشروع",
-    "new_project_category_e_g_waterproofing": "فئة مشروع جديدة، مثل: العزل المائي"
+    "new_project_category_e_g_waterproofing": "فئة مشروع جديدة، مثل: العزل المائي",
+    "all_categories": "كل الفئات",
+    "discipline_placeholder": "مثل: كهرباء",
+    "all_statuses": "كل الحالات",
+    "statusValue": {
+      "SUBMITTED": "مُرسل",
+      "VERIFIED": "موثّق",
+      "REJECTED": "مرفوض"
+    },
+    "all_directions": "كل الاتجاهات",
+    "directionValue": {
+      "FRONT": "أمامي",
+      "BACK": "خلفي",
+      "LEFT": "يسار",
+      "RIGHT": "يمين",
+      "TOP": "علوي",
+      "DETAIL": "تفصيلي",
+      "OTHER": "أخرى"
+    },
+    "to": "إلى",
+    "general": "عام",
+    "not_reviewed": "لم تتم مراجعته",
+    "unlabelled": "بدون تصنيف"
   },
   "projectDetail": {
     "back_to_projects": "العودة إلى المشاريع",
@@ -2157,6 +2415,41 @@
     "budget_total": "إجمالي الميزانية",
     "owner": "المالك *",
     "project_manager": "مدير المشروع *",
+    "columnProject": "المشروع",
+    "columnLocation": "الموقع",
+    "columnStatus": "الحالة",
+    "columnProgress": "التقدّم",
+    "columnOwner": "المالك",
+    "columnProjectManager": "مدير المشروع",
+    "columnDates": "التواريخ",
+    "allStatuses": "كل الحالات",
+    "addProject": "إضافة مشروع",
+    "editProject": "تعديل المشروع",
+    "subtitlePm": "اختر مشروعًا مُسندًا إليك لفتح لوحة تحكمه",
+    "subtitleEngineer": "اختر أحد المشاريع النشطة المُسندة إليك",
+    "subtitleDefault": "إدارة إعداد المشروع والمالك ومدير المشروع والاستشاريين والأعضاء",
+    "saveChanges": "حفظ التغييرات",
+    "createProject": "إنشاء المشروع",
+    "membersTitle": "أعضاء {{name}}",
+    "membersTitleDefault": "أعضاء المشروع",
+    "unknownUser": "مستخدم غير معروف",
+    "active": "نشط",
+    "inactive": "غير نشط",
+    "noDescription": "لا يوجد وصف",
+    "openIssuesCount": "{{count}} مشكلة مفتوحة",
+    "nameRequired": "اسم المشروع مطلوب.",
+    "ownerRequired": "حدّد مالكًا للمشروع.",
+    "projectManagerRequired": "حدّد مدير مشروع.",
+    "projectUpdated": "تم تحديث المشروع بنجاح.",
+    "projectCreated": "تم إنشاء المشروع بنجاح.",
+    "loadFailed": "تعذّر تحميل المشاريع.",
+    "loadMembersFailed": "تعذّر تحميل أعضاء المشروع.",
+    "saveFailed": "تعذّر حفظ المشروع.",
+    "projectTypePlaceholder": "سكني، تجاري...",
+    "dateRange": "{{start}} إلى {{end}}",
+    "selectOwner": "اختر المالك",
+    "selectProjectManager": "اختر مدير المشروع",
+    "noConsultantSelected": "لم يُحدَّد استشاري",
     "initial_consultant": "الاستشاري الأولي"
   },
   "resetPassword": {
@@ -2196,7 +2489,29 @@
     "work_in_progress": "الأعمال الجارية",
     "delay_notes": "ملاحظات التأخير",
     "issue_references_summary": "ملخص الملاحظات",
-    "additional_notes": "ملاحظات إضافية"
+    "additional_notes": "ملاحظات إضافية",
+    "site_reports": "تقارير الموقع",
+    "site_reports_singular": "تقرير موقع",
+    "all_statuses": "كل الحالات",
+    "all_disciplines": "كل التخصصات",
+    "has_attachments": "به مرفقات",
+    "draft_saved": "تم حفظ مسودة تقرير الموقع.",
+    "report_submitted": "تم إرسال تقرير الموقع.",
+    "save_failed": "تعذّر حفظ تقرير الموقع.",
+    "edit_draft_title": "تعديل مسودة تقرير الموقع",
+    "create_title": "إنشاء تقرير موقع",
+    "visit_summary": "{{type}} · تاريخ الزيارة {{date}}",
+    "general_daily_report": "تقرير يومي عام",
+    "verification_needed": "بانتظار التحقق منك",
+    "verify": "تحقق",
+    "reject": "رفض",
+    "rejection_reason": "سبب الرفض",
+    "reviewed_by": "راجعه {{name}} بتاريخ {{date}}",
+    "reject_report_title": "رفض تقرير الموقع",
+    "reject_report_description": "اشرح لمقدّم التقرير سبب رفضه. سيتم إشعاره بهذا السبب.",
+    "report_verified": "تم التحقق من تقرير الموقع.",
+    "report_rejected": "تم رفض تقرير الموقع.",
+    "review_failed": "تعذّرت مراجعة التقرير."
   },
   "taskCard": {
     "critical": "حرجة",
@@ -2272,6 +2587,20 @@
     "search_tasks": "البحث في المهام...",
     "all_statuses": "جميع الحالات",
     "all_priorities": "جميع الأولويات",
+    "all_disciplines": "جميع التخصصات",
+    "critical_only": "الحرجة فقط",
+    "overdue_only": "المتأخرة فقط",
+    "no_due_date": "لا يوجد تاريخ استحقاق",
+    "days_overdue": "متأخرة {{count}} يوم",
+    "days_remaining": "متبقٍ {{count}} يوم",
+    "select_project_before_my_tasks": "اختر مشروعًا مُسندًا إليك قبل فتح مهامي.",
+    "unable_to_load_assigned_tasks": "تعذّر تحميل مهامك المُسندة.",
+    "unable_to_load_tasks": "تعذّر تحميل المهام.",
+    "task_created": "تم إنشاء {{code}}.",
+    "task_updated": "تم تحديث {{code}}.",
+    "task_deleted": "تم حذف المهمة.",
+    "unable_to_delete_task": "تعذّر حذف المهمة.",
+    "confirm_delete_task": "حذف المهمة \"{{name}}\"؟",
     "new_task": "مهمة جديدة",
     "due_today": "مستحقة اليوم",
     "my_tasks": "مهامي"
@@ -2343,7 +2672,9 @@
       "in_review": "قيد المراجعة",
       "approved": "معتمد",
       "rejected": "مرفوض",
-      "clarification_requested": "مطلوب توضيح"
+      "clarification_requested": "مطلوب توضيح",
+      "draft": "مسودة",
+      "submitted": "مُرسل"
     }
   },
   "milestone": {
@@ -2419,6 +2750,10 @@
       "label": "تقديم تقارير الموقع",
       "description": "رفع تقرير موقع يومي أو تقرير زيارة."
     },
+    "site_report.verify": {
+      "label": "التحقق من تقارير الموقع",
+      "description": "الموافقة على تقرير موقع مُقدَّم أو رفضه."
+    },
     "issue.create": {
       "label": "رفع المشكلات",
       "description": "فتح مشكلة في المشروع."
@@ -2479,5 +2814,18 @@
       "delayed": "متأخرة",
       "criticalPath": "المسار الحرج"
     }
+  },
+  "stepUp": {
+    "title": "مطلوب تحقق أمني",
+    "protectedAction": "أنت على وشك:",
+    "explanation": "لأمانك، أرسلنا رمز تحقق إلى بريدك الإلكتروني. أدخله للمتابعة. الرمز ينتهي خلال فترة قصيرة ويُستخدم مرة واحدة.",
+    "codeLabel": "رمز التحقق",
+    "verify": "تحقّق وتابع",
+    "cancel": "إلغاء",
+    "resend": "إرسال رمز جديد",
+    "resendIn": "يمكن إعادة الإرسال خلال {{seconds}} ثانية",
+    "invalidCode": "هذا الرمز غير صالح أو منتهي الصلاحية. اطلب رمزًا جديدًا إذا لزم الأمر.",
+    "requestFailed": "تعذّر إرسال رمز التحقق. حاول مرة أخرى بعد قليل.",
+    "deliveryUnavailable": "إرسال البريد الإلكتروني غير مُهيّأ في هذه البيئة، لذا تعذّر إرسال الرمز."
   }
 }

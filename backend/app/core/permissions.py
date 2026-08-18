@@ -70,9 +70,5 @@ def can_create_team_role(creator_role: UserRole, target_role: UserRole) -> bool:
     return False
 
 
-def can_view_all_projects(role: UserRole) -> bool:
-    return role == UserRole.ADMIN
-
-
 def normalize_engineer_role(role: UserRole) -> UserRole:
     return role

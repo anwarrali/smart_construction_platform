@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:record/record.dart';
 
 import '../../app/dependency_injection.dart';
+import '../../core/l10n/l10n_labels.dart';
 
 class AiDiagnosticsScreen extends ConsumerStatefulWidget {
   const AiDiagnosticsScreen({super.key});
@@ -78,14 +79,16 @@ class _AiDiagnosticsScreenState extends ConsumerState<AiDiagnosticsScreen> {
   Widget build(BuildContext context) {
     final enabled = ref.watch(configProvider).aiDiagnosticsEnabled;
     if (!enabled) {
-      return const Scaffold(body: Center(child: Text('AI diagnostics are disabled in this build.')));
+      return Scaffold(
+        body: Center(child: Text(context.l10n.diagnosticsDisabled)),
+      );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('AI diagnostics (development)')),
+      appBar: AppBar(title: Text(context.l10n.diagnosticsTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('This screen checks configuration and permissions only. It never fakes a recording, upload, transcription, or AI result.'),
+          Text(context.l10n.diagnosticsBody),
           const SizedBox(height: 16),
           if (_running) const LinearProgressIndicator(),
           ..._results.entries.map(
@@ -104,7 +107,7 @@ class _AiDiagnosticsScreenState extends ConsumerState<AiDiagnosticsScreen> {
           FilledButton.icon(
             onPressed: _running ? null : _run,
             icon: const Icon(Icons.refresh),
-            label: const Text('Run checks again'),
+            label: Text(context.l10n.diagnosticsRerun),
           ),
         ],
       ),

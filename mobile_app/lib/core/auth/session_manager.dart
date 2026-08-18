@@ -10,7 +10,9 @@ class SessionState {
   const SessionState({required this.status, this.user, this.error});
   final SessionStatus status;
   final User? user;
-  final String? error;
+  /// The failure that ended the last sign-in attempt, kept as the exception
+  /// rather than a rendered sentence so the screen can translate it.
+  final Object? error;
 }
 
 final sessionProvider = StateNotifierProvider<SessionManager, SessionState>((
@@ -48,7 +50,7 @@ class SessionManager extends StateNotifier<SessionState> {
     } on NetworkException catch (error) {
       state = SessionState(
         status: SessionStatus.unauthenticated,
-        error: error.message,
+        error: error,
       );
       return false;
     }

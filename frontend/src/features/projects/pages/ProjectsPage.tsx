@@ -15,6 +15,7 @@ import { projectsService } from "../services/projects.service";
 import { usersService } from "../../users/services/users.service";
 import { formatDate } from "../../../utils/date";
 import { useRole } from "../../../hooks/useRole";
+import { useVocabulary } from "../../../utils/vocabulary";
 import type { CreateProjectRequest, Project, ProjectMember, ProjectStatus } from "../../../types/project";
 import type { UserProfile } from "../../../types/user";
 
@@ -67,9 +68,12 @@ const statusVariant: Record<string, "neutral" | "success" | "warning" | "danger"
   cancelled: "neutral",
 };
 
+const PROJECT_STATUSES: ProjectStatus[] = ["planning", "active", "on_hold", "delayed", "completed", "cancelled"];
+
 export const ProjectsPage = () => {
   const { t } = useTranslation();
   const { isAdmin, isProjectManager, isEngineer, checkPermission } = useRole();
+  const vocabulary = useVocabulary();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -108,11 +112,11 @@ export const ProjectsPage = () => {
         setUsers([]);
       }
     } catch (err: any) {
-      toast.error(errorMessage(err, "Failed to load projects."));
+      toast.error(errorMessage(err, t("projectsPage.loadFailed")));
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, t]);
 
   useEffect(() => {
     fetchData();
@@ -162,7 +166,7 @@ export const ProjectsPage = () => {
       const members = await projectsService.getMembers(project.id);
       setSelectedMembers(members);
     } catch (err: any) {
-      toast.error(errorMessage(err, "Failed to load project members."));
+      toast.error(errorMessage(err, t("projectsPage.loadMembersFailed")));
       setSelectedMembers(project.members || []);
     }
   };
@@ -170,15 +174,15 @@ export const ProjectsPage = () => {
   const saveProject = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.name.trim()) {
-      toast.error("Project name is required.");
+      toast.error(t("projectsPage.nameRequired"));
       return;
     }
     if (!form.ownerId) {
-      toast.error("Assign an owner.");
+      toast.error(t("projectsPage.ownerRequired"));
       return;
     }
     if (!form.projectManagerId) {
-      toast.error("Assign a project manager.");
+      toast.error(t("projectsPage.projectManagerRequired"));
       return;
     }
 
@@ -205,13 +209,13 @@ export const ProjectsPage = () => {
         await projectsService.addMember(savedProject.id, form.consultantId, "consultant");
       }
 
-      toast.success(selectedProject ? "Project updated successfully." : "Project created successfully.");
+      toast.success(selectedProject ? t("projectsPage.projectUpdated") : t("projectsPage.projectCreated"));
       setIsFormOpen(false);
       setSelectedProject(null);
       setForm(emptyProjectForm);
       fetchData();
     } catch (err: any) {
-      toast.error(errorMessage(err, "Failed to save project."));
+      toast.error(errorMessage(err, t("projectsPage.saveFailed")));
     } finally {
       setIsSaving(false);
     }
@@ -220,49 +224,52 @@ export const ProjectsPage = () => {
   const columns: Column<Project>[] = [
     {
       key: "name",
-      header: "Project",
+      header: t("projectsPage.columnProject"),
       render: (project) => (
         <div>
           <p className="font-medium">{project.name}</p>
-          <p className="text-xs text-muted-foreground line-clamp-1">{project.description || "No description"}</p>
+          <p className="text-xs text-muted-foreground line-clamp-1">{project.description || t("projectsPage.noDescription")}</p>
         </div>
       ),
     },
     {
       key: "location",
-      header: "Location",
+      header: t("projectsPage.columnLocation"),
       render: (project) => <span className="text-sm text-muted-foreground">{project.location || "-"}</span>,
     },
     {
       key: "status",
-      header: "Status",
+      header: t("projectsPage.columnStatus"),
       render: (project) => (
         <Badge variant={statusVariant[project.status] || "neutral"}>
-          {project.status.replace("_", " ")}
+          {vocabulary.projectStatus(project.status)}
         </Badge>
       ),
     },
     {
       key: "completionPercentage",
-      header: "Progress",
-      render: (project) => <div className="min-w-28"><div className="flex justify-between text-xs"><span>{project.completionPercentage}%</span><span>{project.openIssueCount || 0} open issues</span></div><div className="mt-1 h-1.5 rounded bg-muted"><div className="h-full rounded bg-primary" style={{width:`${project.completionPercentage}%`}} /></div></div>,
+      header: t("projectsPage.columnProgress"),
+      render: (project) => <div className="min-w-28"><div className="flex justify-between text-xs"><span>{project.completionPercentage}%</span><span>{t("projectsPage.openIssuesCount", { count: project.openIssueCount || 0 })}</span></div><div className="mt-1 h-1.5 rounded bg-muted"><div className="h-full rounded bg-primary" style={{width:`${project.completionPercentage}%`}} /></div></div>,
     },
     {
       key: "ownerId",
-      header: "Owner",
+      header: t("projectsPage.columnOwner"),
       render: (project) => <span>{userById.get(project.ownerId)?.fullName || "-"}</span>,
     },
     {
       key: "projectManagerId",
-      header: "Project Manager",
+      header: t("projectsPage.columnProjectManager"),
       render: (project) => <span>{userById.get(project.projectManagerId || "")?.fullName || "-"}</span>,
     },
     {
       key: "plannedEndDate",
-      header: "Dates",
+      header: t("projectsPage.columnDates"),
       render: (project) => (
         <span className="text-sm text-muted-foreground">
-          {project.startDate ? formatDate(project.startDate) : "-"} to {project.plannedEndDate ? formatDate(project.plannedEndDate) : "-"}
+          {t("projectsPage.dateRange", {
+            start: project.startDate ? formatDate(project.startDate) : "-",
+            end: project.plannedEndDate ? formatDate(project.plannedEndDate) : "-",
+          })}
         </span>
       ),
     },
@@ -307,14 +314,14 @@ export const ProjectsPage = () => {
           <h1 className="text-2xl font-bold">{t("projectsPage.projects")}</h1>
           <p className="text-muted-foreground">{
             isProjectManager
-              ? "Select an assigned project to open its project dashboard"
+              ? t("projectsPage.subtitlePm")
               : isEngineer
-                ? "Select one of your active project assignments"
-                : "Manage project setup, owner, project manager, consultants, and members"
+                ? t("projectsPage.subtitleEngineer")
+                : t("projectsPage.subtitleDefault")
           }</p>
         </div>
         {canCreate && (
-          <Button onClick={openCreate}>+ Add Project</Button>
+          <Button onClick={openCreate}>+ {t("projectsPage.addProject")}</Button>
         )}
       </div>
 
@@ -327,13 +334,8 @@ export const ProjectsPage = () => {
           />
           <Select
             options={[
-              { value: "", label: "All Statuses" },
-              { value: "planning", label: "Planning" },
-              { value: "active", label: "Active" },
-              { value: "on_hold", label: "On Hold" },
-              { value: "delayed", label: "Delayed" },
-              { value: "completed", label: "Completed" },
-              { value: "cancelled", label: "Cancelled" },
+              { value: "", label: t("projectsPage.allStatuses") },
+              ...PROJECT_STATUSES.map((status) => ({ value: status, label: vocabulary.projectStatus(status) })),
             ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -352,7 +354,7 @@ export const ProjectsPage = () => {
       <Modal
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
-        title={selectedProject ? "Edit Project" : "Add Project"}
+        title={selectedProject ? t("projectsPage.editProject") : t("projectsPage.addProject")}
         size="xl"
       >
         <form onSubmit={saveProject} className="space-y-4">
@@ -377,20 +379,13 @@ export const ProjectsPage = () => {
               label={t("projectsPage.project_type")}
               value={form.projectType}
               onChange={(e) => setForm({ ...form, projectType: e.target.value })}
-              placeholder="residential, commercial..."
+              placeholder={t("projectsPage.projectTypePlaceholder")}
             />
             <Select
               label={t("projectsPage.status")}
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
-              options={[
-                { value: "planning", label: "Planning" },
-                { value: "active", label: "Active" },
-                { value: "on_hold", label: "On Hold" },
-                { value: "delayed", label: "Delayed" },
-                { value: "completed", label: "Completed" },
-                { value: "cancelled", label: "Cancelled" },
-              ]}
+              options={PROJECT_STATUSES.map((status) => ({ value: status, label: vocabulary.projectStatus(status) }))}
             />
             <Input
               label={t("projectsPage.start_date")}
@@ -416,7 +411,7 @@ export const ProjectsPage = () => {
               value={form.ownerId}
               onChange={(e) => setForm({ ...form, ownerId: e.target.value })}
               options={[
-                { value: "", label: "Select owner" },
+                { value: "", label: t("projectsPage.selectOwner") },
                 ...owners.map((owner) => ({ value: owner.id, label: owner.fullName })),
               ]}
               required
@@ -426,7 +421,7 @@ export const ProjectsPage = () => {
               value={form.projectManagerId}
               onChange={(e) => setForm({ ...form, projectManagerId: e.target.value })}
               options={[
-                { value: "", label: "Select project manager" },
+                { value: "", label: t("projectsPage.selectProjectManager") },
                 ...projectManagers.map((pm) => ({ value: pm.id, label: pm.fullName })),
               ]}
               required
@@ -436,7 +431,7 @@ export const ProjectsPage = () => {
               value={form.consultantId}
               onChange={(e) => setForm({ ...form, consultantId: e.target.value })}
               options={[
-                { value: "", label: "No consultant selected" },
+                { value: "", label: t("projectsPage.noConsultantSelected") },
                 ...consultants.map((consultant) => ({ value: consultant.id, label: consultant.fullName })),
               ]}
             />
@@ -446,7 +441,7 @@ export const ProjectsPage = () => {
               {t("projectsPage.cancel")}
             </Button>
             <Button type="submit" isLoading={isSaving}>
-              {selectedProject ? "Save Changes" : "Create Project"}
+              {selectedProject ? t("projectsPage.saveChanges") : t("projectsPage.createProject")}
             </Button>
           </ModalActions>
         </form>
@@ -455,20 +450,20 @@ export const ProjectsPage = () => {
       <Modal
         isOpen={isMembersOpen}
         onClose={() => setIsMembersOpen(false)}
-        title={selectedProject ? `${selectedProject.name} Members` : "Project Members"}
+        title={selectedProject ? t("projectsPage.membersTitle", { name: selectedProject.name }) : t("projectsPage.membersTitleDefault")}
         size="lg"
       >
         <div className="space-y-3">
           {selectedMembers.map((member) => (
             <div key={member.id} className="flex items-center justify-between rounded-md border px-4 py-3">
               <div>
-                <p className="font-medium">{member.user?.fullName || userById.get(member.userId)?.fullName || "Unknown user"}</p>
+                <p className="font-medium">{member.user?.fullName || userById.get(member.userId)?.fullName || t("projectsPage.unknownUser")}</p>
                 <p className="text-xs text-muted-foreground">{member.user?.email || userById.get(member.userId)?.email || ""}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="info">{member.roleOnProject.replace("_", " ")}</Badge>
+                <Badge variant="info">{vocabulary.projectRole(member.roleOnProject)}</Badge>
                 <Badge variant={member.isActive ? "success" : "neutral"}>
-                  {member.isActive ? "Active" : "Inactive"}
+                  {member.isActive ? t("projectsPage.active") : t("projectsPage.inactive")}
                 </Badge>
               </div>
             </div>

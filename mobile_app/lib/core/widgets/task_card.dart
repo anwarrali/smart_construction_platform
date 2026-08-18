@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../models/task.dart';
+import '../l10n/l10n_formats.dart';
+import '../l10n/l10n_labels.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_shadows.dart';
@@ -16,24 +17,24 @@ class TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final priorityTone = switch (task.priority) {
-      'critical' => AppColors.danger,
-      'high' => AppColors.warning,
-      'low' => AppColors.success,
-      _ => AppColors.info,
+      'critical' => AppColors.destructive,
+      'high' => AppColors.stateReview,
+      'low' => AppColors.stateVerified,
+      _ => AppColors.stateProgress,
     };
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.large),
+        borderRadius: BorderRadius.circular(AppRadius.panel),
         border: Border.all(
           color: task.isOverdue
-              ? AppColors.danger.withValues(alpha: .26)
+              ? AppColors.destructive.withValues(alpha: .26)
               : AppColors.border,
         ),
         boxShadow: AppShadows.card,
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.large),
+        borderRadius: BorderRadius.circular(AppRadius.panel),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -64,7 +65,8 @@ class TaskCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${task.code}  ·  ${task.discipline ?? 'General'}',
+                          '${task.code}  ·  '
+                          '${context.l10n.disciplineLabel(task.discipline)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall,
@@ -80,17 +82,17 @@ class TaskCard extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    'Progress',
+                    context.l10n.commonProgress,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const Spacer(),
                   Text(
-                    '${task.progress.round()}%',
+                    context.formatPercent(task.progress),
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: AppColors.navy,
+                      color: AppColors.primary,
                     ),
                   ),
                 ],
@@ -108,7 +110,7 @@ class TaskCard extends StatelessWidget {
                 children: [
                   _MetaPill(
                     icon: Icons.flag_outlined,
-                    label: task.priority,
+                    label: context.l10n.priorityLabel(task.priority),
                     color: priorityTone,
                   ),
                   if (task.dueDate != null)
@@ -117,17 +119,19 @@ class TaskCard extends StatelessWidget {
                           ? Icons.event_busy_outlined
                           : Icons.event_outlined,
                       label: task.isOverdue
-                          ? '${task.daysOverdue}d overdue'
-                          : 'Due ${DateFormat.MMMd().format(task.dueDate!)}',
+                          ? context.l10n.taskDaysOverdue(task.daysOverdue)
+                          : context.l10n.taskDueOn(
+                              context.formatShortDate(task.dueDate!),
+                            ),
                       color: task.isOverdue
-                          ? AppColors.danger
-                          : AppColors.textSecondary,
+                          ? AppColors.destructive
+                          : AppColors.mutedForeground,
                     ),
                   if (task.hasIncompleteDependencies)
-                    const _MetaPill(
+                    _MetaPill(
                       icon: Icons.link_off_rounded,
-                      label: 'Dependency blocked',
-                      color: AppColors.warning,
+                      label: context.l10n.taskDependencyBlocked,
+                      color: AppColors.stateReview,
                     ),
                 ],
               ),

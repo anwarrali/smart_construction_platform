@@ -10,6 +10,9 @@ import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import api from "../../../services/api";
 import { errorMessage } from "../../../utils/errorMessage";
+import { useRole } from "../../../hooks/useRole";
+import { useAuthStore } from "../../../app/store/auth.store";
+import { useStepUp } from "../../../hooks/useStepUp";
 import {
   accessControlService,
   type ConsultantScope,
@@ -41,7 +44,12 @@ const ROLES = ["admin", "project_manager", "engineer", "consultant", "owner", "w
  * only thing standing between a user and a protected operation.
  */
 export const AccessControlPage = () => {
+  // Sensitive operations may answer with a step-up challenge; `run` shows the
+  // shared verification dialog and replays the call once it is satisfied.
+  const { run, dialog } = useStepUp();
   const { t } = useTranslation();
+  const { role: ownRole, refreshPermissions } = useRole();
+  const ownUserId = useAuthStore((state) => state.user?.id);
   const [tab, setTab] = useState<Tab>("roles");
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [matrix, setMatrix] = useState<RolePermissionState[]>([]);
@@ -112,10 +120,15 @@ export const AccessControlPage = () => {
     const allowed = next === permission.defaultRoles.includes(role) ? null : next;
     setBusy(`${role}:${permission.code}`);
     try {
-      const updated = await accessControlService.setRolePermission(role, permission.code, allowed);
+      const updated = await run(() => accessControlService.setRolePermission(role, permission.code, allowed));
       setMatrix((rows) => rows.map((row) =>
         row.role === role && row.permissionCode === permission.code ? updated : row));
       toast.success(t("accessControl.roleUpdated"));
+      // An administrator can change the permissions of their own role (e.g.
+      // revoke platform.view_all_projects from Admin) — without this, their
+      // own session's cached effective permissions would stay stale until
+      // their next full page load.
+      if (role === ownRole) void refreshPermissions();
     } catch (error) {
       toast.error(errorMessage(error, t("accessControl.updateFailed")));
       if (current) setMatrix((rows) => [...rows]);
@@ -137,9 +150,12 @@ export const AccessControlPage = () => {
     if (!summary) return;
     setBusy(`user:${permission.code}`);
     try {
-      setSummary(await accessControlService.setUserPermission(
-        summary.userId, permission.code, next, personProjectId || null));
+      setSummary(await run(() => accessControlService.setUserPermission(
+        summary.userId, permission.code, next, personProjectId || null)));
       toast.success(t("accessControl.personUpdated"));
+      // Same reasoning as toggleRole: an administrator can grant/revoke a
+      // permission directly on their own account.
+      if (summary.userId === ownUserId) void refreshPermissions();
     } catch (error) {
       toast.error(errorMessage(error, t("accessControl.updateFailed")));
     } finally { setBusy(""); }
@@ -427,6 +443,7 @@ export const AccessControlPage = () => {
           <p className="text-sm text-muted-foreground">{t("accessControl.enforcementNote")}</p>
         </div>
       </Card>
+      {dialog}
     </div>
   );
 };

@@ -81,3 +81,10 @@ class SiteReportOut(SiteReportBase):
     created_at: datetime
     updated_at: datetime
     attachment_count: int = 0
+    rejection_reason: Optional[str] = None
+    reviewed_by: Optional[UserOut] = None
+
+
+class SiteReportReviewRequest(CamelModel):
+    approved: bool
+    rejection_reason: Optional[str] = None

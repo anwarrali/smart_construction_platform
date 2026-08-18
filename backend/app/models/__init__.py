@@ -78,6 +78,8 @@ from app.models.ai_governance import AIActionVersion, DomainEvent, AIProviderCal
 from app.models.notification import Notification
 from app.models.audit_log import AuditLog
 from app.models.revoked_token import RevokedToken
+from app.models.rate_limit import RateLimitHit
+from app.models.step_up import OtpChallenge, StepUpGrant
 from app.models.ifc import (
     IFCModelGroup,
     IFCModelVersion,

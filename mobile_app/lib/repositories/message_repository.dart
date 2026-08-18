@@ -33,6 +33,21 @@ class MessageRepository {
     projectId: projectId, type: type,
     contextId: contextId, content: content,
   );
+  Future<ProjectConversation> forward({
+    required String messageId, required List<String> recipientIds,
+    String? groupCode, String? note, String? title,
+  }) => _service.forward(
+    messageId: messageId, recipientIds: recipientIds,
+    groupCode: groupCode, note: note, title: title,
+  );
+  Future<ProjectConversation> shareEntity({
+    required String entityType, required String entityId,
+    required List<String> recipientIds,
+    String? groupCode, String? note, String? title,
+  }) => _service.shareEntity(
+    entityType: entityType, entityId: entityId, recipientIds: recipientIds,
+    groupCode: groupCode, note: note, title: title,
+  );
   Future<ChatMessage> send(String conversationId, String content) =>
       _service.send(conversationId, content);
   Future<void> markRead(String conversationId) => _service.markRead(conversationId);

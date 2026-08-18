@@ -11,7 +11,9 @@ class TaskDependency {
 
   factory TaskDependency.fromJson(Map<String, dynamic> json) => TaskDependency(
     id: '${json['dependsOnTaskId']}',
-    name: json['dependsOnTaskName'] as String? ?? 'Blocking task',
+    // Empty rather than an English literal: a model has no locale, so the
+    // stand-in wording belongs to whichever widget puts this on screen.
+    name: json['dependsOnTaskName'] as String? ?? '',
     status: json['dependsOnTaskStatus'] as String? ?? 'todo',
   );
 }

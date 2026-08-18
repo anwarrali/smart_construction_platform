@@ -53,6 +53,32 @@ def send_invitation_email(
     return _deliver(to_email=to_email, subject=subject, body=body)
 
 
+def send_step_up_code_email(
+    *,
+    to_email: str,
+    full_name: str,
+    action_label: str,
+    code: str,
+    expires_minutes: int,
+) -> bool:
+    """Send a step-up verification code.
+
+    The code is passed straight to SMTP and never returned, stored or logged
+    by this function — `_deliver` logs only the recipient on failure, never
+    the body.
+    """
+    subject = "Your Struct IQ verification code"
+    body = (
+        f"Hello {full_name},\n\n"
+        f"A verification code was requested to confirm this action: {action_label}.\n\n"
+        f"Your code is: {code}\n\n"
+        f"It expires in {expires_minutes} minutes and can be used once.\n\n"
+        f"If you did not request this, do not share the code — someone may have "
+        f"access to your session. Change your password and contact your administrator.\n"
+    )
+    return _deliver(to_email=to_email, subject=subject, body=body)
+
+
 def send_password_reset_email(
     *,
     to_email: str,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/l10n/l10n_labels.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -17,28 +18,32 @@ class WorkerSubmissionsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(projectContextProvider).selected;
     if (project == null) {
-      return const MessageView(
-        icon: Icons.apartment, title: 'No project selected', message: 'Select a project first.',
+      return MessageView(
+        icon: Icons.apartment,
+        title: context.l10n.commonNoProjectSelected,
+        message: context.l10n.commonSelectProjectFirst,
       );
     }
     final content = FutureBuilder<List<FieldSubmission>>(
       future: ref.read(fieldSubmissionRepositoryProvider).mine(project.id, taskId: taskId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LoadingView(label: 'Loading field evidence');
+          return LoadingView(label: context.l10n.evidenceLoading);
         }
         if (snapshot.hasError) {
           return MessageView(
             icon: Icons.cloud_off,
-            title: 'Evidence unavailable',
-            message: '${snapshot.error}',
+            title: context.l10n.commonUnavailable(
+              context.l10n.evidenceTitle,
+            ),
+            message: context.l10n.describeError(snapshot.error),
           );
         }
         final items = snapshot.data ?? const [];
         if (items.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(20),
-            child: Text('No field evidence submitted yet.'),
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text(context.l10n.evidenceEmpty),
           );
         }
         return ListView.separated(
@@ -52,7 +57,7 @@ class WorkerSubmissionsScreen extends ConsumerWidget {
       },
     );
     return embedded ? content : Scaffold(
-      appBar: AppBar(title: const Text('My Field Evidence')),
+      appBar: AppBar(title: Text(context.l10n.evidenceMyTitle)),
       body: content,
     );
   }
@@ -80,7 +85,7 @@ class _SubmissionCard extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 )),
                 Chip(
-                  label: Text(item.status.toLowerCase()),
+                  label: Text(context.l10n.statusLabel(item.status)),
                   backgroundColor: color.withValues(alpha: .12),
                   labelStyle: TextStyle(color: color, fontWeight: FontWeight.w700),
                 ),
@@ -91,7 +96,7 @@ class _SubmissionCard extends StatelessWidget {
               Text(item.description!),
             ],
             const SizedBox(height: 8),
-            Text('${item.photos.length} photo(s)'),
+            Text(context.l10n.evidencePhotoCount(item.photos.length)),
             if ((item.reviewComment ?? '').isNotEmpty) ...[
               const SizedBox(height: 10),
               Container(
@@ -108,7 +113,7 @@ class _SubmissionCard extends StatelessWidget {
                   '/tasks/${item.taskId}/evidence/new?resubmission=${item.id}',
                 ),
                 icon: const Icon(Icons.refresh),
-                label: const Text('Submit Corrected Evidence'),
+                label: Text(context.l10n.evidenceSubmitCorrected),
               ),
             ],
           ],

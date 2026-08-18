@@ -12,6 +12,7 @@ from app.core.security import verify_password
 from app.db.bootstrap_admin import BootstrapConfig, bootstrap_admin
 from app.models.audit_log import AuditLog
 from app.models.enums import UserRole, UserStatus
+from app.models.rate_limit import RateLimitHit
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 
@@ -37,6 +38,12 @@ class QueryResult:
 
     def first(self):
         return self.first_value
+
+    def count(self):
+        return len(self.all_items)
+
+    def order_by(self, *args, **kwargs):
+        return self
 
     def delete(self, *args, **kwargs):
         return 0
@@ -77,9 +84,19 @@ class AuthSession:
     def query(self, entity):
         if entity is RevokedToken:
             return QueryResult()
+        if entity is RateLimitHit:
+            # Login now counts failed attempts per account (the audit found it
+            # entirely unthrottled). The stub reports "no prior attempts".
+            return QueryResult()
         if entity is User:
             return QueryResult(first=self.user)
         raise AssertionError(f"Unexpected query entity: {entity}")
+
+    def add(self, entity):
+        return None
+
+    def flush(self):
+        return None
 
     def commit(self):
         return None

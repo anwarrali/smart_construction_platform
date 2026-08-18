@@ -45,7 +45,13 @@ const LinkList = ({ items, onNavigate }: { items:NavItem[]; onNavigate?:()=>void
  */
 export const Sidebar = ({ className = "", onNavigate }: { className?:string; onNavigate?:()=>void } = {}) => {
   const { t } = useTranslation();
-  const { role, isAdmin, isOwner, isProjectManager, isConsultantEngineer } = useRole();
+  const { role, isAdmin, isOwner, isProjectManager, isConsultantEngineer, permissionsReady, hasCapability } = useRole();
+  // Hide only once we positively know the capability is revoked; before that,
+  // show it (matching the previous always-visible behaviour) so a link never
+  // flickers away and back while permissions are still loading. The backing
+  // pages/endpoints remain the actual authorization boundary either way.
+  const canSeeSchedule = !permissionsReady || hasCapability("schedule.view");
+  const canSeeAiIntelligence = !permissionsReady || hasCapability("ai.view_insights");
   const workspace = useProjectWorkspace();
 
   const globalByRole:Record<string,NavItem[]> = {
@@ -94,7 +100,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
     { label:t("nav.groupPlan"), items:[
       {to:workspace.path("dashboard"),label:t("nav.projectOverview"),icon:LayoutDashboard},
       {to:workspace.path("tasks"),label:t("nav.tasks"),icon:CheckSquare},
-      {to:workspace.path("schedule"),label:t("nav.schedule"),icon:CalendarDays},
+      ...(canSeeSchedule?[{to:workspace.path("schedule"),label:t("nav.schedule"),icon:CalendarDays}]:[]),
     ]},
     { label:t("nav.groupControl"), items:[
       {to:workspace.path("issues"),label:t("nav.issues"),icon:AlertTriangle},
@@ -109,7 +115,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
     { label:t("nav.groupReference"), items:[
       {to:workspace.path("documents"),label:t("nav.documents"),icon:FileText},
       {to:workspace.path("ifc"),label:t("nav.ifcBim"),icon:Boxes},
-      {to:workspace.path("ai-intelligence"),label:t("nav.aiInsights"),icon:BrainCircuit},
+      ...(canSeeAiIntelligence?[{to:workspace.path("ai-intelligence"),label:t("nav.aiInsights"),icon:BrainCircuit}]:[]),
     ]},
     { label:t("nav.groupTeam"), items:[
       {to:workspace.path("collaboration"),label:t("nav.collaboration"),icon:ListChecks},
@@ -137,7 +143,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
     { label:t("nav.groupReference"), items:[
       {to:workspace.path("documents"),label:t("nav.documents"),icon:FileText},
       {to:workspace.path("ifc"),label:t("nav.ifcBim"),icon:Boxes},
-      {to:workspace.path("ai-intelligence"),label:t("nav.aiInsights"),icon:BrainCircuit},
+      ...(canSeeAiIntelligence?[{to:workspace.path("ai-intelligence"),label:t("nav.aiInsights"),icon:BrainCircuit}]:[]),
     ]},
     { label:t("nav.groupTeam"), items:[
       {to:workspace.path("collaboration"),label:t("nav.collaboration"),icon:ListChecks},

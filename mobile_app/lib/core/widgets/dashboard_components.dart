@@ -4,6 +4,9 @@ import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme.dart';
+import '../l10n/l10n_formats.dart';
+import '../l10n/l10n_labels.dart';
 
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
@@ -35,8 +38,99 @@ class SectionHeader extends StatelessWidget {
         ),
       ),
       if (onAction != null)
-        TextButton(onPressed: onAction, child: Text(actionLabel ?? 'View all')),
+        TextButton(
+          onPressed: onAction,
+          child: Text(actionLabel ?? context.l10n.commonViewAll),
+        ),
     ],
+  );
+}
+
+/// One line of the "Today" list: a thing that needs a person, how many of
+/// them there are, and where to go to deal with it.
+///
+/// This replaced a six-cell grid of metric squares. The grid gave equal
+/// weight to "6 overdue" and "0 blocked", so the screen looked identical
+/// whether the project was on fire or completely clear — a person had to read
+/// six numbers to find that out. A list that only carries what is non-zero,
+/// worst first, answers the field question in one glance and disappears
+/// entirely when there is nothing to answer.
+class AttentionRow extends StatelessWidget {
+  const AttentionRow({
+    super.key,
+    required this.label,
+    required this.count,
+    required this.icon,
+    required this.tone,
+    required this.onTap,
+  });
+
+  final String label;
+  final String count;
+  final IconData icon;
+  final Color tone;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.card,
+    borderRadius: BorderRadius.circular(AppRadius.panel),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(AppRadius.panel),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: 10,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.panel),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: .1),
+                borderRadius: BorderRadius.circular(AppRadius.control),
+              ),
+              child: Icon(icon, color: tone, size: 20),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(AppRadius.chip),
+              ),
+              child: Text(
+                count,
+                style: AppTheme.measured.copyWith(
+                  color: tone,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.mutedForeground,
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 }
 
@@ -46,7 +140,7 @@ class DashboardMetricCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
-    this.tone = AppColors.navy,
+    this.tone = AppColors.primary,
     this.background = Colors.white,
   });
 
@@ -61,7 +155,7 @@ class DashboardMetricCard extends StatelessWidget {
     padding: const EdgeInsets.all(AppSpacing.md),
     decoration: BoxDecoration(
       color: background,
-      borderRadius: BorderRadius.circular(AppRadius.large),
+      borderRadius: BorderRadius.circular(AppRadius.panel),
       border: Border.all(color: AppColors.border),
       boxShadow: AppShadows.card,
     ),
@@ -113,8 +207,8 @@ class ProjectProgressCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.navy,
-        borderRadius: BorderRadius.circular(AppRadius.large),
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(AppRadius.panel),
         boxShadow: AppShadows.elevated,
       ),
       child: Row(
@@ -128,10 +222,12 @@ class ProjectProgressCard extends StatelessWidget {
                   value: normalized,
                   strokeWidth: 8,
                   backgroundColor: Colors.white.withValues(alpha: .12),
-                  color: AppColors.bronze,
+                  color: AppColors.accent,
                 ),
                 Text(
-                  '${progress.round()}%',
+                  // Was '${progress.round()}%', which hardcoded the Western
+                  // percent sign and bypassed the app's number policy.
+                  context.formatPercent(progress),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -147,14 +243,14 @@ class ProjectProgressCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Overall progress',
+                  context.l10n.dashboardOverallProgress,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: Colors.white70),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  status.replaceAll('_', ' '),
+                  context.l10n.statusLabel(status),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -162,9 +258,12 @@ class ProjectProgressCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Live project data',
-                  style: TextStyle(color: AppColors.bronzeSoft, fontSize: 12),
+                Text(
+                  context.l10n.dashboardLiveProjectData,
+                  style: const TextStyle(
+                    color: AppColors.accentWash,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -193,8 +292,8 @@ class SmartSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(AppSpacing.lg),
     decoration: BoxDecoration(
-      color: AppColors.navy,
-      borderRadius: BorderRadius.circular(AppRadius.large),
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(AppRadius.panel),
       boxShadow: AppShadows.elevated,
     ),
     child: Column(
@@ -206,29 +305,29 @@ class SmartSummaryCard extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: AppColors.bronze.withValues(alpha: .2),
+                color: AppColors.accent.withValues(alpha: .2),
                 borderRadius: BorderRadius.circular(13),
               ),
               child: const Icon(
                 Icons.auto_awesome_outlined,
-                color: AppColors.bronze,
+                color: AppColors.accent,
               ),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Smart Project Summary',
-                    style: TextStyle(
+                    context.l10n.dashboardSummaryTitle,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   Text(
-                    'Executive project intelligence',
+                    context.l10n.dashboardSummarySubtitle,
                     style: TextStyle(color: Colors.white60, fontSize: 12),
                   ),
                 ],
@@ -241,9 +340,13 @@ class SmartSummaryCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                state == SmartSummaryState.ready ? 'LIVE DATA' : 'AI READY',
+                // These two were hardcoded English literals even though the
+                // catalogue already carried both keys.
+                state == SmartSummaryState.ready
+                    ? context.l10n.dashboardLiveData
+                    : context.l10n.dashboardAiReady,
                 style: const TextStyle(
-                  color: AppColors.bronzeSoft,
+                  color: AppColors.accentWash,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
                 ),
@@ -269,7 +372,7 @@ class SmartSummaryCard extends StatelessWidget {
           Text(
             state == SmartSummaryState.ready && summary != null
                 ? summary!
-                : 'AI-generated insights will appear here when the summary service is connected. Current project metrics remain available below.',
+                : context.l10n.dashboardAiPlaceholder,
             style: const TextStyle(color: Colors.white, height: 1.5),
           ),
         const SizedBox(height: AppSpacing.md),
@@ -286,8 +389,8 @@ class SmartSummaryCard extends StatelessWidget {
             Expanded(
               child: Text(
                 state == SmartSummaryState.ready
-                    ? 'Generated from current backend metrics · No external AI'
-                    : 'Future integration placeholder · No fabricated insights',
+                    ? context.l10n.dashboardGeneratedFrom
+                    : context.l10n.dashboardFutureIntegration,
                 style: const TextStyle(color: Colors.white54, fontSize: 11),
               ),
             ),

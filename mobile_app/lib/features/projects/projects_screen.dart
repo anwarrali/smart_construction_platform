@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session_manager.dart';
+import '../../core/l10n/l10n_formats.dart';
+import '../../core/l10n/l10n_labels.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_shadows.dart';
@@ -34,22 +36,20 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     final state = ref.watch(projectContextProvider);
     final Widget content;
     if (state.loading) {
-      content = const LoadingView(label: 'Loading assigned projects');
+      content = LoadingView(label: context.l10n.projectsLoading);
     } else if (state.error != null) {
       content = MessageView(
         icon: Icons.cloud_off_rounded,
-        title: 'Projects unavailable',
-        message: state.error!,
+        title: context.l10n.commonUnavailable(context.l10n.projectsTitle),
+        message: context.l10n.describeError(state.error),
         onAction: () => ref.read(projectContextProvider.notifier).load(),
       );
     } else if (state.projects.isEmpty) {
       content = MessageView(
         icon: Icons.apartment_rounded,
-        title: 'No projects assigned',
-        message:
-            'Contact your administrator or project manager for access, '
-            'or switch to another account.',
-        actionLabel: 'Switch account',
+        title: context.l10n.projectsNoneAssigned,
+        message: context.l10n.projectsNoneAssignedBody,
+        actionLabel: context.l10n.projectsSwitchAccount,
         onAction: _switchingAccount ? null : _requestAccountSwitch,
       );
     } else {
@@ -104,19 +104,17 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         icon: const Icon(Icons.switch_account_rounded),
-        title: const Text('Switch account?'),
-        content: const Text(
-          'You will be signed out and returned to the sign-in screen.',
-        ),
+        title: Text(context.l10n.projectsSwitchAccountQuestion),
+        content: Text(context.l10n.projectsSwitchAccountBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton.icon(
             onPressed: () => Navigator.pop(dialogContext, true),
             icon: const Icon(Icons.logout_rounded),
-            label: const Text('Sign out'),
+            label: Text(context.l10n.commonSignOut),
           ),
         ],
       ),
@@ -146,18 +144,18 @@ class _ProjectsHeader extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 188,
     decoration: const BoxDecoration(
-      color: AppColors.navy,
+      color: AppColors.primary,
       borderRadius: BorderRadius.vertical(
-        bottom: Radius.circular(AppRadius.extraLarge),
+        bottom: Radius.circular(AppRadius.sheet),
       ),
     ),
     child: Stack(
       fit: StackFit.expand,
       children: [
-        const SafeArea(
+        SafeArea(
           bottom: false,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
+            padding: const EdgeInsets.fromLTRB(
               AppSpacing.page,
               24,
               AppSpacing.page,
@@ -168,17 +166,17 @@ class _ProjectsHeader extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  'My Projects',
-                  style: TextStyle(
+                  context.l10n.projectsMyProjects,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                SizedBox(height: 7),
+                const SizedBox(height: 7),
                 Text(
-                  'Select a workspace to continue',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                  context.l10n.projectsSelectWorkspace,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
@@ -187,7 +185,10 @@ class _ProjectsHeader extends StatelessWidget {
         SafeArea(
           bottom: false,
           child: Align(
-            alignment: Alignment.topRight,
+            // Directional: the chip belongs on the side opposite the
+            // heading, which is the left in Arabic. Hardcoding topRight
+            // put it on top of the heading under RTL.
+            alignment: AlignmentDirectional.topEnd,
             child: Padding(
               padding: const EdgeInsets.only(
                 top: AppSpacing.sm,
@@ -209,7 +210,7 @@ class _ProjectsHeader extends StatelessWidget {
                         ),
                       )
                     : const Icon(Icons.switch_account_rounded, size: 19),
-                label: const Text('Switch account'),
+                label: Text(context.l10n.projectsSwitchAccount),
               ),
             ),
           ),
@@ -233,15 +234,15 @@ class _ProjectCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(AppRadius.large),
+      borderRadius: BorderRadius.circular(AppRadius.panel),
       border: Border.all(
-        color: selected ? AppColors.bronze : AppColors.border,
+        color: selected ? AppColors.accent : AppColors.border,
         width: selected ? 1.5 : 1,
       ),
       boxShadow: AppShadows.card,
     ),
     child: InkWell(
-      borderRadius: BorderRadius.circular(AppRadius.large),
+      borderRadius: BorderRadius.circular(AppRadius.panel),
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -255,12 +256,12 @@ class _ProjectCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: AppColors.navy,
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: const Icon(
                     Icons.apartment_rounded,
-                    color: AppColors.bronze,
+                    color: AppColors.accent,
                   ),
                 ),
                 const SizedBox(width: 13),
@@ -281,7 +282,7 @@ class _ProjectCard extends StatelessWidget {
                             const Icon(
                               Icons.location_on_outlined,
                               size: 14,
-                              color: AppColors.textSecondary,
+                              color: AppColors.mutedForeground,
                             ),
                             const SizedBox(width: 3),
                             Expanded(
@@ -306,17 +307,17 @@ class _ProjectCard extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'Project progress',
+                  context.l10n.projectsProgress,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const Spacer(),
                 Text(
-                  '${project.completionPercentage.round()}%',
+                  context.formatPercent(project.completionPercentage),
                   style: const TextStyle(
                     fontWeight: FontWeight.w800,
-                    color: AppColors.navy,
+                    color: AppColors.primary,
                   ),
                 ),
               ],
@@ -334,24 +335,26 @@ class _ProjectCard extends StatelessWidget {
                   const Icon(
                     Icons.report_problem_outlined,
                     size: 16,
-                    color: AppColors.warning,
+                    color: AppColors.stateReview,
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    '${project.openIssueCount} open issues',
+                    context.l10n.projectsOpenIssues(project.openIssueCount),
                     style: const TextStyle(
                       fontSize: 11,
-                      color: AppColors.warning,
+                      color: AppColors.stateReview,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
                 const Spacer(),
                 Text(
-                  selected ? 'Current project' : 'Open workspace',
+                  selected
+                      ? context.l10n.projectsCurrentProject
+                      : context.l10n.projectsOpenWorkspace,
                   style: TextStyle(
                     fontSize: 12,
-                    color: selected ? AppColors.success : AppColors.navy,
+                    color: selected ? AppColors.stateVerified : AppColors.primary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -361,7 +364,7 @@ class _ProjectCard extends StatelessWidget {
                       ? Icons.check_circle_rounded
                       : Icons.arrow_forward_rounded,
                   size: 17,
-                  color: selected ? AppColors.success : AppColors.navy,
+                  color: selected ? AppColors.stateVerified : AppColors.primary,
                 ),
               ],
             ),

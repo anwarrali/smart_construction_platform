@@ -3,6 +3,8 @@ import { formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import toast from "react-hot-toast";
+import { Forward, ExternalLink } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
@@ -13,9 +15,10 @@ import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../hooks/useAuth";
 import { useRole } from "../../../hooks/useRole";
 import api from "../../../services/api";
-import type { Conversation, ConversationDetail, ConversationType, RecipientOptions } from "../../../types/message";
+import type { Conversation, ConversationDetail, ConversationType, ProjectMessage, RecipientOptions } from "../../../types/message";
 import type { Project } from "../../../types/project";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
+import { projectEntityPath } from "../../../utils/projectRoutes";
 
 type Tab = "all" | "unread" | "direct" | "teams" | "project";
 
@@ -23,7 +26,16 @@ export const MessagesPage = () => {
   const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const { user } = useAuth();
-  const { isAdmin, isProjectManager } = useRole();
+  const navigate = useNavigate();
+  const { isAdmin, isProjectManager, role, isConsultantEngineer } = useRole();
+  // "View original" must land inside the role's own project workspace: the
+  // portfolio-level /issues route redirects role-scoped users to their
+  // dashboard and drops the query parameter, so the entity would be lost.
+  const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
+  // Sharing an entity happens away from this page and then lands here, so the
+  // conversation it created is selected from the URL on arrival.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedConversationId = searchParams.get("conversationId");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState(workspace.projectId || "");
   const projectId = workspace.projectId || selectedProjectId;
@@ -43,6 +55,12 @@ export const MessagesPage = () => {
   const [title, setTitle] = useState("");
   const [firstMessage, setFirstMessage] = useState("");
   const [announcement, setAnnouncement] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<ProjectMessage | null>(null);
+  const [forwardRecipientMode, setForwardRecipientMode] = useState<"individual" | "multiple" | "group">("individual");
+  const [forwardRecipientIds, setForwardRecipientIds] = useState<string[]>([]);
+  const [forwardGroupCode, setForwardGroupCode] = useState("");
+  const [forwardNote, setForwardNote] = useState("");
+  const [forwardBusy, setForwardBusy] = useState(false);
 
   useEffect(() => {
     if (workspace.projectId) return setSelectedProjectId(workspace.projectId);
@@ -95,6 +113,15 @@ export const MessagesPage = () => {
   }, [projectId]);
   useEffect(() => { loadList(); }, [loadList]);
   useEffect(() => { loadDetail(); }, [loadDetail]);
+  // Consumed once: after selecting the requested conversation the parameter is
+  // dropped, so a later manual selection is not overridden on the next render.
+  useEffect(() => {
+    if (!requestedConversationId) return;
+    setSelectedId(requestedConversationId);
+    const next = new URLSearchParams(searchParams);
+    next.delete("conversationId");
+    setSearchParams(next, { replace: true });
+  }, [requestedConversationId, searchParams, setSearchParams]);
   useEffect(() => {
     const timer = window.setInterval(() => {
       loadList(true);
@@ -149,6 +176,37 @@ export const MessagesPage = () => {
     } finally { setBusy(false); }
   };
 
+  const openForward = (message: ProjectMessage) => {
+    setForwardingMessage(message);
+    setForwardRecipientMode("individual");
+    setForwardRecipientIds([]);
+    setForwardGroupCode("");
+    setForwardNote("");
+  };
+
+  // Recipients come from the same `recipientOptions` the compose modal uses —
+  // the same server-side `can_message_user` / group resolution, so the picker
+  // can never offer someone the backend would reject anyway (2.7). The backend
+  // still re-validates on submit regardless of what this list shows.
+  const submitForward = async () => {
+    if (!forwardingMessage) return;
+    setForwardBusy(true);
+    try {
+      const conversation = await api.messages.forward(forwardingMessage.id, {
+        recipientIds: forwardRecipientMode === "group" ? [] : forwardRecipientIds,
+        groupCode: forwardRecipientMode === "group" ? forwardGroupCode : undefined,
+        note: forwardNote.trim() || undefined,
+      });
+      setForwardingMessage(null);
+      await loadList();
+      setSelectedId(conversation.id);
+      await loadDetail();
+      toast.success(t("messagesPage.message_forwarded"));
+    } catch (err: any) {
+      toast.error(errorMessage(err, t("messagesPage.forward_failed")));
+    } finally { setForwardBusy(false); }
+  };
+
   const tabs: Array<{ value: Tab; label: string }> = [
     { value: "all", label: "All" }, { value: "unread", label: "Unread" },
     { value: "direct", label: "Direct" }, { value: "teams", label: "Teams" },
@@ -198,11 +256,50 @@ export const MessagesPage = () => {
           <div className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-4">
             {detail.messages.map((message) => {
               const mine = message.senderId === user?.id;
-              return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+              const origin = message.forwardOrigin;
+              return <div key={message.id} className={`group flex ${mine ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] rounded-xl px-4 py-2 text-sm ${mine ? "bg-primary text-primary-foreground" : "border bg-card"}`}>
                   {!mine && detail.type !== "DIRECT" && <p className="mb-1 text-xs font-semibold text-primary">{message.sender.fullName}</p>}
+                  {/* A forwarded message never reads as if the forwarder wrote
+                      the original content themselves (2.3 / 2.4): the quoted
+                      block always names the true original sender, resolved to
+                      the root of the chain even after several forwards. */}
+                  {origin && (
+                    <div className={`mb-2 rounded-lg border-l-2 px-2 py-1.5 text-xs ${mine ? "border-primary-foreground/40 bg-primary-foreground/10" : "border-primary/40 bg-muted/40"}`}>
+                      <p className={`flex items-center gap-1 font-medium ${mine ? "text-primary-foreground/80" : "text-primary"}`}>
+                        <Forward size={11} className="rtl-flip" /> {t("messagesPage.forwarded_from", { name: origin.sender.fullName })}
+                      </p>
+                      <p className={`mt-0.5 line-clamp-3 whitespace-pre-wrap break-words ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{origin.content}</p>
+                    </div>
+                  )}
                   <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                  <p className={`mt-1 text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{formatDateTime(message.createdAt)}</p>
+                  {/* A shared entity gets a way back to the entity itself. The
+                      destination page re-checks permission on load, so showing
+                      the link never implies the recipient may read it. */}
+                  {message.sharedEntityType && message.sharedEntityId && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(projectEntityPath(
+                        detail.projectId, message.sharedEntityType!, message.sharedEntityId!,
+                        role, affiliation,
+                      ))}
+                      className={`mt-2 inline-flex items-center gap-1 text-xs font-medium underline ${mine ? "text-primary-foreground/90" : "text-primary"}`}
+                    >
+                      <ExternalLink size={11} className="rtl-flip" />
+                      {t(`communication.viewOriginal.${message.sharedEntityType}`)}
+                    </button>
+                  )}
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <p className={`text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{formatDateTime(message.createdAt)}</p>
+                    <button
+                      type="button"
+                      onClick={() => openForward(message)}
+                      title={t("messagesPage.forward")}
+                      className={`opacity-0 transition-opacity group-hover:opacity-100 ${mine ? "text-primary-foreground/70 hover:text-primary-foreground" : "text-muted-foreground hover:text-primary"}`}
+                    >
+                      <Forward size={13} className="rtl-flip" />
+                    </button>
+                  </div>
                 </div>
               </div>;
             })}
@@ -240,6 +337,45 @@ export const MessagesPage = () => {
         <Input label={t("messagesPage.title_optional")} value={title} onChange={(event) => setTitle(event.target.value)} />
         <label className="block text-sm font-medium">{t("messagesPage.message")}<textarea className="input mt-1 min-h-28 w-full" value={firstMessage} onChange={(event) => setFirstMessage(event.target.value)} maxLength={4000} /></label>
         <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setComposeOpen(false)}>{t("messagesPage.cancel")}</Button><Button disabled={busy || !firstMessage.trim() || (!(recipientMode === "group" || announcement) && recipientIds.length === 0) || ((recipientMode === "group" || announcement) && !groupCode)} onClick={create}>{t("messagesPage.send")}</Button></div>
+      </div>
+    </Modal>
+
+    <Modal isOpen={!!forwardingMessage} onClose={() => setForwardingMessage(null)} title={t("messagesPage.forward_message")} size="lg">
+      <div className="space-y-4">
+        {forwardingMessage && <div className="rounded-lg border-l-2 border-primary/40 bg-muted/40 px-3 py-2 text-xs">
+          <p className="font-medium text-primary">{forwardingMessage.sender.fullName}</p>
+          <p className="mt-0.5 line-clamp-3 whitespace-pre-wrap break-words text-muted-foreground">{forwardingMessage.content}</p>
+        </div>}
+        <Select label={t("messagesPage.send_to")} value={forwardRecipientMode} onChange={(event) => { setForwardRecipientMode(event.target.value as typeof forwardRecipientMode); setForwardRecipientIds([]); setForwardGroupCode(""); }} options={[
+          { value: "individual", label: "Individual" },
+          { value: "multiple", label: "Multiple People" },
+          ...(options.groups.length ? [{ value: "group", label: "Team / Group" }] : []),
+        ]} />
+        {forwardRecipientMode === "group" ? <Select label={t("messagesPage.recipient_group")} value={forwardGroupCode} onChange={(event) => setForwardGroupCode(event.target.value)} options={
+          options.groups.map((group) => ({ value: group.code, label: `${group.label} (${group.recipientCount})` }))
+        } /> : <div>
+          <p className="mb-2 text-sm font-medium">{t("messagesPage.project_recipients")}</p>
+          <div className="max-h-56 space-y-1 overflow-y-auto rounded border p-2">
+            {options.users.map((recipient) => {
+              const checked = forwardRecipientIds.includes(recipient.id);
+              return <label key={recipient.id} className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-muted">
+                <input type={forwardRecipientMode === "individual" ? "radio" : "checkbox"} checked={checked}
+                  onChange={() => setForwardRecipientIds(forwardRecipientMode === "individual" ? [recipient.id] : checked ? forwardRecipientIds.filter((id) => id !== recipient.id) : [...forwardRecipientIds, recipient.id])} />
+                <span><span className="block text-sm font-medium">{recipient.fullName}</span><span className="text-xs text-muted-foreground">{recipient.role.replaceAll("_", " ")}</span></span>
+              </label>;
+            })}
+          </div>
+        </div>}
+        <label className="block text-sm font-medium">{t("messagesPage.forward_note_optional")}
+          <textarea className="input mt-1 min-h-20 w-full" value={forwardNote} onChange={(event) => setForwardNote(event.target.value)} maxLength={4000} placeholder={t("messagesPage.forward_note_placeholder")} />
+        </label>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setForwardingMessage(null)}>{t("messagesPage.cancel")}</Button>
+          <Button
+            disabled={forwardBusy || (forwardRecipientMode === "group" ? !forwardGroupCode : forwardRecipientIds.length === 0)}
+            onClick={submitForward}
+          >{t("messagesPage.forward")}</Button>
+        </div>
       </div>
     </Modal>
   </div>;

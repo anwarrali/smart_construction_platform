@@ -60,7 +60,7 @@ export const ProjectCard = ({ project }: ProjectCardProps) => {
             )}
           </div>
           <span className={state.chip}>
-            {t(`project.status.${vocabulary.projectStatus(project.status)}`, { defaultValue: project.status.replace("_", " ") })}
+            {vocabulary.projectStatus(project.status)}
           </span>
         </div>
 

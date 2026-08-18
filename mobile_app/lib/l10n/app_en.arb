@@ -1,0 +1,2763 @@
+{
+  "@@locale": "en",
+  "commonLoading": "Loading…",
+  "@commonLoading": {
+    "description": "Generic loading label"
+  },
+  "commonRetry": "Retry",
+  "@commonRetry": {
+    "description": "Retry a failed action"
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Cancel button"
+  },
+  "commonConfirm": "Confirm",
+  "@commonConfirm": {
+    "description": "Confirm button"
+  },
+  "commonSubmit": "Submit",
+  "@commonSubmit": {
+    "description": "Submit button"
+  },
+  "commonSubmitting": "Submitting…",
+  "@commonSubmitting": {
+    "description": "Submit button while in flight"
+  },
+  "commonSaveDraft": "Save Draft",
+  "@commonSaveDraft": {
+    "description": "Save a draft record"
+  },
+  "commonCreate": "Create",
+  "@commonCreate": {
+    "description": "Create button"
+  },
+  "commonDelete": "Delete",
+  "@commonDelete": {
+    "description": "Delete button"
+  },
+  "commonUpdate": "Update",
+  "@commonUpdate": {
+    "description": "Update button"
+  },
+  "commonApprove": "Approve",
+  "@commonApprove": {
+    "description": "Approve button"
+  },
+  "commonDone": "Done",
+  "@commonDone": {
+    "description": "Dismiss a completed flow"
+  },
+  "commonAll": "All",
+  "@commonAll": {
+    "description": "Filter chip showing everything"
+  },
+  "commonOptional": "(optional)",
+  "@commonOptional": {
+    "description": "Suffix marking an optional field"
+  },
+  "commonStatus": "Status",
+  "@commonStatus": {
+    "description": "Status field label"
+  },
+  "commonPriority": "Priority",
+  "@commonPriority": {
+    "description": "Priority field label"
+  },
+  "commonDiscipline": "Discipline",
+  "@commonDiscipline": {
+    "description": "Engineering discipline field label"
+  },
+  "commonDescription": "Description",
+  "@commonDescription": {
+    "description": "Description field label"
+  },
+  "commonTitle": "Title",
+  "@commonTitle": {
+    "description": "Title field label"
+  },
+  "commonCategory": "Category",
+  "@commonCategory": {
+    "description": "Category field label"
+  },
+  "commonNote": "Note",
+  "@commonNote": {
+    "description": "Single note field label"
+  },
+  "commonProject": "Project",
+  "@commonProject": {
+    "description": "Project field label"
+  },
+  "commonProgress": "Progress",
+  "@commonProgress": {
+    "description": "Progress field label"
+  },
+  "commonNotifications": "Notifications",
+  "@commonNotifications": {
+    "description": "Notifications"
+  },
+  "commonToday": "Today",
+  "@commonToday": {
+    "description": "Date group header"
+  },
+  "commonYesterday": "Yesterday",
+  "@commonYesterday": {
+    "description": "Date group header"
+  },
+  "commonViewAll": "View all",
+  "@commonViewAll": {
+    "description": "Open the full list"
+  },
+  "commonSignOut": "Sign out",
+  "@commonSignOut": {
+    "description": "Sign out button"
+  },
+  "commonLogOut": "Log out",
+  "@commonLogOut": {
+    "description": "Log out button"
+  },
+  "commonSelectProject": "Select a project",
+  "@commonSelectProject": {
+    "description": "Empty state title when no project is active"
+  },
+  "commonSelectProjectFirst": "Select a project first.",
+  "@commonSelectProjectFirst": {
+    "description": "Body shown when a screen needs an active project"
+  },
+  "commonNoProjectSelected": "No project selected",
+  "@commonNoProjectSelected": {
+    "description": "Empty state title"
+  },
+  "commonNothingHereYet": "Nothing here yet",
+  "@commonNothingHereYet": {
+    "description": "Generic empty state title"
+  },
+  "commonUnavailable": "{subject} unavailable",
+  "@commonUnavailable": {
+    "description": "Error title; subject is a screen name",
+    "placeholders": {
+      "subject": {
+        "type": "String"
+      }
+    }
+  },
+  "commonPercent": "{value}%",
+  "@commonPercent": {
+    "description": "A percentage value",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "navHome": "Home",
+  "@navHome": {
+    "description": "Bottom navigation destination"
+  },
+  "navTasks": "Tasks",
+  "@navTasks": {
+    "description": "Bottom navigation destination"
+  },
+  "navMyTasks": "My Tasks",
+  "@navMyTasks": {
+    "description": "Bottom navigation destination"
+  },
+  "navReports": "Reports",
+  "@navReports": {
+    "description": "Bottom navigation destination"
+  },
+  "navMessages": "Messages",
+  "@navMessages": {
+    "description": "Bottom navigation destination"
+  },
+  "navProfile": "Profile",
+  "@navProfile": {
+    "description": "Bottom navigation destination"
+  },
+  "navReviews": "Reviews",
+  "@navReviews": {
+    "description": "Bottom navigation destination"
+  },
+  "navDocuments": "Documents",
+  "@navDocuments": {
+    "description": "Bottom navigation destination"
+  },
+  "navIssues": "Issues",
+  "@navIssues": {
+    "description": "Bottom navigation destination. The Arabic is deliberately shorter than the web sidebar's \"الملاحظات والمشكلات\": a five-destination bar on a phone cannot fit the full term, which wrapped and clipped on device. The screen title keeps the full wording."
+  },
+  "navProjects": "Projects",
+  "@navProjects": {
+    "description": "Bottom navigation destination"
+  },
+  "navEvidence": "Evidence",
+  "@navEvidence": {
+    "description": "Bottom navigation destination for field evidence"
+  },
+  "navMyActions": "My Actions",
+  "@navMyActions": {
+    "description": "Quick-access destination"
+  },
+  "navIfcModels": "IFC Models",
+  "@navIfcModels": {
+    "description": "Quick-access destination; IFC is a format name and stays Latin"
+  },
+  "navFieldEvidence": "Field Evidence",
+  "@navFieldEvidence": {
+    "description": "Quick-access destination"
+  },
+  "navRecordUpdate": "Record Update",
+  "@navRecordUpdate": {
+    "description": "Floating action to record a spoken field update"
+  },
+  "navRecordFieldUpdate": "Record field update",
+  "@navRecordFieldUpdate": {
+    "description": "Accessibility label for the record action"
+  },
+  "errorGeneric": "Something went wrong. Please try again.",
+  "@errorGeneric": {
+    "description": "Fallback error"
+  },
+  "errorTimeout": "The server took too long to respond. Please retry.",
+  "@errorTimeout": {
+    "description": "Request timed out"
+  },
+  "errorNetwork": "Cannot reach the project server. Check that the server is running and that this device is on the correct network.",
+  "@errorNetwork": {
+    "description": "Connection failure"
+  },
+  "errorUnauthorized": "You are not signed in.",
+  "@errorUnauthorized": {
+    "description": "HTTP 401"
+  },
+  "errorForbidden": "You do not have permission to do this.",
+  "@errorForbidden": {
+    "description": "HTTP 403"
+  },
+  "errorNotFound": "That record could not be found.",
+  "@errorNotFound": {
+    "description": "HTTP 404"
+  },
+  "errorConflict": "This conflicts with an existing record.",
+  "@errorConflict": {
+    "description": "HTTP 409"
+  },
+  "errorValidation": "Please correct the highlighted fields.",
+  "@errorValidation": {
+    "description": "HTTP 422"
+  },
+  "errorLoadFailed": "This information could not be loaded.",
+  "@errorLoadFailed": {
+    "description": "A read failed"
+  },
+  "errorSaveFailed": "Your changes could not be saved.",
+  "@errorSaveFailed": {
+    "description": "A write failed"
+  },
+  "errorActionFailed": "The action could not be completed.",
+  "@errorActionFailed": {
+    "description": "An action failed"
+  },
+  "validationRequired": "This field is required.",
+  "@validationRequired": {
+    "description": "Empty required field"
+  },
+  "validationEnterEmailOrUsername": "Enter your email or username.",
+  "@validationEnterEmailOrUsername": {
+    "description": "Login validation"
+  },
+  "validationEnterPassword": "Enter your password.",
+  "@validationEnterPassword": {
+    "description": "Login validation"
+  },
+  "validationEnterIssueTitle": "Enter an issue title.",
+  "@validationEnterIssueTitle": {
+    "description": "Issue form validation"
+  },
+  "validationDescribeIssue": "Describe the issue.",
+  "@validationDescribeIssue": {
+    "description": "Issue form validation"
+  },
+  "validationAddReportSummary": "Add the report summary.",
+  "@validationAddReportSummary": {
+    "description": "Site report validation"
+  },
+  "validationCompleteRequiredFields": "Complete all required fields.",
+  "@validationCompleteRequiredFields": {
+    "description": "Review form validation"
+  },
+  "validationEnterClarificationQuestion": "Enter a clarification question.",
+  "@validationEnterClarificationQuestion": {
+    "description": "Review form validation"
+  },
+  "brandDescriptor": "Smart Construction Management",
+  "@brandDescriptor": {
+    "description": "Brand descriptor under the logo"
+  },
+  "loginSignIn": "Sign in",
+  "@loginSignIn": {
+    "description": "Sign-in heading"
+  },
+  "loginSubtitle": "Use your organization account to continue.",
+  "@loginSubtitle": {
+    "description": "Sign-in subtitle"
+  },
+  "loginEmailLabel": "Email or username",
+  "@loginEmailLabel": {
+    "description": "Login field label"
+  },
+  "loginEmailHint": "name@company.com",
+  "@loginEmailHint": {
+    "description": "Login field hint; an email example is not translated"
+  },
+  "loginPasswordLabel": "Password",
+  "@loginPasswordLabel": {
+    "description": "Login field label"
+  },
+  "loginPasswordHint": "Enter your password",
+  "@loginPasswordHint": {
+    "description": "Login field hint"
+  },
+  "loginShowPassword": "Show password",
+  "@loginShowPassword": {
+    "description": "Accessibility label"
+  },
+  "loginHidePassword": "Hide password",
+  "@loginHidePassword": {
+    "description": "Accessibility label"
+  },
+  "loginSubmit": "Sign in securely",
+  "@loginSubmit": {
+    "description": "Login submit button"
+  },
+  "loginNeedHelp": "Need help? Contact Administrator",
+  "@loginNeedHelp": {
+    "description": "Link to the support screen"
+  },
+  "loginSecureAccess": "Secure access · Authorized project members only",
+  "@loginSecureAccess": {
+    "description": "Footer note on the sign-in screen"
+  },
+  "loginInvalidCredentials": "Incorrect email/username or password.",
+  "@loginInvalidCredentials": {
+    "description": "Sign-in failed with 401"
+  },
+  "loginAccountDeactivated": "Your account has been deactivated. Contact your administrator.",
+  "@loginAccountDeactivated": {
+    "description": "Sign-in refused with 403"
+  },
+  "loginTooManyAttempts": "Too many failed sign-in attempts. Try again later.",
+  "@loginTooManyAttempts": {
+    "description": "Sign-in throttled with 429"
+  },
+  "loginWelcomeBack": "Welcome Back",
+  "@loginWelcomeBack": {
+    "description": "Sign-in aside heading"
+  },
+  "loginWelcomeBody": "Manage projects, field activities, and team collaboration from anywhere.",
+  "@loginWelcomeBody": {
+    "description": "Sign-in aside body"
+  },
+  "projectsLoading": "Loading assigned projects",
+  "@projectsLoading": {
+    "description": "Loading label"
+  },
+  "projectsTitle": "Projects",
+  "@projectsTitle": {
+    "description": "Projects screen title used in error states"
+  },
+  "projectsNoneAssigned": "No projects assigned",
+  "@projectsNoneAssigned": {
+    "description": "Empty state title"
+  },
+  "projectsNoneAssignedBody": "Contact your administrator or project manager for access, or switch to another account.",
+  "@projectsNoneAssignedBody": {
+    "description": "Empty state body"
+  },
+  "projectsSwitchAccount": "Switch account",
+  "@projectsSwitchAccount": {
+    "description": "Action that signs the user out"
+  },
+  "projectsSwitchAccountQuestion": "Switch account?",
+  "@projectsSwitchAccountQuestion": {
+    "description": "Confirmation dialog title"
+  },
+  "projectsSwitchAccountBody": "You will be signed out and returned to the sign-in screen.",
+  "@projectsSwitchAccountBody": {
+    "description": "Confirmation dialog body"
+  },
+  "projectsMyProjects": "My Projects",
+  "@projectsMyProjects": {
+    "description": "Projects screen heading"
+  },
+  "projectsSelectWorkspace": "Select a workspace to continue",
+  "@projectsSelectWorkspace": {
+    "description": "Projects screen subheading"
+  },
+  "projectsProgress": "Project progress",
+  "@projectsProgress": {
+    "description": "Progress row label on a project card"
+  },
+  "projectsOpenIssues": "{count, plural, =1{{count} open issue} other{{count} open issues}}",
+  "@projectsOpenIssues": {
+    "description": "Open issue count on a project card. Pluralised: English reads wrong at 1, and Arabic needs dual and few forms.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "projectsCurrentProject": "Current project",
+  "@projectsCurrentProject": {
+    "description": "Marker on the active project card"
+  },
+  "projectsOpenWorkspace": "Open workspace",
+  "@projectsOpenWorkspace": {
+    "description": "Action on a non-active project card"
+  },
+  "statusBacklog": "Backlog",
+  "@statusBacklog": {
+    "description": "Task status"
+  },
+  "statusTodo": "To do",
+  "@statusTodo": {
+    "description": "Task status"
+  },
+  "statusInProgress": "In progress",
+  "@statusInProgress": {
+    "description": "Task status"
+  },
+  "statusUnderReview": "Under review",
+  "@statusUnderReview": {
+    "description": "Task status"
+  },
+  "statusReworkRequired": "Rework required",
+  "@statusReworkRequired": {
+    "description": "Task status"
+  },
+  "statusDone": "Done",
+  "@statusDone": {
+    "description": "Task status"
+  },
+  "statusBlocked": "Blocked",
+  "@statusBlocked": {
+    "description": "Task status"
+  },
+  "statusCancelled": "Cancelled",
+  "@statusCancelled": {
+    "description": "Task or project status"
+  },
+  "statusOpen": "Open",
+  "@statusOpen": {
+    "description": "Issue status"
+  },
+  "statusResolved": "Resolved",
+  "@statusResolved": {
+    "description": "Issue status"
+  },
+  "statusClosed": "Closed",
+  "@statusClosed": {
+    "description": "Issue status"
+  },
+  "statusPending": "Pending",
+  "@statusPending": {
+    "description": "Review status"
+  },
+  "statusInReview": "In review",
+  "@statusInReview": {
+    "description": "Review status"
+  },
+  "statusApproved": "Approved",
+  "@statusApproved": {
+    "description": "Review status"
+  },
+  "statusRejected": "Rejected",
+  "@statusRejected": {
+    "description": "Review status"
+  },
+  "statusClarificationRequested": "Clarification requested",
+  "@statusClarificationRequested": {
+    "description": "Review status"
+  },
+  "statusDraft": "Draft",
+  "@statusDraft": {
+    "description": "Review or report status"
+  },
+  "statusSubmitted": "Submitted",
+  "@statusSubmitted": {
+    "description": "Review or report status"
+  },
+  "statusProposed": "Proposed",
+  "@statusProposed": {
+    "description": "Design change status"
+  },
+  "statusImplemented": "Implemented",
+  "@statusImplemented": {
+    "description": "Design change status"
+  },
+  "statusPlanning": "Planning",
+  "@statusPlanning": {
+    "description": "Project status"
+  },
+  "statusActive": "Active",
+  "@statusActive": {
+    "description": "Project status"
+  },
+  "statusOnHold": "On hold",
+  "@statusOnHold": {
+    "description": "Project status"
+  },
+  "statusDelayed": "Delayed",
+  "@statusDelayed": {
+    "description": "Project status or health"
+  },
+  "statusCompleted": "Completed",
+  "@statusCompleted": {
+    "description": "Project status"
+  },
+  "statusVerified": "Verified",
+  "@statusVerified": {
+    "description": "Site report review status"
+  },
+  "statusOnTrack": "On track",
+  "@statusOnTrack": {
+    "description": "Project health"
+  },
+  "statusAtRisk": "At risk",
+  "@statusAtRisk": {
+    "description": "Project health"
+  },
+  "priorityLow": "Low",
+  "@priorityLow": {
+    "description": "Priority level"
+  },
+  "priorityMedium": "Medium",
+  "@priorityMedium": {
+    "description": "Priority level"
+  },
+  "priorityHigh": "High",
+  "@priorityHigh": {
+    "description": "Priority level"
+  },
+  "priorityCritical": "Critical",
+  "@priorityCritical": {
+    "description": "Priority level"
+  },
+  "priorityNormal": "Normal",
+  "@priorityNormal": {
+    "description": "Notification priority"
+  },
+  "priorityImportant": "Important",
+  "@priorityImportant": {
+    "description": "Notification priority badge"
+  },
+  "priorityInfo": "Info",
+  "@priorityInfo": {
+    "description": "Notification priority"
+  },
+  "disciplineCivil": "Civil",
+  "@disciplineCivil": {
+    "description": "Engineering discipline"
+  },
+  "disciplineArchitectural": "Architectural",
+  "@disciplineArchitectural": {
+    "description": "Engineering discipline"
+  },
+  "disciplineElectrical": "Electrical",
+  "@disciplineElectrical": {
+    "description": "Engineering discipline"
+  },
+  "disciplineMechanical": "Mechanical",
+  "@disciplineMechanical": {
+    "description": "Engineering discipline"
+  },
+  "disciplineStructural": "Structural",
+  "@disciplineStructural": {
+    "description": "Engineering discipline"
+  },
+  "disciplinePlumbing": "Plumbing",
+  "@disciplinePlumbing": {
+    "description": "Engineering discipline"
+  },
+  "disciplineHvac": "HVAC",
+  "@disciplineHvac": {
+    "description": "Engineering discipline"
+  },
+  "disciplineFireProtection": "Fire protection",
+  "@disciplineFireProtection": {
+    "description": "Engineering discipline"
+  },
+  "disciplineGeneral": "General",
+  "@disciplineGeneral": {
+    "description": "Engineering discipline"
+  },
+  "disciplineUnclassified": "Unclassified",
+  "@disciplineUnclassified": {
+    "description": "Engineering discipline"
+  },
+  "disciplineUnassigned": "Unassigned",
+  "@disciplineUnassigned": {
+    "description": "No discipline or assignee set"
+  },
+  "roleAdmin": "Administrator",
+  "@roleAdmin": {
+    "description": "User role"
+  },
+  "roleOwner": "Owner",
+  "@roleOwner": {
+    "description": "User role"
+  },
+  "roleProjectManager": "Project manager",
+  "@roleProjectManager": {
+    "description": "User role"
+  },
+  "roleEngineer": "Engineer",
+  "@roleEngineer": {
+    "description": "User role"
+  },
+  "roleConsultant": "Consultant",
+  "@roleConsultant": {
+    "description": "User role"
+  },
+  "roleWorker": "Worker",
+  "@roleWorker": {
+    "description": "User role"
+  },
+  "roleCaptionSiteEngineer": "Main Contractor · Site Engineer",
+  "@roleCaptionSiteEngineer": {
+    "description": "Role caption under the greeting"
+  },
+  "roleCaptionConsultant": "Consultant Engineer · Review & Quality",
+  "@roleCaptionConsultant": {
+    "description": "Role caption under the greeting"
+  },
+  "roleCaptionOwner": "Project Owner · Executive View",
+  "@roleCaptionOwner": {
+    "description": "Role caption under the greeting"
+  },
+  "roleCaptionWorker": "Construction Worker · Field Evidence",
+  "@roleCaptionWorker": {
+    "description": "Role caption under the greeting"
+  },
+  "roleCaptionProjectManager": "Project Manager · Field Monitoring",
+  "@roleCaptionProjectManager": {
+    "description": "Role caption under the greeting"
+  },
+  "roleCaptionConsultantShort": "Consultant Engineer",
+  "@roleCaptionConsultantShort": {
+    "description": "Role caption on the profile screen"
+  },
+  "dashboardSelectProjectBody": "Choose a project to see its dashboard.",
+  "@dashboardSelectProjectBody": {
+    "description": "Empty state body"
+  },
+  "dashboardLoading": "Loading project dashboard",
+  "@dashboardLoading": {
+    "description": "Loading label"
+  },
+  "dashboardTitle": "Dashboard",
+  "@dashboardTitle": {
+    "description": "Dashboard name used in error states"
+  },
+  "dashboardGreetingMorning": "Good morning",
+  "@dashboardGreetingMorning": {
+    "description": "Time-of-day greeting"
+  },
+  "dashboardGreetingAfternoon": "Good afternoon",
+  "@dashboardGreetingAfternoon": {
+    "description": "Time-of-day greeting"
+  },
+  "dashboardGreetingEvening": "Good evening",
+  "@dashboardGreetingEvening": {
+    "description": "Time-of-day greeting"
+  },
+  "dashboardGreeting": "{greeting}, {name}",
+  "@dashboardGreeting": {
+    "description": "Greeting line; name is the user's own name and is never translated",
+    "placeholders": {
+      "greeting": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardChangeProject": "Change project",
+  "@dashboardChangeProject": {
+    "description": "Accessibility label for the project switcher"
+  },
+  "dashboardFastFieldUpdate": "Fast field update",
+  "@dashboardFastFieldUpdate": {
+    "description": "Section heading"
+  },
+  "dashboardFastFieldUpdateBody": "Capture work without stopping your workflow",
+  "@dashboardFastFieldUpdateBody": {
+    "description": "Section subheading"
+  },
+  "dashboardExecutiveIntelligence": "Executive intelligence",
+  "@dashboardExecutiveIntelligence": {
+    "description": "Section heading"
+  },
+  "dashboardExecutiveIntelligenceBody": "Current status and future smart insights",
+  "@dashboardExecutiveIntelligenceBody": {
+    "description": "Section subheading"
+  },
+  "dashboardNeedsAttention": "Needs your attention",
+  "@dashboardNeedsAttention": {
+    "description": "Section heading"
+  },
+  "dashboardProjectSnapshot": "Project snapshot",
+  "@dashboardProjectSnapshot": {
+    "description": "Section heading"
+  },
+  "dashboardQuickAccess": "Quick access",
+  "@dashboardQuickAccess": {
+    "description": "Section heading"
+  },
+  "dashboardQuickAccessBody": "Role-appropriate project tools",
+  "@dashboardQuickAccessBody": {
+    "description": "Section subheading"
+  },
+  "dashboardRecentActivity": "Recent activity",
+  "@dashboardRecentActivity": {
+    "description": "Section heading"
+  },
+  "dashboardRecentActivityBody": "Latest information from this project",
+  "@dashboardRecentActivityBody": {
+    "description": "Section subheading"
+  },
+  "dashboardSnapshotEngineer": "Tasks, blockers, and reviews that need action",
+  "@dashboardSnapshotEngineer": {
+    "description": "Snapshot subtitle for engineers"
+  },
+  "dashboardSnapshotConsultant": "Review workload and submitted work",
+  "@dashboardSnapshotConsultant": {
+    "description": "Snapshot subtitle for consultants"
+  },
+  "dashboardSnapshotOwner": "High-level progress, risk, and decisions",
+  "@dashboardSnapshotOwner": {
+    "description": "Snapshot subtitle for owners"
+  },
+  "dashboardSnapshotManager": "Execution health and team priorities",
+  "@dashboardSnapshotManager": {
+    "description": "Snapshot subtitle for managers"
+  },
+  "dashboardPendingReviews": "Pending reviews",
+  "@dashboardPendingReviews": {
+    "description": "KPI label"
+  },
+  "dashboardOverdueReviews": "Overdue reviews",
+  "@dashboardOverdueReviews": {
+    "description": "KPI label"
+  },
+  "dashboardApprovedWork": "Approved work",
+  "@dashboardApprovedWork": {
+    "description": "KPI label"
+  },
+  "dashboardAwaitingRework": "Awaiting rework",
+  "@dashboardAwaitingRework": {
+    "description": "KPI label"
+  },
+  "dashboardDelayedTasks": "Delayed tasks",
+  "@dashboardDelayedTasks": {
+    "description": "KPI label"
+  },
+  "dashboardOpenRisks": "Open risks",
+  "@dashboardOpenRisks": {
+    "description": "KPI label"
+  },
+  "dashboardDecisions": "Decisions",
+  "@dashboardDecisions": {
+    "description": "KPI label"
+  },
+  "dashboardMilestones": "Milestones",
+  "@dashboardMilestones": {
+    "description": "KPI label"
+  },
+  "dashboardAssignedTasks": "Assigned tasks",
+  "@dashboardAssignedTasks": {
+    "description": "KPI label"
+  },
+  "dashboardSubmitted": "Submitted",
+  "@dashboardSubmitted": {
+    "description": "KPI label"
+  },
+  "dashboardVerified": "Verified",
+  "@dashboardVerified": {
+    "description": "KPI label"
+  },
+  "dashboardNeedsCorrection": "Needs correction",
+  "@dashboardNeedsCorrection": {
+    "description": "KPI label"
+  },
+  "dashboardTodaysTasks": "Today’s tasks",
+  "@dashboardTodaysTasks": {
+    "description": "KPI label"
+  },
+  "dashboardOverdue": "Overdue",
+  "@dashboardOverdue": {
+    "description": "KPI label"
+  },
+  "dashboardBlocked": "Blocked",
+  "@dashboardBlocked": {
+    "description": "KPI label"
+  },
+  "dashboardWaitingReview": "Waiting review",
+  "@dashboardWaitingReview": {
+    "description": "KPI label"
+  },
+  "dashboardReworkRequired": "Rework required",
+  "@dashboardReworkRequired": {
+    "description": "KPI label"
+  },
+  "dashboardOpenIssues": "Open issues",
+  "@dashboardOpenIssues": {
+    "description": "KPI label"
+  },
+  "dashboardOverallProgress": "Overall progress",
+  "@dashboardOverallProgress": {
+    "description": "Progress ring caption"
+  },
+  "dashboardLiveProjectData": "Live project data",
+  "@dashboardLiveProjectData": {
+    "description": "Progress ring footnote"
+  },
+  "dashboardProgressSemantics": "Overall progress is {progress}%. Project health is {health}.",
+  "@dashboardProgressSemantics": {
+    "description": "Screen-reader summary of the progress ring",
+    "placeholders": {
+      "progress": {
+        "type": "String"
+      },
+      "health": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardExecutiveSummary": "Overall progress is {progress}%. Project health is {health}. There are {delayed} delayed tasks and {risks} open risks requiring visibility.",
+  "@dashboardExecutiveSummary": {
+    "description": "Executive summary sentence built from the project's own metrics",
+    "placeholders": {
+      "progress": {
+        "type": "String"
+      },
+      "health": {
+        "type": "String"
+      },
+      "delayed": {
+        "type": "int"
+      },
+      "risks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardSummaryTitle": "Smart Project Summary",
+  "@dashboardSummaryTitle": {
+    "description": "Executive summary card title"
+  },
+  "dashboardSummarySubtitle": "Executive project intelligence",
+  "@dashboardSummarySubtitle": {
+    "description": "Executive summary card subtitle"
+  },
+  "dashboardLiveData": "LIVE DATA",
+  "@dashboardLiveData": {
+    "description": "Badge on the summary card"
+  },
+  "dashboardAiReady": "AI READY",
+  "@dashboardAiReady": {
+    "description": "Badge on the summary card"
+  },
+  "dashboardAiPlaceholder": "AI-generated insights will appear here when the summary service is connected. Current project metrics remain available below.",
+  "@dashboardAiPlaceholder": {
+    "description": "Placeholder text on the summary card"
+  },
+  "dashboardGeneratedFrom": "Generated from current backend metrics · No external AI",
+  "@dashboardGeneratedFrom": {
+    "description": "Footnote on the summary card"
+  },
+  "dashboardFutureIntegration": "Future integration placeholder · No fabricated insights",
+  "@dashboardFutureIntegration": {
+    "description": "Footnote on the summary card"
+  },
+  "dashboardNoActivity": "New project activity will appear here as your team works.",
+  "@dashboardNoActivity": {
+    "description": "Activity feed empty state"
+  },
+  "dashboardProjectActivity": "Project activity",
+  "@dashboardProjectActivity": {
+    "description": "Fallback title for an activity entry"
+  },
+  "tasksMyTasks": "My Tasks",
+  "@tasksMyTasks": {
+    "description": "Tasks screen title for assignees"
+  },
+  "tasksProjectTasks": "Project Tasks",
+  "@tasksProjectTasks": {
+    "description": "Tasks screen title for managers"
+  },
+  "tasksLoading": "Loading tasks",
+  "@tasksLoading": {
+    "description": "Loading label"
+  },
+  "tasksTitle": "Tasks",
+  "@tasksTitle": {
+    "description": "Tasks screen name used in error states"
+  },
+  "tasksTotal": "Total",
+  "@tasksTotal": {
+    "description": "Task counter label"
+  },
+  "tasksOverdue": "Overdue",
+  "@tasksOverdue": {
+    "description": "Task counter label"
+  },
+  "tasksBlocked": "Blocked",
+  "@tasksBlocked": {
+    "description": "Task counter label"
+  },
+  "tasksNoMatching": "No matching tasks",
+  "@tasksNoMatching": {
+    "description": "Empty state title"
+  },
+  "tasksNoAssigned": "There are no assigned tasks in this view.",
+  "@tasksNoAssigned": {
+    "description": "Empty state body"
+  },
+  "tasksFilterRework": "Rework",
+  "@tasksFilterRework": {
+    "description": "Short filter chip for rework_required"
+  },
+  "taskDetailTitle": "Task Details",
+  "@taskDetailTitle": {
+    "description": "Task detail screen title"
+  },
+  "taskTitle": "Task",
+  "@taskTitle": {
+    "description": "Task screen name used in error states"
+  },
+  "taskPercentComplete": "{percent}% complete",
+  "@taskPercentComplete": {
+    "description": "Progress caption on a task",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "taskCannotStartYet": "Cannot start yet",
+  "@taskCannotStartYet": {
+    "description": "Blocked-by-dependency notice"
+  },
+  "taskQuickActions": "Quick actions",
+  "@taskQuickActions": {
+    "description": "Section heading"
+  },
+  "taskDiscussion": "Task Discussion",
+  "@taskDiscussion": {
+    "description": "Action opening the task conversation"
+  },
+  "taskVoiceUpdate": "AI Voice Field Update",
+  "@taskVoiceUpdate": {
+    "description": "Action opening the voice screen"
+  },
+  "taskStart": "Start Task",
+  "@taskStart": {
+    "description": "Action"
+  },
+  "taskUpdateProgress": "Update Progress",
+  "@taskUpdateProgress": {
+    "description": "Action and dialog title"
+  },
+  "taskAddComment": "Add Comment",
+  "@taskAddComment": {
+    "description": "Action"
+  },
+  "taskSubmitForReview": "Submit for Review",
+  "@taskSubmitForReview": {
+    "description": "Action"
+  },
+  "taskCreateFieldUpdate": "Create Field Update",
+  "@taskCreateFieldUpdate": {
+    "description": "Action"
+  },
+  "taskEvidenceHistory": "My Evidence History",
+  "@taskEvidenceHistory": {
+    "description": "Action"
+  },
+  "taskNoPermission": "You do not have permission to update this task.",
+  "@taskNoPermission": {
+    "description": "Permission notice"
+  },
+  "taskUpdated": "Task updated.",
+  "@taskUpdated": {
+    "description": "Success message"
+  },
+  "taskWorkNote": "Work note (optional)",
+  "@taskWorkNote": {
+    "description": "Field label"
+  },
+  "taskDependencyBlocked": "Dependency blocked",
+  "@taskDependencyBlocked": {
+    "description": "Badge on a task card"
+  },
+  "taskDueOn": "Due {date}",
+  "@taskDueOn": {
+    "description": "Due-date chip",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "taskDaysOverdue": "{count, plural, =1{{count} day overdue} other{{count} days overdue}}",
+  "@taskDaysOverdue": {
+    "description": "Overdue chip",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "taskDependencyLine": "· {name} ({status})",
+  "@taskDependencyLine": {
+    "description": "One blocking dependency",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "taskBlockingTask": "Blocking task",
+  "@taskBlockingTask": {
+    "description": "Fallback name for a dependency"
+  },
+  "issuesTitle": "Issues & Blockers",
+  "@issuesTitle": {
+    "description": "Issues screen title"
+  },
+  "issuesEmpty": "No issues have been reported.",
+  "@issuesEmpty": {
+    "description": "Issues empty state"
+  },
+  "issueReport": "Report Issue",
+  "@issueReport": {
+    "description": "Create-issue screen title"
+  },
+  "issueTitleLabel": "Issue title",
+  "@issueTitleLabel": {
+    "description": "Field label"
+  },
+  "issueSeverity": "Severity",
+  "@issueSeverity": {
+    "description": "Field label"
+  },
+  "issueAffectsSchedule": "Affects project schedule",
+  "@issueAffectsSchedule": {
+    "description": "Switch label"
+  },
+  "issueAffectsScheduleBody": "Flag this issue for schedule attention.",
+  "@issueAffectsScheduleBody": {
+    "description": "Switch subtitle"
+  },
+  "issueSubmit": "Submit Issue",
+  "@issueSubmit": {
+    "description": "Submit button"
+  },
+  "issueReported": "Issue reported successfully.",
+  "@issueReported": {
+    "description": "Success message"
+  },
+  "issueCategoryMaterialUnavailable": "Material unavailable",
+  "@issueCategoryMaterialUnavailable": {
+    "description": "Issue category"
+  },
+  "issueCategoryPreviousTaskIncomplete": "Previous task incomplete",
+  "@issueCategoryPreviousTaskIncomplete": {
+    "description": "Issue category"
+  },
+  "issueCategoryDrawingUnavailable": "Drawing unavailable",
+  "@issueCategoryDrawingUnavailable": {
+    "description": "Issue category"
+  },
+  "issueCategoryEquipmentUnavailable": "Equipment unavailable",
+  "@issueCategoryEquipmentUnavailable": {
+    "description": "Issue category"
+  },
+  "issueCategoryLaborShortage": "Labor shortage",
+  "@issueCategoryLaborShortage": {
+    "description": "Issue category"
+  },
+  "issueCategorySiteAccess": "Site access issue",
+  "@issueCategorySiteAccess": {
+    "description": "Issue category"
+  },
+  "issueCategoryConsultantClarification": "Consultant clarification required",
+  "@issueCategoryConsultantClarification": {
+    "description": "Issue category"
+  },
+  "issueCategoryTechnicalConflict": "Technical conflict",
+  "@issueCategoryTechnicalConflict": {
+    "description": "Issue category"
+  },
+  "issueCategorySafetyRestriction": "Safety restriction",
+  "@issueCategorySafetyRestriction": {
+    "description": "Issue category"
+  },
+  "issueCategoryOther": "Other",
+  "@issueCategoryOther": {
+    "description": "Issue category"
+  },
+  "siteReportsTitle": "Site Reports",
+  "@siteReportsTitle": {
+    "description": "Site reports screen title"
+  },
+  "siteReportsEmpty": "No site reports have been submitted.",
+  "@siteReportsEmpty": {
+    "description": "Empty state"
+  },
+  "siteReportCreate": "Create Site Report",
+  "@siteReportCreate": {
+    "description": "Create screen title"
+  },
+  "siteReportDate": "Report date",
+  "@siteReportDate": {
+    "description": "Field label"
+  },
+  "siteReportWorkSummary": "Work summary",
+  "@siteReportWorkSummary": {
+    "description": "Field label"
+  },
+  "siteReportWorkCompleted": "Work completed",
+  "@siteReportWorkCompleted": {
+    "description": "Field label"
+  },
+  "siteReportWeather": "Weather conditions",
+  "@siteReportWeather": {
+    "description": "Field label"
+  },
+  "siteReportWorkersCount": "Workers count",
+  "@siteReportWorkersCount": {
+    "description": "Field label"
+  },
+  "siteReportEquipment": "Equipment used",
+  "@siteReportEquipment": {
+    "description": "Field label"
+  },
+  "siteReportDelays": "Delays or constraints",
+  "@siteReportDelays": {
+    "description": "Field label"
+  },
+  "siteReportSubmit": "Submit Report",
+  "@siteReportSubmit": {
+    "description": "Submit button"
+  },
+  "siteReportDraftSaved": "Report draft saved.",
+  "@siteReportDraftSaved": {
+    "description": "Success message"
+  },
+  "siteReportSubmitted": "Site report submitted.",
+  "@siteReportSubmitted": {
+    "description": "Success message"
+  },
+  "documentsTitle": "Documents",
+  "@documentsTitle": {
+    "description": "Documents screen title"
+  },
+  "documentsEmpty": "No documents are available.",
+  "@documentsEmpty": {
+    "description": "Empty state"
+  },
+  "messagesTitle": "Messages",
+  "@messagesTitle": {
+    "description": "Messages screen title"
+  },
+  "messagesTitleWithProject": "Messages · {project}",
+  "@messagesTitleWithProject": {
+    "description": "Messages title with the active project name, which is never translated",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "messagesNew": "New",
+  "@messagesNew": {
+    "description": "Compose action"
+  },
+  "messagesLoading": "Loading conversations",
+  "@messagesLoading": {
+    "description": "Loading label"
+  },
+  "messagesEmptyTitle": "No conversations yet",
+  "@messagesEmptyTitle": {
+    "description": "Empty state title"
+  },
+  "messagesEmptyBody": "Messages you send or receive on this project will appear here.",
+  "@messagesEmptyBody": {
+    "description": "Empty state body"
+  },
+  "messagesNoMessages": "No messages",
+  "@messagesNoMessages": {
+    "description": "Conversation row with no last message"
+  },
+  "messagesNewConversation": "New Project Conversation",
+  "@messagesNewConversation": {
+    "description": "Compose sheet title"
+  },
+  "messagesAnnouncement": "Project/team announcement",
+  "@messagesAnnouncement": {
+    "description": "Compose sheet subtitle"
+  },
+  "messagesPeople": "People",
+  "@messagesPeople": {
+    "description": "Recipient mode"
+  },
+  "messagesTeamGroup": "Team / Group",
+  "@messagesTeamGroup": {
+    "description": "Recipient mode"
+  },
+  "messagesRecipientGroup": "Recipient group",
+  "@messagesRecipientGroup": {
+    "description": "Field label"
+  },
+  "messagesGroupWithCount": "{label} ({count})",
+  "@messagesGroupWithCount": {
+    "description": "Recipient group option; label comes from the server",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "messagesTitleOptional": "Title (optional)",
+  "@messagesTitleOptional": {
+    "description": "Field label"
+  },
+  "messagesMessage": "Message",
+  "@messagesMessage": {
+    "description": "Field label"
+  },
+  "messagesSend": "Send",
+  "@messagesSend": {
+    "description": "Send button"
+  },
+  "messagesProjectDiscussion": "Project discussion",
+  "@messagesProjectDiscussion": {
+    "description": "Fallback conversation name"
+  },
+  "conversationTitle": "Project Conversation",
+  "@conversationTitle": {
+    "description": "Conversation screen title"
+  },
+  "conversationContextTitle": "{context} Discussion",
+  "@conversationContextTitle": {
+    "description": "Conversation title for an entity thread",
+    "placeholders": {
+      "context": {
+        "type": "String"
+      }
+    }
+  },
+  "conversationWriteMessage": "Write a project message…",
+  "@conversationWriteMessage": {
+    "description": "Composer hint"
+  },
+  "conversationLoading": "Loading conversation",
+  "@conversationLoading": {
+    "description": "Loading label"
+  },
+  "conversationTitleShort": "Conversation",
+  "@conversationTitleShort": {
+    "description": "Screen name used in error states"
+  },
+  "conversationStartTitle": "Start the discussion",
+  "@conversationStartTitle": {
+    "description": "Empty state title"
+  },
+  "conversationStartBody": "Send the first contextual project message.",
+  "@conversationStartBody": {
+    "description": "Empty state body"
+  },
+  "communicationForwardedFrom": "Forwarded from {sender}",
+  "@communicationForwardedFrom": {
+    "description": "Header of a quoted forwarded message; the sender's name is never translated",
+    "placeholders": {
+      "sender": {
+        "type": "String"
+      }
+    }
+  },
+  "entityIssue": "Issue",
+  "@entityIssue": {
+    "description": "Shared entity type"
+  },
+  "entityTask": "Task",
+  "@entityTask": {
+    "description": "Shared entity type"
+  },
+  "entitySiteReport": "Site report",
+  "@entitySiteReport": {
+    "description": "Shared entity type"
+  },
+  "entityDesignChange": "Design change",
+  "@entityDesignChange": {
+    "description": "Shared entity type"
+  },
+  "entityDocument": "Document",
+  "@entityDocument": {
+    "description": "Shared entity type"
+  },
+  "notificationsTitle": "Notifications",
+  "@notificationsTitle": {
+    "description": "Notifications screen title"
+  },
+  "notificationsUnreadCount": "{count, plural, =1{{count} unread} other{{count} unread}}",
+  "@notificationsUnreadCount": {
+    "description": "Unread counter in the app bar",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationsReadAll": "Read all",
+  "@notificationsReadAll": {
+    "description": "Mark every notification read"
+  },
+  "notificationsFilterUnread": "Unread",
+  "@notificationsFilterUnread": {
+    "description": "Filter chip"
+  },
+  "notificationsLoading": "Loading notifications",
+  "@notificationsLoading": {
+    "description": "Loading label"
+  },
+  "notificationsEmptyUnreadTitle": "No unread notifications",
+  "@notificationsEmptyUnreadTitle": {
+    "description": "Empty state title"
+  },
+  "notificationsEmptyUnreadBody": "New unread notifications will appear here.",
+  "@notificationsEmptyUnreadBody": {
+    "description": "Empty state body"
+  },
+  "notificationsEmptyTitle": "You are all caught up",
+  "@notificationsEmptyTitle": {
+    "description": "Empty state title"
+  },
+  "notificationsEmptyBody": "Project updates and team activity will appear here.",
+  "@notificationsEmptyBody": {
+    "description": "Empty state body"
+  },
+  "notificationReminder": "Reminder",
+  "@notificationReminder": {
+    "description": "Badge marking a chase notification"
+  },
+  "notificationFallbackTitle": "Notification",
+  "@notificationFallbackTitle": {
+    "description": "Title for a notification the server sent without one"
+  },
+  "notificationDetailTitle": "Notification Details",
+  "@notificationDetailTitle": {
+    "description": "Detail screen title"
+  },
+  "notificationDetailMustOpen": "This notification must be opened from the notification list.",
+  "@notificationDetailMustOpen": {
+    "description": "Detail screen empty state"
+  },
+  "notificationOpenTask": "Open Task",
+  "@notificationOpenTask": {
+    "description": "Deep-link action"
+  },
+  "notificationOpenMessages": "Open Messages",
+  "@notificationOpenMessages": {
+    "description": "Deep-link action"
+  },
+  "notificationOpenIssues": "Open Issues",
+  "@notificationOpenIssues": {
+    "description": "Deep-link action"
+  },
+  "notificationOpenReviews": "Open Reviews",
+  "@notificationOpenReviews": {
+    "description": "Deep-link action"
+  },
+  "notificationOpenReports": "Open Reports",
+  "@notificationOpenReports": {
+    "description": "Deep-link action"
+  },
+  "notificationOpenProject": "Open Project",
+  "@notificationOpenProject": {
+    "description": "Deep-link action"
+  },
+  "notifTaskDueTomorrowTitle": "Task due tomorrow",
+  "@notifTaskDueTomorrowTitle": {
+    "description": "messageKey taskDeadline.DUE_TOMORROW"
+  },
+  "notifTaskDueTomorrowBody": "{name} is due tomorrow.",
+  "@notifTaskDueTomorrowBody": {
+    "description": "messageKey taskDeadline.DUE_TOMORROW; name is the task title",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "notifTaskDueTodayTitle": "Task due today",
+  "@notifTaskDueTodayTitle": {
+    "description": "messageKey taskDeadline.DUE_TODAY"
+  },
+  "notifTaskDueTodayBody": "{name} is due today.",
+  "@notifTaskDueTodayBody": {
+    "description": "messageKey taskDeadline.DUE_TODAY",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "notifTaskOverdueTitle": "Task overdue",
+  "@notifTaskOverdueTitle": {
+    "description": "messageKey taskDeadline.OVERDUE"
+  },
+  "notifTaskOverdueBody": "{name} is overdue.",
+  "@notifTaskOverdueBody": {
+    "description": "messageKey taskDeadline.OVERDUE",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "notifTaskOverdueSeveralBody": "{name} has been overdue for several days.",
+  "@notifTaskOverdueSeveralBody": {
+    "description": "messageKey taskDeadline.OVERDUE_SEVERAL",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "notifTaskOverdueWeekBody": "{name} has been overdue for more than a week.",
+  "@notifTaskOverdueWeekBody": {
+    "description": "messageKey taskDeadline.OVERDUE_WEEK",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "notifSiteReportAwaitingTitle": "Site report awaiting your verification",
+  "@notifSiteReportAwaitingTitle": {
+    "description": "messageKey siteReport.awaitingVerification"
+  },
+  "notifSiteReportAwaitingBody": "A site report was submitted for {project}.",
+  "@notifSiteReportAwaitingBody": {
+    "description": "messageKey siteReport.awaitingVerification",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "notifSiteReportVerifiedTitle": "Site report verified",
+  "@notifSiteReportVerifiedTitle": {
+    "description": "messageKey siteReport.verified"
+  },
+  "notifSiteReportVerifiedBody": "Your site report for {date} was verified by {reviewer}.",
+  "@notifSiteReportVerifiedBody": {
+    "description": "messageKey siteReport.verified",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "reviewer": {
+        "type": "String"
+      }
+    }
+  },
+  "notifSiteReportRejectedTitle": "Site report rejected",
+  "@notifSiteReportRejectedTitle": {
+    "description": "messageKey siteReport.rejected"
+  },
+  "notifSiteReportRejectedBody": "Your site report for {date} was rejected by {reviewer}: {reason}",
+  "@notifSiteReportRejectedBody": {
+    "description": "messageKey siteReport.rejected; the reason is written by the reviewer and is not translated",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "reviewer": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "notifReminderWaitingTitle": "Response reminder: {label}",
+  "@notifReminderWaitingTitle": {
+    "description": "messageKey reminder.waiting",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "notifReminderWaitingBody": "This {target} is still waiting for action. Reminder {sequence}.",
+  "@notifReminderWaitingBody": {
+    "description": "messageKey reminder.waiting",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "sequence": {
+        "type": "String"
+      }
+    }
+  },
+  "notifReminderEscalationTitle": "Escalation: {label}",
+  "@notifReminderEscalationTitle": {
+    "description": "messageKey reminder.escalation",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "notifReminderEscalationBody": "This {target} has been waiting too long and has been escalated.",
+  "@notifReminderEscalationBody": {
+    "description": "messageKey reminder.escalation",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "notifStepUpRequestedTitle": "Verification code requested",
+  "@notifStepUpRequestedTitle": {
+    "description": "messageKey stepUp.codeRequested"
+  },
+  "notifStepUpRequestedBody": "A verification code was requested to confirm: {action}. If this was not you, change your password immediately.",
+  "@notifStepUpRequestedBody": {
+    "description": "messageKey stepUp.codeRequested",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "profileAccountInformation": "Account information",
+  "@profileAccountInformation": {
+    "description": "Section heading"
+  },
+  "profileEmail": "Email",
+  "@profileEmail": {
+    "description": "Field label"
+  },
+  "profilePhone": "Phone",
+  "@profilePhone": {
+    "description": "Field label"
+  },
+  "profileOrganization": "Organization",
+  "@profileOrganization": {
+    "description": "Field label"
+  },
+  "profileAccountStatus": "Account status",
+  "@profileAccountStatus": {
+    "description": "Field label"
+  },
+  "profileLanguage": "Language",
+  "@profileLanguage": {
+    "description": "Section heading for the language chooser"
+  },
+  "profileLanguageBody": "Choose the app language, or follow your device.",
+  "@profileLanguageBody": {
+    "description": "Section subtitle for the language chooser"
+  },
+  "languageSystem": "Device language",
+  "@languageSystem": {
+    "description": "Follow the device locale"
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "A language is named in its own script in both locales, which is standard practice for a language picker"
+  },
+  "languageArabic": "العربية",
+  "@languageArabic": {
+    "description": "A language is named in its own script in both locales"
+  },
+  "profileSecurity": "Security",
+  "@profileSecurity": {
+    "description": "Section heading"
+  },
+  "profileSecureSession": "Secure mobile session",
+  "@profileSecureSession": {
+    "description": "Security row title"
+  },
+  "profileSecureSessionBody": "Authentication tokens are stored in encrypted device storage.",
+  "@profileSecureSessionBody": {
+    "description": "Security row body"
+  },
+  "reviewsPendingTitle": "Pending Reviews",
+  "@reviewsPendingTitle": {
+    "description": "Reviews list screen title"
+  },
+  "reviewsTitle": "Reviews",
+  "@reviewsTitle": {
+    "description": "Screen name used in error states"
+  },
+  "reviewsSelectProjectBody": "Choose a project before opening consultant reviews.",
+  "@reviewsSelectProjectBody": {
+    "description": "Empty state body"
+  },
+  "reviewsLoading": "Loading review submissions",
+  "@reviewsLoading": {
+    "description": "Loading label"
+  },
+  "reviewsEmptyTitle": "Nothing waiting for review",
+  "@reviewsEmptyTitle": {
+    "description": "Empty state title"
+  },
+  "reviewsEmptyBody": "New submissions matching your discipline will appear here.",
+  "@reviewsEmptyBody": {
+    "description": "Empty state body"
+  },
+  "reviewCritical": "Critical",
+  "@reviewCritical": {
+    "description": "Badge on a review row"
+  },
+  "reviewOverdue": "Overdue",
+  "@reviewOverdue": {
+    "description": "Badge on a review row"
+  },
+  "reviewAttempt": "Attempt {number}",
+  "@reviewAttempt": {
+    "description": "Resubmission counter",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "reviewSubmittedAt": "Submitted {date}",
+  "@reviewSubmittedAt": {
+    "description": "Submission timestamp",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "reviewEvidenceCount": "{count, plural, =1{{count} evidence item} other{{count} evidence items}}",
+  "@reviewEvidenceCount": {
+    "description": "Evidence counter tag on a review row",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewSubmissionFallback": "Review submission",
+  "@reviewSubmissionFallback": {
+    "description": "Fallback title for a review row"
+  },
+  "reviewSubmissionTitle": "Review Submission",
+  "@reviewSubmissionTitle": {
+    "description": "Review detail screen title"
+  },
+  "reviewLoadingSubmission": "Loading submission and evidence",
+  "@reviewLoadingSubmission": {
+    "description": "Loading label"
+  },
+  "reviewUnableToOpen": "Unable to open review",
+  "@reviewUnableToOpen": {
+    "description": "Error title"
+  },
+  "reviewNotFound": "Review submission not found.",
+  "@reviewNotFound": {
+    "description": "Error body"
+  },
+  "reviewTaskReview": "Task review",
+  "@reviewTaskReview": {
+    "description": "Fallback heading"
+  },
+  "reviewTaskAndSubmission": "Task and submission",
+  "@reviewTaskAndSubmission": {
+    "description": "Section heading"
+  },
+  "reviewSubmission": "Submission",
+  "@reviewSubmission": {
+    "description": "Section heading"
+  },
+  "reviewCompletionNote": "Completion note",
+  "@reviewCompletionNote": {
+    "description": "Field label"
+  },
+  "reviewSubmittedEvidence": "Submitted evidence ({count})",
+  "@reviewSubmittedEvidence": {
+    "description": "Section heading",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewNoEvidence": "No evidence was attached to this submission.",
+  "@reviewNoEvidence": {
+    "description": "Empty state"
+  },
+  "reviewAttachment": "Attachment",
+  "@reviewAttachment": {
+    "description": "Fallback name for an attachment"
+  },
+  "reviewDependencyImpact": "Dependency impact",
+  "@reviewDependencyImpact": {
+    "description": "Section heading"
+  },
+  "reviewPredecessors": "{count, plural, =1{{count} predecessor} other{{count} predecessors}}",
+  "@reviewPredecessors": {
+    "description": "Dependency counter",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewDependentTasks": "{count, plural, =1{{count} dependent task} other{{count} dependent tasks}}",
+  "@reviewDependentTasks": {
+    "description": "Dependency counter",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewGatingWork": "Approval is currently gating downstream work.",
+  "@reviewGatingWork": {
+    "description": "Dependency warning"
+  },
+  "reviewStart": "Start Review",
+  "@reviewStart": {
+    "description": "Action"
+  },
+  "reviewApproveSubmission": "Approve Submission",
+  "@reviewApproveSubmission": {
+    "description": "Action and dialog title"
+  },
+  "reviewRequestClarification": "Request Clarification",
+  "@reviewRequestClarification": {
+    "description": "Action and dialog title"
+  },
+  "reviewRequestRework": "Request Rework",
+  "@reviewRequestRework": {
+    "description": "Action and dialog title"
+  },
+  "reviewStarted": "Review started.",
+  "@reviewStarted": {
+    "description": "Success message"
+  },
+  "reviewApprovalHint": "Approval marks this task complete and may unlock dependent work.",
+  "@reviewApprovalHint": {
+    "description": "Dialog hint"
+  },
+  "reviewRejectionReasonRequired": "Rejection reason *",
+  "@reviewRejectionReasonRequired": {
+    "description": "Required field label"
+  },
+  "reviewRequiredCorrections": "Required corrections *",
+  "@reviewRequiredCorrections": {
+    "description": "Required field label"
+  },
+  "reviewClarificationQuestion": "Clarification question *",
+  "@reviewClarificationQuestion": {
+    "description": "Required field label"
+  },
+  "reviewComments": "Review comments *",
+  "@reviewComments": {
+    "description": "Required field label"
+  },
+  "reviewNoteOptional": "Review note (optional)",
+  "@reviewNoteOptional": {
+    "description": "Optional field label"
+  },
+  "reviewApproved": "Submission approved successfully.",
+  "@reviewApproved": {
+    "description": "Success message"
+  },
+  "reviewReworkRecorded": "Rework request recorded.",
+  "@reviewReworkRecorded": {
+    "description": "Success message"
+  },
+  "reviewClarificationRequested": "Clarification requested.",
+  "@reviewClarificationRequested": {
+    "description": "Success message"
+  },
+  "collabMyActions": "My Actions",
+  "@collabMyActions": {
+    "description": "Collaboration screen title"
+  },
+  "collabSelectProjectBody": "Choose a project to see accountable actions.",
+  "@collabSelectProjectBody": {
+    "description": "Empty state body"
+  },
+  "collabTabActions": "Actions",
+  "@collabTabActions": {
+    "description": "Tab label"
+  },
+  "collabTabRequests": "Requests",
+  "@collabTabRequests": {
+    "description": "Tab label"
+  },
+  "collabTabVisits": "Visits",
+  "@collabTabVisits": {
+    "description": "Tab label"
+  },
+  "collabNewRequest": "New request",
+  "@collabNewRequest": {
+    "description": "Action"
+  },
+  "collabSchedule": "Schedule",
+  "@collabSchedule": {
+    "description": "Action"
+  },
+  "collabOwnerRequest": "Client / Owner Request",
+  "@collabOwnerRequest": {
+    "description": "Sheet title"
+  },
+  "collabRequestHint": "This request does not modify the official design.",
+  "@collabRequestHint": {
+    "description": "Sheet hint"
+  },
+  "collabSubmitForReview": "Submit for engineering review",
+  "@collabSubmitForReview": {
+    "description": "Submit button"
+  },
+  "collabRequestSubmitted": "Request submitted for human engineering review.",
+  "@collabRequestSubmitted": {
+    "description": "Success message"
+  },
+  "collabScheduleVisit": "Schedule site visit",
+  "@collabScheduleVisit": {
+    "description": "Sheet title"
+  },
+  "collabSiteLocation": "Site / location",
+  "@collabSiteLocation": {
+    "description": "Field label"
+  },
+  "collabStart": "Start",
+  "@collabStart": {
+    "description": "Field label"
+  },
+  "collabEnd": "End",
+  "@collabEnd": {
+    "description": "Field label"
+  },
+  "collabReviewAndSchedule": "Review and schedule",
+  "@collabReviewAndSchedule": {
+    "description": "Submit button"
+  },
+  "collabVisitScheduled": "Site visit scheduled.",
+  "@collabVisitScheduled": {
+    "description": "Success message"
+  },
+  "collabActionCenter": "Action center",
+  "@collabActionCenter": {
+    "description": "Screen name used in error states"
+  },
+  "collabWhatNeedsAttention": "What needs my attention right now?",
+  "@collabWhatNeedsAttention": {
+    "description": "Section heading"
+  },
+  "collabAiAdvisory": "AI is advisory",
+  "@collabAiAdvisory": {
+    "description": "Notice title"
+  },
+  "collabAiAdvisoryBody": "AI alerts require human review and retain their project sources.",
+  "@collabAiAdvisoryBody": {
+    "description": "Notice body"
+  },
+  "collabRequestsTitle": "Requests",
+  "@collabRequestsTitle": {
+    "description": "Screen name used in error states"
+  },
+  "collabNoRequests": "No active owner requests",
+  "@collabNoRequests": {
+    "description": "Empty state title"
+  },
+  "collabNoRequestsBody": "New client requests and engineering responses will appear here.",
+  "@collabNoRequestsBody": {
+    "description": "Empty state body"
+  },
+  "collabScheduleTitle": "Schedule",
+  "@collabScheduleTitle": {
+    "description": "Screen name used in error states"
+  },
+  "collabNoVisits": "No site visits scheduled",
+  "@collabNoVisits": {
+    "description": "Empty state title"
+  },
+  "collabNoVisitsBody": "Visits across assigned projects will appear here.",
+  "@collabNoVisitsBody": {
+    "description": "Empty state body"
+  },
+  "collabAcknowledge": "Acknowledge action",
+  "@collabAcknowledge": {
+    "description": "Accessibility label"
+  },
+  "collabNeedsMyResponse": "Needs my response",
+  "@collabNeedsMyResponse": {
+    "description": "Action-centre counter"
+  },
+  "collabOwnerRequests": "Client requests",
+  "@collabOwnerRequests": {
+    "description": "Action-centre counter"
+  },
+  "collabRequiresActionNotifications": "Notifications requiring action",
+  "@collabRequiresActionNotifications": {
+    "description": "Action-centre counter"
+  },
+  "collabUpcomingSiteVisits": "Upcoming site visits",
+  "@collabUpcomingSiteVisits": {
+    "description": "Action-centre counter"
+  },
+  "collabAiAlertsRequiringReview": "AI alerts to review",
+  "@collabAiAlertsRequiringReview": {
+    "description": "Action-centre counter"
+  },
+  "collabTasksUnderReview": "Tasks under review",
+  "@collabTasksUnderReview": {
+    "description": "Action-centre counter"
+  },
+  "collabVisitTypeRoutine": "Routine inspection",
+  "@collabVisitTypeRoutine": {
+    "description": "Site visit type"
+  },
+  "collabVisitTypeQuality": "Quality audit",
+  "@collabVisitTypeQuality": {
+    "description": "Site visit type"
+  },
+  "collabVisitTypeSafety": "Safety inspection",
+  "@collabVisitTypeSafety": {
+    "description": "Site visit type"
+  },
+  "collabVisitTypeProgress": "Progress review",
+  "@collabVisitTypeProgress": {
+    "description": "Site visit type"
+  },
+  "collabProjectSite": "Project site",
+  "@collabProjectSite": {
+    "description": "Fallback visit location"
+  },
+  "evidenceMyTitle": "My Field Evidence",
+  "@evidenceMyTitle": {
+    "description": "Screen title"
+  },
+  "evidenceTitle": "Evidence",
+  "@evidenceTitle": {
+    "description": "Screen name used in error states"
+  },
+  "evidenceLoading": "Loading field evidence",
+  "@evidenceLoading": {
+    "description": "Loading label"
+  },
+  "evidenceEmpty": "No field evidence submitted yet.",
+  "@evidenceEmpty": {
+    "description": "Empty state"
+  },
+  "evidenceNewTitle": "New Field Update",
+  "@evidenceNewTitle": {
+    "description": "Screen title"
+  },
+  "evidenceCorrectedTitle": "Corrected Evidence",
+  "@evidenceCorrectedTitle": {
+    "description": "Screen title for a resubmission"
+  },
+  "evidenceDocumentWork": "Document completed site work",
+  "@evidenceDocumentWork": {
+    "description": "Screen subtitle"
+  },
+  "evidenceVerifyHint": "Your Engineer will verify this evidence. It does not change official task progress.",
+  "@evidenceVerifyHint": {
+    "description": "Screen hint"
+  },
+  "evidenceWhatWork": "What work was completed?",
+  "@evidenceWhatWork": {
+    "description": "Field label"
+  },
+  "evidenceHint": "Short, practical site note…",
+  "@evidenceHint": {
+    "description": "Field hint"
+  },
+  "evidenceTakePhoto": "Take Photo",
+  "@evidenceTakePhoto": {
+    "description": "Action"
+  },
+  "evidenceAddPhotos": "Add Photos",
+  "@evidenceAddPhotos": {
+    "description": "Action"
+  },
+  "evidenceCategoryOptional": "Category (optional)",
+  "@evidenceCategoryOptional": {
+    "description": "Section heading"
+  },
+  "evidenceCategoryHint": "Choose any tags that apply. Your Engineer can correct them.",
+  "@evidenceCategoryHint": {
+    "description": "Section hint"
+  },
+  "evidenceViewOptional": "View (optional)",
+  "@evidenceViewOptional": {
+    "description": "Field label"
+  },
+  "viewFront": "front",
+  "@viewFront": {
+    "description": "Photo view direction"
+  },
+  "viewBack": "back",
+  "@viewBack": {
+    "description": "Photo view direction"
+  },
+  "viewLeft": "left",
+  "@viewLeft": {
+    "description": "Photo view direction"
+  },
+  "viewRight": "right",
+  "@viewRight": {
+    "description": "Photo view direction"
+  },
+  "viewTop": "top",
+  "@viewTop": {
+    "description": "Photo view direction"
+  },
+  "viewDetail": "detail",
+  "@viewDetail": {
+    "description": "Photo view direction"
+  },
+  "viewOther": "other",
+  "@viewOther": {
+    "description": "Photo view direction"
+  },
+  "evidenceRemovePhoto": "Remove photo",
+  "@evidenceRemovePhoto": {
+    "description": "Accessibility label"
+  },
+  "evidenceSubmit": "Submit Evidence",
+  "@evidenceSubmit": {
+    "description": "Submit button"
+  },
+  "evidenceSent": "Field evidence sent to your Engineer.",
+  "@evidenceSent": {
+    "description": "Success message"
+  },
+  "evidencePhotoCount": "{count, plural, =1{{count} photo} other{{count} photos}}",
+  "@evidencePhotoCount": {
+    "description": "Photo counter on a field-evidence card, pluralised.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "evidenceSubmitCorrected": "Submit Corrected Evidence",
+  "@evidenceSubmitCorrected": {
+    "description": "Action on a rejected submission"
+  },
+  "evidencePhotoFallback": "Field photo",
+  "@evidencePhotoFallback": {
+    "description": "Fallback attachment name"
+  },
+  "ifcTitle": "IFC Intelligence",
+  "@ifcTitle": {
+    "description": "Screen title; IFC is a format name and stays Latin"
+  },
+  "ifcSelectProjectBody": "Choose a project before opening IFC Intelligence.",
+  "@ifcSelectProjectBody": {
+    "description": "Empty state body"
+  },
+  "ifcLoading": "Loading IFC models",
+  "@ifcLoading": {
+    "description": "Loading label"
+  },
+  "ifcModelsTitle": "IFC models",
+  "@ifcModelsTitle": {
+    "description": "Screen name used in error states"
+  },
+  "ifcEmptyTitle": "No IFC models",
+  "@ifcEmptyTitle": {
+    "description": "Empty state title"
+  },
+  "ifcEmptyBody": "A project manager can create a model group and upload the first IFC version from the web workspace.",
+  "@ifcEmptyBody": {
+    "description": "Empty state body"
+  },
+  "ifcReadOnlyHint": "Read-only field view of approved model facts and processing status.",
+  "@ifcReadOnlyHint": {
+    "description": "Screen hint"
+  },
+  "ifcFederatedModel": "Federated model",
+  "@ifcFederatedModel": {
+    "description": "Fallback model group name"
+  },
+  "ifcNoVersions": "No versions uploaded",
+  "@ifcNoVersions": {
+    "description": "Empty state for a model group"
+  },
+  "ifcVersionLine": "v{number} · {title}",
+  "@ifcVersionLine": {
+    "description": "Model version row; the title comes from the file",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      },
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "ifcElementCount": "{count, plural, =1{{count} element} other{{count} elements}}",
+  "@ifcElementCount": {
+    "description": "Element counter on an IFC version",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ifcActive": "Active",
+  "@ifcActive": {
+    "description": "Badge on the active model version"
+  },
+  "ifcUntitled": "Untitled",
+  "@ifcUntitled": {
+    "description": "Fallback model version title"
+  },
+  "contactAdminTitle": "Contact Administrator",
+  "@contactAdminTitle": {
+    "description": "Screen title"
+  },
+  "contactAdminUnavailable": "Support details unavailable",
+  "@contactAdminUnavailable": {
+    "description": "Error title"
+  },
+  "contactAdminUnavailableBody": "Please contact your project office or try again when connected.",
+  "@contactAdminUnavailableBody": {
+    "description": "Error body"
+  },
+  "contactAdminCompanySupport": "Company support",
+  "@contactAdminCompanySupport": {
+    "description": "Card title"
+  },
+  "contactAdminBody": "Contact the administrator for account access and support.",
+  "@contactAdminBody": {
+    "description": "Card body"
+  },
+  "contactAdminPhone": "Support phone",
+  "@contactAdminPhone": {
+    "description": "Field label"
+  },
+  "contactAdminEmail": "Support email",
+  "@contactAdminEmail": {
+    "description": "Field label"
+  },
+  "contactAdminOffice": "Office",
+  "@contactAdminOffice": {
+    "description": "Field label"
+  },
+  "recordStop": "Stop recording",
+  "@recordStop": {
+    "description": "Recorder control"
+  },
+  "recordResume": "Resume recording",
+  "@recordResume": {
+    "description": "Recorder control"
+  },
+  "recordProcessing": "Processing…",
+  "@recordProcessing": {
+    "description": "Recorder state"
+  },
+  "recordPlay": "Play recording",
+  "@recordPlay": {
+    "description": "Recorder control"
+  },
+  "recordPausePlayback": "Pause playback",
+  "@recordPausePlayback": {
+    "description": "Recorder control"
+  },
+  "recordTryAgain": "Try again",
+  "@recordTryAgain": {
+    "description": "Recorder control"
+  },
+  "recordCapture": "Capture a hands-free field update",
+  "@recordCapture": {
+    "description": "Recorder hint"
+  },
+  "recordReviewHint": "You review every proposal before submission",
+  "@recordReviewHint": {
+    "description": "Recorder hint"
+  },
+  "diagnosticsDisabled": "AI diagnostics are disabled in this build.",
+  "@diagnosticsDisabled": {
+    "description": "Developer diagnostics screen, gated off in release builds"
+  },
+  "diagnosticsTitle": "AI diagnostics (development)",
+  "@diagnosticsTitle": {
+    "description": "Developer diagnostics screen title"
+  },
+  "diagnosticsBody": "This screen checks configuration and permissions only. It never fakes a recording, upload, transcription, or AI result.",
+  "@diagnosticsBody": {
+    "description": "Developer diagnostics screen body"
+  },
+  "diagnosticsRerun": "Run checks again",
+  "@diagnosticsRerun": {
+    "description": "Developer diagnostics action"
+  },
+  "voiceTitle": "Construction Voice Assistant",
+  "@voiceTitle": {
+    "description": "Voice screen title"
+  },
+  "voiceSpeakNaturally": "Speak naturally about work, issues, or project updates.",
+  "@voiceSpeakNaturally": {
+    "description": "Voice screen hint"
+  },
+  "voiceTaskContext": "Task context (recommended)",
+  "@voiceTaskContext": {
+    "description": "Field label"
+  },
+  "voiceLetAiSuggest": "Let AI suggest an assigned task",
+  "@voiceLetAiSuggest": {
+    "description": "Dropdown placeholder"
+  },
+  "voiceSubmitForAnalysis": "Submit for AI analysis",
+  "@voiceSubmitForAnalysis": {
+    "description": "Submit button"
+  },
+  "voicePrivacyNote": "Your recording is used to prepare this project action and is stored according to the project data policy.",
+  "@voicePrivacyNote": {
+    "description": "Privacy footnote"
+  },
+  "voiceRetryAudio": "Retry retained audio",
+  "@voiceRetryAudio": {
+    "description": "Action"
+  },
+  "voiceReportSent": "Report sent",
+  "@voiceReportSent": {
+    "description": "Result dialog title"
+  },
+  "voiceActionCompleted": "Action completed",
+  "@voiceActionCompleted": {
+    "description": "Result dialog title"
+  },
+  "voiceReportSentBody": "Your report was sent to the responsible engineer for review.",
+  "@voiceReportSentBody": {
+    "description": "Result dialog body"
+  },
+  "voiceActionsSucceeded": "{succeeded} of {total} selected actions succeeded.",
+  "@voiceActionsSucceeded": {
+    "description": "Result dialog body",
+    "placeholders": {
+      "succeeded": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "voicePause": "Pause",
+  "@voicePause": {
+    "description": "Recorder control"
+  },
+  "voiceDelete": "Delete",
+  "@voiceDelete": {
+    "description": "Recorder control"
+  },
+  "voiceRecordAgain": "Record again",
+  "@voiceRecordAgain": {
+    "description": "Recorder control"
+  },
+  "voiceUploading": "Uploading recording securely…",
+  "@voiceUploading": {
+    "description": "Progress label"
+  },
+  "voiceTranscribing": "Transcribing speech…",
+  "@voiceTranscribing": {
+    "description": "Progress label"
+  },
+  "voiceLiveWaveform": "Live recording waveform",
+  "@voiceLiveWaveform": {
+    "description": "Accessibility label"
+  },
+  "voiceRecordedWaveform": "Recorded audio waveform",
+  "@voiceRecordedWaveform": {
+    "description": "Accessibility label"
+  },
+  "voiceReviewUnderstood": "Review what I understood",
+  "@voiceReviewUnderstood": {
+    "description": "Section heading"
+  },
+  "voiceChooseActions": "Choose and edit the actions you want to confirm.",
+  "@voiceChooseActions": {
+    "description": "Section subheading"
+  },
+  "voiceAiSummary": "AI SUMMARY",
+  "@voiceAiSummary": {
+    "description": "Section label"
+  },
+  "voiceSelectTask": "Select a task",
+  "@voiceSelectTask": {
+    "description": "Placeholder when no task was detected"
+  },
+  "voiceWorkCompleted": "WORK COMPLETED",
+  "@voiceWorkCompleted": {
+    "description": "Section label"
+  },
+  "voiceProblems": "PROBLEMS / BLOCKERS",
+  "@voiceProblems": {
+    "description": "Section label"
+  },
+  "voiceSuggestedActions": "SUGGESTED ACTIONS",
+  "@voiceSuggestedActions": {
+    "description": "Section label"
+  },
+  "voiceTranscript": "TRANSCRIPT",
+  "@voiceTranscript": {
+    "description": "Section label"
+  },
+  "voiceTask": "TASK",
+  "@voiceTask": {
+    "description": "Section label"
+  },
+  "voiceProgressLabel": "PROGRESS",
+  "@voiceProgressLabel": {
+    "description": "Section label"
+  },
+  "voiceProgressMentioned": "{percent}% mentioned — not yet official",
+  "@voiceProgressMentioned": {
+    "description": "Progress detected in speech but not yet applied",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "voiceIntentUpdateProgress": "Update task progress",
+  "@voiceIntentUpdateProgress": {
+    "description": "Suggested voice action"
+  },
+  "voiceIntentReportIssue": "Report issue",
+  "@voiceIntentReportIssue": {
+    "description": "Suggested voice action"
+  },
+  "voiceIntentSendMessage": "Send message",
+  "@voiceIntentSendMessage": {
+    "description": "Suggested voice action"
+  },
+  "voiceIntentSubmitReport": "Submit site report",
+  "@voiceIntentSubmitReport": {
+    "description": "Suggested voice action"
+  },
+  "voiceIntentRequestClarification": "Request clarification",
+  "@voiceIntentRequestClarification": {
+    "description": "Suggested voice action"
+  },
+  "voiceNoSafeAction": "No safe executable action was suggested.",
+  "@voiceNoSafeAction": {
+    "description": "Empty state"
+  },
+  "voiceConfidence": "{percent}% confidence",
+  "@voiceConfidence": {
+    "description": "Confidence caption on a suggested action",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "voiceConfirmedProgress": "Confirmed progress (0–100)",
+  "@voiceConfirmedProgress": {
+    "description": "Field label"
+  },
+  "voiceReviewEditValue": "Review/edit value",
+  "@voiceReviewEditValue": {
+    "description": "Field hint"
+  },
+  "voiceReviewedAffected": "I reviewed the affected task, recipients, and workflow impact.",
+  "@voiceReviewedAffected": {
+    "description": "Confirmation checkbox"
+  },
+  "voiceDiscard": "Discard",
+  "@voiceDiscard": {
+    "description": "Action"
+  },
+  "voiceConfirmSelected": "Confirm selected",
+  "@voiceConfirmSelected": {
+    "description": "Action"
+  },
+  "voiceMicPermissionRequired": "Microphone permission is required.",
+  "@voiceMicPermissionRequired": {
+    "description": "Error message"
+  },
+  "voiceRecordBeforeTranscribe": "Record audio before transcribing.",
+  "@voiceRecordBeforeTranscribe": {
+    "description": "Error message"
+  },
+  "voiceRecordBeforeAnalysis": "Record audio before analysis.",
+  "@voiceRecordBeforeAnalysis": {
+    "description": "Error message"
+  },
+  "voiceNoAnalysisRetry": "No analysis to retry.",
+  "@voiceNoAnalysisRetry": {
+    "description": "Error message"
+  },
+  "voiceNoAnalysisConfirm": "No analysis to confirm.",
+  "@voiceNoAnalysisConfirm": {
+    "description": "Error message"
+  },
+  "voiceNoAnalysisClarify": "No analysis to clarify.",
+  "@voiceNoAnalysisClarify": {
+    "description": "Error message"
+  },
+  "voiceActionUnavailable": "Voice action is no longer available.",
+  "@voiceActionUnavailable": {
+    "description": "Error message"
+  },
+  "navVoiceAssistant": "Voice Assistant",
+  "@navVoiceAssistant": {
+      "description": "Label for the raised voice-capture action in the centre of the bottom navigation."
+  },
+  "shareActionsTitle": "Actions",
+  "@shareActionsTitle": {
+      "description": "Title of the contextual action sheet opened from a record."
+  },
+  "shareForward": "Forward",
+  "@shareForward": {
+      "description": "Action: send this record or message on to someone else."
+  },
+  "shareForwardHint": "Send this on to someone else.",
+  "@shareForwardHint": {
+      "description": "One-line explanation under the Forward action."
+  },
+  "shareAskOpinion": "Ask for Opinion",
+  "@shareAskOpinion": {
+      "description": "Action: ask a colleague to advise on a record. Deliberately not called Forward, because nothing is handed over."
+  },
+  "shareAskOpinionHint": "Ask a colleague to advise. Nothing is reassigned.",
+  "@shareAskOpinionHint": {
+      "description": "One-line explanation under the Ask for Opinion action, stating that it does not change ownership."
+  },
+  "shareShare": "Share",
+  "@shareShare": {
+      "description": "Action: send a copy of a record into a conversation."
+  },
+  "shareShareHint": "Send a copy into a conversation.",
+  "@shareShareHint": {
+      "description": "One-line explanation under the Share action."
+  },
+  "shareRecipients": "Recipients",
+  "@shareRecipients": {
+      "description": "Section label above the recipient picker in the share sheet."
+  },
+  "shareNoteLabel": "Note (optional)",
+  "@shareNoteLabel": {
+      "description": "Label of the free-text note field in the share sheet."
+  },
+  "shareSend": "Send",
+  "@shareSend": {
+      "description": "Primary button of the share sheet."
+  },
+  "shareSending": "Sending",
+  "@shareSending": {
+      "description": "Progress label while a share or forward is in flight."
+  },
+  "shareLoadingRecipients": "Loading recipients",
+  "@shareLoadingRecipients": {
+      "description": "Loading label while the authorized recipient list is fetched."
+  },
+  "shareNoRecipientsTitle": "No one to send to",
+  "@shareNoRecipientsTitle": {
+      "description": "Empty state when the project has no other authorized recipients."
+  },
+  "shareNoRecipientsBody": "There is nobody on this project you can send this to.",
+  "@shareNoRecipientsBody": {
+      "description": "Body of the empty recipient state."
+  },
+  "shareSelectRecipient": "Select at least one recipient.",
+  "@shareSelectRecipient": {
+      "description": "Validation message when the send button is pressed with nobody selected."
+  },
+  "shareSentForward": "Message forwarded.",
+  "@shareSentForward": {
+      "description": "Confirmation after a message is forwarded."
+  },
+  "shareSentOpinion": "Opinion requested.",
+  "@shareSentOpinion": {
+      "description": "Confirmation after a consultation request is sent."
+  },
+  "shareSentShare": "Shared.",
+  "@shareSentShare": {
+      "description": "Confirmation after a record is shared."
+  },
+  "shareSelectedCount": "{count, plural, =0{No one selected} =1{{count} selected} other{{count} selected}}",
+  "@shareSelectedCount": {
+      "description": "Counter under the recipient list, pluralised.",
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "shareOpinionPrefill": "Could you give me your opinion on this?",
+  "@shareOpinionPrefill": {
+      "description": "Prefilled note when asking a colleague for an opinion."
+  },
+  "shareOpen": "Open",
+  "@shareOpen": {
+      "description": "Snack-bar action that opens the conversation a share just created."
+  },
+  "dashboardTodayTitle": "Today",
+  "@dashboardTodayTitle": {
+      "description": "Heading of the field-first section listing what the user must act on now."
+  },
+  "dashboardTodayBody": "What needs you on site right now.",
+  "@dashboardTodayBody": {
+      "description": "Subtitle of the Today section."
+  },
+  "dashboardAllClearTitle": "Nothing needs you right now",
+  "@dashboardAllClearTitle": {
+      "description": "Empty state when a role has no outstanding exceptions."
+  },
+  "dashboardAllClearBody": "No overdue, blocked or waiting work on this project.",
+  "@dashboardAllClearBody": {
+      "description": "Body of the all-clear empty state."
+  },
+  "dashboardOpenProfile": "Your profile",
+  "@dashboardOpenProfile": {
+      "description": "Tooltip of the avatar button in the dashboard header, which opens the profile."
+  },
+  "dashboardActivityUnavailable": "Recent activity is unavailable.",
+  "@dashboardActivityUnavailable": {
+      "description": "Shown when the activity feed cannot be resolved into readable entries."
+  },
+  "voiceClarificationTitle": "More information needed",
+  "@voiceClarificationTitle": {
+      "description": "Heading of the card asking the speaker a follow-up question."
+  },
+  "voiceClarificationAnswerLabel": "Answer",
+  "@voiceClarificationAnswerLabel": {
+      "description": "Label of the answer field in the clarification card."
+  },
+  "voiceClarificationAnswerHint": "Write a short, specific answer",
+  "@voiceClarificationAnswerHint": {
+      "description": "Hint text of the answer field in the clarification card."
+  },
+  "voiceContinue": "Continue",
+  "@voiceContinue": {
+      "description": "Button that submits a clarification answer."
+  },
+  "voiceUnavailableTitle": "Voice is not available",
+  "@voiceUnavailableTitle": {
+      "description": "Permission-denied state shown when a role may not use the voice assistant."
+  },
+  "voiceUnavailableBody": "The voice assistant is for project and field roles. Administration is done on the web application.",
+  "@voiceUnavailableBody": {
+      "description": "Body of the voice permission-denied state."
+  },
+  "activityGeneric": "Project activity",
+  "@activityGeneric": {
+      "description": "Fallback description for an activity entry the app has no wording for. Shown instead of the raw database identifier."
+  },
+  "activityTaskCreated": "Task created",
+  "@activityTaskCreated": {
+      "description": "Activity entry."
+  },
+  "activityTaskStarted": "Task started",
+  "@activityTaskStarted": {
+      "description": "Activity entry."
+  },
+  "activityTaskResumed": "Task resumed",
+  "@activityTaskResumed": {
+      "description": "Activity entry."
+  },
+  "activityProgressUpdated": "Progress updated",
+  "@activityProgressUpdated": {
+      "description": "Activity entry."
+  },
+  "activitySubmitted": "Submitted for review",
+  "@activitySubmitted": {
+      "description": "Activity entry."
+  },
+  "activityApproved": "Approved",
+  "@activityApproved": {
+      "description": "Activity entry."
+  },
+  "activityReviewStarted": "Review started",
+  "@activityReviewStarted": {
+      "description": "Activity entry."
+  },
+  "activityReworkRequested": "Rework requested",
+  "@activityReworkRequested": {
+      "description": "Activity entry."
+  },
+  "activityReworkStarted": "Rework started",
+  "@activityReworkStarted": {
+      "description": "Activity entry."
+  },
+  "activityClarificationRequested": "Clarification requested",
+  "@activityClarificationRequested": {
+      "description": "Activity entry."
+  },
+  "activityClarificationResponded": "Clarification answered",
+  "@activityClarificationResponded": {
+      "description": "Activity entry."
+  },
+  "activityCommentAdded": "Comment added",
+  "@activityCommentAdded": {
+      "description": "Activity entry."
+  },
+  "activityWorkUpdateAdded": "Work update added",
+  "@activityWorkUpdateAdded": {
+      "description": "Activity entry."
+  },
+  "activityBlockerReported": "Blocker reported",
+  "@activityBlockerReported": {
+      "description": "Activity entry."
+  },
+  "activityDocumentUploaded": "Document uploaded",
+  "@activityDocumentUploaded": {
+      "description": "Activity entry."
+  },
+  "activityAttachmentUploaded": "Attachment uploaded",
+  "@activityAttachmentUploaded": {
+      "description": "Activity entry."
+  },
+  "activitySiteReportVerified": "Site report verified",
+  "@activitySiteReportVerified": {
+      "description": "Activity entry."
+  },
+  "activitySiteVisitScheduled": "Site visit scheduled",
+  "@activitySiteVisitScheduled": {
+      "description": "Activity entry."
+  },
+  "activityOwnerRequestSubmitted": "Owner request submitted",
+  "@activityOwnerRequestSubmitted": {
+      "description": "Activity entry."
+  },
+  "activityScheduleRecalculated": "Schedule recalculated",
+  "@activityScheduleRecalculated": {
+      "description": "Activity entry."
+  },
+  "activityRemindersDispatched": "Reminders sent",
+  "@activityRemindersDispatched": {
+      "description": "Activity entry."
+  },
+  "activityMemberAssigned": "Team member assigned",
+  "@activityMemberAssigned": {
+      "description": "Activity entry."
+  },
+  "activityModelVersionUploaded": "Model version uploaded",
+  "@activityModelVersionUploaded": {
+      "description": "Activity entry."
+  },
+  "activityVoiceUpdate": "Voice update recorded",
+  "@activityVoiceUpdate": {
+      "description": "Activity entry."
+  },
+  "activityEvidenceVerified": "Field evidence verified",
+  "@activityEvidenceVerified": {
+      "description": "Activity entry."
+  },
+  "activityEvidenceRejected": "Field evidence returned",
+  "@activityEvidenceRejected": {
+      "description": "Activity entry."
+  },
+  "activityEvidenceSubmitted": "Field evidence submitted",
+  "@activityEvidenceSubmitted": {
+      "description": "Activity entry."
+  },
+  "activityCreated": "Created",
+  "@activityCreated": {
+      "description": "Activity entry."
+  },
+  "activityUpdated": "Updated",
+  "@activityUpdated": {
+      "description": "Activity entry."
+  },
+  "commonSeverity": "Severity",
+  "@commonSeverity": {
+      "description": "Field label for an issue's severity."
+  },
+  "commonCreated": "Created",
+  "@commonCreated": {
+      "description": "Field label for a record's creation date."
+  },
+  "commonDue": "Due",
+  "@commonDue": {
+      "description": "Field label for a due date."
+  },
+  "commonNoDescription": "No description provided.",
+  "@commonNoDescription": {
+      "description": "Shown in a record's detail sheet when it carries no description."
+  },
+  "commonMoreActions": "More actions",
+  "@commonMoreActions": {
+      "description": "Tooltip of the overflow button that opens a record's contextual actions."
+  },
+  "navDesignChanges": "Design Changes",
+  "@navDesignChanges": {
+      "description": "Navigation label for the design-changes list."
+  },
+  "designChangesEmpty": "No design changes have been raised on this project.",
+  "@designChangesEmpty": {
+      "description": "Empty state of the design-changes list."
+  },
+  "taskDependencyUnnamed": "Blocking task",
+  "@taskDependencyUnnamed": {
+      "description": "Stand-in name for a dependency the API returned without a title."
+  },
+  "voiceOutcomeSuccessTitle": "Actions completed",
+  "@voiceOutcomeSuccessTitle": {
+      "description": "Heading shown when every confirmed voice action executed successfully."
+  },
+  "voiceOutcomePartialTitle": "Some actions completed",
+  "@voiceOutcomePartialTitle": {
+      "description": "Heading shown when some confirmed voice actions succeeded and others failed."
+  },
+  "voiceOutcomeFailureTitle": "No action was carried out",
+  "@voiceOutcomeFailureTitle": {
+      "description": "Heading shown when no confirmed voice action succeeded. Must never look like success."
+  },
+  "voiceOutcomeNothingTitle": "Nothing to carry out",
+  "@voiceOutcomeNothingTitle": {
+      "description": "Heading when the assistant understood the note but no executable action was required."
+  },
+  "voiceOutcomeNothingBody": "The note was understood, but it did not require any change in the system.",
+  "@voiceOutcomeNothingBody": {
+      "description": "Body for the nothing-to-execute outcome."
+  },
+  "voiceOutcomeReason": "Reason",
+  "@voiceOutcomeReason": {
+      "description": "Label before the explanation of why one action failed."
+  },
+  "voiceOutcomeNotExecuted": "Not carried out",
+  "@voiceOutcomeNotExecuted": {
+      "description": "Status shown beside a single failed action in the outcome list."
+  },
+  "voiceOutcomeExecuted": "Done",
+  "@voiceOutcomeExecuted": {
+      "description": "Status shown beside a single successful action in the outcome list."
+  },
+  "voiceOutcomeRejectedFields": "The system refused some of the details the assistant produced for this action.",
+  "@voiceOutcomeRejectedFields": {
+      "description": "User-facing explanation for a payload validation rejection, shown instead of the raw backend message."
+  },
+  "voiceOutcomeGenericFailure": "This action could not be carried out.",
+  "@voiceOutcomeGenericFailure": {
+      "description": "Fallback explanation for a failed action when no specific reason is recognised."
+  }
+}

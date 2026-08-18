@@ -175,10 +175,12 @@ export const ProjectManagerDashboard = () => {
     }
     setIssuesLoading(false);
 
-    // 3. Site reports (first 3 shown on dashboard)
+    // 3. Site reports awaiting this manager's verification — filtered server-side
+    // by real review_status, not derived from the whole report list, so the
+    // dashboard count matches actual backend state.
     setReportsLoading(true);
     try {
-      const reportData: SiteReport[] = await api.siteReports.list();
+      const reportData: SiteReport[] = await api.siteReports.list({ status: "submitted" });
       setReports(reportData);
     } catch {
       setReports([]);
@@ -339,7 +341,10 @@ export const ProjectManagerDashboard = () => {
       tone: "text-state-review",
       title: t("pmDashboard.decisions.reportsAwaiting", { count: reports.length }),
       meta: t("pmDashboard.decisions.oldest", { age: formatAge(reports[reports.length - 1].createdAt, locale) }),
-      to: ROUTES.SITE_REPORTS,
+      // Takes the manager straight to the oldest report awaiting verification,
+      // not just the unfiltered list — `SiteReportsPage` already knows how to
+      // focus a single report via `?reportId=`.
+      to: `${ROUTES.SITE_REPORTS}?reportId=${reports[reports.length - 1].id}`,
     },
     stats && stats.milestonePending > 0 && {
       key: "milestones",
@@ -658,7 +663,11 @@ export const ProjectManagerDashboard = () => {
                 const author = r.submittedBy?.fullName ?? t("pmDashboard.teamMember");
                 const dateLabel = formatReportDate(r.reportDate ?? r.createdAt, locale, { today: t("common.today"), yesterday: t("common.yesterday") });
                 return (
-                  <tr key={r.id} className="hover:bg-muted/20 transition-colors">
+                  <tr
+                    key={r.id}
+                    className="cursor-pointer hover:bg-muted/20 transition-colors"
+                    onClick={() => navigate(`${ROUTES.SITE_REPORTS}?reportId=${r.id}`)}
+                  >
                     <td className="px-6 py-3.5 font-medium">
                       <p className="truncate max-w-xs">{projectName}</p>
                       <p className="text-xs text-muted-foreground font-normal">{summary}</p>
@@ -666,6 +675,9 @@ export const ProjectManagerDashboard = () => {
                     <td className="px-6 py-3.5 text-muted-foreground">{author}</td>
                     <td className="px-6 py-3.5 text-muted-foreground">{dateLabel}</td>
                     <td className="px-6 py-3.5">
+                      {/* This table only ever lists reports fetched with
+                          status=submitted, so "pending review" reflects the
+                          real backend state rather than being shown unconditionally. */}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-wash-review text-state-review">
                         {t("pmDashboard.pendingReview")}
                       </span>

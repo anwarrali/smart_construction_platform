@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from app.api.auth import router as auth_router
+from app.api.step_up import router as step_up_router
 from app.api.users import router as users_router
 from app.api.projects import router as projects_router
 from app.api.tasks import router as tasks_router
@@ -26,10 +27,12 @@ from app.api.ai_intelligence import router as ai_intelligence_router
 from app.api.ai_actions import router as ai_actions_router
 from app.api.collaboration import router as collaboration_router
 from app.api.permissions import router as permissions_router
+from app.api.cost_validations import router as cost_validations_router
 
 api_router = APIRouter()
 
 api_router.include_router(auth_router)
+api_router.include_router(step_up_router)
 api_router.include_router(permissions_router)
 api_router.include_router(users_router)
 api_router.include_router(projects_router)
@@ -56,3 +59,9 @@ api_router.include_router(ifc_router)
 api_router.include_router(ai_intelligence_router)
 api_router.include_router(ai_actions_router)
 api_router.include_router(collaboration_router)
+# Fully implemented (list/create/review, project-scoped access checks) but
+# never wired in — the frontend's `submit_cost_validation` /
+# `review_cost_validation` permission actions (utils/permissions.ts) have had
+# no reachable endpoint behind them. Every route in this module 404'd
+# regardless of role, including Admin.
+api_router.include_router(cost_validations_router)

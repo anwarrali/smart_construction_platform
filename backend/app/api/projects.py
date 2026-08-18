@@ -44,10 +44,10 @@ from app.core.deps import (
     is_main_contractor_engineer,
     is_consultant_engineer,
 )
-from app.core.permissions import can_view_all_projects, is_admin
+from app.core.permissions import is_admin
 from app.services.user_service import create_provisioned_user, add_user_to_project
 from app.services.audit_service import record_audit
-from app.services.authorization import manageable_project, require_permission
+from app.services.authorization import can_view_all_projects_effective, manageable_project, require_permission
 from app.models.notification import Notification
 from app.models.enums import NotificationType
 from app.services.consultant_approval_service import normalize_discipline
@@ -96,20 +96,45 @@ def _remove_reviewer_assignments(
 
 def _scoped_projects_query(db: Session, current_user: User):
     query = db.query(Project)
-    if current_user.role == UserRole.PROJECT_MANAGER:
-        query = query.filter(Project.project_manager_id == current_user.id)
-    elif not can_view_all_projects(current_user.role):
-        member_project_ids = db.query(ProjectMember.project_id).filter(
-            ProjectMember.user_id == current_user.id,
-            ProjectMember.is_active == True,
-        ).subquery()
-        query = query.filter(
-            (Project.owner_id == current_user.id)
-            | (Project.project_manager_id == current_user.id)
-            | Project.id.in_(member_project_ids)
-        )
-    if current_user.company_id and current_user.role != UserRole.ADMIN:
-        query = query.filter(Project.company_id == current_user.company_id)
+    # The "view all" gate is checked before the Project Manager branch (not
+    # the other way around, as this used to read) so that granting
+    # `platform.view_all_projects` to a specific PM actually does something:
+    # previously a PM's "only my assigned project" filter applied
+    # unconditionally, so the permission could never have any effect for that
+    # role. The static default is unchanged (only ADMIN holds this by
+    # default, via the catalogue, not a hardcoded role check — see
+    # `can_view_all_projects_effective`), so nobody's visibility shifts unless
+    # an administrator configures it. This mirrors `accessible_project_ids`
+    # (app.core.deps), which already had this ordering.
+    if not can_view_all_projects_effective(db, current_user):
+        if current_user.role == UserRole.PROJECT_MANAGER:
+            query = query.filter(Project.project_manager_id == current_user.id)
+        else:
+            member_project_ids = db.query(ProjectMember.project_id).filter(
+                ProjectMember.user_id == current_user.id,
+                ProjectMember.is_active == True,
+            ).subquery()
+            query = query.filter(
+                (Project.owner_id == current_user.id)
+                | (Project.project_manager_id == current_user.id)
+                | Project.id.in_(member_project_ids)
+            )
+    # No `company_id` filter here, deliberately: cross-company collaboration
+    # is how this app is actually modelled, not an edge case. The seeded demo
+    # project (app.db.seed_demo) is owned by one company while its Main
+    # Contractor engineers and reviewing consultants belong to two different
+    # companies entirely, joined only through `ProjectMember`; company_id is
+    # how `Project`/`User` record which company someone belongs to (used for
+    # e.g. scoping the user directory in app.api.users and `/company/settings`),
+    # not a project-visibility boundary. An unconditional `Project.company_id
+    # == current_user.company_id` AND-filter here used to hide a project from
+    # every contractor/consultant member whose own company differs from the
+    # project's owning company — which is every non-owner-side member in the
+    # seeded project — even though `accessible_project_ids` /
+    # `user_has_project_access` (app.core.deps) and `get_dashboard_stats`
+    # (app.api.dashboard) never applied any such filter and already granted
+    # them access. This just brings the project list in line with the access
+    # every other endpoint already gives the same person.
     return query
 
 

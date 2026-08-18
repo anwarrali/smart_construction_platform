@@ -43,6 +43,11 @@ dependencies:
   go_router: ^15.1.2
   image_picker: ^1.1.2
   intl: ^0.20.2
+  # Ships with the Flutter SDK — not a new third-party dependency. Without
+  # it the app has no supported locales, so Arabic (and therefore RTL) can
+  # never activate no matter how the device is configured.
+  flutter_localizations:
+    sdk: flutter
   path_provider: ^2.1.5
   record: ^6.0.0
   shared_preferences: ^2.5.3
@@ -68,6 +73,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Generates AppLocalizations from lib/l10n/*.arb (see l10n.yaml). This is
+  # Flutter's own tooling, not a bespoke translation layer.
+  generate: true
 
   # To add assets to your application, add an assets section, like this:
   # assets:

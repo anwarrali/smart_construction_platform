@@ -72,9 +72,12 @@ export const AIIntelligencePage=()=>{
       (!discipline||(item.affectedJson?.disciplines||[]).includes(discipline))
       &&(!needle||[item.title,item.description,item.reason,item.insightType].some(value=>(value||"").toLowerCase().includes(needle))));
   },[items,search,discipline,focusedInsightId]);
-  const load=useCallback(async()=>{if(!projectId)return;setLoading(true);try{const [summary,insights]=await Promise.all([api.aiIntelligence.overview(projectId),api.aiIntelligence.insights(projectId,filters)]);setOverview(summary);setItems(insights);}catch{toast.error(t("errors.intelligenceLoadFailed"));}finally{setLoading(false);}},[filters,projectId]);
+  const load=useCallback(async()=>{if(!projectId)return;setLoading(true);try{const [summary,insights]=await Promise.all([api.aiIntelligence.overview(projectId),api.aiIntelligence.insights(projectId,filters)]);setOverview(summary);setItems(insights);}catch(error){toast.error(errorMessage(error,t("errors.intelligenceLoadFailed")));}finally{setLoading(false);}},[filters,projectId]);
   useEffect(()=>{void load();},[load]);
-  const run=async()=>{if(!projectId)return;setBusy("run");try{await api.aiIntelligence.run(projectId,overview?.latestRevision?.id);toast.success("Structured project intelligence refreshed");await load();}catch{toast.error("Intelligence analysis could not be completed.");}finally{setBusy("");}};
+  // Matches the `action` handler below: the specific backend reason (e.g. a
+  // 403 from a revoked capability, or "no processed IFC revision") is more
+  // useful than one fixed sentence that hides it regardless of cause.
+  const run=async()=>{if(!projectId)return;setBusy("run");try{await api.aiIntelligence.run(projectId,overview?.latestRevision?.id);toast.success(t("ai.refreshSucceeded"));await load();}catch(error){toast.error(errorMessage(error,t("errors.intelligenceRunFailed")));}finally{setBusy("");}};
   const insightText=useInsightText();
   const action=async(id:string,operation:()=>Promise<unknown>,message:string)=>{setBusy(id);try{await operation();toast.success(message);await load();}catch(error){toast.error(errorMessage(error,t("errors.reviewActionFailed")));}finally{setBusy("");}};
   const open3D=(item:AIInsight)=>{const ids=item.affectedJson?.elements||[];navigate(`${workspace.path("ifc")}?tab=viewer&elementIds=${encodeURIComponent(ids.join(","))}`);};

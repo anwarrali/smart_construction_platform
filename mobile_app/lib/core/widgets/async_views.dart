@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import '../l10n/l10n_labels.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 
 class LoadingView extends StatelessWidget {
-  const LoadingView({super.key, this.label = 'Loading…'});
-  final String label;
+  const LoadingView({super.key, this.label});
+
+  /// A specific label such as "Loading tasks"; falls back to the generic
+  /// translated one. It cannot default to a literal in the constructor
+  /// because a const default cannot be locale-aware.
+  final String? label;
+
   @override
-  Widget build(BuildContext context) => Center(
+  Widget build(BuildContext context) {
+    final text = label ?? context.l10n.commonLoading;
+    return Center(
     child: Semantics(
-      label: label,
+      label: text,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -17,11 +25,12 @@ class LoadingView extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 3),
           ),
           const SizedBox(height: 14),
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          Text(text, style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     ),
   );
+  }
 }
 
 class MessageView extends StatelessWidget {
@@ -49,10 +58,10 @@ class MessageView extends StatelessWidget {
             width: 70,
             height: 70,
             decoration: BoxDecoration(
-              color: AppColors.bronzeSoft,
-              borderRadius: BorderRadius.circular(AppRadius.large),
+              color: AppColors.accentWash,
+              borderRadius: BorderRadius.circular(AppRadius.panel),
             ),
-            child: Icon(icon, size: 34, color: AppColors.bronze),
+            child: Icon(icon, size: 34, color: AppColors.accent),
           ),
           const SizedBox(height: 16),
           Text(
@@ -66,7 +75,10 @@ class MessageView extends StatelessWidget {
             const SizedBox(height: 20),
             FilledButton.tonal(
               onPressed: onAction,
-              child: Text(actionLabel ?? 'Retry'),
+              // Was a literal 'Retry', which stayed English in an Arabic
+              // session. It sat outside `Text('…')` so the hardcoded-copy
+              // test never saw it.
+              child: Text(actionLabel ?? context.l10n.commonRetry),
             ),
           ],
         ],

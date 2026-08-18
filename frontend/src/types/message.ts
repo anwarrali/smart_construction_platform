@@ -9,6 +9,23 @@ export interface ConversationParticipant {
   lastReadAt?: string;
 }
 
+/** Project entities that can be shared into a conversation (see the backend's
+ *  SHARED_ENTITY_LABELS — this list must stay in step with it). */
+export type SharedEntityType =
+  | "ISSUE"
+  | "TASK"
+  | "SITE_REPORT"
+  | "DESIGN_CHANGE"
+  | "DOCUMENT";
+
+export interface ForwardOrigin {
+  messageId: string;
+  conversationId: string;
+  sender: User;
+  content: string;
+  createdAt: string;
+}
+
 export interface ProjectMessage {
   id: string;
   conversationId: string;
@@ -19,6 +36,13 @@ export interface ProjectMessage {
   updatedAt: string;
   editedAt?: string;
   deletedAt?: string;
+  /** Set when this message was created by forwarding another one. */
+  forwardedFromMessageId?: string;
+  /** The first, non-forwarded message in the chain — who it truly came from. */
+  forwardOrigin?: ForwardOrigin;
+  /** Set when this message was created by sharing a project entity. */
+  sharedEntityType?: SharedEntityType;
+  sharedEntityId?: string;
 }
 
 export interface Conversation {

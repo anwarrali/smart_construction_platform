@@ -13,7 +13,6 @@ from app.core.permissions import (
     can_create_team_role,
     can_manage_all_users,
     can_manage_project_members,
-    can_view_all_projects,
     is_admin,
 )
 from app.core.security import decode_token
@@ -188,7 +187,21 @@ def user_has_project_access(
     *,
     require_management: bool = False,
 ) -> bool:
-    if can_view_all_projects(user.role):
+    # `can_view_all_projects_effective` resolves `platform.view_all_projects`
+    # through the same role-default-then-override chain as every other
+    # catalogue permission, so an unconfigured Administrator gets exactly the
+    # old hardcoded `role == ADMIN` answer (it is the role's default) — but,
+    # unlike the old hardcoded check this replaced, an explicit revoke now
+    # actually restricts an administrator, and an explicit grant actually
+    # widens a non-administrator. A plain `if can_view_all_projects(user.role):
+    # return True` guard here would have made a revoke impossible no matter
+    # what Access Control says, by always winning first.
+    #
+    # Deferred import: this module is imported by app.services.authorization
+    # for `user_has_project_access` itself, so importing at module load time
+    # here would be a circular import; by call time both modules are loaded.
+    from app.services.authorization import can_view_all_projects_effective
+    if can_view_all_projects_effective(db, user):
         return True
 
     project = db.query(Project).filter(Project.id == project_id).first()
@@ -221,8 +234,17 @@ def user_has_project_access(
     return False
 
 def accessible_project_ids(db: Session, user: User) -> list[uuid.UUID] | None:
-    """Return every project visible to the user, including direct owner/PM assignments."""
-    if can_view_all_projects(user.role):
+    """Return every project visible to the user, including direct owner/PM assignments.
+
+    `None` means unrestricted. See `user_has_project_access` for why the
+    `platform.view_all_projects` check below (a) is safe from recursion and
+    (b) is the sole gate rather than an `or can_view_all_projects(role)` —
+    the effective-permission check already reproduces the hardcoded
+    role-only default, and an unconditional static OR would make a revoke
+    impossible.
+    """
+    from app.services.authorization import can_view_all_projects_effective
+    if can_view_all_projects_effective(db, user):
         return None
     if user.role == UserRole.PROJECT_MANAGER:
         return [project_id for (project_id,) in db.query(Project.id).filter(

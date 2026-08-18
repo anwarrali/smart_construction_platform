@@ -16,6 +16,7 @@ import { Select } from "../../../components/ui/Select";
 import { formatAssigneeRole, getAvatarColor, getInitials } from "../../../utils/helpers";
 import { EngineerTaskDetailPage } from "./EngineerTaskDetailPage";
 import { ContextDiscussion } from "../../messages/components/ContextDiscussion";
+import { CommunicationActions } from "../../../components/shared/CommunicationActions";
 
 interface Comment { id: string; content: string; createdAt: string; author?: { fullName: string } }
 interface Review { id: string; status: string; comments?: string; rejectionReason?: string; createdAt: string; submittedBy?: { fullName: string }; reviewedBy?: { fullName: string } }
@@ -60,7 +61,10 @@ const ManagedTaskDetailPage = () => {
   const run = async (action: () => Promise<unknown>) => { setError(""); try { await action(); await load(); } catch (e: any) { setError(errorMessage(e, "Action failed")); } };
   return <div className="space-y-6">
     <Button variant="ghost" onClick={() => navigate(workspace.isProjectWorkspace ? workspace.path("tasks") : "/tasks")}>← Back to Tasks</Button>
-    <div className="flex justify-between gap-4"><div><p className="text-sm font-semibold text-primary">{task.taskCode}</p><h1 className="text-2xl font-bold">{task.name}</h1><p className="text-muted-foreground">{task.description || "No description"}</p></div><Badge>{task.status.replaceAll("_", " ")}</Badge></div>
+    <div className="flex justify-between gap-4"><div><p className="text-sm font-semibold text-primary">{task.taskCode}</p><h1 className="text-2xl font-bold">{task.name}</h1><p className="text-muted-foreground">{task.description || "No description"}</p></div><div className="flex flex-col items-end gap-2"><Badge>{task.status.replaceAll("_", " ")}</Badge>
+      {/* Consultation only — this is not task transfer: the assignee and
+          status are untouched by sharing (enforced server-side). */}
+      <CommunicationActions entityType="TASK" entityId={task.id} projectId={task.projectId} intents={["opinion"]} /></div></div>
     {error && <p className="text-sm text-destructive">{error}</p>}
     <ContextDiscussion projectId={task.projectId} contextType="TASK" contextId={task.id} title={t("taskDetail.task_discussion")} />
     <div className="grid lg:grid-cols-3 gap-6"><Card className="lg:col-span-2 space-y-5">

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from typing import Dict
@@ -23,6 +24,7 @@ from app.core.config import settings
 from app.schemas.user import UserOut, ChangePasswordRequest
 from app.schemas.token import Token
 from app.services.email_service import send_password_reset_email
+from app.services import rate_limit_service
 
 # Import from deps.py (canonical location) to avoid circular imports
 from app.core.deps import get_current_user, oauth2_scheme
@@ -42,13 +44,37 @@ def register_disabled():
     )
 
 
+LOGIN_SCOPE = "login"
+
+
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    db.query(RevokedToken).filter(RevokedToken.expires_at < datetime.now(timezone.utc)).delete(synchronize_session=False)
+    now = datetime.now(timezone.utc)
+    db.query(RevokedToken).filter(RevokedToken.expires_at < now).delete(synchronize_session=False)
+    rate_limit_service.prune(db, now=now)
     login_name = form_data.username.lower().strip()
     email = "admin@local.dev" if login_name == "admin" else login_name
+
+    # The audit found login completely unthrottled — unlimited password
+    # guesses against any known address. Counting per account (not per IP)
+    # is what actually protects a specific user, since an attacker rotating
+    # source addresses would sail past an IP-only limit.
+    window = settings.LOGIN_ATTEMPT_WINDOW_MINUTES * 60
+    if rate_limit_service.count_recent(
+        db, scope=LOGIN_SCOPE, key=email, window_seconds=window, now=now
+    ) >= settings.LOGIN_MAX_ATTEMPTS:
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed sign-in attempts. Try again later.",
+        )
+
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
+        # Recorded for the attempted address whether or not it exists, so the
+        # throttle cannot be used to discover which accounts are real.
+        rate_limit_service.record_hit(db, scope=LOGIN_SCOPE, key=email, now=now)
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username/email or password",
@@ -61,7 +87,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Your account has been deactivated. Contact your administrator.",
         )
 
-    user.last_login_at = datetime.now(timezone.utc).isoformat()
+    # A successful sign-in clears the account's failed-attempt history, so a
+    # user who mistyped twice is not throttled for the rest of the window.
+    rate_limit_service.clear(db, scope=LOGIN_SCOPE, key=email)
+    # (A `user.last_login_at = ...` assignment used to sit here. `User` has no
+    # such mapped column — only the output schema does — so it set a transient
+    # attribute that was never persisted. Removed rather than left looking
+    # functional; recording last-login properly needs its own column.)
     if user.status == UserStatus.PENDING:
         user.status = UserStatus.ACTIVE
         user.invitation_accepted = True
@@ -113,7 +145,19 @@ def refresh(data: Dict[str, str], db: Session = Depends(get_db)):
     db.add(RevokedToken(token_hash=hash_token(refresh_token_str),
                         expires_at=datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)))
     new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # The revoked-token check above and this insert are not atomic: two
+        # requests racing to refresh the same (single-use) token can both pass
+        # the check before either commits. The loser hits the unique
+        # constraint on token_hash here instead of silently minting a second
+        # valid session for an already-rotated refresh token. Report it the
+        # same way the check above does, rather than as an unhandled 500 —
+        # this is the frontend's normal "several requests 401 at once and each
+        # tries to refresh" case, not an attack or a corrupt token.
+        db.rollback()
+        raise HTTPException(status_code=401, detail="Refresh token has been revoked")
 
     return {
         "access_token": new_access_token,

@@ -6,6 +6,7 @@ import '../../core/constants/api_endpoints.dart';
 import '../../core/network/network_exceptions.dart';
 import '../../core/theme/app_spacing.dart';
 import '../projects/project_context_view_model.dart';
+import '../../core/l10n/l10n_labels.dart';
 
 class CreateIssueScreen extends ConsumerStatefulWidget {
   const CreateIssueScreen({super.key});
@@ -34,7 +35,7 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
   Widget build(BuildContext context) {
     final project = ref.watch(projectContextProvider).selected;
     return Scaffold(
-      appBar: AppBar(title: const Text('Report Issue')),
+      appBar: AppBar(title: Text(context.l10n.issueReport)),
       body: SafeArea(
         top: false,
         child: Form(
@@ -49,19 +50,19 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
             ),
             children: [
               Text(
-                project?.name ?? 'No project selected',
+                project?.name ?? context.l10n.commonNoProjectSelected,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _title,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Issue title',
-                  prefixIcon: Icon(Icons.report_problem_outlined),
+                decoration: InputDecoration(
+                  labelText: context.l10n.issueTitleLabel,
+                  prefixIcon: const Icon(Icons.report_problem_outlined),
                 ),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Enter an issue title.'
+                    ? context.l10n.validationEnterIssueTitle
                     : null,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -69,22 +70,24 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
                 controller: _description,
                 minLines: 4,
                 maxLines: 7,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
+                decoration: InputDecoration(
+                  labelText: context.l10n.commonDescription,
                   alignLabelWithHint: true,
                 ),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Describe the issue.'
+                    ? context.l10n.validationDescribeIssue
                     : null,
               ),
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<String>(
                 value: _category,
                 isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  prefixIcon: Icon(Icons.category_outlined),
+                decoration: InputDecoration(
+                  labelText: context.l10n.commonCategory,
+                  prefixIcon: const Icon(Icons.category_outlined),
                 ),
+                // The item *values* stay the English strings the API already
+                // stores; only the visible text is translated.
                 items:
                     const [
                           'Material unavailable',
@@ -101,7 +104,9 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
                         .map(
                           (value) => DropdownMenuItem(
                             value: value,
-                            child: Text(value),
+                            child: Text(
+                              context.l10n.issueCategoryLabel(value),
+                            ),
                           ),
                         )
                         .toList(),
@@ -111,17 +116,15 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<String>(
                 value: _severity,
-                decoration: const InputDecoration(
-                  labelText: 'Severity',
-                  prefixIcon: Icon(Icons.priority_high_rounded),
+                decoration: InputDecoration(
+                  labelText: context.l10n.issueSeverity,
+                  prefixIcon: const Icon(Icons.priority_high_rounded),
                 ),
                 items: const ['low', 'medium', 'high', 'critical']
                     .map(
                       (value) => DropdownMenuItem(
                         value: value,
-                        child: Text(
-                          '${value[0].toUpperCase()}${value.substring(1)}',
-                        ),
+                        child: Text(context.l10n.priorityLabel(value)),
                       ),
                     )
                     .toList(),
@@ -131,8 +134,8 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
               const SizedBox(height: AppSpacing.sm),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Affects project schedule'),
-                subtitle: const Text('Flag this issue for schedule attention.'),
+                title: Text(context.l10n.issueAffectsSchedule),
+                subtitle: Text(context.l10n.issueAffectsScheduleBody),
                 value: _affectsSchedule,
                 onChanged: (value) => setState(() => _affectsSchedule = value),
               ),
@@ -140,7 +143,11 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
               FilledButton.icon(
                 onPressed: project == null || _submitting ? null : _submit,
                 icon: const Icon(Icons.send_rounded),
-                label: Text(_submitting ? 'Submitting…' : 'Submit Issue'),
+                label: Text(
+                  _submitting
+                      ? context.l10n.commonSubmitting
+                      : context.l10n.issueSubmit,
+                ),
               ),
             ],
           ),
@@ -170,7 +177,7 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Issue reported successfully.')),
+          SnackBar(content: Text(context.l10n.issueReported)),
         );
         Navigator.pop(context, true);
       }
@@ -179,7 +186,9 @@ class _CreateIssueScreenState extends ConsumerState<CreateIssueScreen> {
         setState(() => _submitting = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
+        ).showSnackBar(
+          SnackBar(content: Text(context.l10n.describeError(error))),
+        );
       }
     }
   }

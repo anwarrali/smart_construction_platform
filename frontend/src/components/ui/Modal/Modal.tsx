@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useCallback,
   useId,
   useRef,
   type HTMLAttributes,
@@ -45,10 +44,25 @@ export const Modal = ({
   const titleId = useId();
   const descriptionId = useId();
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+  // Callers overwhelmingly pass `onClose={() => setOpen(false)}` inline, a
+  // new function every render of the parent — and the parent re-renders on
+  // every keystroke whenever the open form's field values live in or above
+  // that same component (the common pattern here). `onCloseRef` lets the
+  // Escape handler always call the *latest* `onClose` without `onClose`
+  // itself needing to be a dependency of anything below, which is what used
+  // to make this effect re-run on every keystroke — see the effect's own
+  // comment for what that re-run actually did to focus.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -75,41 +89,51 @@ export const Modal = ({
           first.focus();
         }
       }
-    },
-    [onClose],
-  );
+    };
 
-  useEffect(() => {
-    if (isOpen) {
-      const previouslyFocused = document.activeElement as HTMLElement | null;
-      const previousOverflow = document.body.style.overflow;
-      const previousPaddingRight = document.body.style.paddingRight;
-      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    // Everything in this effect must run exactly once per open/close cycle —
+    // never on a re-render while already open. It used to also depend on
+    // `handleKeyDown` (itself a `useCallback([onClose])`), so it re-ran on
+    // every keystroke in any field whose value lived in the same component
+    // as `onClose`. Each re-run's *cleanup* called `previouslyFocused.focus()`
+    // — a stale closure over whatever was focused when that instance of the
+    // effect had been set up — which, one keystroke after the modal opened,
+    // was still the button that had originally opened it. The net effect on
+    // every keystroke: input takes the character correctly (the input DOM
+    // node was never destroyed — reconciliation kept it, only focus moved),
+    // then focus is yanked out of the dialog entirely back to the trigger
+    // button behind it, so the next keystroke lands nowhere useful until the
+    // field is clicked again. Depending on `[isOpen]` alone removes the
+    // repeated teardown/setup — and therefore the stale refocus — while
+    // `onCloseRef` above keeps Escape calling the current `onClose` anyway.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 
-      document.addEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "hidden";
-      if (scrollbarWidth > 0) {
-        document.body.style.paddingRight = `${scrollbarWidth}px`;
-      }
-
-      window.requestAnimationFrame(() => {
-        const firstField = dialogRef.current?.querySelector<HTMLElement>(
-          '.dialog-body input:not([disabled]), .dialog-body select:not([disabled]), .dialog-body textarea:not([disabled]), .dialog-body button:not([disabled])',
-        );
-        const firstAction = dialogRef.current?.querySelector<HTMLElement>(
-          'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])',
-        );
-        (firstField || firstAction || dialogRef.current)?.focus();
-      });
-
-      return () => {
-        document.removeEventListener("keydown", handleKeyDown);
-        document.body.style.overflow = previousOverflow;
-        document.body.style.paddingRight = previousPaddingRight;
-        previouslyFocused?.focus();
-      };
+    document.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
-  }, [isOpen, handleKeyDown]);
+
+    window.requestAnimationFrame(() => {
+      const firstField = dialogRef.current?.querySelector<HTMLElement>(
+        '.dialog-body input:not([disabled]), .dialog-body select:not([disabled]), .dialog-body textarea:not([disabled]), .dialog-body button:not([disabled])',
+      );
+      const firstAction = dialogRef.current?.querySelector<HTMLElement>(
+        'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])',
+      );
+      (firstField || firstAction || dialogRef.current)?.focus();
+    });
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+      previouslyFocused?.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

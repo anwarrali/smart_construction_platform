@@ -25,6 +25,16 @@ class VoiceActionDraft(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     client_action_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    #: Position in the model's own `suggestedActions` list.
+    #:
+    #: The relationship used to be ordered by `created_at`, which is identical
+    #: for every draft of one analysis, so the order was a tie and could
+    #: change between requests — see the `c87g2b4d0f69` migration for the
+    #: failure that caused. This is the one ordering the drafts, the
+    #: suggestions and the execution results all agree on.
+    sequence: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     action_type: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
     target_entity_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     target_entity_id: Mapped[uuid.UUID | None] = mapped_column(

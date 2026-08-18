@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../core/constants/api_endpoints.dart';
 import '../core/network/api_client.dart';
 import '../models/voice_draft.dart';
+import '../features/voice_command/voice_errors.dart';
 
 class VoiceProcessingService {
   VoiceProcessingService(this._api);
@@ -59,26 +60,52 @@ class VoiceProcessingService {
     return VoiceAnalysis.fromJson(data);
   }
 
+  /// Confirms and executes the chosen actions.
+  ///
+  /// Every action is addressed by its **draft id**. The previous version took
+  /// a positional `actionIndex` into `result.suggestedActions` and used it to
+  /// subscript `analysis.actionDrafts` — two different lists — and it
+  /// reassigned `current` from each PUT response inside the loop, so the
+  /// second iteration indexed a freshly deserialized list. The server ordered
+  /// that list by `created_at`, which is identical for every draft of one
+  /// analysis, so the order was a tie that Postgres could return differently
+  /// once a row had been rewritten.
+  ///
+  /// The observed result: a `SUBMIT_TASK_FOR_REVIEW` payload was written onto
+  /// the `UPDATE_TASK_PROGRESS` draft, which was then rejected for carrying
+  /// the other action's fields, while the review draft was never selected and
+  /// the consultant was never notified.
+  ///
+  /// Ids are resolved from the analysis the user actually reviewed, before
+  /// anything is mutated, so no later response can change what they refer to.
   Future<List<Map<String, dynamic>>> confirmActions(
     String analysisId,
-    List<Map<String, dynamic>> actions,
+    List<VoiceDraftConfirmation> actions,
     VoiceAnalysis analysis,
   ) async {
+    if (actions.isEmpty) {
+      throw const VoiceException(VoiceFailure.nothingToConfirm);
+    }
+    final known = {for (final draft in analysis.actionDrafts) draft.id: draft};
+    // Resolved up front and never recomputed.
+    final selectedIds = [for (final action in actions) action.draftId];
+    if (selectedIds.any((id) => !known.containsKey(id))) {
+      throw const VoiceException(VoiceFailure.actionUnavailable);
+    }
+
     var current = analysis;
-    final selectedIds = <String>[];
-    for (final edit in actions) {
-      final index = edit['actionIndex'] as int;
-      if (index < 0 || index >= current.actionDrafts.length) {
-        throw StateError('Voice action is no longer available.');
-      }
-      final draft = current.actionDrafts[index];
-      selectedIds.add(draft.id);
+    for (final action in actions) {
+      final draft = known[action.draftId]!;
       final data = await _api.put<Map<String, dynamic>>(
+        // The id, not a position — this is the whole fix.
         ApiEndpoints.voiceDraft(analysisId, draft.id),
         data: {
-          'targetId': edit['targetId'] ?? draft.targetEntityId,
-          'payload': edit['payload'] ?? draft.extractedPayload,
+          'targetId': action.targetId ?? draft.targetEntityId,
+          'payload': action.payload ?? draft.extractedPayload,
           'selectedForExecution': true,
+          // Only the optimistic-concurrency token is carried forward from
+          // the response; the draft list from it is deliberately not used
+          // for addressing anything.
           'rowVersion': current.rowVersion,
         },
       );
@@ -89,9 +116,10 @@ class VoiceProcessingService {
       data: {
         'selectedDraftIds': selectedIds,
         'rowVersion': current.rowVersion,
-        'detailedConfirmation': current.actionDrafts.any(
-          (draft) =>
-              selectedIds.contains(draft.id) && draft.riskLevel == 'HIGH',
+        // Resolved from the reviewed analysis, so a high-risk action cannot
+        // be silently dropped from this check by a reordered response.
+        'detailedConfirmation': selectedIds.any(
+          (id) => known[id]!.riskLevel == 'HIGH',
         ),
       },
     );
