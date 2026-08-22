@@ -75,6 +75,10 @@ class ApiClient {
       _request(() => _dio.put<T>(path, data: data, queryParameters: query));
   Future<T> patch<T>(String path, {Object? data, Map<String, dynamic>? query}) =>
       _request(() => _dio.patch<T>(path, data: data, queryParameters: query));
+  /// DELETE with an optional body — used to retire a push device, whose
+  /// identifier is an FCM token far too long to sit safely in a URL.
+  Future<T> delete<T>(String path, {Object? data, Map<String, dynamic>? query}) =>
+      _request(() => _dio.delete<T>(path, data: data, queryParameters: query));
   Future<T> upload<T>(
     String path,
     FormData data, {

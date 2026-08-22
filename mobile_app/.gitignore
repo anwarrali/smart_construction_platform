@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase project configuration.
+#
+# Not secret in the credential sense — these files hold public client
+# identifiers — but they are per-project deployment configuration rather than
+# source, and committing one silently binds every clone to one Firebase
+# project. Generate your own: see docs/NOTIFICATIONS.md.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist

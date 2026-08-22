@@ -1712,7 +1712,8 @@
   "documentList": {
     "no_documents_found": "No documents found",
     "download": "Download",
-    "delete": "Delete"
+    "delete": "Delete",
+    "ask_ai": "Ask AI"
   },
   "documentsPage": {
     "project_documents_and_files": "Project documents and files",
@@ -2771,5 +2772,40 @@
     "invalidCode": "That code is not valid or has expired. Request a new one if needed.",
     "requestFailed": "The verification code could not be sent. Please try again shortly.",
     "deliveryUnavailable": "Email delivery is not configured on this environment, so the code could not be sent."
+  },
+  "notificationRedirect": {
+    "opening": "Opening notification…",
+    "not_found": "That notification is no longer available."
+  },
+  "documentAssistant": {
+    "title": "Ask about this document",
+    "index_state": "AI index:",
+    "index_for_ai": "Index for AI",
+    "reindex": "Re-index",
+    "indexing": "Indexing…",
+    "index_hint": "Index this PDF once so questions can be answered from its text.",
+    "indexed_summary": "{{pages}} pages · {{chunks}} passages",
+    "indexed_toast": "Indexed {{pages}} pages into {{chunks}} passages.",
+    "index_failed": "Indexing failed.",
+    "status_failed": "Could not read the index status.",
+    "question_label": "Your question",
+    "question_placeholder": "For example: what is the retention percentage?",
+    "ask": "Ask",
+    "asking": "Asking…",
+    "ask_failed": "The question could not be answered.",
+    "searching": "Searching the document…",
+    "answers_from_this_document": "Answers come only from this document.",
+    "index_before_asking": "Index the document before asking a question.",
+    "not_found_hint": "Nothing in the indexed text answers this. Try rephrasing, or check that the right document is indexed.",
+    "sources_one": "Source",
+    "sources_other": "Sources",
+    "page": "page {{page}}",
+    "open_failed": "The document could not be opened.",
+    "status": {
+      "NOT_INDEXED": "Not indexed",
+      "INDEXING": "Indexing",
+      "READY": "Ready",
+      "FAILED": "Failed"
+    }
   }
 }

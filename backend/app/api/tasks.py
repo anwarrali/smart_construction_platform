@@ -21,6 +21,8 @@ from app.models.issue import Issue
 from app.models.project import Project, ProjectMember
 from app.models.task import Task, TaskDependency, TaskComment, TaskReview
 from app.models.notification import Notification
+from app.services.notification_service import notify
+from app.services.realtime import EventType, publish_event
 from app.models.milestone import Milestone
 from app.models.audit_log import AuditLog
 from app.models.attachment import Attachment
@@ -71,11 +73,38 @@ TASK_ASSIGNEE_ROLES = {
 }
 
 def _notify(db: Session, user_id, title: str, message: str, task: Task, notification_type: NotificationType) -> None:
+    """Notify one person about a task.
+
+    Routed through `notification_service` rather than constructing the row
+    here, so that task events reach the user's phone and browser as well as
+    their notification centre. The persisted row is unchanged — the service's
+    defaults for category, priority and requires_action are exactly what this
+    helper produced before.
+    """
     if not user_id:
         return
-    db.add(Notification(user_id=user_id, title=title, message=message, type=notification_type,
-                        project_id=task.project_id, task_id=task.id,
-                        related_entity_type="TASK", related_entity_id=task.id))
+    notify(db, user_id=user_id, title=title, message=message,
+           notification_type=notification_type,
+           project_id=task.project_id, task_id=task.id,
+           entity_type="TASK", entity_id=task.id)
+
+def _publish_task_event(db: Session, task: Task, event_type: str) -> None:
+    """Announce that a task changed, to everyone who can see its project.
+
+    Project-scoped rather than per-assignee on purpose: a task board shows
+    every task in the project, so anyone viewing it needs the hint. The
+    envelope carries only ids — name, status and progress come from the
+    refetch, which re-applies the same per-role filtering the board already
+    uses.
+    """
+    publish_event(
+        db,
+        event_type=event_type,
+        project_id=task.project_id,
+        entity_type="TASK",
+        entity_id=task.id,
+    )
+
 
 def _refresh_project_progress(db: Session, project_id) -> None:
     db.flush()
@@ -547,6 +576,7 @@ def create_task(
         payload={"taskCode": new_task.task_code, "status": new_task.status.value},
         correlation_id=f"task:{new_task.id}", idempotency_key=f"TASK_CREATED:{new_task.id}",
     )
+    _publish_task_event(db, new_task, EventType.TASK_CREATED)
     db.commit()
     db.refresh(new_task)
     return new_task
@@ -709,6 +739,7 @@ def update_task(
                     "assignee_ids": [str(value) for value in task.assignee_ids] if assignments_changed else None,
                     "previous_dependency_ids": [str(value) for value in previous_dependency_ids] if dependencies_changed else None,
                     "dependency_ids": [str(value.id) for value in predecessors] if dependencies_changed else None})
+    _publish_task_event(db, task, EventType.TASK_UPDATED)
     db.commit()
     db.refresh(task)
     return task
@@ -823,6 +854,7 @@ def update_task_progress(
     from app.services.ai_traceability_service import invalidate_insights_for_source
     invalidate_insights_for_source(db, project_id=task.project_id, source_type="TASK", source_id=task.id,
                                    reason="Task progress or workflow state changed")
+    _publish_task_event(db, task, EventType.TASK_UPDATED)
     db.commit()
     db.refresh(task)
     return task

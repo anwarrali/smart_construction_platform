@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Android 13 (API 33) and later require an explicit runtime grant before
+         any notification can be posted. Without this the permission dialog can
+         never be shown and every push is silently dropped. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="Struct IQ"
         android:name="${applicationName}"
@@ -28,6 +32,15 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- The channel a notification is posted to when FCM does not name
+             one. It must match PUSH_ANDROID_CHANNEL_ID on the backend and the
+             channel PushNotificationService creates at startup: Android 8+
+             silently discards a notification whose channel does not exist,
+             which fails invisibly — FCM reports success and nothing appears. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="structiq_default" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

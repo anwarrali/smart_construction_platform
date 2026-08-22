@@ -2,8 +2,9 @@
 Notifications — in-app notifications sent to users.
 """
 import uuid
+from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, String, Text, Boolean
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +48,10 @@ class Notification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    #: When the user actually read it. Distinct from `updated_at`, which any
+    #: write touches — this answers "how long did they sit on it", which is the
+    #: only question worth asking of a notification after the fact.
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True

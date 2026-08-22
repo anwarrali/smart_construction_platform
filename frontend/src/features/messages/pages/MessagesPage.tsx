@@ -18,6 +18,7 @@ import api from "../../../services/api";
 import type { Conversation, ConversationDetail, ConversationType, ProjectMessage, RecipientOptions } from "../../../types/message";
 import type { Project } from "../../../types/project";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
+import { useRealtimeRefresh } from "../../../hooks/useRealtimeRefresh";
 import { projectEntityPath } from "../../../utils/projectRoutes";
 
 type Tab = "all" | "unread" | "direct" | "teams" | "project";
@@ -122,13 +123,20 @@ export const MessagesPage = () => {
     next.delete("conversationId");
     setSearchParams(next, { replace: true });
   }, [requestedConversationId, searchParams, setSearchParams]);
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      loadList(true);
-      loadDetail(true);
-    }, 15000);
-    return () => window.clearInterval(timer);
-  }, [loadList, loadDetail]);
+  // Replaces a 15-second poll. The poll meant a message could sit unseen for
+  // most of a minute and cost two requests per user per interval whether or
+  // not anything had changed; the event fires only when a message is actually
+  // sent, and arrives in well under a second.
+  //
+  // `quiet` on both: a realtime refresh must not flash the loading state over
+  // a conversation the user is reading.
+  useRealtimeRefresh(
+    ["MESSAGE_CREATED", "MESSAGE_UPDATED"],
+    useCallback(() => {
+      void loadList(true);
+      void loadDetail(true);
+    }, [loadList, loadDetail]),
+  );
 
   const conversationTitle = (conversation: Conversation) => {
     if (conversation.title) return conversation.title;

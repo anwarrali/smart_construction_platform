@@ -159,7 +159,22 @@ class NotificationType(str, enum.Enum):
 class NotificationChannel(str, enum.Enum):
     IN_APP = "in_app"
     EMAIL = "email"
+    #: Mobile (Android/iOS) and browser push, both delivered through FCM.
+    PUSH = "push"
     TELEGRAM = "telegram"
+
+
+class DevicePlatform(str, enum.Enum):
+    """Where a registered push token can be delivered to.
+
+    WEB is a first-class platform rather than a special case: a browser
+    registration is just another device belonging to the same person, and one
+    user may hold an Android phone, an iPhone and two browsers at once.
+    """
+
+    ANDROID = "android"
+    IOS = "ios"
+    WEB = "web"
 
 
 class NotificationStatus(str, enum.Enum):

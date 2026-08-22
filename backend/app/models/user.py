@@ -81,6 +81,11 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         secondary="task_assignees", back_populates="assignees"
     )
     company: Mapped["Company | None"] = relationship(back_populates="users")
+    # Push delivery addresses. `passive_deletes` for the same reason as
+    # `project_memberships`: the FK already cascades in the database.
+    device_tokens: Mapped[list["DeviceToken"]] = relationship(
+        back_populates="user", passive_deletes=True
+    )
 
 
     def __repr__(self) -> str:

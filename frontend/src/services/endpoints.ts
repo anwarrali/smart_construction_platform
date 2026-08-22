@@ -98,6 +98,21 @@ export const ENDPOINTS = {
     MARK_READ: (id: string) => `/messages/${id}/read`,
   },
 
+  // Realtime. The stream itself is opened by EventSource rather than axios,
+  // so only the ticket endpoint is called through the API client.
+  REALTIME: {
+    TICKET: "/events/ticket",
+    HEALTH: "/events/health",
+  },
+
+  // Document question answering. Every route is authenticated and scoped to
+  // the caller's document permissions on the server.
+  RAG: {
+    INDEX: (documentId: string) => `/rag/documents/${documentId}/index`,
+    STATUS: (documentId: string) => `/rag/documents/${documentId}/status`,
+    QUERY: "/rag/query",
+  },
+
   DOCUMENTS: {
     BASE: "/documents",
     BY_ID: (id: string) => `/documents/${id}`,
@@ -124,6 +139,10 @@ export const ENDPOINTS = {
     MARK_ALL_READ: "/notifications/read-all",
     UNREAD_COUNT: "/notifications/unread-count",
     PREFERENCES: "/notifications/preferences",
+    // Push device registration. Scoped to the caller on the server: the user
+    // is taken from the access token, never from the request body.
+    DEVICES: "/notifications/devices",
+    DEV_TEST: "/notifications/dev/test-notification",
   },
 
   SCHEDULING: {

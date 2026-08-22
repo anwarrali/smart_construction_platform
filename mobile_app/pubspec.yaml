@@ -52,6 +52,16 @@ dependencies:
   record: ^6.0.0
   shared_preferences: ^2.5.3
 
+  # --- Push notifications ---------------------------------------------------
+  # firebase_core is required by firebase_messaging; it is not an independent
+  # choice. flutter_local_notifications exists for one specific reason: FCM
+  # does not display a notification while the app is in the foreground on
+  # Android, by design, so without it a message that arrives with the app open
+  # is silently swallowed.
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.5
+  flutter_local_notifications: ^18.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -81,6 +81,74 @@ class Settings(BaseSettings):
     #: flow can be exercised without SMTP. Must stay false anywhere real.
     OTP_DEV_ECHO_ENABLED: bool = os.getenv("OTP_DEV_ECHO_ENABLED", "false").lower() == "true"
 
+    # --- Realtime (Server-Sent Events) --------------------------------------
+    # Keeps an open application synchronized. Distinct from push: SSE is for a
+    # tab that is already open, FCM is for reaching someone who is elsewhere.
+    # With this off, the stream endpoints report unavailable and every REST
+    # endpoint behaves exactly as before — the app degrades to its previous
+    # fetch-on-mount behaviour rather than breaking.
+    REALTIME_ENABLED: bool = os.getenv("REALTIME_ENABLED", "true").lower() == "true"
+    #: Lifetime of the single-purpose SSE ticket. Short because it travels in a
+    #: query string, where it lands in access and proxy logs.
+    REALTIME_TICKET_TTL_SECONDS: int = int(os.getenv("REALTIME_TICKET_TTL_SECONDS", "60"))
+    #: How often a live connection re-resolves the user's project access. This
+    #: is the window in which someone removed from a project keeps receiving
+    #: its events, so it is deliberately short.
+    REALTIME_AUTH_TTL_SECONDS: int = int(os.getenv("REALTIME_AUTH_TTL_SECONDS", "30"))
+    #: Comment frames that keep idle proxies from silently dropping the stream.
+    REALTIME_HEARTBEAT_SECONDS: int = int(os.getenv("REALTIME_HEARTBEAT_SECONDS", "25"))
+    #: Reconnect hint sent to EventSource; the client adds jitter and backoff.
+    REALTIME_RETRY_MS: int = int(os.getenv("REALTIME_RETRY_MS", "3000"))
+    #: Per-connection queue bound. Overflow is dropped rather than blocking the
+    #: listener — safe only because events are hints and the client refetches.
+    REALTIME_MAX_QUEUE: int = int(os.getenv("REALTIME_MAX_QUEUE", "100"))
+
+    # --- RAG (document question answering) ----------------------------------
+    # Off by default, and the application must start cleanly with it off:
+    # every RAG route reports itself unavailable rather than erroring, and no
+    # other feature observes any difference.
+    RAG_ENABLED: bool = os.getenv("RAG_ENABLED", "false").lower() == "true"
+    OPENAI_EMBEDDING_MODEL: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    #: The answering model. Deliberately its own setting rather than reusing
+    #: OPENAI_ANALYSIS_MODEL, which names a voice-analysis model — the two
+    #: workloads have no reason to move together.
+    OPENAI_RAG_MODEL: str = os.getenv("OPENAI_RAG_MODEL", "gpt-4.1-mini")
+    RAG_CHUNK_TOKENS: int = int(os.getenv("RAG_CHUNK_TOKENS", "500"))
+    RAG_CHUNK_OVERLAP: int = int(os.getenv("RAG_CHUNK_OVERLAP", "75"))
+    RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "5"))
+    RAG_MAX_FILE_MB: int = int(os.getenv("RAG_MAX_FILE_MB", "25"))
+    #: Guards against a pathological PDF turning one request into thousands of
+    #: embedding calls.
+    RAG_MAX_PAGES: int = int(os.getenv("RAG_MAX_PAGES", "300"))
+
+    # --- Push notifications (FCM: Android, iOS and Web) ---------------------
+    # Nothing here carries a secret value in the repository. The service
+    # account arrives at runtime as a mounted file (FCM_CREDENTIALS_FILE) or,
+    # for PaaS deployments that only offer environment variables, inline
+    # (FCM_CREDENTIALS_JSON). With neither set the provider reports itself
+    # unconfigured and notifications are still persisted and readable in-app —
+    # push is an enhancement to the notification system, never its foundation.
+    PUSH_ENABLED: bool = os.getenv("PUSH_ENABLED", "false").lower() == "true"
+    FCM_PROJECT_ID: Optional[str] = os.getenv("FCM_PROJECT_ID")
+    FCM_CREDENTIALS_FILE: Optional[str] = os.getenv("FCM_CREDENTIALS_FILE")
+    FCM_CREDENTIALS_JSON: Optional[str] = os.getenv("FCM_CREDENTIALS_JSON")
+    PUSH_TIMEOUT_SECONDS: float = float(os.getenv("PUSH_TIMEOUT_SECONDS", "10"))
+    #: Must match the channel the Flutter app creates at startup. Android 8+
+    #: drops a notification whose channel id does not exist on the device.
+    PUSH_ANDROID_CHANNEL_ID: str = os.getenv("PUSH_ANDROID_CHANNEL_ID", "structiq_default")
+    #: Icon shown on browser notifications, resolved against FRONTEND_URL.
+    PUSH_WEB_ICON_PATH: str = os.getenv("PUSH_WEB_ICON_PATH", "/favicon.svg")
+    #: Deliver on the calling thread instead of a background one. For tests and
+    #: scripts that need the send to have completed before they assert; leaving
+    #: it on in a served process would put FCM latency in the request path.
+    PUSH_SYNCHRONOUS: bool = os.getenv("PUSH_SYNCHRONOUS", "false").lower() == "true"
+    #: Development only. Exposes POST /notifications/dev/test-notification,
+    #: which sends a notification to *the caller only*. Must stay false in
+    #: production — see the endpoint's own guard.
+    NOTIFICATION_DEV_TEST_ENABLED: bool = os.getenv(
+        "NOTIFICATION_DEV_TEST_ENABLED", "false"
+    ).lower() == "true"
+
     # --- Login brute-force protection ---------------------------------------
     # The audit found no rate limiting of any kind; these are the first.
     LOGIN_MAX_ATTEMPTS: int = int(os.getenv("LOGIN_MAX_ATTEMPTS", "10"))
@@ -121,6 +189,55 @@ class Settings(BaseSettings):
             raise ValueError("OTP_MAX_VERIFY_ATTEMPTS must be between 1 and 10")
         if not 1 <= self.STEP_UP_VALIDITY_MINUTES <= 60:
             raise ValueError("STEP_UP_VALIDITY_MINUTES must be between 1 and 60")
+        # Refuse to boot claiming push works when it cannot: a silently
+        # unconfigured provider looks identical to "nobody has registered a
+        # device yet", and that ambiguity is exactly what makes missing
+        # notifications hard to diagnose.
+        if self.PUSH_ENABLED:
+            has_credentials = bool(
+                (self.FCM_CREDENTIALS_FILE or "").strip()
+                or (self.FCM_CREDENTIALS_JSON or "").strip()
+            )
+            if not has_credentials:
+                raise ValueError(
+                    "PUSH_ENABLED=true requires FCM_CREDENTIALS_FILE or "
+                    "FCM_CREDENTIALS_JSON in the backend environment"
+                )
+        if not 1 <= self.PUSH_TIMEOUT_SECONDS <= 60:
+            raise ValueError("PUSH_TIMEOUT_SECONDS must be between 1 and 60")
+        # Same reasoning as the voice and push checks above: refuse to boot on
+        # a configuration that claims a feature works when it cannot, rather
+        # than failing later at the first question a user asks.
+        if self.RAG_ENABLED and not self.OPENAI_API_KEY:
+            raise ValueError(
+                "RAG_ENABLED=true requires OPENAI_API_KEY in the backend environment"
+            )
+        if not 100 <= self.RAG_CHUNK_TOKENS <= 4000:
+            raise ValueError("RAG_CHUNK_TOKENS must be between 100 and 4000")
+        # Overlap at or above chunk size means each chunk re-reads the whole
+        # previous one, so the window never advances and chunking cannot
+        # terminate. Caught here rather than as a hang during indexing.
+        if not 0 <= self.RAG_CHUNK_OVERLAP < self.RAG_CHUNK_TOKENS:
+            raise ValueError("RAG_CHUNK_OVERLAP must be >= 0 and less than RAG_CHUNK_TOKENS")
+        if not 1 <= self.RAG_TOP_K <= 50:
+            raise ValueError("RAG_TOP_K must be between 1 and 50")
+        if not 1 <= self.RAG_MAX_FILE_MB <= 200:
+            raise ValueError("RAG_MAX_FILE_MB must be between 1 and 200")
+        if not 1 <= self.RAG_MAX_PAGES <= 5000:
+            raise ValueError("RAG_MAX_PAGES must be between 1 and 5000")
+        # A ticket measured in hours would defeat the point of keeping it out
+        # of the access token's blast radius.
+        if not 10 <= self.REALTIME_TICKET_TTL_SECONDS <= 300:
+            raise ValueError("REALTIME_TICKET_TTL_SECONDS must be between 10 and 300")
+        # The upper bound is how long a removed user could keep receiving a
+        # project's events; five minutes is already generous.
+        if not 5 <= self.REALTIME_AUTH_TTL_SECONDS <= 300:
+            raise ValueError("REALTIME_AUTH_TTL_SECONDS must be between 5 and 300")
+        # Above ~50s many proxies drop an idle connection before the next beat.
+        if not 5 <= self.REALTIME_HEARTBEAT_SECONDS <= 50:
+            raise ValueError("REALTIME_HEARTBEAT_SECONDS must be between 5 and 50")
+        if not 10 <= self.REALTIME_MAX_QUEUE <= 10000:
+            raise ValueError("REALTIME_MAX_QUEUE must be between 10 and 10000")
         return self
     
     class Config:

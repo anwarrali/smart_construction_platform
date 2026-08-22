@@ -9,6 +9,7 @@ import { ThemeSwitcher } from "../ThemeSwitcher";
 import { useAuth } from "../../../hooks/useAuth";
 import { useRole } from "../../../hooks/useRole";
 import { useNotificationStore } from "../../../app/store/notification.store";
+import { useRealtimeRefresh } from "../../../hooks/useRealtimeRefresh";
 import { ROUTES } from "../../../utils/constants";
 import api from "../../../services/api";
 import { useProjectWorkspace } from "../../../features/projects/context/ProjectWorkspaceContext";
@@ -38,6 +39,15 @@ export const Topbar = ({ onOpenMenu }: { onOpenMenu?: () => void }) => {
   useEffect(() => {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
+
+  // The bell used to fetch once on mount and never again, so a notification
+  // arriving while the tab stayed open was invisible until a reload. Both
+  // event types matter: CREATED when somebody else acts, UPDATED when this
+  // user reads a notification in another tab and the badge must drop here too.
+  useRealtimeRefresh(
+    ["NOTIFICATION_CREATED", "NOTIFICATION_UPDATED"],
+    fetchUnreadCount,
+  );
 
   const initials =
     user?.fullName

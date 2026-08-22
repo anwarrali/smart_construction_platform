@@ -36,6 +36,7 @@ from app.schemas.message import (
 )
 from app.schemas.user import UserOut
 from app.services.audit_service import record_audit
+from app.services.realtime import EventType, publish_event
 from app.services.notification_service import (
     CATEGORY_DIRECT, CATEGORY_WORKFLOW, PRIORITY_NORMAL, notify,
 )
@@ -291,6 +292,24 @@ def _send_message(
             receipt.response_status = "RESPONDED"
     conversation.last_activity_at = message.created_at or datetime.now(timezone.utc)
     _notify_message_recipients(db, conversation, message, sender)
+
+    # A realtime hint for anyone with this thread open. `notify` above already
+    # updates the bell; this is what refreshes the conversation itself, which
+    # otherwise had to wait for a 15-second poll.
+    #
+    # Addressed per participant rather than to the project: everyone in a
+    # project can see project events, but only participants have any business
+    # learning that this thread moved. The sender is included so their own
+    # other tabs stay in step.
+    for participant_id in {sender.id, *(row[0] for row in recipient_ids)}:
+        publish_event(
+            db,
+            event_type=EventType.MESSAGE_CREATED,
+            user_id=participant_id,
+            project_id=conversation.project_id,
+            entity_type="CONVERSATION",
+            entity_id=conversation.id,
+        )
     return message
 
 

@@ -13,3 +13,8 @@ email-validator
 openai>=2.0.0,<3.0.0
 httpx>=0.27.0,<0.28.0
 ifcopenshell==0.8.5
+# RAG: PDF text extraction and token-aware chunking. Both are optional at
+# import time — the application starts and every non-RAG test runs without
+# them; RAG reports itself unavailable instead of erroring.
+pypdf==5.1.0
+tiktoken==0.8.0

@@ -24,6 +24,7 @@ from app.models.field_submission import (
     PhotoCategoryAssignment,
 )
 from app.models.notification import Notification
+from app.services.notification_service import notify
 from app.models.project import Project
 from app.models.task import Task
 from app.models.user import User
@@ -60,16 +61,22 @@ def _submission_or_404(db: Session, submission_id: uuid.UUID) -> FieldSubmission
 def _notify(
     db: Session, user_id: uuid.UUID, submission: FieldSubmission, title: str, message: str
 ) -> None:
-    db.add(Notification(
+    """Notify one person about a field submission.
+
+    Through the service so the notification also reaches push; the row it
+    writes is identical to the one this helper used to construct by hand.
+    """
+    notify(
+        db,
         user_id=user_id,
         title=title,
         message=message,
-        type=NotificationType.TASK_UPDATED,
+        notification_type=NotificationType.TASK_UPDATED,
         project_id=submission.project_id,
         task_id=submission.task_id,
-        related_entity_type="FIELD_SUBMISSION",
-        related_entity_id=submission.id,
-    ))
+        entity_type="FIELD_SUBMISSION",
+        entity_id=submission.id,
+    )
 
 
 def _directions(raw: str | None, count: int) -> list[EvidencePhotoDirection | None]:

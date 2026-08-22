@@ -20,6 +20,10 @@ from app.core.deps import (
 from app.models.enums import IssueStatus, IssueSeverity, UserRole
 from app.models.project import Project, ProjectMember
 from app.models.notification import Notification
+from app.services.realtime import EventType, publish_event
+from app.services.notification_service import (
+    CATEGORY_WORKFLOW, PRIORITY_IMPORTANT, PRIORITY_NORMAL, notify, notify_users,
+)
 from app.models.enums import NotificationType
 from app.services.audit_service import record_audit
 from app.models.attachment import Attachment
@@ -169,12 +173,28 @@ def create_issue(
             profile = member.user.engineer_profile
             if (profile and profile.discipline.value == issue_data.category) or member.is_site_engineer:
                 recipients.add(member.user_id)
-    for recipient in recipients:
-        db.add(Notification(user_id=recipient, title="New Project Issue",
-            message=f"A new {issue_data.severity.value}-priority issue was reported in {project.name if project else 'the project'}: {issue_data.title}",
-            type=NotificationType.TASK_UPDATED, project_id=issue_data.project_id,
-            related_entity_type="ISSUE", related_entity_id=new_issue.id))
+    # Through the service (rather than one hand-built row each) so the issue
+    # also reaches these people's phones, and so the duplicate-recipient case
+    # — a project manager who is also the discipline engineer — is collapsed
+    # in one place instead of relying on `recipients` being a set here.
+    notify_users(
+        db,
+        user_ids=recipients,
+        title="New Project Issue",
+        message=f"A new {issue_data.severity.value}-priority issue was reported in {project.name if project else 'the project'}: {issue_data.title}",
+        notification_type=NotificationType.TASK_UPDATED,
+        project_id=issue_data.project_id,
+        entity_type="ISSUE",
+        entity_id=new_issue.id,
+    )
     record_audit(db, actor_id=current_user.id, action="created", entity_type="issue", entity_id=new_issue.id, project_id=new_issue.project_id)
+    # Project-scoped: an issue list shows every issue in the project, so
+    # anyone viewing one needs the hint. Ids only — the refetch supplies the
+    # detail, through the same endpoint that already filters by role.
+    publish_event(
+        db, event_type=EventType.ISSUE_CREATED, project_id=new_issue.project_id,
+        entity_type="ISSUE", entity_id=new_issue.id,
+    )
     db.commit()
     db.refresh(new_issue)
     return new_issue
@@ -228,28 +248,64 @@ def update_issue(
         issue.status = issue_data.status
         if issue_data.status in {IssueStatus.RESOLVED, IssueStatus.CLOSED}:
             issue.resolved_at = datetime.now(timezone.utc)
+    newly_assigned_to = None
     if issue_data.assigned_to_id is not None:
+        # Captured before the write: after the assignment there is no longer
+        # any way to tell a new assignee from a resave of the same one.
+        if issue_data.assigned_to_id != issue.assigned_to_id:
+            newly_assigned_to = issue_data.assigned_to_id
         issue.assigned_to_id = issue_data.assigned_to_id
     if issue_data.resolution_notes is not None:
         issue.resolution_notes = issue_data.resolution_notes
     if issue.raised_by_id != current_user.id and (
         issue_data.status is not None or issue_data.resolution_notes is not None
     ):
-        db.add(Notification(
+        notify(
+            db,
             user_id=issue.raised_by_id,
             title="Task Blocker Updated" if issue.category and issue.category.startswith("blocker:") else "Project Issue Updated",
             message=(
                 f'{issue.title} is now {issue.status.value.replace("_", " ")}.'
                 + (f" {issue.resolution_notes}" if issue.resolution_notes else "")
             ),
-            type=NotificationType.TASK_UPDATED,
+            notification_type=NotificationType.TASK_UPDATED,
             project_id=issue.project_id,
             task_id=issue.task_id,
-            related_entity_type="ISSUE",
-            related_entity_id=issue.id,
-        ))
+            entity_type="ISSUE",
+            entity_id=issue.id,
+        )
+
+    # The assignee was never told. `assigned_to_id` has been settable since the
+    # issue workflow migration, but the only notification on this path went to
+    # whoever *raised* the issue — so the person expected to act on it learned
+    # about it by noticing it in a list. Fired only when the assignee actually
+    # changes, so repeated saves of an unrelated field stay silent.
+    if newly_assigned_to and newly_assigned_to != current_user.id:
+        notify(
+            db,
+            user_id=newly_assigned_to,
+            title="Issue assigned to you",
+            message=f'You were assigned to the issue "{issue.title}".',
+            notification_type=NotificationType.TASK_ASSIGNED,
+            category=CATEGORY_WORKFLOW,
+            priority=PRIORITY_IMPORTANT if issue.severity == IssueSeverity.CRITICAL else PRIORITY_NORMAL,
+            requires_action=True,
+            project_id=issue.project_id,
+            task_id=issue.task_id,
+            entity_type="ISSUE",
+            entity_id=issue.id,
+            # One notification per assignment, not per subsequent edit.
+            dedupe_key=f"issue-assigned:{issue.id}:{newly_assigned_to}",
+            message_key="issue.assigned",
+            message_params={"title": issue.title},
+        )
+
         
     record_audit(db, actor_id=current_user.id, action="updated", entity_type="issue", entity_id=issue.id, project_id=issue.project_id)
+    publish_event(
+        db, event_type=EventType.ISSUE_UPDATED, project_id=issue.project_id,
+        entity_type="ISSUE", entity_id=issue.id,
+    )
     db.commit()
     db.refresh(issue)
     return issue

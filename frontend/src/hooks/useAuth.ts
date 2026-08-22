@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useAuthStore } from "../app/store/auth.store";
 import api from "../services/api";
+import { getDeviceId, teardownWebPush } from "../services/push/webPush";
 import type { LoginRequest } from "../types/auth";
 
 export const useAuth = () => {
@@ -33,6 +34,14 @@ export const useAuth = () => {
   );
 
   const logout = useCallback(async () => {
+    // Retire this browser's push registration *before* the session ends, while
+    // the access token is still valid. Skipping it would leave a shared
+    // machine delivering this user's notifications to whoever signs in next —
+    // and after `storeLogout()` there is no longer a token to authorize the
+    // call with. Both halves are best-effort: signing out must never be
+    // blocked by the network.
+    await api.notifications.unregisterDevice({ deviceId: getDeviceId() }).catch(() => {});
+    await teardownWebPush();
     await api.auth.logout(tokens?.refreshToken).catch(() => {});
     storeLogout();
   }, [storeLogout, tokens?.refreshToken]);

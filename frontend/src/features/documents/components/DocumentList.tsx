@@ -13,7 +13,14 @@ interface DocumentListProps {
   isLoading: boolean;
   onDownload?: (doc: Document) => void;
   onDelete?: (doc: Document) => void;
+  /** Opens the question-answering modal. Omitted where RAG is not offered. */
+  onAskAI?: (doc: Document) => void;
 }
+
+/** Only PDFs can be indexed, so the action is only offered on PDFs.
+ *  Showing it on a .docx would offer something guaranteed to fail. */
+const isPdf = (doc: Document) =>
+  doc.mimeType === "application/pdf" || /\.pdf($|\?)/i.test(doc.fileUrl || "");
 
 const typeIcons: Record<string, string> = {
   drawing: "📐",
@@ -30,6 +37,7 @@ export const DocumentList = ({
   isLoading,
   onDownload,
   onDelete,
+  onAskAI,
 }: DocumentListProps) => {
   const { t } = useTranslation();
   if (isLoading) return <Loader text="Loading documents..." />;
@@ -78,6 +86,11 @@ export const DocumentList = ({
               projectId={doc.projectId}
               intents={["forward"]}
             />
+            {onAskAI && isPdf(doc) && (
+              <Button variant="ghost" size="sm" onClick={() => onAskAI(doc)}>
+                {t("documentList.ask_ai")}
+              </Button>
+            )}
             {onDownload && (
               <Button variant="ghost" size="sm" onClick={() => onDownload(doc)}>
                 {t("documentList.download")}

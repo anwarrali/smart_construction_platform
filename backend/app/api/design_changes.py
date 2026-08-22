@@ -15,6 +15,7 @@ from app.models.enums import DesignChangeStatus, UserRole
 from app.models.attachment import Attachment
 from app.models.project import Project, ProjectMember
 from app.models.notification import Notification
+from app.services.notification_service import notify_users
 from app.models.enums import NotificationType
 from app.services.audit_service import record_audit
 
@@ -158,11 +159,20 @@ def create_design_change(
             recipients.add(member.user_id)
         if member.is_site_engineer:
             recipients.add(member.user_id)
-    for recipient in recipients - {None}:
-        db.add(Notification(user_id=recipient, title="New Design Change",
-                            message=f"A new {new_change.source_discipline} Design Change was created for {project.name if project else 'the project'}: {new_change.title}",
-                            type=NotificationType.DESIGN_CHANGE, project_id=new_change.project_id,
-                            related_entity_type="DESIGN_CHANGE", related_entity_id=new_change.id))
+    # A design change is this platform's request-for-information flow: it is
+    # raised by one discipline and waits on another to review and respond.
+    # Routed through the service so those reviewers are reached on their phone
+    # rather than only the next time they open the web app.
+    notify_users(
+        db,
+        user_ids=recipients - {None},
+        title="New Design Change",
+        message=f"A new {new_change.source_discipline} Design Change was created for {project.name if project else 'the project'}: {new_change.title}",
+        notification_type=NotificationType.DESIGN_CHANGE,
+        project_id=new_change.project_id,
+        entity_type="DESIGN_CHANGE",
+        entity_id=new_change.id,
+    )
     record_audit(db, actor_id=current_user.id, action="created", entity_type="design_change",
                  entity_id=new_change.id, project_id=new_change.project_id,
                  details={"disciplines": sorted(relevant_disciplines)})
@@ -239,13 +249,16 @@ def approve_design_change(
     change.approved_by_id = current_user.id
     project = db.get(Project, change.project_id)
     recipients = {change.proposed_by_id, project.project_manager_id if project else None, project.owner_id if project else None}
-    for recipient in recipients - {None, current_user.id}:
-        db.add(Notification(
-            user_id=recipient, title="Design change approved",
-            message=f"{change.title} was approved.",
-            type=NotificationType.DESIGN_CHANGE, project_id=change.project_id,
-            related_entity_type="DESIGN_CHANGE", related_entity_id=change.id,
-        ))
+    notify_users(
+        db,
+        user_ids=recipients - {None, current_user.id},
+        title="Design change approved",
+        message=f"{change.title} was approved.",
+        notification_type=NotificationType.DESIGN_CHANGE,
+        project_id=change.project_id,
+        entity_type="DESIGN_CHANGE",
+        entity_id=change.id,
+    )
     record_audit(db, actor_id=current_user.id, action="approved", entity_type="design_change", entity_id=change.id, project_id=change.project_id)
     db.commit()
     db.refresh(change)
@@ -272,13 +285,16 @@ def reject_design_change(
     change.review_notes = data.get("reviewNotes") or data.get("review_notes")
     project = db.get(Project, change.project_id)
     recipients = {change.proposed_by_id, project.project_manager_id if project else None, project.owner_id if project else None}
-    for recipient in recipients - {None, current_user.id}:
-        db.add(Notification(
-            user_id=recipient, title="Design change rejected",
-            message=f"{change.title} was rejected.",
-            type=NotificationType.DESIGN_CHANGE, project_id=change.project_id,
-            related_entity_type="DESIGN_CHANGE", related_entity_id=change.id,
-        ))
+    notify_users(
+        db,
+        user_ids=recipients - {None, current_user.id},
+        title="Design change rejected",
+        message=f"{change.title} was rejected.",
+        notification_type=NotificationType.DESIGN_CHANGE,
+        project_id=change.project_id,
+        entity_type="DESIGN_CHANGE",
+        entity_id=change.id,
+    )
     record_audit(db, actor_id=current_user.id, action="rejected", entity_type="design_change", entity_id=change.id, project_id=change.project_id)
     db.commit()
     db.refresh(change)

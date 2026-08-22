@@ -16,6 +16,7 @@ import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceCont
 import toast from "react-hot-toast";
 import { Badge } from "../../../components/ui/Badge";
 import { useNavigate } from "react-router-dom";
+import { useRealtimeRefresh } from "../../../hooks/useRealtimeRefresh";
 import type {
   Task,
   CreateTaskRequest,
@@ -142,6 +143,14 @@ const ManagedTasksPage = () => {
       toast.error(errorMessage(err, t("tasksPage.unable_to_load_tasks")));
     } finally { setIsLoading(false); }
   }, [activeProjectId, debouncedSearch, statusFilter, priorityFilter, t]);
+
+  // Task boards are shared: a status change made by one person needs to appear
+  // on everyone else's board. Scoped to the open project so activity elsewhere
+  // does not trigger a needless refetch — the server has already limited these
+  // events to projects this user may see.
+  useRealtimeRefresh(["TASK_CREATED", "TASK_UPDATED"], fetchTasks, {
+    projectId: activeProjectId || undefined,
+  });
 
   useEffect(() => {
     if (isFirstRender.current) {

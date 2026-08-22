@@ -1764,7 +1764,8 @@
   "documentList": {
     "no_documents_found": "لم يتم العثور على مستندات",
     "download": "تنزيل",
-    "delete": "حذف"
+    "delete": "حذف",
+    "ask_ai": "اسأل الذكاء الاصطناعي"
   },
   "documentsPage": {
     "project_documents_and_files": "مستندات المشروع وملفاته",
@@ -2827,5 +2828,44 @@
     "invalidCode": "هذا الرمز غير صالح أو منتهي الصلاحية. اطلب رمزًا جديدًا إذا لزم الأمر.",
     "requestFailed": "تعذّر إرسال رمز التحقق. حاول مرة أخرى بعد قليل.",
     "deliveryUnavailable": "إرسال البريد الإلكتروني غير مُهيّأ في هذه البيئة، لذا تعذّر إرسال الرمز."
+  },
+  "notificationRedirect": {
+    "opening": "جارٍ فتح الإشعار…",
+    "not_found": "لم يعد هذا الإشعار متاحًا."
+  },
+  "documentAssistant": {
+    "title": "اسأل عن هذا المستند",
+    "index_state": "فهرسة الذكاء الاصطناعي:",
+    "index_for_ai": "فهرسة للذكاء الاصطناعي",
+    "reindex": "إعادة الفهرسة",
+    "indexing": "جارٍ الفهرسة…",
+    "index_hint": "افهرس هذا الملف مرة واحدة ليتم الإجابة عن الأسئلة من نصه.",
+    "indexed_summary": "{{pages}} صفحة · {{chunks}} مقطعًا",
+    "indexed_toast": "تمت فهرسة {{pages}} صفحة في {{chunks}} مقطعًا.",
+    "index_failed": "فشلت الفهرسة.",
+    "status_failed": "تعذّرت قراءة حالة الفهرسة.",
+    "question_label": "سؤالك",
+    "question_placeholder": "مثال: ما نسبة المحتجزات؟",
+    "ask": "اسأل",
+    "asking": "جارٍ السؤال…",
+    "ask_failed": "تعذّرت الإجابة عن السؤال.",
+    "searching": "جارٍ البحث في المستند…",
+    "answers_from_this_document": "الإجابات مأخوذة من هذا المستند فقط.",
+    "index_before_asking": "افهرس المستند قبل طرح سؤال.",
+    "not_found_hint": "لا يوجد في النص المفهرس ما يجيب عن هذا. جرّب إعادة صياغة السؤال، أو تأكد من فهرسة المستند الصحيح.",
+    "sources_zero": "لا مصادر",
+    "sources_one": "مصدر",
+    "sources_two": "مصدران",
+    "sources_few": "مصادر",
+    "sources_many": "مصدرًا",
+    "sources_other": "مصدر",
+    "page": "صفحة {{page}}",
+    "open_failed": "تعذّر فتح المستند.",
+    "status": {
+      "NOT_INDEXED": "غير مفهرس",
+      "INDEXING": "جارٍ الفهرسة",
+      "READY": "جاهز",
+      "FAILED": "فشل"
+    }
   }
 }

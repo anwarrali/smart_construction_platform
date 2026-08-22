@@ -28,6 +28,8 @@ from app.api.ai_actions import router as ai_actions_router
 from app.api.collaboration import router as collaboration_router
 from app.api.permissions import router as permissions_router
 from app.api.cost_validations import router as cost_validations_router
+from app.api.rag import router as rag_router
+from app.api.events import router as events_router
 
 api_router = APIRouter()
 
@@ -65,3 +67,9 @@ api_router.include_router(collaboration_router)
 # no reachable endpoint behind them. Every route in this module 404'd
 # regardless of role, including Admin.
 api_router.include_router(cost_validations_router)
+# Document question answering. Every route is gated on RAG_ENABLED and
+# resolves document permissions through the same rules the documents API uses.
+api_router.include_router(rag_router)
+# Server-Sent Events. Keeps an open application synchronized; distinct from
+# push, which reaches a user who is not looking at it.
+api_router.include_router(events_router)

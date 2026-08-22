@@ -29,6 +29,13 @@ services:
       - uploads_data:/app/uploads
       # Private voice and IFC source files; never served by the public upload mount.
       - voice_audio_data:/app/private_uploads
+      # Firebase service account, mounted read-only from a git-ignored
+      # directory. Create ./backend/secrets/ and drop the JSON in as
+      # fcm-service-account.json to enable push; the bind is optional in the
+      # sense that with PUSH_ENABLED=false nothing reads it, but Docker
+      # requires the host directory to exist, so `mkdir backend/secrets` is
+      # part of first-run setup. See docs/NOTIFICATIONS.md.
+      - ./backend/secrets:/run/secrets:ro
     depends_on:
       db:
         condition: service_healthy
@@ -43,10 +50,38 @@ services:
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
+      # Push notifications. Off unless PUSH_ENABLED is set; the container then
+      # reads the service account from the path below, which is mounted
+      # read-only from ./backend/secrets (git-ignored) rather than baked in.
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-/run/secrets/fcm-service-account.json}
+      PUSH_ANDROID_CHANNEL_ID: ${PUSH_ANDROID_CHANNEL_ID:-structiq_default}
+      NOTIFICATION_DEV_TEST_ENABLED: ${NOTIFICATION_DEV_TEST_ENABLED:-false}
+      # Document question answering. Off unless RAG_ENABLED is set; the
+      # OpenAI key comes from ./backend/.env via env_file, never from here.
+      RAG_ENABLED: ${RAG_ENABLED:-true}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_RAG_MODEL: ${OPENAI_RAG_MODEL:-gpt-4.1-mini}
+      RAG_CHUNK_TOKENS: ${RAG_CHUNK_TOKENS:-500}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-75}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      RAG_MAX_FILE_MB: ${RAG_MAX_FILE_MB:-25}
+      # Realtime. Cross-worker delivery uses PostgreSQL LISTEN/NOTIFY, so
+      # there is no broker to configure and --workers 2 stays as it is.
+      REALTIME_ENABLED: ${REALTIME_ENABLED:-true}
+      REALTIME_TICKET_TTL_SECONDS: ${REALTIME_TICKET_TTL_SECONDS:-60}
+      REALTIME_AUTH_TTL_SECONDS: ${REALTIME_AUTH_TTL_SECONDS:-30}
+      REALTIME_HEARTBEAT_SECONDS: ${REALTIME_HEARTBEAT_SECONDS:-25}
       PYTHONUNBUFFERED: 1
     networks:
       - app-network
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers"
+    # `depends_on: service_healthy` gates only the FIRST start. After any
+    # crash, `restart: always` restarts this container immediately with no
+    # health gate and no dependency ordering — so one transient blip becomes a
+    # permanent crash loop that never self-heals. wait_for_db polls the real
+    # connection and proceeds the moment it succeeds.
+    command: sh -c "python scripts/wait_for_db.py && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers"
 
   frontend:
     build:
@@ -54,6 +89,16 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+        # Web push. Empty by default, which leaves push cleanly unavailable
+        # rather than broken — the app still works and now says so in the
+        # console. Set these in the root .env to enable it. Public client
+        # identifiers only; the sending credential lives on the backend.
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:-}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN:-}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:-}
+        VITE_FIREBASE_MESSAGING_SENDER_ID: ${VITE_FIREBASE_MESSAGING_SENDER_ID:-}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:-}
+        VITE_FIREBASE_VAPID_KEY: ${VITE_FIREBASE_VAPID_KEY:-}
     container_name: construction_frontend
     ports:
       - "5173:80"

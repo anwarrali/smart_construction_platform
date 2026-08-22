@@ -65,6 +65,7 @@ import type {
 } from "../types/photoArchive";
 import type { IFCComparison, IFCElement, IFCFinding, IFCModelGroup, IFCSpatialDetails, IFCSpatialNode, IFCSuggestion, IFCVersion } from "../types/ifc";
 import type { AIActionPage, AIActionVersion } from "../types/aiAction";
+import type { DocumentIndexStatus, RagQueryResponse } from "../types/rag";
 import type { AIInsight, AIInsightSource, AIIntelligenceOverview } from "../types/aiInsight";
 
 const api = {
@@ -595,6 +596,68 @@ const api = {
     getUnreadCount: () =>
       axiosInstance
         .get<{ count: number }>(ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT)
+        .then((res) => res.data),
+    getById: (id: string) =>
+      axiosInstance
+        .get(ENDPOINTS.NOTIFICATIONS.BY_ID(id))
+        .then((res) => res.data),
+    registerDevice: (data: {
+      token: string;
+      platform: "android" | "ios" | "web";
+      deviceId?: string;
+      deviceName?: string;
+      appVersion?: string;
+    }) =>
+      axiosInstance
+        .post(ENDPOINTS.NOTIFICATIONS.DEVICES, data)
+        .then((res) => res.data),
+    unregisterDevice: (data: { token?: string; deviceId?: string }) =>
+      // DELETE with a body: the identifier is not a resource path segment, and
+      // an FCM token is far too long to sit safely in a URL.
+      axiosInstance
+        .delete<void>(ENDPOINTS.NOTIFICATIONS.DEVICES, { data })
+        .then((res) => res.data),
+    listDevices: () =>
+      axiosInstance
+        .get(ENDPOINTS.NOTIFICATIONS.DEVICES)
+        .then((res) => res.data),
+    sendTestNotification: () =>
+      axiosInstance
+        .post(ENDPOINTS.NOTIFICATIONS.DEV_TEST)
+        .then((res) => res.data),
+  },
+
+  // Realtime. Only the ticket goes through axios — it needs the bearer token,
+  // and minting it here means the stream inherits the same session handling
+  // (including refresh-on-401) as every other call.
+  realtime: {
+    ticket: () =>
+      axiosInstance
+        .post<{ ticket: string; expiresInSeconds: number; heartbeatSeconds: number }>(
+          ENDPOINTS.REALTIME.TICKET,
+        )
+        .then((res) => res.data),
+    health: () =>
+      axiosInstance.get(ENDPOINTS.REALTIME.HEALTH).then((res) => res.data),
+  },
+
+  // Document question answering. Uses the shared axios instance, so the access
+  // token, refresh-on-401 and step-up handling are inherited rather than
+  // reimplemented here.
+  rag: {
+    indexDocument: (documentId: string, force = false) =>
+      axiosInstance
+        .post<DocumentIndexStatus>(
+          `${ENDPOINTS.RAG.INDEX(documentId)}${force ? "?force=true" : ""}`,
+        )
+        .then((res) => res.data),
+    getStatus: (documentId: string) =>
+      axiosInstance
+        .get<DocumentIndexStatus>(ENDPOINTS.RAG.STATUS(documentId))
+        .then((res) => res.data),
+    query: (data: { projectId: string; query: string; documentId?: string }) =>
+      axiosInstance
+        .post<RagQueryResponse>(ENDPOINTS.RAG.QUERY, data)
         .then((res) => res.data),
   },
 

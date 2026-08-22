@@ -1,7 +1,8 @@
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import BigInteger, ForeignKey, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,9 +38,34 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     version: Mapped[int] = mapped_column(nullable=False, default=1)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # --- RAG indexing state -------------------------------------------------
+    # A document is only queryable when `index_status` is READY. Every other
+    # value — including a run that died halfway — makes retrieval refuse it,
+    # so a partial index is unreachable by construction rather than by
+    # convention. See `services/rag/ingestion.py`.
+
+    #: NOT_INDEXED | INDEXING | READY | FAILED.
+    #: A plain string rather than a PG enum, matching `notifications.category`:
+    #: naming a new state should not require an enum migration.
+    index_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="NOT_INDEXED",
+        server_default="NOT_INDEXED", index=True,
+    )
+    #: Set only on success, cleared when a re-index begins.
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Why the last attempt failed, in words a user can act on. NULL when READY.
+    index_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     project: Mapped["Project"] = relationship(back_populates="documents")
     task: Mapped["Task"] = relationship()
     uploaded_by: Mapped["User"] = relationship(foreign_keys=[uploaded_by_id])
+    #: Deleting a document must not orphan its indexed text. The FK cascades
+    #: in the database; `passive_deletes` stops the ORM trying to nullify a
+    #: NOT NULL column first.
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     def __repr__(self) -> str:
         return f"<Document id={self.id} title={self.title} type={self.document_type}>"

@@ -29,6 +29,7 @@ from app.models.enums import (
     NotificationType,
     NotificationChannel,
     NotificationStatus,
+    DevicePlatform,
     VoiceProcessingStatus,
     VoiceAnalysisStatus,
     VoiceConfirmationStatus,
@@ -59,6 +60,7 @@ from app.models.issue import Issue
 
 # Documents + media
 from app.models.document import Document, MediaAsset
+from app.models.document_chunk import DocumentChunk
 from app.models.attachment import Attachment
 from app.models.field_submission import (
     FieldSubmission,
@@ -76,6 +78,7 @@ from app.models.ai_governance import AIActionVersion, DomainEvent, AIProviderCal
 
 # Notifications
 from app.models.notification import Notification
+from app.models.device_token import DeviceToken
 from app.models.audit_log import AuditLog
 from app.models.revoked_token import RevokedToken
 from app.models.rate_limit import RateLimitHit

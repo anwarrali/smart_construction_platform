@@ -20,4 +20,10 @@ class PreferencesService {
   Future<void> setLocaleCode(String? code) => code == null
       ? _preferences.remove(StorageKeys.locale)
       : _preferences.setString(StorageKeys.locale, code);
+
+  /// This installation's push device id, created on first use.
+  String? get pushDeviceId => _preferences.getString(StorageKeys.pushDeviceId);
+
+  Future<void> setPushDeviceId(String id) =>
+      _preferences.setString(StorageKeys.pushDeviceId, id);
 }

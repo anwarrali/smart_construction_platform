@@ -86,6 +86,9 @@ export const ROUTES = {
   REPORTS: "/reports",
   MESSAGES: "/messages",
   NOTIFICATIONS: "/notifications",
+  // Where a tapped push notification lands. Resolved to the real destination
+  // by NotificationRedirectPage, which knows the signed-in user's role.
+  NOTIFICATION_DETAIL: "/notifications/:id",
   USERS: "/users",
   SETTINGS: "/settings",
   OWNER_DASHBOARD: "/owner-dashboard",

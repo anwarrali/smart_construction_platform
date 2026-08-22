@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { useAuth } from "../../../hooks/useAuth";
+import { useRealtimeRefresh } from "../../../hooks/useRealtimeRefresh";
 import api from "../../../services/api";
 import type { ConversationDetail } from "../../../types/message";
 
@@ -29,10 +30,12 @@ export const ContextDiscussion = ({ projectId, contextType, contextId, title = "
     } finally { if (!quiet) setLoading(false); }
   }, [contextId, contextType, projectId]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    const timer = window.setInterval(() => load(true), 15000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+  // Replaces a 15-second poll — see the note in MessagesPage. Quiet, so a
+  // refresh never flashes a spinner over a discussion being read.
+  useRealtimeRefresh(
+    ["MESSAGE_CREATED", "MESSAGE_UPDATED"],
+    useCallback(() => void load(true), [load]),
+  );
   const send = async () => {
     if (!content.trim()) return;
     setBusy(true);

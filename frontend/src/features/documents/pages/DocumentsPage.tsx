@@ -7,6 +7,7 @@ import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { DocumentList } from "../components/DocumentList";
 import { DocumentUploader } from "../components/DocumentUploader";
+import { DocumentAssistant } from "../components/DocumentAssistant";
 import { documentsService } from "../services/documents.service";
 import { useDebounce } from "../../../hooks/useDebounce";
 import type {
@@ -28,6 +29,8 @@ export const DocumentsPage = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  // The document currently open in the question-answering modal, or null.
+  const [assistantDocument, setAssistantDocument] = useState<Document | null>(null);
   const [projects, setProjects] = useState<Array<{id:string;name:string}>>([]);
   const debouncedSearch = useDebounce(search);
   const isFirstRender = useRef(true);
@@ -126,8 +129,17 @@ export const DocumentsPage = () => {
           isLoading={isLoading}
           onDownload={handleDownload}
           onDelete={canUpload ? handleDelete : undefined}
+          // Offered to everyone who can see the row: the server applies the
+          // same document permissions to a question as to a download.
+          onAskAI={setAssistantDocument}
         />
       </Card>
+
+      <DocumentAssistant
+        document={assistantDocument}
+        isOpen={assistantDocument !== null}
+        onClose={() => setAssistantDocument(null)}
+      />
 
       {canUpload && <DocumentUploader
         isOpen={isUploadOpen}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session_manager.dart';
+import '../../core/push/push_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
@@ -210,6 +211,13 @@ class ProfileScreen extends ConsumerWidget {
                     side: const BorderSide(color: AppColors.destructive),
                   ),
                   onPressed: () async {
+                    // Before the session ends, not after: retiring this
+                    // handset's push registration is an authenticated call,
+                    // and once `logout()` has cleared the tokens there is
+                    // nothing left to authorize it with. Skipping it would
+                    // leave a shared site phone delivering this user's
+                    // notifications to whoever signs in next.
+                    await ref.read(pushControllerProvider).stop();
                     await ref
                         .read(projectContextProvider.notifier)
                         .clearForLogout();

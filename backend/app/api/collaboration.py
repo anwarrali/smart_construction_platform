@@ -21,6 +21,7 @@ from app.models.ifc import AIInsight
 from app.models.issue import Issue
 from app.models.message import Conversation, Message
 from app.models.notification import Notification
+from app.services.notification_service import notify
 from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.site_report import SiteReport
@@ -110,11 +111,17 @@ def _visit_payload(value: SiteVisit) -> dict:
 
 def _notify(db: Session, *, user_id, project_id, title, message, category, entity_type, entity_id,
             requires_action=False, action_url=None):
-    db.add(Notification(
-        user_id=user_id, project_id=project_id, title=title, message=message,
-        type=NotificationType.SYSTEM, category=category, requires_action=requires_action,
-        related_entity_type=entity_type, related_entity_id=entity_id, action_url=action_url,
-    ))
+    """Notify one person about an owner request or site visit.
+
+    Through the service so the notification also reaches push; every persisted
+    field is the same as when this built the row itself.
+    """
+    notify(
+        db, user_id=user_id, project_id=project_id, title=title, message=message,
+        notification_type=NotificationType.SYSTEM, category=category,
+        requires_action=requires_action,
+        entity_type=entity_type, entity_id=entity_id, action_url=action_url,
+    )
 
 
 def _route_owner_request(db: Session, item: OwnerRequest) -> uuid.UUID | None:

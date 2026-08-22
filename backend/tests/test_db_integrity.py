@@ -31,8 +31,12 @@ def db():
         session.close()
 
 
-def test_the_migration_chain_has_exactly_one_head():
-    """A branch point would mean `alembic upgrade head` is ambiguous."""
+def _migration_chain() -> dict[str, str | None]:
+    """Every migration on disk, as {revision: down_revision}.
+
+    Shared by the two tests below so that "what is the head" is derived once
+    from the files rather than restated as a literal in each.
+    """
     # Some migrations declare `revision: str = "..."` (a type annotation),
     # most just `revision = "..."` — match both rather than assume one style.
     REVISION_RE = re.compile(r"^revision\s*(?::\s*[\w\[\], ]+)?\s*=\s*[\"']([\w]+)[\"']")
@@ -54,12 +58,24 @@ def test_the_migration_chain_has_exactly_one_head():
                 down_revision = match.group(2)
         if revision:
             revisions[revision] = down_revision
+    return revisions
 
+
+def _heads(revisions: dict[str, str | None]) -> list[str]:
     parents = set(revisions.values()) - {None}
-    heads = [rev for rev in revisions if rev not in parents]
-    # Bumped by `c87g2b4d0f69`, which gives voice action drafts a `sequence`
-    # so their order stops depending on a tied `created_at`.
-    assert heads == ["c87g2b4d0f69"], f"expected exactly one head, found: {heads}"
+    return [rev for rev in revisions if rev not in parents]
+
+
+def test_the_migration_chain_has_exactly_one_head():
+    """A branch point would mean `alembic upgrade head` is ambiguous."""
+    revisions = _migration_chain()
+    heads = _heads(revisions)
+    # Deliberately a literal: it is the tripwire that makes adding a migration
+    # a conscious act rather than something that slips in unnoticed. Bump it
+    # when you add one.
+    # Bumped by `e91c4d7a3f26`, which adds `document_chunks` (RAG-indexed
+    # passages) and the document indexing-state columns.
+    assert heads == ["e91c4d7a3f26"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.
@@ -69,8 +85,23 @@ def test_the_migration_chain_has_exactly_one_head():
 
 
 def test_the_running_database_is_at_the_latest_head(db):
+    """The database has had every migration on disk applied to it.
+
+    Compared against the head derived from the migration files rather than a
+    literal revision. This test previously pinned `b76f1a3c9e58` and had been
+    failing since `c87g2b4d0f69` was added without anyone updating it — which
+    is exactly the failure mode a hardcoded value invites here. The sibling
+    test above keeps the deliberate literal tripwire; this one only needs to
+    know whether the running database is caught up, and the answer to that
+    changes every time a migration lands.
+    """
     current = db.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert current == "b76f1a3c9e58"
+    expected = _heads(_migration_chain())
+    assert expected != [], "no migrations found on disk"
+    assert current == expected[0], (
+        f"database is at {current}, but the migrations on disk head at "
+        f"{expected[0]} — run `alembic upgrade head`"
+    )
 
 
 def test_the_project_id_indexes_the_audit_added_are_present(db):
@@ -120,6 +151,13 @@ def test_no_foreign_key_referencing_users_cascades_over_audit_or_work_records(db
         ("otp_challenges", "user_id"),
         ("step_up_grants", "user_id"),
         ("password_reset_tokens", "user_id"),
+        # A push registration is one of "their own tokens" in the sense this
+        # docstring means: it is a delivery address for a session, not a record
+        # of work. It *must* cascade — a surviving row would keep pushing
+        # notifications to a handset registered to a deleted account, and the
+        # notifications themselves already cascade, so the token would outlive
+        # everything it could refer to.
+        ("device_tokens", "user_id"),
         ("project_consultant_reviewers", "user_id"),
         ("project_members", "user_id"),
         ("project_view_states", "user_id"),

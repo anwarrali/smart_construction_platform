@@ -11,6 +11,7 @@ from app.models.document import Document
 from app.schemas.document import DocumentOut
 from app.core.deps import get_current_user
 from app.core.deps import user_has_project_access, accessible_project_ids, is_main_contractor_engineer, is_consultant_engineer
+from app.services.document_access import consultant_document_scope, owner_document_scope
 from app.services.file_storage import save_upload, delete_upload
 from app.models.enums import UserRole, DocumentType, TaskStatus, NotificationType
 from app.models.project import Project
@@ -21,29 +22,12 @@ from app.services.audit_service import record_audit
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
-def _consultant_document_scope(query, db: Session, current_user: User, project_id: uuid.UUID):
-    if not current_user.engineer_profile:
-        raise HTTPException(status_code=403, detail="Consultant specialization is required")
-    discipline = current_user.engineer_profile.discipline.value
-    authorized_tasks = db.query(Task.id).filter(
-        Task.project_id == project_id,
-        Task.discipline == discipline,
-    )
-    return query.filter(or_(Document.task_id.is_(None), Document.task_id.in_(authorized_tasks)))
-
-
-def _owner_document_scope(query):
-    """Owners see official project files and evidence from approved completed work only."""
-    return query.filter(or_(
-        and_(
-            Document.task_id.is_(None),
-            Document.document_type.in_([DocumentType.CONTRACT, DocumentType.PERMIT]),
-        ),
-        Document.task.has(and_(
-            Task.status == TaskStatus.DONE,
-            Task.review_status == "approved",
-        )),
-    ))
+# These two now live in `app.services.document_access`, because RAG retrieval
+# must apply exactly the same rules — a second copy would drift, and the copy
+# that drifted would be the one nobody audits. Aliased rather than renamed at
+# every call site: the behaviour here is unchanged.
+_consultant_document_scope = consultant_document_scope
+_owner_document_scope = owner_document_scope
 
 @router.get("", response_model=List[DocumentOut])
 def list_documents(

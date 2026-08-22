@@ -50,6 +50,30 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+#: Token `type` claim for a Server-Sent Events connection ticket.
+#: Deliberately distinct from "access" and "refresh": `get_current_user`
+#: rejects anything whose type is not "access", and the SSE stream rejects
+#: anything whose type is not this — so neither token can ever be used in the
+#: other's place, in either direction.
+SSE_TICKET_TYPE = "sse_ticket"
+
+
+def create_sse_ticket(user_id: str, expires_delta: timedelta) -> str:
+    """A short-lived, single-purpose ticket for opening an SSE stream.
+
+    `EventSource` cannot set an Authorization header, so the credential has to
+    travel in the query string — where it will land in access logs, proxy logs
+    and Referer headers. This ticket bounds that exposure: it lives for about a
+    minute and the only thing it can do is open a read-only event stream.
+
+    Signed with the same key and algorithm as every other token in the system;
+    this is not a parallel credential scheme, only a narrower one.
+    """
+    expire = datetime.now(timezone.utc) + expires_delta
+    payload = {"sub": str(user_id), "exp": expire, "type": SSE_TICKET_TYPE}
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
 def generate_secure_token() -> str:
     return secrets.token_urlsafe(32)
 

@@ -37,6 +37,11 @@ abstract final class ApiEndpoints {
   static const notifications = '/notifications';
   static const unreadNotifications = '/notifications/unread-count';
   static String readNotification(String id) => '/notifications/$id/read';
+  static String notification(String id) => '/notifications/$id';
+
+  /// Push device registration. Scoped to the caller on the server: the user
+  /// comes from the access token, never from the request body.
+  static const notificationDevices = '/notifications/devices';
   static const messages = '/messages';
   static const participants = '/messages/participants';
   static const messageConversations = '/messages/conversations';

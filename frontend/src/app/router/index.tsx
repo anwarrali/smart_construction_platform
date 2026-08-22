@@ -9,6 +9,7 @@ import { PublicLayout } from "../../layouts/PublicLayout";
 import { DashboardLayout } from "../../layouts/DashboardLayout";
 import { AuthLayout } from "../../layouts/AuthLayout";
 import { NotFoundPage } from "../../pages/NotFound/NotFoundPage";
+import { WebPushBridge } from "./WebPushBridge";
 
 /*
  * Every route destination below is lazy: each `import()` becomes its own
@@ -48,6 +49,7 @@ const TasksPage = lazy(() => import("../../features/tasks/pages/TasksPage").then
 const TaskDetailPage = lazy(() => import("../../features/tasks/pages/TaskDetailPage").then((m) => ({ default: m.TaskDetailPage })));
 const DocumentsPage = lazy(() => import("../../features/documents/pages/DocumentsPage").then((m) => ({ default: m.DocumentsPage })));
 const NotificationsPage = lazy(() => import("../../features/notifications/pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const NotificationRedirectPage = lazy(() => import("../../features/notifications/pages/NotificationRedirectPage").then((m) => ({ default: m.NotificationRedirectPage })));
 const UsersPage = lazy(() => import("../../features/users/pages/UserPage").then((m) => ({ default: m.UsersPage })));
 const ProfilePage = lazy(() => import("../../features/users/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
 const IssuesPage = lazy(() => import("../../features/issues/pages/IssuesPage").then((m) => ({ default: m.IssuesPage })));
@@ -65,6 +67,9 @@ const CollaborationPage = lazy(() => import("../../features/collaboration/pages/
 export const Router = () => {
   return (
     <BrowserRouter>
+      {/* Inside BrowserRouter because it navigates on a notification click.
+          Renders nothing. */}
+      <WebPushBridge />
       <Routes>
         {/* ── Public ── */}
         <Route element={<PublicLayout />}>
@@ -97,6 +102,14 @@ export const Router = () => {
             </Route>
 
             {/* Core features */}
+            {/* Deliberately outside every RoleGuard. A push notification can
+                only carry an id, so this is where a tapped notification lands
+                before the app redirects it to the role-correct page — and any
+                role can receive one, including the roles that cannot open the
+                notification centre at ROUTES.NOTIFICATIONS. The server has
+                already scoped the notification to the caller, so this exposes
+                nothing a RoleGuard here would protect. */}
+            <Route path={ROUTES.NOTIFICATION_DETAIL} element={<NotificationRedirectPage />} />
             <Route path={ROUTES.PROJECTS}        element={<ProjectsPage />} />
             <Route element={<RoleGuard allowedRoles={["admin", "project_manager", "consultant"]} />}>
               <Route path={ROUTES.PROJECT_DETAIL}  element={<ProjectDetailPage />} />

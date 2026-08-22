@@ -10,3 +10,13 @@ __pycache__/
 .vscode/
 .claude/
 .pytest_cache/
+
+# Firebase service account keys. These are REAL credentials: one can send a
+# notification to every device registered to the project. Mount the file at
+# runtime and point FCM_CREDENTIALS_FILE at it; never commit one.
+*service-account*.json
+*firebase-adminsdk*.json
+# Ignore everything dropped in here, but keep the directory itself: the
+# docker-compose bind mount requires it to exist on a fresh clone.
+backend/secrets/*
+!backend/secrets/README.md

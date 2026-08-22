@@ -16,6 +16,7 @@ import api from "../../../services/api";
 import { AttachmentPanel } from "../../../components/shared/AttachmentPanel";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
 import toast from "react-hot-toast";
+import { useRealtimeRefresh } from "../../../hooks/useRealtimeRefresh";
 import type { Task } from "../../../types/task";
 import { useRole } from "../../../hooks/useRole";
 import { useSearchParams } from "react-router-dom";
@@ -64,6 +65,12 @@ export const IssuesPage = () => {
       setIsLoading(false);
     }
   }, [activeProjectId, filterProject, filterStatus, filterDiscipline, dateFrom, dateTo, onlyAttachments]);
+
+  // Issues are project-wide: one person raising or resolving one must show up
+  // on everyone's list without a reload.
+  useRealtimeRefresh(["ISSUE_CREATED", "ISSUE_UPDATED"], fetchIssues, {
+    projectId: activeProjectId || undefined,
+  });
 
   useEffect(() => {
     if (isFirstRender.current) {

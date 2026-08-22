@@ -23,6 +23,7 @@ class NotificationOut(CamelModel):
     priority: str = "NORMAL"
     message_key: Optional[str] = None
     message_params_json: dict = {}
+    read_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

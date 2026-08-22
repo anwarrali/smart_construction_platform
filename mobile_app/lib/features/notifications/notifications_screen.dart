@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/dependency_injection.dart';
 import '../../core/auth/session_manager.dart';
 import '../../core/network/network_exceptions.dart';
+import '../../core/push/push_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
@@ -35,6 +39,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   void initState() {
     super.initState();
     Future.microtask(_load);
+    // A push arriving while this screen is open should update the list the
+    // user is looking at. Without this the notification banner appears and the
+    // list behind it stays stale until a manual pull-to-refresh — which reads
+    // as the app having missed the notification.
+    _pushMessages = ref.read(pushControllerProvider).foregroundMessages
+      ..addListener(_onForegroundPush);
+  }
+
+  ValueListenable<int>? _pushMessages;
+
+  void _onForegroundPush() {
+    if (mounted) unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _pushMessages?.removeListener(_onForegroundPush);
+    super.dispose();
   }
 
   Future<void> _load() async {
