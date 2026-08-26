@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from datetime import datetime
 from uuid import UUID
 
@@ -21,29 +23,24 @@ from app.services.audit_service import record_audit
 from app.services.voice_action_service import _execute_one
 from app.services.voice_command_service import transition
 from app.services.ai_action_history_service import record_voice_action_version
+from app.services.voice_action_errors import (
+    ASSIGNEE_NOT_ELIGIBLE,
+    ASSIGNEE_REQUIRED,
+    TARGET_TASK_NOT_FOUND,
+    VoiceActionError,
+    classify,
+    missing_field_failure,
+    success_message,
+)
+from app.services.voice_capabilities import capability_for, is_available, voice_role
+
+
+logger = logging.getLogger(__name__)
 
 
 class VoiceRulesEngine:
     """Deterministic authorization and workflow boundary for AI proposals."""
 
-    _worker_actions = {SuggestedActionType.CREATE_FIELD_SUBMISSION}
-    _engineer_actions = {
-        SuggestedActionType.CREATE_TASK,
-        SuggestedActionType.START_TASK,
-        SuggestedActionType.UPDATE_TASK_PROGRESS,
-        SuggestedActionType.SUBMIT_TASK_FOR_REVIEW,
-        SuggestedActionType.CREATE_ISSUE,
-        SuggestedActionType.ADD_TASK_NOTE,
-        SuggestedActionType.CREATE_SITE_REPORT_DRAFT,
-        SuggestedActionType.CREATE_TASK_MESSAGE,
-        SuggestedActionType.CREATE_DESIGN_CHANGE_REPORT,
-        SuggestedActionType.SEND_PROJECT_MESSAGE,
-        SuggestedActionType.SEND_OWNER_UPDATE,
-    }
-    _consultant_actions = {
-        SuggestedActionType.PREPARE_CONSULTANT_REVIEW,
-        SuggestedActionType.CREATE_ISSUE,
-    }
 
     def validate(
         self,
@@ -60,22 +57,36 @@ class VoiceRulesEngine:
         if not user_has_project_access(db, actor, command.project_id):
             raise HTTPException(status_code=403, detail="Project access is no longer available")
         action_type = SuggestedActionType(draft.action_type)
-        allowed = (
-            self._worker_actions
-            if actor.role == UserRole.WORKER
-            else self._engineer_actions
-            if actor.role in {UserRole.ENGINEER, UserRole.PROJECT_MANAGER}
-            and not is_consultant_engineer(actor)
-            else self._consultant_actions
-            if is_consultant_engineer(actor)
-            else set()
-        )
-        if action_type not in allowed:
-            raise HTTPException(status_code=403, detail="This role cannot execute the proposed voice action")
-        if action_type == SuggestedActionType.CREATE_TASK and actor.role != UserRole.PROJECT_MANAGER:
-            raise HTTPException(status_code=403, detail="Only the assigned Project Manager can create tasks")
+        # The registry is the one list of who may do what — see
+        # `app.services.voice_capabilities`. It used to be repeated here as
+        # three sets, which is how a new capability could reach execution
+        # without anybody deciding which roles it belonged to.
+        capability = capability_for(action_type)
+        if capability is None or voice_role(actor) not in capability.roles:
+            # The reason is named rather than generic, because this string is
+            # what support reads in the execution log when somebody asks why a
+            # spoken instruction did nothing.
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Only the assigned Project Manager can perform this action"
+                    if capability is not None and capability.roles == {"project_manager"}
+                    else "This role cannot execute the proposed voice action"
+                ),
+            )
+        if not is_available(
+            db, user=actor, project_id=command.project_id, capability=capability
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to perform this action on this project",
+            )
         if draft.missing_fields:
-            raise HTTPException(status_code=409, detail="Required clarification is still missing")
+            # Named rather than generic. "لسه في معلومة ناقصة" is true of every
+            # incomplete draft and useful for none of them; the outstanding
+            # field already has a question written in the engineer's language,
+            # and the refusal says exactly that.
+            raise missing_field_failure(list(draft.missing_fields))
         minimum_photos = max(
             (
                 int(item.split(":", 1)[1])
@@ -134,6 +145,8 @@ class VoiceRulesEngine:
                 )
             if task.status in {TaskStatus.UNDER_REVIEW, TaskStatus.DONE}:
                 raise HTTPException(status_code=409, detail="Task progress is locked by workflow")
+        if action_type == SuggestedActionType.UPDATE_TASK_ASSIGNMENT:
+            self._validated_assignees(db, command, payload)
         if action_type == SuggestedActionType.SUBMIT_TASK_FOR_REVIEW:
             if not task.review_required:
                 raise HTTPException(status_code=409, detail="This task does not require Consultant review")
@@ -148,23 +161,63 @@ class VoiceRulesEngine:
         )
 
     @staticmethod
+    def _validated_assignees(db: Session, command: VoiceAnalysis, payload: dict) -> None:
+        """Refuse an assignment the tasks API is going to refuse anyway.
+
+        The check itself is not new — `app.api.tasks` has always enforced it,
+        and still does. What is new is *where the engineer hears about it*: the
+        same rule applied here turns a 400 whose sentence the client could not
+        show into a reason in their own language, naming the person and saying
+        who may hold work. Nothing is widened; a name that passes here is
+        validated again by the endpoint that performs the change.
+        """
+        from app.services.voice_entity_resolution import assignable_people
+
+        proposed = [str(value) for value in payload.get("assigneeIds") or []]
+        if not proposed:
+            raise VoiceActionError(
+                ASSIGNEE_REQUIRED,
+                detail="No assignee was selected for this task",
+                status_code=422,
+            )
+        eligible = {
+            str(person.user_id): person
+            for person in assignable_people(db, project_id=command.project_id)
+        }
+        refused = [value for value in proposed if value not in eligible]
+        if not refused:
+            return
+        raise VoiceActionError(
+            ASSIGNEE_NOT_ELIGIBLE,
+            detail=(
+                "Every assignee must be an active Engineer, Worker, Consultant, "
+                "or this project's assigned Project Manager"
+            ),
+            status_code=400,
+        )
+
+    @staticmethod
     def _validated_task(
         db: Session, command: VoiceAnalysis, draft: VoiceActionDraft
     ) -> Task | None:
+        capability = capability_for(draft.action_type)
+        if capability is not None and capability.needs_issue:
+            # Issue capabilities target an issue, and `app.api.issues.update_issue`
+            # validates it — including who is allowed to change what on it.
+            if not draft.target_entity_id:
+                raise HTTPException(status_code=422, detail="A target issue is required")
+            return None
         if not draft.target_entity_id:
-            if draft.action_type in {
-                SuggestedActionType.CREATE_TASK.value,
-                SuggestedActionType.CREATE_ISSUE.value,
-                SuggestedActionType.CREATE_SITE_REPORT_DRAFT.value,
-                SuggestedActionType.CREATE_DESIGN_CHANGE_REPORT.value,
-                SuggestedActionType.SEND_PROJECT_MESSAGE.value,
-                SuggestedActionType.SEND_OWNER_UPDATE.value,
-            }:
+            if capability is not None and not capability.needs_task:
                 return None
             raise HTTPException(status_code=422, detail="A target task is required")
         task = db.query(Task).filter(Task.id == draft.target_entity_id).with_for_update().first()
         if not task or task.project_id != command.project_id:
-            raise HTTPException(status_code=404, detail="Target task is unavailable")
+            raise VoiceActionError(
+                TARGET_TASK_NOT_FOUND,
+                detail="Target task is unavailable",
+                status_code=404,
+            )
         snapshot = draft.target_snapshot or {}
         expected_updated = snapshot.get("updatedAt")
         if expected_updated and task.updated_at:
@@ -192,6 +245,11 @@ class VoiceRulesEngine:
             raise HTTPException(status_code=409, detail="Confirm this voice command before execution")
         transition(command, VoiceAnalysisStatus.EXECUTING)
         db.commit()
+        # Every sentence this run produces is in the language the command was
+        # spoken in, which the interpretation step recorded.
+        language = str(
+            (command.provider_metadata or {}).get("replyLanguage") or "en"
+        )
         results: list[dict] = []
         priority = {
             SuggestedActionType.START_TASK.value: 10,
@@ -228,6 +286,11 @@ class VoiceRulesEngine:
                     )
                 draft.execution_status = "EXECUTED"
                 draft.execution_error = None
+                # Only ever said once the operation returned: the assistant
+                # reports what the backend confirmed, never what it proposed.
+                result = result.model_copy(update={
+                    "user_message": success_message(draft.action_type, language),
+                })
                 serialized = result.model_dump(mode="json", by_alias=True)
                 results.append(serialized)
                 after = self._task_state(db, draft.target_entity_id)
@@ -260,12 +323,23 @@ class VoiceRulesEngine:
                 draft = db.get(VoiceActionDraft, draft.id)
                 draft.execution_status = "FAILED"
                 draft.execution_error = str(exc.detail)
+                # The raised sentence is developer English written for logs.
+                # Classifying it here is what turns "At least one authorized
+                # recipient is required" into "لمين بدك أبعت الرسالة؟" instead
+                # of the client's one generic "something went wrong".
+                failure = classify(exc)
+                logger.info(
+                    "voice action %s rejected: %s (%s)",
+                    draft.action_type, failure.error_code, exc.detail,
+                )
                 results.append({
                     "actionIndex": index,
                     "type": draft.action_type,
                     "success": False,
                     "status": "REJECTED",
                     "message": str(exc.detail),
+                    "errorCode": failure.error_code,
+                    "userMessage": failure.text_for(language),
                 })
                 db.add(VoiceExecutionLog(
                     voice_analysis_id=command.id,

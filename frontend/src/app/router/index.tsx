@@ -60,6 +60,7 @@ const MilestonesPage = lazy(() => import("../../features/milestones/pages/Milest
 const MessagesPage = lazy(() => import("../../features/messages/pages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
 const EvidencePhotoArchivePage = lazy(() => import("../../features/photo-archive/pages/EvidencePhotoArchivePage").then((m) => ({ default: m.EvidencePhotoArchivePage })));
 const VoiceReportsPage = lazy(() => import("../../features/voice/pages/VoiceReportsPage").then((m) => ({ default: m.VoiceReportsPage })));
+const VoiceAssistantPage = lazy(() => import("../../features/voice/pages/VoiceAssistantPage").then((m) => ({ default: m.VoiceAssistantPage })));
 const IFCWorkspacePage = lazy(() => import("../../features/ifc/pages/IFCWorkspacePage").then((m) => ({ default: m.IFCWorkspacePage })));
 const AIIntelligencePage = lazy(() => import("../../features/ai-intelligence/pages/AIIntelligencePage").then((m) => ({ default: m.AIIntelligencePage })));
 const CollaborationPage = lazy(() => import("../../features/collaboration/pages/CollaborationPage").then((m) => ({ default: m.CollaborationPage })));
@@ -134,6 +135,7 @@ export const Router = () => {
               <Route path={ROUTES.PM_PROJECT_COLLABORATION} element={<CollaborationPage />} />
               <Route path={ROUTES.PM_PROJECT_REQUESTS} element={<CollaborationPage initialTab="requests" />} />
               <Route path={ROUTES.PM_PROJECT_SITE_VISITS} element={<CollaborationPage initialTab="schedule" />} />
+              <Route path={ROUTES.PM_PROJECT_VOICE_ASSISTANT} element={<VoiceAssistantPage />} />
               <Route path={ROUTES.PM_PROJECT_ACTIVITY} element={<CollaborationPage initialTab="activity" />} />
             </Route>
             <Route element={<MainContractorEngineerGuard />}>
@@ -147,6 +149,7 @@ export const Router = () => {
               <Route path={ROUTES.ENGINEER_PROJECT_NOTIFICATIONS} element={<NotificationsPage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_EVIDENCE} element={<EvidencePhotoArchivePage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_VOICE_REPORTS} element={<VoiceReportsPage />} />
+              <Route path={ROUTES.ENGINEER_PROJECT_VOICE_ASSISTANT} element={<VoiceAssistantPage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_IFC} element={<IFCWorkspacePage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
               <Route path={ROUTES.ENGINEER_PROJECT_MESSAGES} element={<MessagesPage />} />

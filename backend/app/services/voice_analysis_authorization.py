@@ -51,6 +51,40 @@ def authorized_voice_tasks(db: Session, user: User, project_id) -> list[Task]:
     return query.order_by(Task.task_code).all()
 
 
+def authorized_site_reports(db: Session, user: User, project_id, *, limit: int = 5):
+    """Site reports this person may read, newest first.
+
+    Mirrors `app.api.site_reports.list_site_reports` rather than inventing a
+    second rule: an Owner sees only what has been submitted or approved, and a
+    Consultant Engineer sees project-wide reports plus the ones filed against
+    their own discipline's tasks. Voice must never widen what a screen shows.
+    """
+    from app.models.site_report import SiteReport
+
+    if not user_has_project_access(db, user, project_id):
+        return []
+    if user.role == UserRole.ENGINEER and not (
+        is_main_contractor_engineer(user) or is_consultant_engineer(user)
+    ):
+        return []
+    query = db.query(SiteReport).filter(SiteReport.project_id == project_id)
+    if user.role == UserRole.OWNER:
+        query = query.filter(SiteReport.review_status.in_(["submitted", "approved"]))
+    if is_consultant_engineer(user):
+        profile = getattr(user, "engineer_profile", None)
+        discipline = getattr(profile, "discipline", None) if profile else None
+        discipline_task_ids = db.query(Task.id).filter(
+            Task.project_id == project_id,
+            Task.discipline == (discipline.value if discipline else ""),
+        )
+        query = query.filter(
+            (SiteReport.task_id.is_(None)) | SiteReport.task_id.in_(discipline_task_ids)
+        )
+    return query.order_by(
+        SiteReport.report_date.desc(), SiteReport.created_at.desc()
+    ).limit(max(1, limit)).all()
+
+
 def can_view_voice_analysis(db: Session, user: User, analysis) -> bool:
     if analysis.user_id == user.id:
         return True

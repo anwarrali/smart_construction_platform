@@ -2217,6 +2217,23 @@
   "@diagnosticsRerun": {
     "description": "Developer diagnostics action"
   },
+
+  "voiceHoldToRecordHint": "Hold the button while you speak, then release to send.",
+  "@voiceHoldToRecordHint": {
+    "description": "Shown when the record button was tapped instead of held"
+  },
+  "voiceAnswerTitle": "Answer",
+  "@voiceAnswerTitle": {
+    "description": "Heading on the card that answers a spoken question"
+  },
+  "voiceNoResponse": "I could not finish that. Could you tell me again what you need?",
+  "@voiceNoResponse": {
+    "description": "Last-resort line when a command carries no question, proposal or answer to render"
+  },
+  "voiceAskSomethingElse": "Ask something else",
+  "@voiceAskSomethingElse": {
+    "description": "Button that clears an answer and returns to recording"
+  },
   "voiceTitle": "Construction Voice Assistant",
   "@voiceTitle": {
     "description": "Voice screen title"

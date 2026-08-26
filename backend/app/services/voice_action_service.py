@@ -10,6 +10,7 @@ from app.models.enums import (
     FieldSubmissionStatus,
     IssueSeverity,
     IssueStatus,
+    TaskPriority,
     UserRole,
     VoiceConfirmationStatus,
     NotificationType,
@@ -131,13 +132,28 @@ def execute_confirmed_actions(
 
 
 def action_allowed_for_role(role: str, action_type: SuggestedActionType) -> bool:
-    if role == "worker":
-        return action_type == SuggestedActionType.CREATE_FIELD_SUBMISSION
-    if role in {"engineer", "project_manager"}:
-        return action_type != SuggestedActionType.CREATE_FIELD_SUBMISSION
-    if role == "consultant":
-        return action_type == SuggestedActionType.PREPARE_CONSULTANT_REVIEW
-    return False
+    """Whether a coarse role may ever perform this action.
+
+    Reads the capability registry rather than repeating its own list, so a new
+    capability is allowed in exactly one place. This is the *coarse* gate only:
+    project membership, the permission catalogue and every rule inside the
+    operation's own service still run afterwards, and any of them can refuse.
+    """
+    from app.services.voice_capabilities import (
+        CONSULTANT, ENGINEER, MANAGER, WORKER, capability_for,
+    )
+
+    capability = capability_for(action_type)
+    if capability is None:
+        return False
+    registry_role = {
+        "worker": WORKER,
+        "engineer": ENGINEER,
+        "project_manager": MANAGER,
+        "consultant": CONSULTANT,
+        "external_consultant": CONSULTANT,
+    }.get(role, role)
+    return registry_role in capability.roles
 
 
 def _execute_one(
@@ -146,7 +162,10 @@ def _execute_one(
 ) -> ActionExecutionResult:
     if not user_has_project_access(db, current_user, analysis.project_id):
         raise HTTPException(status_code=403, detail="Project access is no longer available")
-    if not action_allowed_for_role(current_user.role.value, action.type):
+    from app.services.voice_capabilities import capability_for, voice_role
+
+    capability = capability_for(action.type)
+    if capability is None or voice_role(current_user) not in capability.roles:
         raise HTTPException(status_code=403, detail="This role cannot confirm the suggested action")
     metadata = {
         "source": "AI_VOICE_ANALYSIS",
@@ -166,6 +185,24 @@ def _execute_one(
                 name=str(payload["title"]).strip(),
                 description=str(payload.get("description") or "").strip() or None,
                 discipline=str(payload.get("sourceDiscipline") or "").strip() or None,
+                # The same fields the create form carries. Voice used to drop
+                # them, so "أنشئ مهمة … وخلي موعدها الأحد" created a task with
+                # no date and no owner and said nothing about it.
+                assignee_ids=[
+                    UUID(str(value)) for value in payload.get("assigneeIds") or []
+                ],
+                planned_start_date=(
+                    _as_date(payload["startDate"], "startDate")
+                    if payload.get("startDate") else None
+                ),
+                planned_end_date=(
+                    _as_date(payload["dueDate"], "dueDate")
+                    if payload.get("dueDate") else None
+                ),
+                **(
+                    {"priority": TaskPriority(str(payload["priority"]).lower())}
+                    if payload.get("priority") else {}
+                ),
             ),
             db=db,
             current_user=current_user,
@@ -186,6 +223,114 @@ def _execute_one(
             source="ai_voice_analysis", audit_metadata=metadata,
         )
         return _success(action_index, action.type, "Task progress updated", updated.id)
+    if action.type in {
+        SuggestedActionType.UPDATE_TASK_SCHEDULE,
+        SuggestedActionType.UPDATE_TASK_ASSIGNMENT,
+        SuggestedActionType.UPDATE_TASK_PRIORITY,
+        SuggestedActionType.UPDATE_TASK_DETAILS,
+    }:
+        # One endpoint, four capabilities. `update_task` is the same function
+        # the web UI posts to, so every rule it enforces — who may reassign,
+        # what an engineer may touch, which statuses accept which change —
+        # applies to voice without being restated here. Voice's only job is to
+        # turn words into the fields that endpoint already accepts.
+        task = _task(db, analysis.project_id, action.target_id)
+        from app.api.tasks import update_task
+        from app.schemas.task import TaskUpdate
+
+        changes: dict = {}
+        if action.type == SuggestedActionType.UPDATE_TASK_SCHEDULE:
+            if payload.get("dueDate"):
+                changes["planned_end_date"] = _as_date(payload["dueDate"], "dueDate")
+            if payload.get("startDate"):
+                changes["planned_start_date"] = _as_date(payload["startDate"], "startDate")
+            if not changes:
+                raise HTTPException(status_code=422, detail="No new date was provided")
+        elif action.type == SuggestedActionType.UPDATE_TASK_ASSIGNMENT:
+            changes["assignee_ids"] = [
+                UUID(str(value)) for value in payload.get("assigneeIds") or []
+            ]
+            if not changes["assignee_ids"]:
+                raise HTTPException(status_code=422, detail="No assignee was selected")
+        elif action.type == SuggestedActionType.UPDATE_TASK_PRIORITY:
+            changes["priority"] = TaskPriority(str(payload["priority"]).lower())
+        else:
+            if payload.get("title"):
+                changes["name"] = str(payload["title"]).strip()
+            if payload.get("description"):
+                changes["description"] = str(payload["description"]).strip()
+            if not changes:
+                raise HTTPException(status_code=422, detail="No change was provided")
+
+        updated = update_task(
+            task.id,
+            TaskUpdate(**changes),
+            db=db,
+            current_user=current_user,
+        )
+        note = str(payload.get("note") or "").strip()
+        if note:
+            db.add(TaskComment(task_id=task.id, author_id=current_user.id, content=note))
+        _audit_entity(
+            db, analysis, current_user, "voice_task_updated", "task", task.id,
+            {**metadata, "fields": sorted(changes)},
+        )
+        db.commit()
+        return _success(
+            action_index, action.type, "Task updated", updated.id,
+        )
+    if action.type == SuggestedActionType.DELETE_TASK:
+        # Destructive, so it carries its own gate on top of the endpoint's:
+        # the engineer must have acknowledged the deletion explicitly on the
+        # confirmation card. A misheard sentence cannot reach this line.
+        if not payload.get("confirmDeletion"):
+            raise HTTPException(
+                status_code=409,
+                detail="Deleting a task requires an explicit confirmation",
+            )
+        task = _task(db, analysis.project_id, action.target_id)
+        task_id = task.id
+        from app.api.tasks import delete_task
+
+        delete_task(task_id, db=db, current_user=current_user)
+        _audit_entity(
+            db, analysis, current_user, "voice_task_deleted", "task", task_id, metadata,
+        )
+        db.commit()
+        return _success(action_index, action.type, "Task deleted", task_id)
+    if action.type in {
+        SuggestedActionType.UPDATE_ISSUE_STATUS,
+        SuggestedActionType.ASSIGN_ISSUE,
+    }:
+        issue = _issue(db, analysis.project_id, action.target_id)
+        from app.api.issues import update_issue
+        from app.schemas.issue import IssueUpdate
+
+        changes: dict = {}
+        if action.type == SuggestedActionType.UPDATE_ISSUE_STATUS:
+            changes["status"] = IssueStatus(str(payload["issueStatus"]).lower())
+            notes = str(payload.get("resolutionNotes") or "").strip()
+            if notes:
+                changes["resolution_notes"] = notes
+        else:
+            recipients = [UUID(str(value)) for value in payload.get("assigneeIds") or []]
+            if len(recipients) != 1:
+                raise HTTPException(
+                    status_code=422, detail="Select one person to own this issue",
+                )
+            changes["assigned_to_id"] = recipients[0]
+        updated = update_issue(
+            issue.id,
+            IssueUpdate(**changes),
+            db=db,
+            current_user=current_user,
+        )
+        _audit_entity(
+            db, analysis, current_user, "voice_issue_updated", "issue", issue.id,
+            {**metadata, "fields": sorted(changes)},
+        )
+        db.commit()
+        return _success(action_index, action.type, "Issue updated", updated.id)
     if action.type == SuggestedActionType.SUBMIT_TASK_FOR_REVIEW:
         task = _task(db, analysis.project_id, action.target_id)
         from app.api.tasks import submit_task_for_review
@@ -497,6 +642,32 @@ def _require_contractor_engineer(user: User) -> None:
         return
     if not is_main_contractor_engineer(user):
         raise HTTPException(status_code=403, detail="Active Contractor Engineer access required")
+
+
+def _as_date(value, field: str) -> date:
+    """A payload date, already resolved to a real day by the voice layer.
+
+    Spoken wording ("الأسبوع الجاي") is turned into a date by
+    `app.services.voice_dates` while the draft is being built, so by the time
+    execution runs there is nothing left to interpret. Anything still unparsed
+    here is a bug upstream, and it fails loudly rather than guessing a day.
+    """
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"The {field} could not be read as a date",
+        ) from exc
+
+
+def _issue(db: Session, project_id: UUID, issue_id: UUID | None) -> Issue:
+    issue = db.get(Issue, issue_id) if issue_id else None
+    if not issue or issue.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Issue is unavailable in this project")
+    return issue
 
 
 def _task(db: Session, project_id: UUID, task_id: UUID | None) -> Task:

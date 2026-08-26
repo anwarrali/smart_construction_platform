@@ -200,6 +200,18 @@ class VoiceClarificationItem {
   final String expectedAnswerType;
   final List<Map<String, dynamic>> options;
 
+  /// The question in one language — the one that was spoken.
+  ///
+  /// Both halves used to be shown, one under the other, which is a translation
+  /// exercise rather than a conversation. The backend writes the naturally
+  /// phrased question into the half matching the speaker's language and leaves
+  /// the plain template in the other, so showing one is showing the good one.
+  String questionFor(String languageCode) {
+    final arabic = languageCode.startsWith('ar');
+    final preferred = arabic ? questionAr : questionEn;
+    return preferred.isNotEmpty ? preferred : (arabic ? questionEn : questionAr);
+  }
+
   factory VoiceClarificationItem.fromJson(Map<String, dynamic> json) =>
       VoiceClarificationItem(
         id: '${json['id']}',
@@ -210,6 +222,63 @@ class VoiceClarificationItem {
             .map((value) => Map<String, dynamic>.from(value as Map))
             .toList(),
       );
+}
+
+/// A direct answer to a spoken question.
+///
+/// Present only when the backend decided the utterance was a question and could
+/// answer it from project data. Its existence is what tells the UI to show a
+/// sentence instead of a confirmation card: an answer proposes nothing, so
+/// there is nothing to confirm or cancel.
+class VoiceAnswer {
+  const VoiceAnswer({
+    required this.topic,
+    required this.textEn,
+    required this.textAr,
+    this.text = '',
+    this.language = '',
+    this.data = const {},
+  });
+
+  final String topic;
+  final String textEn;
+  final String textAr;
+
+  /// The sentence the backend actually composed for this question, already in
+  /// the language the person spoke. Preferred over the two template fields,
+  /// which remain as the fallback for an older backend or a provider outage.
+  final String text;
+
+  /// The language that sentence is written in — the language of the *speech*,
+  /// not of the interface. Someone working with an English UI who asks a
+  /// question in Arabic is answered in Arabic.
+  final String language;
+  final Map<String, dynamic> data;
+
+  /// True when there is a sentence to show. A question the backend understood
+  /// but could not pin to one task arrives with every text empty and a
+  /// clarification alongside it.
+  bool get hasText => text.isNotEmpty || textEn.isNotEmpty || textAr.isNotEmpty;
+
+  /// What to display. `languageCode` is the interface language and is used only
+  /// when the backend supplied no composed sentence of its own.
+  String textFor(String languageCode) {
+    if (text.isNotEmpty) return text;
+    final arabic = (language.isNotEmpty ? language : languageCode).startsWith(
+      'ar',
+    );
+    final preferred = arabic ? textAr : textEn;
+    return preferred.isNotEmpty ? preferred : (arabic ? textEn : textAr);
+  }
+
+  factory VoiceAnswer.fromJson(Map<String, dynamic> json) => VoiceAnswer(
+    topic: '${json['topic'] ?? ''}',
+    textEn: '${json['textEn'] ?? ''}',
+    textAr: '${json['textAr'] ?? ''}',
+    text: '${json['text'] ?? ''}',
+    language: '${json['language'] ?? ''}',
+    data: Map<String, dynamic>.from(json['data'] as Map? ?? const {}),
+  );
 }
 
 class ConstructionVoiceResult {
@@ -279,6 +348,9 @@ class VoiceAnalysis {
     this.detectedLanguage,
     this.errorDetail,
     this.result,
+    this.answer,
+    this.route = 'ACTION',
+    this.replyLanguage = '',
     this.actionResults = const [],
     this.actionDrafts = const [],
     this.clarifications = const [],
@@ -296,6 +368,17 @@ class VoiceAnalysis {
   final String? detectedLanguage;
   final String? errorDetail;
   final ConstructionVoiceResult? result;
+  final VoiceAnswer? answer;
+  /// ANSWER | ACTION | COMMUNICATION | CLARIFICATION, decided by the backend
+  /// router. The client renders from this rather than inferring intent from
+  /// `status`, which is why the action-review card is no longer the universal
+  /// voice result screen.
+  final String route;
+
+  /// The language the backend replied in, which is the language that was
+  /// spoken. Empty from an older backend, in which case the interface language
+  /// decides.
+  final String replyLanguage;
   final List<Map<String, dynamic>> actionResults;
   final List<VoiceActionDraftItem> actionDrafts;
   final List<VoiceClarificationItem> clarifications;
@@ -303,8 +386,54 @@ class VoiceAnalysis {
 
   bool get completed =>
       status == 'COMPLETED' || status == 'READY_FOR_CONFIRMATION';
+
+  bool get isAnswerRoute => route == 'ANSWER';
+  bool get isClarificationRoute => route == 'CLARIFICATION';
+
+  /// True when there is a mutation to review. The action-review card renders
+  /// on this and nothing else, so a question or an unclassified utterance can
+  /// never raise "Select a task / No safe executable action was suggested".
+  bool get hasProposal => actionDrafts.isNotEmpty;
+
+  /// True when every proposed action is fully specified.
+  ///
+  /// A half-specified proposal is not something a person can review — a card
+  /// reading "Task: unknown, Progress: 50%" asks them to confirm a blank. While
+  /// anything is outstanding the assistant asks about it in words instead, and
+  /// the review card waits.
+  bool get hasCompleteProposal =>
+      actionDrafts.isNotEmpty &&
+      actionDrafts.every((draft) => draft.missingFields.isEmpty);
+
+
+  /// True when the reply is information rather than a proposal.
+  ///
+  /// An answered question also reaches COMPLETED — it is a terminal state —
+  /// but it proposes nothing, so the screen shows the sentence and suppresses
+  /// the confirmation card. `completed` deliberately keeps its original
+  /// meaning of "terminal and reviewable"; deciding what to *render* belongs to
+  /// the screen, not to this predicate.
+  bool get answered => answer?.hasText == true;
   bool get needsClarification => status == 'NEEDS_CLARIFICATION';
   bool get failed => status == 'FAILED';
+
+  /// True when the assistant is waiting on an answer it can still show.
+  ///
+  /// `needsClarification` alone is not that: once the question has been
+  /// answered it stays in that status while the backend works out what the
+  /// answer meant, and `clarifications` — which the parser trims to the
+  /// *unanswered* ones — is empty. Gating the other cards on the status rather
+  /// than on this is what left the screen with a question card that had gone,
+  /// an answer card suppressed, and nothing in between.
+  bool get isAsking => clarifications.isNotEmpty;
+
+  /// True when there is nothing at all to render.
+  ///
+  /// Should never happen — the backend guarantees a question, a proposal or a
+  /// sentence on every path — but a client that silently shows nothing is
+  /// indistinguishable from a broken one, so the screen checks and says so.
+  bool get hasNothingToShow =>
+      !isAsking && !hasCompleteProposal && !answered && !failed;
 
   factory VoiceAnalysis.fromJson(Map<String, dynamic> json) => VoiceAnalysis(
     id: '${json['id']}',
@@ -323,6 +452,21 @@ class VoiceAnalysis {
             Map<String, dynamic>.from(json['structuredResult'] as Map),
           )
         : null,
+    // The backend writes the answer into `structuredResult` rather than a
+    // column of its own; it is derived output belonging to one analysis.
+    answer:
+        json['structuredResult'] is Map &&
+            (json['structuredResult'] as Map)['answer'] is Map
+        ? VoiceAnswer.fromJson(
+            Map<String, dynamic>.from(
+              (json['structuredResult'] as Map)['answer'] as Map,
+            ),
+          )
+        : null,
+    route:
+        '${(json['providerMetadata'] as Map?)?['route'] ?? 'ACTION'}',
+    replyLanguage:
+        '${(json['providerMetadata'] as Map?)?['replyLanguage'] ?? ''}',
     actionResults: (json['actionResults'] as List? ?? const [])
         .map((value) => Map<String, dynamic>.from(value as Map))
         .toList(),

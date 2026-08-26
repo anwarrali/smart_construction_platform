@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+import logging
+from datetime import date, datetime, time, timedelta, timezone
 from time import perf_counter
 from uuid import UUID, uuid4
 
@@ -16,15 +17,16 @@ from app.ai.exceptions import (
 from app.ai.construction_analysis_service import ConstructionVoiceAnalysisService
 from app.ai.transcription_service import validate_audio
 from app.core.config import settings
-from app.core.deps import get_current_user, is_worker
+from app.core.deps import get_current_user, is_worker, user_has_project_access
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.enums import VoiceAnalysisStatus
 from app.models.task import Task
 from app.models.user import User
-from app.models.voice_action import VoiceActionDraft, VoiceClarification
+from app.models.voice_action import VoiceActionDraft, VoiceClarification, VoiceExecutionLog
 from app.models.voice_analysis import VoiceAnalysis
 from app.models.ai_governance import AIProviderCall
+from app.schemas.voice_analysis import SuggestedActionType
 from app.schemas.voice_command import (
     VoiceClarificationAnswer,
     VoiceCommandOut,
@@ -32,22 +34,35 @@ from app.schemas.voice_command import (
     VoiceConfirmRequest,
     VoiceDraftUpdate,
     VoiceExecuteRequest,
+    VoiceReportReadinessOut,
+    VoiceReportUpdateOut,
+    VoiceTaskCandidateOut,
+    VoiceTaskCandidatesOut,
     VoiceTranscriptCommandCreate,
 )
 from app.services.audit_service import record_audit
 from app.services.file_storage import save_private_upload
-from app.services.voice_analysis_authorization import can_create_voice_analysis
+from app.services.voice_analysis_authorization import (
+    authorized_voice_tasks,
+    can_create_voice_analysis,
+)
 from app.services.voice_command_service import (
     answer_clarification,
     assert_command_access,
     assert_version,
     transition,
     update_draft,
-    build_action_drafts,
+    interpret_command,
 )
 from app.services.voice_rules_engine import VoiceRulesEngine
 from app.services.voice_context_builder import VoiceContextBuilder
+from app.services.voice_capabilities import DESTRUCTIVE
+from app.services.voice_conversation_service import find_open_request
+from app.services.voice_language import reply_language
+from app.services.voice_task_matcher import MAX_CANDIDATES, match_task
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/voice", tags=["Voice Commands"])
 
@@ -97,7 +112,7 @@ async def create_voice_command(
         VoiceAnalysis.user_id == current_user.id,
         VoiceAnalysis.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
     ).count()
-    if recent_count >= 20:
+    if recent_count >= 50:
         raise HTTPException(
             status_code=429,
             detail="Voice processing limit reached. Try again later.",
@@ -225,7 +240,12 @@ async def create_voice_command_from_transcript(
     db.commit()
     try:
         context = VoiceContextBuilder().build(
-            db, user=current_user, project_id=command.project_id, task_id=command.task_id
+            db, user=current_user, project_id=command.project_id,
+            task_id=command.task_id,
+            pending=find_open_request(
+                db, user=current_user, project_id=command.project_id,
+                exclude_id=command.id,
+            ),
         )
         result = await run_in_threadpool(
             ConstructionVoiceAnalysisService().analyze,
@@ -242,7 +262,7 @@ async def create_voice_command_from_transcript(
             "analysisProvider": "openai",
             "analysisModel": settings.OPENAI_ANALYSIS_MODEL,
         }
-        build_action_drafts(db, command=command, result=result, user=current_user)
+        interpret_command(db, command=command, result=result, user=current_user)
         command.completed_at = datetime.now(timezone.utc)
         metric.success = "SUCCESS"
         metric.latency_ms = int((perf_counter() - started) * 1000)
@@ -285,6 +305,108 @@ async def create_voice_command_from_transcript(
         db.commit()
         db.refresh(command)
         return command
+
+
+@router.get("/task-candidates", response_model=VoiceTaskCandidatesOut)
+def voice_task_candidates(
+    project_id: UUID,
+    q: str | None = Query(default=None, max_length=1000),
+    limit: int = Query(default=MAX_CANDIDATES, ge=1, le=MAX_CANDIDATES),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Rank the tasks this user may act on against what they said.
+
+    Backs the "choose another task" path, and any client that wants to show
+    alternatives before confirming. It ranks *only* what
+    `authorized_voice_tasks` already returned, so no query string can widen the
+    set beyond this user's role, project, and assignment scope — an empty
+    result for an inaccessible project is indistinguishable from an empty one
+    for an accessible project with no tasks, which is the intended behaviour.
+    """
+    tasks = authorized_voice_tasks(db, current_user, project_id)
+    outcome = match_task(q, tasks, limit=limit)
+    return VoiceTaskCandidatesOut(
+        resolved_task_id=outcome.resolved_task_id,
+        confidence=outcome.confidence,
+        candidates=[
+            VoiceTaskCandidateOut(
+                task_id=match.task_id,
+                task_code=match.task_code,
+                name=match.name,
+                status=match.status,
+                progress_percentage=match.progress_percentage,
+                discipline=match.discipline,
+                score=round(match.score, 3),
+                reasons=match.reasons,
+            )
+            for match in outcome.candidates
+        ],
+    )
+
+
+@router.get("/report-readiness", response_model=VoiceReportReadinessOut)
+def voice_report_readiness(
+    project_id: UUID,
+    report_date: date | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The day's confirmed voice updates, shaped for the report agent.
+
+    Only executed actions appear. An unconfirmed draft or a rejected one is not
+    project knowledge, and letting either reach a report — or later, a RAG
+    index — would make a spoken guess indistinguishable from a verified fact.
+    """
+    if not user_has_project_access(db, current_user, project_id):
+        raise HTTPException(status_code=403, detail="Project access is not available")
+    day = report_date or datetime.now(timezone.utc).date()
+    start = datetime.combine(day, time.min, tzinfo=timezone.utc)
+    logs = db.query(VoiceExecutionLog).join(
+        VoiceAnalysis, VoiceExecutionLog.voice_analysis_id == VoiceAnalysis.id
+    ).filter(
+        VoiceAnalysis.project_id == project_id,
+        VoiceExecutionLog.actor_user_id == current_user.id,
+        VoiceExecutionLog.result == "EXECUTED",
+        VoiceExecutionLog.created_at >= start,
+        VoiceExecutionLog.created_at < start + timedelta(days=1),
+    ).order_by(VoiceExecutionLog.created_at).all()
+
+    updates: list[VoiceReportUpdateOut] = []
+    disciplines: set[str] = set()
+    task_ids: set[UUID] = set()
+    for log in logs:
+        task = db.get(Task, log.target_id) if log.target_id else None
+        if task:
+            task_ids.add(task.id)
+            if task.discipline:
+                disciplines.add(task.discipline)
+        command = db.get(VoiceAnalysis, log.voice_analysis_id)
+        updates.append(VoiceReportUpdateOut(
+            voice_command_id=log.voice_analysis_id,
+            action_type=log.action_type,
+            task_id=task.id if task else None,
+            task_code=task.task_code if task else None,
+            task_name=task.name if task else None,
+            discipline=task.discipline if task else None,
+            before_state=log.before_state,
+            after_state=log.after_state,
+            summary=(command.structured_result or {}).get("summary") if command else None,
+            reported_by_id=log.actor_user_id,
+            reported_at=log.created_at,
+        ))
+    return VoiceReportReadinessOut(
+        project_id=project_id,
+        report_date=day,
+        # Two independent updates is the point at which a day's activity is
+        # worth a report rather than a note. The threshold lives here, not in
+        # the client, so every surface offers the report at the same moment.
+        ready=len(updates) >= 2,
+        update_count=len(updates),
+        task_count=len(task_ids),
+        disciplines=sorted(disciplines),
+        updates=updates,
+    )
 
 
 @router.get("/commands/history", response_model=VoiceCommandPage)
@@ -340,24 +462,115 @@ def edit_voice_draft(
 
 
 @router.post("/commands/{command_id}/clarifications", response_model=VoiceCommandOut)
-def clarify_voice_command(
+async def clarify_voice_command(
     command_id: UUID,
     data: VoiceClarificationAnswer,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Answer one clarification, and always come back with the next state.
+
+    Two kinds of question end up here and they need different work:
+
+      * one attached to a **draft** — "أي مهمة تقصد؟", "لأي تاريخ؟" — where the
+        answer is a field, and `answer_clarification` fills it in;
+      * one attached to **nothing** — "ما فهمت قصدك، ممكن توضحيلي؟" — where the
+        answer is *more speech* and there is no field to put it in.
+
+    The second kind used to be a dead end: the answer was recorded, nothing
+    read it, and the response carried a command with no unanswered question, no
+    draft and a stale reply — so every client rendered nothing and the
+    conversation looked frozen. It is now re-interpreted together with the
+    original request, exactly as if the engineer had said both sentences in one
+    breath, which is what they meant.
+    """
     command = _command(db, command_id, current_user, owner_only=True)
     clarification = db.get(VoiceClarification, data.clarification_id)
     if not clarification:
         raise HTTPException(status_code=404, detail="Clarification not found")
-    answer_clarification(
+    original = command.raw_transcript or command.normalized_transcript or ""
+    needs_interpretation = answer_clarification(
         db,
         command=command,
         clarification=clarification,
         answer=data.answer_text,
         user=current_user,
     )
-    return db.get(VoiceAnalysis, command.id)
+    if needs_interpretation:
+        await _interpret_clarified_request(
+            db, command=db.get(VoiceAnalysis, command_id), user=current_user,
+            original=original, answer=data.answer_text,
+        )
+    return db.get(VoiceAnalysis, command_id)
+
+
+async def _interpret_clarified_request(
+    db: Session,
+    *,
+    command: VoiceAnalysis,
+    user: User,
+    original: str,
+    answer: str,
+) -> None:
+    """Read the request and its clarification together, as one request.
+
+    Failure here must never be silent either: the engineer answered a question
+    and is waiting. A provider outage becomes a sentence saying so, the details
+    go to the log, and the command still carries something to render.
+    """
+    combined = " ".join(part.strip() for part in (original, answer) if part.strip())
+    language = str(
+        (command.provider_metadata or {}).get("replyLanguage")
+        or reply_language(combined, command.detected_language)
+    )
+    logger.info(
+        "re-interpreting voice command %s with its clarification answer", command.id,
+    )
+    try:
+        context = VoiceContextBuilder().build(
+            db, user=user, project_id=command.project_id,
+            task_id=command.task_id, pending=command,
+            # The question this answer answers, so a two-word reply is read as
+            # the reply it is.
+            pending_open_question=True,
+        )
+        result = await run_in_threadpool(
+            ConstructionVoiceAnalysisService().analyze,
+            transcript=combined,
+            user_role=_provider_role(user),
+            authorized_tasks=context["tasks"],
+            application_context=context,
+        )
+        command = db.get(VoiceAnalysis, command.id)
+        command.raw_transcript = combined
+        command.structured_result = {
+            **result.model_dump(mode="json", by_alias=True, exclude_none=True),
+        }
+        interpret_command(db, command=command, result=result, user=user)
+        db.commit()
+    except (AIConfigurationError, AIProviderTimeoutError, AIProviderError, ValueError) as error:
+        db.rollback()
+        command = db.get(VoiceAnalysis, command.id)
+        logger.warning(
+            "clarified voice command %s could not be re-interpreted: %s",
+            command.id, error,
+        )
+        arabic = "ما قدرت أكمل الطلب حالياً. جرّب تحكيلي مرة تانية."
+        english = "I could not finish that just now. Try telling me again."
+        command.structured_result = {
+            **(command.structured_result or {}),
+            "answer": {
+                "topic": "UNRESOLVED",
+                "text": arabic if language.startswith("ar") else english,
+                "language": language,
+                "textAr": arabic,
+                "textEn": english,
+                "data": {},
+                "candidates": [],
+            },
+        }
+        command.row_version += 1
+        db.commit()
 
 
 @router.post("/commands/{command_id}/evidence", status_code=201)
@@ -468,6 +681,19 @@ def confirm_voice_command(
             status_code=409,
             detail="Review the full impact and explicitly confirm this high-risk action.",
         )
+    for draft in command.action_drafts:
+        if (
+            draft.selected_for_execution
+            and SuggestedActionType(draft.action_type) in DESTRUCTIVE
+        ):
+            # A deletion carries its acknowledgement in its own payload, so the
+            # rules engine can refuse one that never had it — including on a
+            # replayed or forged execute call, which never passes through this
+            # endpoint's checkbox at all.
+            draft.user_edited_payload = {
+                **dict(draft.user_edited_payload or draft.extracted_payload or {}),
+                "confirmDeletion": True,
+            }
     transition(command, VoiceAnalysisStatus.CONFIRMED)
     command.confirmed_by_id = current_user.id
     command.confirmed_at = datetime.now(timezone.utc)

@@ -17,6 +17,18 @@ RISK_BY_ACTION = {
     SuggestedActionType.SEND_PROJECT_MESSAGE: ActionRiskLevel.MEDIUM,
     SuggestedActionType.SEND_OWNER_UPDATE: ActionRiskLevel.HIGH,
     SuggestedActionType.START_TASK: ActionRiskLevel.MEDIUM,
+    # Schedule, ownership and priority are visible to the whole team and shift
+    # what other people do next, so they are reviewed like any other change —
+    # but they are recoverable by saying the opposite, which deletion is not.
+    SuggestedActionType.UPDATE_TASK_SCHEDULE: ActionRiskLevel.MEDIUM,
+    SuggestedActionType.UPDATE_TASK_ASSIGNMENT: ActionRiskLevel.MEDIUM,
+    SuggestedActionType.UPDATE_TASK_PRIORITY: ActionRiskLevel.LOW,
+    SuggestedActionType.UPDATE_TASK_DETAILS: ActionRiskLevel.MEDIUM,
+    #: Destructive and not reversible: the highest bar the confirmation model
+    #: has, plus an explicit acknowledgement inside the payload.
+    SuggestedActionType.DELETE_TASK: ActionRiskLevel.HIGH,
+    SuggestedActionType.UPDATE_ISSUE_STATUS: ActionRiskLevel.MEDIUM,
+    SuggestedActionType.ASSIGN_ISSUE: ActionRiskLevel.MEDIUM,
     SuggestedActionType.UPDATE_TASK_PROGRESS: ActionRiskLevel.MEDIUM,
     SuggestedActionType.SUBMIT_TASK_FOR_REVIEW: ActionRiskLevel.HIGH,
     SuggestedActionType.PREPARE_CONSULTANT_REVIEW: ActionRiskLevel.HIGH,

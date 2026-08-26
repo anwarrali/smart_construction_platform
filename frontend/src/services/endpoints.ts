@@ -58,7 +58,16 @@ export const ENDPOINTS = {
     PHOTO_CATEGORIES: (photoId: string) => `/field-submissions/photos/${photoId}/categories`,
   },
   VOICE: {
+    COMMANDS: "/voice/commands",
     COMMAND: (id: string) => `/voice/commands/${id}`,
+    HISTORY: "/voice/commands/history",
+    DRAFT: (id: string, draftId: string) => `/voice/commands/${id}/draft-actions/${draftId}`,
+    CLARIFICATIONS: (id: string) => `/voice/commands/${id}/clarifications`,
+    CONFIRM: (id: string) => `/voice/commands/${id}/confirm`,
+    EXECUTE: (id: string) => `/voice/commands/${id}/execute`,
+    CANCEL: (id: string) => `/voice/commands/${id}/cancel`,
+    TASK_CANDIDATES: "/voice/task-candidates",
+    REPORT_READINESS: "/voice/report-readiness",
     AUDIO: (id: string) => `/ai/voice-analyses/${id}/audio`,
   },
   PHOTO_ARCHIVE: {

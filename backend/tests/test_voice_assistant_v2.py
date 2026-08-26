@@ -35,13 +35,17 @@ class VoiceAssistantV2PolicyTests(TestCase):
         self.assertEqual(action_risk(SuggestedActionType.CREATE_FIELD_SUBMISSION).value, "LOW")
 
     def test_design_change_cannot_be_spoken_as_approved(self):
-        with self.assertRaisesRegex(ValueError, "approved"):
-            SuggestedAction(
-                type=SuggestedActionType.CREATE_DESIGN_CHANGE_REPORT,
-                reason="Routing changed",
-                payload={"title": "Routing", "description": "Changed", "approved": True},
-                confidence=.9,
-            )
+        # Corrected rather than rejected: rejecting failed the whole analysis,
+        # so one wrong flag cost the engineer the entire spoken report. The
+        # proposal survives; the claim of approval does not.
+        action = SuggestedAction(
+            type=SuggestedActionType.CREATE_DESIGN_CHANGE_REPORT,
+            reason="Routing changed",
+            payload={"title": "Routing", "description": "Changed", "approved": True},
+            confidence=.9,
+        )
+        self.assertIs(action.payload_dict()["approved"], False)
+        self.assertTrue(action.warnings)
 
     def test_recipient_injection_is_rejected(self):
         allowed, injected = uuid4(), uuid4()

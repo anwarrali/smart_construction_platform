@@ -30,6 +30,13 @@ TASK_ACTIONS = {
     SuggestedActionType.SUBMIT_TASK_FOR_REVIEW,
     SuggestedActionType.PREPARE_CONSULTANT_REVIEW,
     SuggestedActionType.ADD_TASK_NOTE,
+    # The v3 task capabilities. They belong here for the same reason the
+    # others do: the history is only useful if it recorded the task's state on
+    # both sides of the change.
+    SuggestedActionType.UPDATE_TASK_SCHEDULE,
+    SuggestedActionType.UPDATE_TASK_ASSIGNMENT,
+    SuggestedActionType.UPDATE_TASK_PRIORITY,
+    SuggestedActionType.UPDATE_TASK_DETAILS,
 }
 
 CREATED_ENTITY_TYPES = {

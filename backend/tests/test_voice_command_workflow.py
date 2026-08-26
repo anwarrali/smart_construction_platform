@@ -104,6 +104,11 @@ class VoiceRulesEngineTests(TestCase):
         with patch(
             "app.services.voice_rules_engine.user_has_project_access",
             return_value=True,
+        ), patch(
+            # The permission catalogue reads the database; these cases are
+            # about the engine's own gates and run on a Mock session.
+            "app.services.voice_rules_engine.is_available",
+            return_value=True,
         ):
             with self.assertRaises(HTTPException) as raised:
                 VoiceRulesEngine().validate(
@@ -122,6 +127,11 @@ class VoiceRulesEngineTests(TestCase):
         )
         with patch(
             "app.services.voice_rules_engine.user_has_project_access",
+            return_value=True,
+        ), patch(
+            # The permission catalogue reads the database; these cases are
+            # about the engine's own gates and run on a Mock session.
+            "app.services.voice_rules_engine.is_available",
             return_value=True,
         ):
             with self.assertRaises(HTTPException) as raised:
@@ -142,6 +152,11 @@ class VoiceRulesEngineTests(TestCase):
         with patch(
             "app.services.voice_rules_engine.user_has_project_access",
             return_value=True,
+        ), patch(
+            # The permission catalogue reads the database; these cases are
+            # about the engine's own gates and run on a Mock session.
+            "app.services.voice_rules_engine.is_available",
+            return_value=True,
         ):
             with self.assertRaises(HTTPException) as raised:
                 VoiceRulesEngine().validate(
@@ -160,6 +175,11 @@ class VoiceRulesEngineTests(TestCase):
         )
         with patch(
             "app.services.voice_rules_engine.user_has_project_access",
+            return_value=True,
+        ), patch(
+            # The permission catalogue reads the database; these cases are
+            # about the engine's own gates and run on a Mock session.
+            "app.services.voice_rules_engine.is_available",
             return_value=True,
         ):
             with self.assertRaises(HTTPException) as raised:

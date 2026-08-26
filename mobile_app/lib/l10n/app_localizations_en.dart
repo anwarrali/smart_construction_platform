@@ -1689,6 +1689,20 @@ class AppL10nEn extends AppL10n {
   String get diagnosticsRerun => 'Run checks again';
 
   @override
+  String get voiceHoldToRecordHint =>
+      'Hold the button while you speak, then release to send.';
+
+  @override
+  String get voiceAnswerTitle => 'Answer';
+
+  @override
+  String get voiceNoResponse =>
+      'I could not finish that. Could you tell me again what you need?';
+
+  @override
+  String get voiceAskSomethingElse => 'Ask something else';
+
+  @override
   String get voiceTitle => 'Construction Voice Assistant';
 
   @override

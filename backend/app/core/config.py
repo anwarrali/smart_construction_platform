@@ -40,6 +40,26 @@ class Settings(BaseSettings):
     VOICE_MIN_EXECUTION_CONFIDENCE: float = float(
         os.getenv("VOICE_MIN_EXECUTION_CONFIDENCE", "0.80")
     )
+    #: Phrase answers and clarifying questions with the language model instead
+    #: of the deterministic templates. On by default because every failure path
+    #: falls back to those same templates — see `app.ai.response_composer` —
+    #: so the worst case is the previous behaviour, not an error.
+    VOICE_NATURAL_RESPONSES_ENABLED: bool = os.getenv(
+        "VOICE_NATURAL_RESPONSES_ENABLED", "true"
+    ).lower() == "true"
+    #: The phrasing model. Separate from OPENAI_ANALYSIS_MODEL because the two
+    #: workloads differ: analysis needs strict structured output, phrasing needs
+    #: to be fast and cheap enough to run on every reply.
+    OPENAI_RESPONSE_MODEL: str = os.getenv(
+        "OPENAI_RESPONSE_MODEL", os.getenv("OPENAI_RAG_MODEL", "gpt-4.1-mini")
+    )
+    #: How long a half-finished spoken request stays open for the next
+    #: utterance to complete it. Long enough to walk to the other side of a
+    #: slab and answer; short enough that tomorrow's "المهمة السادسة" is not
+    #: attached to yesterday's question.
+    VOICE_CONVERSATION_WINDOW_MINUTES: int = int(
+        os.getenv("VOICE_CONVERSATION_WINDOW_MINUTES", "20")
+    )
     IFC_FEATURE_ENABLED: bool = os.getenv("IFC_FEATURE_ENABLED", "true").lower() == "true"
     IFC_MAX_FILE_MB: int = int(os.getenv("IFC_MAX_FILE_MB", "500"))
     IFC_PARSE_TIMEOUT_SECONDS: int = int(os.getenv("IFC_PARSE_TIMEOUT_SECONDS", "600"))

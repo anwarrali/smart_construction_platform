@@ -1,9 +1,92 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../core/constants/api_endpoints.dart';
 import '../core/network/api_client.dart';
 import '../models/voice_draft.dart';
 import '../features/voice_command/voice_errors.dart';
+
+/// The container the browser actually produced, and how to declare it.
+///
+/// The backend validates an upload three ways — extension, MIME type, and the
+/// leading bytes — and rejects any recording where they disagree. On mobile all
+/// three are known up front because the app chose the file name. On web the
+/// *browser* chooses the container: Chrome honours `aacLc` and returns MP4,
+/// Firefox supports no AAC container and falls back to its WebM default. So the
+/// only safe declaration is one read back off the bytes themselves.
+class RecordedAudioFormat {
+  const RecordedAudioFormat(this.extension, this.mimeType);
+
+  final String extension;
+  final String mimeType;
+
+  /// Mirrors the backend's `_matches_audio_signature` check, so a recording
+  /// this method labels can never fail that check.
+  static RecordedAudioFormat detect(Uint8List bytes) {
+    bool matches(List<int> magic, [int offset = 0]) {
+      if (bytes.length < offset + magic.length) return false;
+      for (var index = 0; index < magic.length; index++) {
+        if (bytes[offset + index] != magic[index]) return false;
+      }
+      return true;
+    }
+
+    // EBML header — WebM/Matroska.
+    if (matches(const [0x1A, 0x45, 0xDF, 0xA3])) {
+      return const RecordedAudioFormat('webm', 'audio/webm');
+    }
+    // 'ftyp' box at offset 4 — MP4/M4A.
+    if (matches(const [0x66, 0x74, 0x79, 0x70], 4)) {
+      return const RecordedAudioFormat('m4a', 'audio/mp4');
+    }
+    // 'RIFF' .... 'WAVE'
+    if (matches(const [0x52, 0x49, 0x46, 0x46]) &&
+        matches(const [0x57, 0x41, 0x56, 0x45], 8)) {
+      return const RecordedAudioFormat('wav', 'audio/wav');
+    }
+    // 'ID3' tag, or an MPEG frame sync.
+    if (matches(const [0x49, 0x44, 0x33]) ||
+        (bytes.length >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0)) {
+      return const RecordedAudioFormat('mp3', 'audio/mpeg');
+    }
+    // Unrecognised: claim WebM, the near-universal `MediaRecorder` default.
+    // A wrong guess is rejected by the backend's signature check rather than
+    // stored, which is the failure mode to prefer.
+    return const RecordedAudioFormat('webm', 'audio/webm');
+  }
+}
+
+/// Build the multipart audio part for whichever platform recorded it.
+///
+/// On web `source` is a `blob:` URL rather than a path, and
+/// `MultipartFile.fromFile` is a hard `UnsupportedError` there —
+/// `dio_web_adapter` replaces it with a thrower reading "MultipartFile is only
+/// supported where dart:io is available." Reading the blob back over XHR (what
+/// dio's browser adapter uses anyway) and sending bytes is the way across.
+Future<MultipartFile> _recordedAudioPart(String source) async {
+  if (!kIsWeb) {
+    return MultipartFile.fromFile(
+      source,
+      filename: source.split(RegExp(r'[/\\]')).last,
+      contentType: DioMediaType.parse('audio/mp4'),
+    );
+  }
+  // A bare Dio: the blob is same-origin browser memory, so it needs none of
+  // the API client's base URL, auth header, or interceptors.
+  final response = await Dio().get<List<int>>(
+    source,
+    options: Options(responseType: ResponseType.bytes),
+  );
+  final bytes = Uint8List.fromList(response.data ?? const <int>[]);
+  final format = RecordedAudioFormat.detect(bytes);
+  return MultipartFile.fromBytes(
+    bytes,
+    filename: 'voice.${format.extension}',
+    contentType: DioMediaType.parse(format.mimeType),
+  );
+}
 
 class VoiceProcessingService {
   VoiceProcessingService(this._api);
@@ -17,17 +100,12 @@ class VoiceProcessingService {
     String? taskId,
     ProgressCallback? onSendProgress,
   }) async {
-    final filename = filePath.split(RegExp(r'[/\\]')).last;
     final form = FormData.fromMap({
       'project_id': projectId,
       if (taskId != null) 'task_id': taskId,
       'duration_seconds': duration.inSeconds,
       'idempotency_key': requestId,
-      'audio': await MultipartFile.fromFile(
-        filePath,
-        filename: filename,
-        contentType: DioMediaType.parse('audio/mp4'),
-      ),
+      'audio': await _recordedAudioPart(filePath),
     });
     final data = await _api.upload<Map<String, dynamic>>(
       ApiEndpoints.voiceCommands,
@@ -149,14 +227,9 @@ class VoiceProcessingService {
     required String filePath,
     ProgressCallback? onSendProgress,
   }) async {
-    final filename = filePath.split(RegExp(r'[/\\]')).last;
     final form = FormData.fromMap({
       'project_id': projectId,
-      'audio': await MultipartFile.fromFile(
-        filePath,
-        filename: filename,
-        contentType: DioMediaType.parse('audio/mp4'),
-      ),
+      'audio': await _recordedAudioPart(filePath),
     });
     final data = await _api.upload<Map<String, dynamic>>(
       ApiEndpoints.aiTranscribe,

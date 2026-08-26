@@ -12,6 +12,7 @@ from app.models.task import Task, TaskComment, TaskDependency
 from app.models.user import User
 from app.services.audit_service import record_audit
 from app.services.domain_event_dispatcher import emit_domain_event
+from app.services.realtime import EventType, publish_event
 
 
 def update_task_progress(*, db: Session, current_user: User, task_id: UUID,
@@ -73,6 +74,20 @@ def update_task_progress(*, db: Session, current_user: User, task_id: UUID,
             if (audit_metadata or {}).get("analysis_id")
             else None
         ),
+    )
+    # Announce the change on the service path too, not only from the REST
+    # endpoint. Both of this function's other callers — a confirmed voice
+    # command and an engineer's verify-and-apply on a worker submission —
+    # changed a task that every open board was showing, and neither produced
+    # an event, so those boards stayed stale until something unrelated
+    # refreshed them. `publish` is transactional (see realtime/publisher.py),
+    # so announcing here is safe whether or not this call commits.
+    publish_event(
+        db,
+        event_type=EventType.TASK_UPDATED,
+        project_id=task.project_id,
+        entity_type="TASK",
+        entity_id=task.id,
     )
     if commit:
         db.commit()

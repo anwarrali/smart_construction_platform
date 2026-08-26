@@ -46,8 +46,11 @@ from app.services.voice_analysis_authorization import (
     can_create_voice_analysis,
     can_view_voice_analysis,
 )
-from app.services.voice_command_service import build_action_drafts, transition
+from app.services.voice_command_service import interpret_command, transition
 from app.services.voice_context_builder import VoiceContextBuilder
+from app.services.voice_conversation_service import find_open_request
+from app.services import voice_metrics
+from app.services.voice_metrics import VoiceLatency
 from app.services.voice_action_policy import user_facing_error
 
 router = APIRouter(prefix="/ai", tags=["AI Voice Foundation"])
@@ -296,13 +299,15 @@ async def _process_analysis(
     content_type: str,
     content: bytes,
 ) -> None:
+    latency = VoiceLatency()
     try:
         transition(analysis, VoiceAnalysisStatus.TRANSCRIBING)
         db.commit()
-        transcription = await run_in_threadpool(
-            TranscriptionService().transcribe,
-            filename=filename, content_type=content_type, content=content,
-        )
+        with latency.stage(voice_metrics.TRANSCRIPTION):
+            transcription = await run_in_threadpool(
+                TranscriptionService().transcribe,
+                filename=filename, content_type=content_type, content=content,
+            )
         analysis = db.get(VoiceAnalysis, analysis.id)
         analysis.raw_transcript = transcription.transcript
         analysis.detected_language = transcription.language
@@ -315,39 +320,58 @@ async def _process_analysis(
         )
         transition(analysis, VoiceAnalysisStatus.ANALYZING)
         db.commit()
-        context = VoiceContextBuilder().build(
-            db, user=current_user, project_id=analysis.project_id,
-            task_id=analysis.task_id,
-        )
+        with latency.stage(voice_metrics.CONTEXT):
+            # The engineer's own unfinished request, if the assistant asked them
+            # something a moment ago. Supplying it is what lets a two-word reply
+            # be interpreted as the answer it is.
+            pending = find_open_request(
+                db, user=current_user, project_id=analysis.project_id,
+                exclude_id=analysis.id,
+            )
+            context = VoiceContextBuilder().build(
+                db, user=current_user, project_id=analysis.project_id,
+                task_id=analysis.task_id, pending=pending,
+            )
         task_context = context["tasks"]
-        result = await run_in_threadpool(
-            ConstructionVoiceAnalysisService().analyze,
-            transcript=transcription.transcript,
-            user_role=(
-                "worker"
-                if is_worker(current_user)
-                else "external_consultant"
-                if getattr(current_user, "engineer_affiliation", None) == "external_consultant"
-                else "contractor_engineer"
-                if current_user.role.value == "engineer"
-                else current_user.role.value
-            ),
-            authorized_tasks=task_context,
-            application_context=context,
-        )
+        with latency.stage(voice_metrics.ANALYSIS):
+            result = await run_in_threadpool(
+                ConstructionVoiceAnalysisService().analyze,
+                transcript=transcription.transcript,
+                user_role=(
+                    "worker"
+                    if is_worker(current_user)
+                    else "external_consultant"
+                    if getattr(current_user, "engineer_affiliation", None) == "external_consultant"
+                    else "contractor_engineer"
+                    if current_user.role.value == "engineer"
+                    else current_user.role.value
+                ),
+                authorized_tasks=task_context,
+                application_context=context,
+            )
         analysis = db.get(VoiceAnalysis, analysis.id)
         analysis.structured_result = result.model_dump(
             mode="json", by_alias=True, exclude_none=True
         )
+        with latency.stage(voice_metrics.DRAFTING):
+            interpret_command(
+                db, command=analysis, result=result, user=current_user,
+            )
         analysis.provider_metadata = {
             "transcriptionProvider": "openai",
             "transcriptionModel": transcription.model,
             "analysisProvider": "openai",
             "analysisModel": settings.OPENAI_ANALYSIS_MODEL,
+            # Durations only — see services/voice_metrics.py for why nothing
+            # from the transcript may ever join them here.
+            "latencyMs": voice_metrics.record(
+                latency,
+                command_id=analysis.id,
+                project_id=analysis.project_id,
+                language=transcription.language,
+                action_count=len(result.suggested_actions),
+            ),
         }
-        build_action_drafts(
-            db, command=analysis, result=result, user=current_user,
-        )
         analysis.completed_at = datetime.now(timezone.utc)
         record_audit(
             db, actor_id=current_user.id, action="voice_interpretation_completed",

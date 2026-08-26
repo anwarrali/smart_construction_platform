@@ -12,6 +12,7 @@ from app.models.enums import TaskStatus
 from app.schemas.voice_command import VoiceTranscriptCommandCreate
 from app.schemas.voice_analysis import SuggestedAction, SuggestedActionType
 from app.services.voice_action_policy import action_risk
+from app.services.voice_action_requirements import missing_fields
 from app.services.ai_action_history_service import undo_status
 from app.services.domain_event_dispatcher import emit_domain_event
 from app.services.ifc_compatibility_service import evaluate_ifc_compatibility
@@ -43,14 +44,35 @@ def test_project_manager_task_creation_proposal_is_strict_and_high_risk():
     assert action_risk(proposal.type).value == "HIGH"
 
 
-def test_task_creation_proposal_requires_a_title():
-    with pytest.raises(ValidationError, match="CREATE_TASK requires title"):
-        SuggestedAction(
-            type=SuggestedActionType.CREATE_TASK,
-            reason="Incomplete request",
-            payload={"description": "No title"},
-            confidence=.9,
-        )
+def test_task_creation_proposal_without_a_title_becomes_a_question_not_an_error():
+    """An unsaid field is asked for, never rejected.
+
+    Rejecting it in the schema failed the entire structured parse, so one
+    missing word turned into "AI analysis is temporarily unavailable". The
+    proposal is accepted, reported as incomplete, and the rules engine refuses
+    to execute anything with an outstanding field — so nothing is lost but the
+    dead end.
+    """
+    proposal = SuggestedAction(
+        type=SuggestedActionType.CREATE_TASK,
+        reason="Incomplete request",
+        payload={"description": "No title"},
+        confidence=.9,
+    )
+    assert missing_fields(proposal.type, proposal.payload_dict(), has_target=False) == [
+        "payload.taskTitle"
+    ]
+
+
+def test_voice_can_never_record_a_design_change_as_already_approved():
+    proposal = SuggestedAction(
+        type=SuggestedActionType.CREATE_DESIGN_CHANGE_REPORT,
+        reason="Spoken design change",
+        payload={"title": "Move the riser", "description": "Coordination clash", "approved": True},
+        confidence=.9,
+    )
+    assert proposal.payload_dict()["approved"] is False
+    assert proposal.warnings
 
 
 def test_unrelated_ifc_identity_is_critical_and_explainable():

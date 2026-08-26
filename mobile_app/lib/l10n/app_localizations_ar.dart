@@ -1690,6 +1690,20 @@ class AppL10nAr extends AppL10n {
   String get diagnosticsRerun => 'إعادة تشغيل الفحوصات';
 
   @override
+  String get voiceHoldToRecordHint =>
+      'اضغط مع الاستمرار أثناء الحديث، ثم ارفع إصبعك للإرسال.';
+
+  @override
+  String get voiceAnswerTitle => 'الإجابة';
+
+  @override
+  String get voiceNoResponse =>
+      'ما قدرت أكمل معالجة طلبك. ممكن تحكيلي مرة تانية شو بدك؟';
+
+  @override
+  String get voiceAskSomethingElse => 'اسأل شيئاً آخر';
+
+  @override
   String get voiceTitle => 'المساعد الصوتي للإنشاءات';
 
   @override

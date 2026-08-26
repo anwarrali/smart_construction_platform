@@ -98,9 +98,21 @@ class PromptContractTests(TestCase):
         self.assertIn("resolves recipients itself", rendered)
 
     def test_prompt_version_was_bumped_with_the_contract(self):
-        # A cached v2 response set predates the contract and is no longer
-        # representative of what the model is now told.
-        self.assertEqual(PROMPT_VERSION, "construction_voice_assistant_v3")
+        # Pinned deliberately: changing what the model is told must be a
+        # decision, not a side effect. v3 introduced the payload contract, v4
+        # the request_kind decision, v5 made a question's topic mandatory, v6
+        # split REASONING from QUESTION because an explanation combines several
+        # facts rather than reading one, v7 made an incomplete request
+        # proposable — the model now names the fields it did not hear instead
+        # of proposing nothing, and is told when a question is outstanding so a
+        # two-word reply reads as the answer it is — and v8 replaced the prose
+        # description of what each role may do with a capability catalogue
+        # rendered per speaker from the permission-filtered registry, and v9
+        # fixed three misclassifications found in acceptance testing: a filed
+        # site report had no topic to go to, a hedged belief was read as an
+        # asserted fact, and one example pinned "حدّث المهمة" to progress even
+        # when the sentence named a date.
+        self.assertEqual(PROMPT_VERSION, "construction_voice_assistant_v9")
 
     def test_rendering_is_stable(self):
         # An unstable prompt would defeat provider-side prompt caching.

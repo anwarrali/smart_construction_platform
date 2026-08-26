@@ -3100,6 +3100,30 @@ abstract class AppL10n {
   /// **'Run checks again'**
   String get diagnosticsRerun;
 
+  /// Shown when the record button was tapped instead of held
+  ///
+  /// In en, this message translates to:
+  /// **'Hold the button while you speak, then release to send.'**
+  String get voiceHoldToRecordHint;
+
+  /// Heading on the card that answers a spoken question
+  ///
+  /// In en, this message translates to:
+  /// **'Answer'**
+  String get voiceAnswerTitle;
+
+  /// Last-resort line when a command carries no question, proposal or answer to render
+  ///
+  /// In en, this message translates to:
+  /// **'I could not finish that. Could you tell me again what you need?'**
+  String get voiceNoResponse;
+
+  /// Button that clears an answer and returns to recording
+  ///
+  /// In en, this message translates to:
+  /// **'Ask something else'**
+  String get voiceAskSomethingElse;
+
   /// Voice screen title
   ///
   /// In en, this message translates to:

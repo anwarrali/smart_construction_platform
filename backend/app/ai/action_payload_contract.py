@@ -57,9 +57,14 @@ class ActionContract:
 # would invalidate provider-side prompt caching for no reason.
 ACTION_CONTRACTS: dict[SuggestedActionType, ActionContract] = {
     SuggestedActionType.CREATE_TASK: ActionContract(
-        "Propose a new task.",
+        "Propose a new task. Carries everything the create form carries, so "
+        "\"أنشئ مهمة لمهندس الكهرباء وخلي موعدها الأحد\" is ONE action — never "
+        "a create followed by updates to a task that does not exist yet.",
         required=("title",),
-        optional=("description", "sourceDiscipline"),
+        optional=(
+            "description", "sourceDiscipline", "assigneeIds", "dueDate",
+            "startDate", "priority",
+        ),
     ),
     SuggestedActionType.START_TASK: ActionContract(
         "Move an existing To Do task into progress. Carries no payload.",
@@ -68,6 +73,41 @@ ACTION_CONTRACTS: dict[SuggestedActionType, ActionContract] = {
         "Set the completion percentage of an existing task.",
         required=("progressPercentage",),
         optional=("note", "correctionConfirmed"),
+    ),
+    SuggestedActionType.UPDATE_TASK_SCHEDULE: ActionContract(
+        "Move a task's planned dates. Say the date in the speaker's own words "
+        "(\"next week\", \"15 September\"); the backend resolves the day.",
+        required=("dueDate",),
+        optional=("startDate", "note"),
+    ),
+    SuggestedActionType.UPDATE_TASK_ASSIGNMENT: ActionContract(
+        "Change who is responsible for a task. Recipients are chosen from the "
+        "project team by identifier, never by spoken name.",
+        required=("assigneeIds",),
+        optional=("note",),
+    ),
+    SuggestedActionType.UPDATE_TASK_PRIORITY: ActionContract(
+        "Change a task's priority.",
+        required=("priority",),
+        optional=("note",),
+    ),
+    SuggestedActionType.UPDATE_TASK_DETAILS: ActionContract(
+        "Rename a task or change its description.",
+        optional=("title", "description"),
+    ),
+    SuggestedActionType.DELETE_TASK: ActionContract(
+        "Delete a task. Destructive and not reversible.",
+        optional=("confirmDeletion",),
+    ),
+    SuggestedActionType.UPDATE_ISSUE_STATUS: ActionContract(
+        "Move an issue through its workflow — in progress, resolved, closed, "
+        "or reopened. Resolving requires a resolution note.",
+        required=("issueStatus",),
+        optional=("resolutionNotes",),
+    ),
+    SuggestedActionType.ASSIGN_ISSUE: ActionContract(
+        "Give an issue an owner from the project team.",
+        required=("assigneeIds",),
     ),
     SuggestedActionType.SUBMIT_TASK_FOR_REVIEW: ActionContract(
         "Hand a finished task to the reviewing consultant. Recipients are "
@@ -114,9 +154,14 @@ ACTION_CONTRACTS: dict[SuggestedActionType, ActionContract] = {
         ),
     ),
     SuggestedActionType.SEND_PROJECT_MESSAGE: ActionContract(
-        "Send a message to named project members.",
-        required=("content",),
-        optional=("recipientIds", "recipientRoles", "subject"),
+        "Send a message to named project members. A message with nobody to "
+        "send it to is not a message, so the recipient is required and the "
+        "backend asks for it when it was not said.",
+        # Recipient first: "ابعت رسالة" is answered with "لمين؟" before "شو
+        # بدك تكتب؟", which is the order the question is asked in and the order
+        # people answer in.
+        required=("recipientIds", "content"),
+        optional=("recipientRoles", "subject"),
     ),
     SuggestedActionType.SEND_OWNER_UPDATE: ActionContract(
         "Send an update to the project owner.",

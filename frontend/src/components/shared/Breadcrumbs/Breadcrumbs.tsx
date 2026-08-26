@@ -12,7 +12,7 @@ const MODULE_KEYS: Record<string, string> = {
   "site-visits": "nav.siteVisits", documents: "nav.documents", evidence: "nav.projectInformation",
   ifc: "nav.ifcBim", "ai-intelligence": "nav.aiInsights", team: "nav.team", activity: "nav.activity",
   reviews: "nav.pendingReviews", history: "nav.pendingReviews", milestones: "task.milestone",
-  "voice-reports": "nav.voiceReports",
+  "voice-reports": "nav.voiceReports", "voice-assistant": "nav.voiceAssistant",
 };
 
 export const Breadcrumbs = () => {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -201,15 +202,25 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
                       playbackPosition: viewModel.playbackPosition,
                       playbackDuration: viewModel.playbackDuration,
                       onPrimary: _primaryRecordAction,
+                      // Hold-to-talk on phones only. The web build keeps
+                      // tap-to-start/stop: a browser can lose a pointer-up to a
+                      // tab switch or dropped pointer capture, and a recording
+                      // that never stops is worse than one that takes two taps.
+                      onHoldStart: kIsWeb ? null : _holdStart,
+                      onHoldEnd: kIsWeb ? null : _holdEnd,
                       onSeek: viewModel.seek,
                       onPause: viewModel.status == VoiceDraftStatus.recording
                           ? () => _run(viewModel.pause)
                           : null,
+                      // Deliberately available while processing as well: an
+                      // upload that hangs must not trap the engineer.
                       onDelete:
                           viewModel.status == VoiceDraftStatus.recorded ||
                               viewModel.status == VoiceDraftStatus.ready ||
-                              viewModel.status == VoiceDraftStatus.error
-                          ? () => _run(viewModel.delete)
+                              viewModel.status == VoiceDraftStatus.error ||
+                              viewModel.status == VoiceDraftStatus.uploading ||
+                              viewModel.status == VoiceDraftStatus.transcribing
+                          ? () => _run(viewModel.abandon)
                           : null,
                       onRetry:
                           viewModel.status == VoiceDraftStatus.recorded ||
@@ -270,7 +281,34 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
                     ),
                   ),
                 ],
-                if (_analysis?.completed == true) ...[
+                // An answered question shows a sentence and nothing else:
+                // no proposal, no task picker, nothing to confirm.
+                //
+                // Suppressed only while a question is actually *on screen* —
+                // the clarification card carries that question along with the
+                // way to answer it, and showing the same sentence twice reads
+                // as the assistant repeating itself. It used to be suppressed
+                // on the command's status instead, which stays
+                // NEEDS_CLARIFICATION after the question has been answered:
+                // the card was gone, the sentence was hidden, and the screen
+                // showed nothing at all.
+                if (_analysis?.answered == true &&
+                    _analysis?.isAsking != true) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  _AnswerCard(
+                    answer: _analysis!.answer!,
+                    language: _analysis!.replyLanguage,
+                    onDone: _cancelTranscript,
+                  ),
+                ],
+                // Rendered from the presence of a *proposal*, not from the
+                // command's status. The review card used to appear whenever the
+                // command reached a terminal state, which is how a question
+                // ended up showing "Select a task / No safe executable action
+                // was suggested". It is one possible result, not the universal
+                // voice result screen.
+                if (_analysis?.hasCompleteProposal == true &&
+                    _analysis?.isAsking != true) ...[
                   const SizedBox(height: AppSpacing.xl),
                   _AnalysisReviewCard(
                     analysis: _analysis!,
@@ -278,11 +316,24 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
                     onConfirm: _confirm,
                   ),
                 ],
-                if (_analysis?.needsClarification == true &&
-                    _analysis!.clarifications.isNotEmpty) ...[
+                // The last resort. The backend guarantees a question, a
+                // proposal or a sentence, so this should never appear — but a
+                // screen that renders nothing after somebody has spoken is
+                // indistinguishable from a broken app, and saying so is always
+                // better than saying nothing.
+                if (_analysis != null && _analysis!.hasNothingToShow) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  Text(
+                    context.l10n.voiceNoResponse,
+                    style: const TextStyle(fontSize: 15, height: 1.5),
+                  ),
+                ],
+                if (_analysis?.isAsking == true) ...[
                   const SizedBox(height: AppSpacing.xl),
                   _ClarificationCard(
                     clarification: _analysis!.clarifications.first,
+                    language: _analysis!.replyLanguage,
+                    busy: _analyzing,
                     onAnswer: _answerClarification,
                     onCancel: _cancelTranscript,
                   ),
@@ -338,7 +389,64 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
         _startUiUpdates();
       case VoiceDraftStatus.uploading:
       case VoiceDraftStatus.transcribing:
-        break;
+        // Processing used to be a dead end: no primary action, no delete, no
+        // retry. A request that never returned left the engineer with zero
+        // controls and reloading the page as the only way out — the reported
+        // "voice stopped responding entirely". Abandoning the in-flight
+        // interpretation and returning to idle is always safe, because nothing
+        // has been confirmed and therefore nothing has been written.
+        await _run(_viewModel!.abandon);
+        _uiTimer?.cancel();
+    }
+  }
+
+  /// Minimum hold before a recording counts.
+  ///
+  /// Below this the engineer brushed the button rather than spoke, and sending
+  /// a fifth of a second of silence for transcription wastes a round trip and
+  /// returns a confusing empty result.
+  static const _minimumHold = Duration(milliseconds: 400);
+
+  DateTime? _holdStartedAt;
+
+  Future<void> _holdStart() async {
+    final viewModel = _viewModel!;
+    // Ignore a press while something is already in flight; the processing
+    // states have their own escape hatch.
+    if (viewModel.status == VoiceDraftStatus.uploading ||
+        viewModel.status == VoiceDraftStatus.transcribing ||
+        viewModel.status == VoiceDraftStatus.recording) {
+      return;
+    }
+    _holdStartedAt = DateTime.now();
+    await _run(viewModel.start);
+    if (viewModel.status == VoiceDraftStatus.recording) _startUiUpdates();
+  }
+
+  Future<void> _holdEnd() async {
+    final viewModel = _viewModel!;
+    final startedAt = _holdStartedAt;
+    _holdStartedAt = null;
+    if (viewModel.status != VoiceDraftStatus.recording) return;
+
+    if (startedAt != null &&
+        DateTime.now().difference(startedAt) < _minimumHold) {
+      // Too short to be speech. Throw it away and say why, rather than
+      // sending silence and reporting that nothing could be transcribed.
+      await _run(viewModel.abandon);
+      _uiTimer?.cancel();
+      if (mounted) {
+        setState(() => _error = context.l10n.voiceHoldToRecordHint);
+      }
+      return;
+    }
+
+    await _run(viewModel.stop);
+    _uiTimer?.cancel();
+    // Release sends: no separate stop-then-send step, which is the whole
+    // point of hold-to-talk.
+    if (viewModel.status == VoiceDraftStatus.recorded) {
+      await _analyzeRecording();
     }
   }
 
@@ -507,6 +615,8 @@ class _RecorderPanel extends StatelessWidget {
     this.onPause,
     this.onDelete,
     this.onRetry,
+    this.onHoldStart,
+    this.onHoldEnd,
   });
   final VoiceDraftStatus status;
   final Duration duration;
@@ -519,6 +629,8 @@ class _RecorderPanel extends StatelessWidget {
   final VoidCallback? onPause;
   final VoidCallback? onDelete;
   final VoidCallback? onRetry;
+  final VoidCallback? onHoldStart;
+  final VoidCallback? onHoldEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -561,6 +673,8 @@ class _RecorderPanel extends StatelessWidget {
             state: controlState,
             duration: duration,
             onPressed: onPrimary,
+            onHoldStart: onHoldStart,
+            onHoldEnd: onHoldEnd,
           ),
           if (status == VoiceDraftStatus.recorded ||
               status == VoiceDraftStatus.ready ||
@@ -751,14 +865,93 @@ class _SmallAction extends StatelessWidget {
   );
 }
 
+/// The reply to a question: a sentence, and a way back to recording.
+///
+/// Deliberately has no confirm button and no task picker. A question changed
+/// nothing, so offering either would invite the engineer to approve something
+/// that does not exist — the confusion this whole change exists to remove.
+class _AnswerCard extends StatelessWidget {
+  const _AnswerCard({
+    required this.answer,
+    required this.onDone,
+    this.language = '',
+  });
+
+  final VoiceAnswer answer;
+
+  /// The language the backend answered in. Empty falls back to the interface
+  /// language, which is what an older backend leaves us with.
+  final String language;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final spoken = language.isNotEmpty
+        ? language
+        : Localizations.localeOf(context).languageCode;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.panel),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.info_outline_rounded, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  context.l10n.voiceAnswerTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            answer.textFor(spoken),
+            textDirection: spoken.startsWith('ar')
+                ? TextDirection.rtl
+                : TextDirection.ltr,
+            style: const TextStyle(fontSize: 15, height: 1.5),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton(
+              onPressed: onDone,
+              child: Text(context.l10n.voiceAskSomethingElse),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ClarificationCard extends StatefulWidget {
   const _ClarificationCard({
     required this.clarification,
     required this.onAnswer,
     required this.onCancel,
+    this.language = '',
+    this.busy = false,
   });
 
   final VoiceClarificationItem clarification;
+
+  /// The language the question was asked in — the speaker's, not the app's.
+  final String language;
+
+  /// True while the answer is being interpreted. An answer to "ما فهمت قصدك"
+  /// is re-read together with the original request, which takes a moment; with
+  /// no indication of that the screen looks like it swallowed the answer.
+  final bool busy;
   final Future<void> Function(String, String) onAnswer;
   final VoidCallback onCancel;
 
@@ -786,24 +979,28 @@ class _ClarificationCardState extends State<_ClarificationCard> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Was three hardcoded Arabic literals plus a forced RTL direction, so
-        // an English session got an Arabic card. The heading and the controls
-        // come from the catalogue now; the *question* is content the server
-        // produced in both languages, so each half keeps its own direction.
+        // The heading and controls come from the catalogue; the *question* is
+        // content the server produced, and it is shown once, in the language
+        // that was spoken. Both halves used to be stacked one above the other,
+        // which turned a single spoken question into a bilingual form.
         Text(
           context.l10n.voiceClarificationTitle,
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
-        Text(
-          widget.clarification.questionAr,
-          textDirection: TextDirection.rtl,
-          style: const TextStyle(fontSize: 16, height: 1.5),
-        ),
-        Text(
-          widget.clarification.questionEn,
-          textDirection: TextDirection.ltr,
-          style: const TextStyle(color: AppColors.mutedForeground),
+        Builder(
+          builder: (context) {
+            final spoken = widget.language.isNotEmpty
+                ? widget.language
+                : Localizations.localeOf(context).languageCode;
+            return Text(
+              widget.clarification.questionFor(spoken),
+              textDirection: spoken.startsWith('ar')
+                  ? TextDirection.rtl
+                  : TextDirection.ltr,
+              style: const TextStyle(fontSize: 16, height: 1.5),
+            );
+          },
         ),
         if (widget.clarification.options.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -838,20 +1035,28 @@ class _ClarificationCardState extends State<_ClarificationCard> {
           children: [
             Expanded(
               child: OutlinedButton(
-                onPressed: widget.onCancel,
+                onPressed: widget.busy ? null : widget.onCancel,
                 child: Text(context.l10n.commonCancel),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: FilledButton(
-                onPressed: () {
-                  final answer = _controller.text.trim();
-                  if (answer.isNotEmpty) {
-                    widget.onAnswer(widget.clarification.id, answer);
-                  }
-                },
-                child: Text(context.l10n.voiceContinue),
+                onPressed: widget.busy
+                    ? null
+                    : () {
+                        final answer = _controller.text.trim();
+                        if (answer.isNotEmpty) {
+                          widget.onAnswer(widget.clarification.id, answer);
+                        }
+                      },
+                child: widget.busy
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(context.l10n.voiceContinue),
               ),
             ),
           ],
@@ -1334,6 +1539,16 @@ class _OutcomeRow extends StatelessWidget {
                     : l10n.voiceOutcomeNotExecuted,
                 style: TextStyle(color: tone, fontSize: 12),
               ),
+              // What actually happened, in the language it was asked in. Sent
+              // by the server only after the operation returned, so it can
+              // never claim something that did not happen.
+              if (result.outcomeText != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  result.outcomeText!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
               if (reason != null) ...[
                 const SizedBox(height: 2),
                 Text(

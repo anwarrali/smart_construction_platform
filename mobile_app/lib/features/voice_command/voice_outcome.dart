@@ -55,6 +55,8 @@ class VoiceActionOutcome {
     required this.succeeded,
     required this.status,
     required this.message,
+    this.userMessage,
+    this.errorCode,
   });
 
   /// The action type, e.g. `SUBMIT_TASK_FOR_REVIEW`.
@@ -68,12 +70,28 @@ class VoiceActionOutcome {
   /// The backend's own English message. Never shown raw — see [reason].
   final String message;
 
+  /// What the backend says to *the person*, already in the language they
+  /// spoke: "ما عندك صلاحية تعمل هذا التعديل", "لمين بدك أبعت الرسالة؟". The
+  /// server classifies the failure and phrases it — see
+  /// `app/services/voice_action_errors.py` — because only the server knows
+  /// which of a dozen rules refused, and the client used to flatten all of
+  /// them into one "something went wrong".
+  final String? userMessage;
+
+  /// The stable classification behind [userMessage], for logs and analytics.
+  /// Never displayed.
+  final String? errorCode;
+
   factory VoiceActionOutcome.fromJson(Map<String, dynamic> json) =>
       VoiceActionOutcome(
         type: '${json['type'] ?? ''}',
         succeeded: json['success'] == true,
         status: '${json['status'] ?? ''}',
         message: '${json['message'] ?? ''}',
+        userMessage: (json['userMessage'] as String?)?.trim().isEmpty ?? true
+            ? null
+            : json['userMessage'] as String?,
+        errorCode: json['errorCode'] as String?,
       );
 
   /// The action's name in the user's language.
@@ -81,17 +99,25 @@ class VoiceActionOutcome {
 
   /// Why it failed, in the user's language.
   ///
-  /// The backend's `message` is English prose written for developers (and
-  /// sometimes names internal field names), so it is classified rather than
-  /// printed. A recognised class gets a sentence a site engineer can act on;
-  /// anything else gets the generic one. Raw backend text and stack traces
-  /// never reach the screen.
+  /// The server's explanation is preferred whenever there is one: it knows
+  /// which rule refused and says so — "ما عندك صلاحية تعمل هذا التعديل",
+  /// "لمين بدك أبعت الرسالة؟" — where this client can only tell that
+  /// *something* refused. The old local classification stays as the fallback
+  /// for an older backend, and the raw `message` is still never shown.
   String? reason(AppL10n l10n) {
     if (succeeded) return null;
+    if (userMessage != null) return userMessage;
     final text = message.toLowerCase();
     if (text.contains('unsupported fields')) {
       return l10n.voiceOutcomeRejectedFields;
     }
     return l10n.voiceOutcomeGenericFailure;
   }
+
+  /// What happened, for an action that did succeed.
+  ///
+  /// Only ever populated by the server after the operation returned, which is
+  /// what keeps "تم إرسال الرسالة" from ever appearing for a message that was
+  /// not sent.
+  String? get outcomeText => succeeded ? userMessage : null;
 }

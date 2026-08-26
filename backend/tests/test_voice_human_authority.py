@@ -46,8 +46,17 @@ def draft(action_type, payload=None, *, confidence=.95, missing=None, target_id=
 class VoiceActsForTheSpeaker(TestCase):
     """An authorized engineer speaking gets the authority they already have."""
 
-    def _validate(self, person, action_draft, *, command=None, access=True, task=None):
+    def _validate(self, person, action_draft, *, command=None, access=True, task=None,
+                  capable=True):
+        """Validate one draft.
+
+        `capable` stands in for the permission catalogue, which
+        `voice_capabilities.is_available` reads from the database. These cases
+        are about the engine's own role and workflow rules; the catalogue is
+        covered by its own tests and a Mock session cannot answer it.
+        """
         with patch("app.services.voice_rules_engine.user_has_project_access", return_value=access), \
+             patch("app.services.voice_rules_engine.is_available", return_value=capable), \
              patch.object(VoiceRulesEngine, "_validated_task", return_value=task):
             return VoiceRulesEngine().validate(
                 Mock(), command=command or command_for(person), draft=action_draft, actor=person,
@@ -102,6 +111,7 @@ class VoiceActsForTheSpeaker(TestCase):
 class WorkerVoiceEntersVerification(TestCase):
     def _expect_forbidden(self, action_type, payload=None):
         person = actor(UserRole.WORKER)
+        capable = True
         with patch("app.services.voice_rules_engine.user_has_project_access", return_value=True), \
              patch.object(VoiceRulesEngine, "_validated_task", return_value=None):
             with self.assertRaises(HTTPException) as raised:
@@ -125,7 +135,9 @@ class WorkerVoiceEntersVerification(TestCase):
     def test_worker_voice_becomes_a_field_submission_that_still_needs_verification(self):
         person = actor(UserRole.WORKER)
         task = fake_task()
+        capable = True
         with patch("app.services.voice_rules_engine.user_has_project_access", return_value=True), \
+             patch("app.services.voice_rules_engine.is_available", return_value=capable), \
              patch.object(VoiceRulesEngine, "_validated_task", return_value=task):
             result = VoiceRulesEngine().validate(
                 Mock(), command=command_for(person),
@@ -137,8 +149,9 @@ class WorkerVoiceEntersVerification(TestCase):
 
 
 class RoleBoundariesAreNotWidenedByVoice(TestCase):
-    def _validate(self, person, action_draft, *, task=None):
+    def _validate(self, person, action_draft, *, task=None, capable=True):
         with patch("app.services.voice_rules_engine.user_has_project_access", return_value=True), \
+             patch("app.services.voice_rules_engine.is_available", return_value=capable), \
              patch.object(VoiceRulesEngine, "_validated_task", return_value=task):
             return VoiceRulesEngine().validate(
                 Mock(), command=command_for(person), draft=action_draft, actor=person,

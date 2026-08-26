@@ -23,12 +23,24 @@ class RecordUpdateControl extends StatelessWidget {
     required this.onPressed,
     this.duration,
     this.compact = false,
+    this.onHoldStart,
+    this.onHoldEnd,
   });
 
   final RecordControlState state;
   final VoidCallback? onPressed;
   final Duration? duration;
   final bool compact;
+
+  /// Press-and-hold recording, WhatsApp style: hold to talk, release to send.
+  ///
+  /// Optional because it is a phone gesture. Where these are null the control
+  /// keeps its tap-to-start / tap-to-stop behaviour, which is what the web
+  /// build uses — a browser tab can lose a pointer-up to a dropped pointer
+  /// capture or a tab switch, and a recording that never stops is worse than
+  /// one that takes two taps.
+  final VoidCallback? onHoldStart;
+  final VoidCallback? onHoldEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -63,9 +75,7 @@ class RecordUpdateControl extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          InkWell(
-            customBorder: const CircleBorder(),
-            onTap: state == RecordControlState.processing ? null : onPressed,
+          _pressable(
             child: Container(
               width: size,
               height: size,
@@ -111,6 +121,31 @@ class RecordUpdateControl extends StatelessWidget {
     );
   }
 
+  /// Hold-to-talk when the caller supplied hold callbacks, tap otherwise.
+  ///
+  /// `onTapDown`/`onTapUp` rather than a long-press: a long press waits half a
+  /// second before firing, and half a second of an engineer already talking is
+  /// half a sentence missing from the recording. `onTapCancel` is treated as a
+  /// release so a finger that slides off the button still ends the recording
+  /// rather than leaving the microphone open.
+  Widget _pressable({required Widget child}) {
+    final busy = state == RecordControlState.processing;
+    final holdToTalk = onHoldStart != null && onHoldEnd != null;
+    if (!holdToTalk) {
+      return InkWell(
+        customBorder: const CircleBorder(),
+        onTap: busy ? null : onPressed,
+        child: child,
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: busy ? null : (_) => onHoldStart!(),
+      onTapUp: busy ? null : (_) => onHoldEnd!(),
+      onTapCancel: busy ? null : onHoldEnd,
+      child: child,
+    );
+  }
 }
 
 class RecordUpdateCard extends StatelessWidget {

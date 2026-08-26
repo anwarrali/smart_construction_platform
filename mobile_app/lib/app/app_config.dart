@@ -18,15 +18,20 @@ class AppConfig {
       // work on a real device.
       //
       // It is also **DHCP-assigned and will go stale**: this value was
-      // .88.6, the router later moved the machine to .88.5, and every build
-      // in between failed on the phone with a generic "cannot reach the
-      // server" that looks exactly like a rejected password. If sign-in
-      // fails to connect, the login screen now prints the address it tried —
-      // compare it with `ipconfig` before suspecting anything else.
+      // .88.6, then .88.5, and is now .88.2 — each move broke every build in
+      // between with a generic "cannot reach the server" that looks exactly
+      // like a rejected password. If sign-in fails to connect, the login
+      // screen prints the address it tried; compare it with `ipconfig`
+      // before suspecting anything else.
       //
-      // Deployments must override this:
+      // Rather than editing this line again, prefer passing the current
+      // address at build time, which leaves the checked-in default alone:
+      //   flutter run --dart-define=API_BASE_URL=http://<your-ip>:8000/api/v1
+      //
+      //   defaultValue: 'http://192.168.88.2:8000/api/v1',
+      // Deployments must override it the same way:
       //   --dart-define=API_BASE_URL=https://api.example.com/api/v1
-      defaultValue: 'http://192.168.88.5:8000/api/v1',
+      defaultValue: 'http://127.0.0.1:8000/api/v1',
     ),
     aiDiagnosticsEnabled: bool.fromEnvironment(
       'ENABLE_AI_DIAGNOSTICS',

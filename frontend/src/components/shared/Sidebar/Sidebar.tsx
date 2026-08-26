@@ -108,6 +108,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
       {to:workspace.path("requests"),label:t("nav.ownerRequests"),icon:ClipboardCheck},
     ]},
     { label:t("nav.groupField"), items:[
+      {to:workspace.path("voice-assistant"),label:t("nav.voiceAssistant"),icon:Mic2},
       {to:workspace.path("site-reports"),label:t("nav.siteReports"),icon:FileText},
       {to:workspace.path("site-visits"),label:t("nav.siteVisits"),icon:CalendarDays},
       {to:workspace.path("evidence"),label:t("nav.projectInformation"),icon:Images},
@@ -138,6 +139,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
       {to:workspace.path("site-reports"),label:t("nav.siteReports"),icon:FileText},
       {to:workspace.path("site-visits"),label:t("nav.siteVisits"),icon:CalendarDays},
       {to:workspace.path("evidence"),label:t("nav.projectInformation"),icon:Images},
+      ...(!isConsultantEngineer?[{to:workspace.path("voice-assistant"),label:t("nav.voiceAssistant"),icon:Mic2}]:[]),
       ...(!isConsultantEngineer?[{to:workspace.path("voice-reports"),label:t("nav.voiceReports"),icon:Mic2}]:[]),
     ]},
     { label:t("nav.groupReference"), items:[

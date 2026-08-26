@@ -55,7 +55,11 @@ import type {
 } from "../types/message";
 import type { StepUpChallenge, StepUpVerifyResult } from "../types/stepUp";
 import type { ConsultantDashboardData, ConsultantReviewDetail, ConsultantReviewSummary } from "../types/consultant";
-import type { VoiceCommand } from "../types/voice";
+import type {
+  VoiceCommand,
+  VoiceReportReadiness,
+  VoiceTaskCandidates,
+} from "../types/voice";
 import type { FieldSubmission } from "../types/fieldSubmission";
 import type {
   EvidencePhotoArchiveItem,
@@ -351,6 +355,92 @@ const api = {
       axiosInstance.get<VoiceCommand>(ENDPOINTS.VOICE.COMMAND(id)).then((res) => res.data),
     getAudio: (id: string) =>
       axiosInstance.get<Blob>(ENDPOINTS.VOICE.AUDIO(id), { responseType: "blob" })
+        .then((res) => res.data),
+
+    /**
+     * Upload one recording and get back the fully interpreted command.
+     *
+     * `signal` is required in practice rather than optional decoration: an
+     * engineer who re-records while the previous upload is in flight must not
+     * receive the earlier interpretation afterwards, and the only reliable way
+     * to guarantee that is to abort the obsolete request rather than to
+     * remember to ignore its response.
+     */
+    createCommand: (
+      body: {
+        projectId: string;
+        taskId?: string;
+        durationSeconds?: number;
+        idempotencyKey: string;
+        audio: Blob;
+        filename: string;
+      },
+      signal?: AbortSignal,
+    ) => {
+      const form = new FormData();
+      form.append("project_id", body.projectId);
+      if (body.taskId) form.append("task_id", body.taskId);
+      if (body.durationSeconds) form.append("duration_seconds", String(body.durationSeconds));
+      form.append("idempotency_key", body.idempotencyKey);
+      form.append("audio", body.audio, body.filename);
+      return axiosInstance
+        .post<VoiceCommand>(ENDPOINTS.VOICE.COMMANDS, form, { signal, timeout: 120000 })
+        .then((res) => res.data);
+    },
+
+    taskCandidates: (projectId: string, q: string, signal?: AbortSignal) =>
+      axiosInstance
+        .get<VoiceTaskCandidates>(ENDPOINTS.VOICE.TASK_CANDIDATES, {
+          params: { project_id: projectId, q },
+          signal,
+        })
+        .then((res) => res.data),
+
+    updateDraft: (
+      commandId: string,
+      draftId: string,
+      body: {
+        targetId?: string;
+        payload: Record<string, unknown>;
+        selectedForExecution: boolean;
+        rowVersion: number;
+      },
+    ) =>
+      axiosInstance
+        .put<VoiceCommand>(ENDPOINTS.VOICE.DRAFT(commandId, draftId), body)
+        .then((res) => res.data),
+
+    answerClarification: (commandId: string, clarificationId: string, answerText: string) =>
+      axiosInstance
+        .post<VoiceCommand>(ENDPOINTS.VOICE.CLARIFICATIONS(commandId), {
+          clarificationId,
+          answerText,
+        })
+        .then((res) => res.data),
+
+    confirm: (
+      commandId: string,
+      body: { selectedDraftIds: string[]; rowVersion: number; detailedConfirmation: boolean },
+    ) =>
+      axiosInstance
+        .post<VoiceCommand>(ENDPOINTS.VOICE.CONFIRM(commandId), body)
+        .then((res) => res.data),
+
+    execute: (commandId: string, rowVersion: number) =>
+      axiosInstance
+        .post<VoiceCommand>(ENDPOINTS.VOICE.EXECUTE(commandId), { rowVersion })
+        .then((res) => res.data),
+
+    cancel: (commandId: string) =>
+      axiosInstance
+        .post<VoiceCommand>(ENDPOINTS.VOICE.CANCEL(commandId), {})
+        .then((res) => res.data),
+
+    reportReadiness: (projectId: string, reportDate?: string) =>
+      axiosInstance
+        .get<VoiceReportReadiness>(ENDPOINTS.VOICE.REPORT_READINESS, {
+          params: { project_id: projectId, ...(reportDate ? { report_date: reportDate } : {}) },
+        })
         .then((res) => res.data),
   },
 
