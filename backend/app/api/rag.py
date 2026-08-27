@@ -32,6 +32,9 @@ from app.services import rag
 from app.services.document_access import assert_document_readable, readable_document_ids
 from app.services.rag.answering import AnswerError, AnswerService
 from app.services.rag.embeddings import EmbeddingError, EmbeddingService
+from app.models.ifc import IFCModelVersion
+from app.models.site_report import SiteReport
+from app.services.knowledge_router import SourceAvailability, route_question
 
 router = APIRouter(prefix="/rag", tags=["RAG"])
 
@@ -157,7 +160,28 @@ def query_documents(
                 detail="This document is not indexed yet",
             )
         allowed_ids = [document.id]
+        # An explicitly named document is an explicit instruction. Routing is
+        # for questions where nobody said where to look.
+        routing = None
     else:
+        routing = route_question(
+            payload.query,
+            availability=_availability(db, payload.project_id),
+        )
+        if not routing.needs_document_retrieval:
+            # The question has a better home than the document vectors. Before
+            # routing existed this searched anyway and returned whichever
+            # passage happened to be nearest, which is how an unrelated
+            # contract clause ended up answering a question about progress.
+            return RagQueryResponse(
+                answer=(
+                    f"{routing.reason} Ask this through the project knowledge endpoint, "
+                    "which reads that source directly."
+                ),
+                found=False, citations=[], chunks_used=0,
+                route=routing.source.value, route_reason=routing.reason,
+                route_matched=routing.matched,
+            )
         # Every document in the project this user may read — resolved from the
         # same rules the documents API applies, then narrowed to those that
         # are actually indexed.
@@ -199,4 +223,22 @@ def query_documents(
             for citation in answer.citations
         ],
         chunks_used=answer.chunks_used,
+        route=routing.source.value if routing else "DOCUMENTS",
+        route_reason=routing.reason if routing else "A specific document was named by the caller.",
+        route_matched=routing.matched if routing else None,
+    )
+
+
+def _availability(db: Session, project_id) -> SourceAvailability:
+    """What this project actually holds, so routing cannot pick an empty source."""
+    return SourceAvailability(
+        documents=True,
+        ifc=db.query(IFCModelVersion.id).filter(
+            IFCModelVersion.project_id == project_id,
+            IFCModelVersion.processing_status.in_(["READY", "READY_WITH_WARNINGS"]),
+        ).first() is not None,
+        site_reports=db.query(SiteReport.id).filter(
+            SiteReport.project_id == project_id
+        ).first() is not None,
+        structured=True,
     )

@@ -59,6 +59,36 @@ export const CompareTab = ({ projectId, versions, currentVersionId }: { projectI
 };
 
 const severityVariant = (severity: string) => severity === "CRITICAL" || severity === "HIGH" ? "danger" : severity === "MEDIUM" ? "warning" : severity === "INFORMATION" ? "info" : "neutral";
+/**
+ * The extra panel a geometry-derived finding needs.
+ *
+ * A model-quality finding is a statement about the file; this is a statement
+ * about two physical elements, so it has to name both, show the measured
+ * overlap, and say plainly that a bounding-box overlap is a candidate rather
+ * than a confirmed clash. Presenting it with the same certainty as "materials
+ * are missing" would be the exact false-confidence the rule is built to avoid.
+ */
+const InterferenceDetail = ({ item }: { item: IFCFinding }) => {
+  const { t } = useTranslation();
+  const pair = item.elementPair;
+  if (!pair?.structural || !pair.service) return null;
+  const party = (value: NonNullable<IFCFinding["elementPair"]>["structural"]) => (
+    <div className="rounded-lg border p-3">
+      <p className="text-xs text-muted-foreground">{value?.discipline ? labelize(value.discipline) : t("ifcActions.discipline")}</p>
+      <b className="block text-sm">{value?.name}</b>
+      <p className="font-mono text-xs text-muted-foreground">{value?.entityType} · {value?.globalId}</p>
+    </div>
+  );
+  return <div className="mt-4 space-y-3">
+    <div className="grid gap-3 md:grid-cols-2">{party(pair.structural)}{party(pair.service)}</div>
+    <div className="flex flex-wrap gap-4 text-sm">
+      {pair.penetrationMetres != null && <span><span className="text-muted-foreground">{t("ifcActions.overlap_depth")}:</span> <b>{pair.penetrationMetres} m</b></span>}
+      {item.storey && <span><span className="text-muted-foreground">{t("ifcActions.location")}:</span> <b>{item.storey}</b></span>}
+    </div>
+    {item.verification && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t("ifcActions.candidate_not_confirmed")} {item.verification}</p>}
+  </div>;
+};
+
 export const FindingsTab = ({ projectId, versionId, onViewElements }: { projectId: string; versionId: string; onViewElements: (ids: string[]) => void }) => {
   const vocabulary = useVocabulary();
   const { t } = useTranslation();
@@ -67,7 +97,7 @@ export const FindingsTab = ({ projectId, versionId, onViewElements }: { projectI
   const visible = useMemo(() => items.filter((item) => (!severity || item.severity === severity) && (!discipline || item.disciplines.includes(discipline))), [discipline, items, severity]);
   const disciplines = Array.from(new Set(items.flatMap((item) => item.disciplines))).sort();
   if (loading) return <LoadingState label={t("ifcActions.loading_model_quality_findings")}/>; if (error) return <ErrorState message={error} onRetry={() => setReload((value) => value + 1)}/>;
-  return <div className="space-y-4"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{t("ifcActions.model_quality_findings")}</h2><p className="text-sm text-muted-foreground">{t("ifcActions.normalized_and_deduplicated_by_ifc_rule")}</p></div><div className="flex gap-2"><select aria-label={t("ifcActions.finding_severity")} className="rounded-md border bg-background px-3 py-2 text-sm" value={severity} onChange={(event) => setSeverity(event.target.value)}><option value="">{t("ifcActions.all_severities")}</option>{["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATION"].map((value) => <option key={value}>{value}</option>)}</select><select aria-label={t("ifcActions.finding_discipline")} className="rounded-md border bg-background px-3 py-2 text-sm" value={discipline} onChange={(event) => setDiscipline(event.target.value)}><option value="">{t("ifcActions.all_disciplines")}</option>{disciplines.map((value) => <option key={value}>{value}</option>)}</select></div></div></Card>{!visible.length ? <EmptyState title={t("ifcActions.no_model_quality_findings")} description={t("ifcActions.no_findings_match_the_current")}/> : visible.map((item) => <Card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="max-w-3xl"><h3 className="flex items-center gap-2 font-semibold"><AlertTriangle size={17}/>{item.title}</h3><p className="mt-2 text-sm text-muted-foreground">{item.description}</p></div><Badge variant={severityVariant(item.severity)}>{vocabulary.severity(item.severity)}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4"><div><p className="text-xs text-muted-foreground">{t("ifcActions.affected_elements")}</p><b>{item.affectedElementCount}</b></div><div><p className="text-xs text-muted-foreground">{t("ifcActions.discipline")}</p><b>{item.discipline}</b></div><div><p className="text-xs text-muted-foreground">{t("ifcActions.ifc_rule_or_reason")}</p><b>{item.ifcRule}</b></div><div><p className="text-xs text-muted-foreground">{t("ifcActions.status")}</p><b>{labelize(item.status)}</b></div></div><div className="mt-4 grid gap-3 md:grid-cols-2"><div className="rounded-lg bg-muted/40 p-3"><p className="text-xs font-semibold">{t("ifcActions.why_it_matters")}</p><p className="mt-1 text-sm">{item.whyItMatters}</p></div><div className="rounded-lg bg-muted/40 p-3"><p className="text-xs font-semibold">{t("ifcActions.recommended_action")}</p><p className="mt-1 text-sm">{item.recommendedAction}</p></div></div><Button className="mt-4" variant="outline" size="sm" onClick={() => onViewElements(item.affectedElementIds)}>{t("ifcActions.view_affected_elements")}</Button></Card>)}</div>;
+  return <div className="space-y-4"><Card><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{t("ifcActions.model_quality_findings")}</h2><p className="text-sm text-muted-foreground">{t("ifcActions.normalized_and_deduplicated_by_ifc_rule")}</p></div><div className="flex gap-2"><select aria-label={t("ifcActions.finding_severity")} className="rounded-md border bg-background px-3 py-2 text-sm" value={severity} onChange={(event) => setSeverity(event.target.value)}><option value="">{t("ifcActions.all_severities")}</option>{["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATION"].map((value) => <option key={value}>{value}</option>)}</select><select aria-label={t("ifcActions.finding_discipline")} className="rounded-md border bg-background px-3 py-2 text-sm" value={discipline} onChange={(event) => setDiscipline(event.target.value)}><option value="">{t("ifcActions.all_disciplines")}</option>{disciplines.map((value) => <option key={value}>{value}</option>)}</select></div></div></Card>{!visible.length ? <EmptyState title={t("ifcActions.no_model_quality_findings")} description={t("ifcActions.no_findings_match_the_current")}/> : visible.map((item) => <Card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="max-w-3xl"><h3 className="flex items-center gap-2 font-semibold"><AlertTriangle size={17}/>{item.title}</h3><p className="mt-2 text-sm text-muted-foreground">{item.description}</p></div><div className="flex flex-wrap gap-2"><Badge variant={severityVariant(item.severity)}>{vocabulary.severity(item.severity)}</Badge>{item.confidence != null && item.confidence < 1 && <Badge variant="info">{t("ai.confidence", { value: Math.round(item.confidence * 100) })}</Badge>}</div></div><div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4"><div><p className="text-xs text-muted-foreground">{t("ifcActions.affected_elements")}</p><b>{item.affectedElementCount}</b></div><div><p className="text-xs text-muted-foreground">{t("ifcActions.discipline")}</p><b>{item.discipline}</b></div><div><p className="text-xs text-muted-foreground">{t("ifcActions.ifc_rule_or_reason")}</p><b>{item.ifcRule}</b></div><div><p className="text-xs text-muted-foreground">{t("ifcActions.status")}</p><b>{labelize(item.status)}</b></div></div><div className="mt-4 grid gap-3 md:grid-cols-2"><div className="rounded-lg bg-muted/40 p-3"><p className="text-xs font-semibold">{t("ifcActions.why_it_matters")}</p><p className="mt-1 text-sm">{item.whyItMatters}</p></div><div className="rounded-lg bg-muted/40 p-3"><p className="text-xs font-semibold">{t("ifcActions.recommended_action")}</p><p className="mt-1 text-sm">{item.recommendedAction}</p></div></div><InterferenceDetail item={item}/><Button className="mt-4" variant="outline" size="sm" onClick={() => onViewElements(item.affectedElementIds)}>{t("ifcActions.view_affected_elements")}</Button></Card>)}</div>;
 };
 
 // `t` is threaded in explicitly (rather than called with `useTranslation` here)

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID, ENUM as PG_ENUM
+from sqlalchemy.dialects.postgresql import JSONB, UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -56,6 +56,20 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     #: Why the last attempt failed, in words a user can act on. NULL when READY.
     index_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # --- File intelligence --------------------------------------------------
+    # `document_type` above is the uploader's choice and stays authoritative.
+    # These record what the file itself turned out to be, so a bill of
+    # quantities filed as "other" is still findable, and so a disagreement
+    # between the two can be surfaced instead of silently resolved.
+    # See `services/file_intelligence.py`.
+
+    #: The format its bytes actually are: PDF, DWG, XLSX, IFC…
+    detected_format: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    #: What classification thinks the document is. Advisory, never enforced.
+    suggested_document_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    #: Confidence, source, evidence and what else was considered.
+    classification_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
 
     project: Mapped["Project"] = relationship(back_populates="documents")
     task: Mapped["Task"] = relationship()

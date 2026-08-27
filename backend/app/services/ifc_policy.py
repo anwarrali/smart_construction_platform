@@ -47,6 +47,8 @@ ERRORS = {
     "IFC_PARSER_UNAVAILABLE": IFCError("IFC processing is unavailable", "The server IFC parser is not installed correctly.", True, "Contact support"),
     "IFC_ENTITY_LIMIT_EXCEEDED": IFCError("Model is too large", "This model exceeds the configured safe entity limit.", False, "Upload a discipline or storey model"),
     "IFC_PARSE_TIMEOUT": IFCError("IFC processing timed out", "The model did not finish parsing within the configured safety window.", True, "Retry or upload a smaller discipline model"),
+    "IFC_PARSER_OUT_OF_MEMORY": IFCError("Model needs more memory than this server has", "Processing was stopped by the operating system before it could finish.", True, "Upload a discipline or storey model, or ask an administrator for a larger processing host"),
+    "IFC_PROCESSING_FAILED": IFCError("IFC processing did not complete", "Extraction stopped before the model could be stored. The uploaded file is unchanged.", True, "Retry processing, then contact support with the support log ID"),
     "IFC_GEOMETRY_FAILED": IFCError("3D view could not be generated", "The hierarchy and properties remain available.", True, "Retry geometry processing"),
     "IFC_DUPLICATE": IFCError("This IFC is already uploaded", "The exact same file already exists in this project.", False, "Open the existing version"),
     "IFC_COMPARISON_GROUP_MISMATCH": IFCError("Versions cannot be compared", "Choose two versions from the same model group.", False, "Select compatible versions"),

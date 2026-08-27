@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+import signal
 from multiprocessing import get_context
 from queue import Empty
-from time import perf_counter
-from uuid import uuid4
+from time import monotonic, perf_counter
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
@@ -27,6 +28,7 @@ from app.services.ai_insight_engine import run_project_intelligence
 from app.services.ifc_compatibility_service import run_ifc_compatibility
 from app.services.domain_event_dispatcher import emit_domain_event
 from app.services.ifc_policy import friendly_ifc_error
+from app.services.ifc_interference import InterferenceElement, detect_interferences
 from app.core.config import settings
 
 
@@ -54,25 +56,70 @@ def _parse_worker(path: str, output) -> None:
         output.put(("error", "IFC_PROCESSING_FAILED"))
 
 
+#: How often the parent re-checks whether the parser worker is still alive.
+PARSE_POLL_SECONDS = 0.5
+#: After the worker exits, how long to keep draining the queue. `Queue.put` is
+#: served by a background feeder thread, so a result can still be in flight for
+#: a moment after the child has already gone.
+PARSE_EXIT_GRACE_SECONDS = 2.0
+
+
 def parse_with_timeout(storage_key: str):
-    """Parse untrusted IFC in an isolated process with a hard wall-clock limit."""
+    """Parse untrusted IFC in an isolated process with a hard wall-clock limit.
+
+    IfcOpenShell is a native library, and some malformed input takes it down
+    with a signal instead of an exception — a truncated upload, which is what
+    an interrupted export or transfer produces, segfaults it outright. A
+    crashed worker never answers, so waiting on the queue alone would block for
+    the entire window (ten minutes by default) and then blame a timeout,
+    telling the user to upload a smaller discipline model when the real problem
+    is a broken file. The worker's liveness is therefore polled alongside the
+    queue, so a crash is reported as a crash, immediately.
+    """
     context = get_context("spawn")
     output = context.Queue(maxsize=1)
     process = context.Process(target=_parse_worker, args=(storage_key, output), daemon=True)
     process.start()
+    deadline = monotonic() + settings.IFC_PARSE_TIMEOUT_SECONDS
     try:
-        kind, value = output.get(timeout=settings.IFC_PARSE_TIMEOUT_SECONDS)
-    except Empty as exc:
-        process.terminate(); process.join(timeout=5)
-        raise IFCParseError("IFC_PARSE_TIMEOUT") from exc
+        while True:
+            remaining = deadline - monotonic()
+            try:
+                kind, value = output.get(timeout=max(0.1, min(PARSE_POLL_SECONDS, remaining)))
+                break
+            except Empty:
+                if not process.is_alive():
+                    try:
+                        kind, value = output.get(timeout=PARSE_EXIT_GRACE_SECONDS)
+                        break
+                    except Empty:
+                        raise IFCParseError(_worker_death_code(process.exitcode)) from None
+                if remaining <= 0:
+                    raise IFCParseError("IFC_PARSE_TIMEOUT") from None
     finally:
+        process.join(timeout=5)
+        if process.is_alive():
+            process.terminate(); process.join(timeout=5)
         output.close()
-    process.join(timeout=5)
-    if process.is_alive():
-        process.terminate(); process.join(timeout=5)
     if kind != "ok":
         raise IFCParseError(value)
     return value
+
+
+def _worker_death_code(exitcode: int | None) -> str:
+    """Explain a parser worker that died without reporting anything itself.
+
+    The exit code is the only evidence available, and it separates the two
+    causes that need opposite advice: the OS reclaiming memory from a model
+    too large for the host, versus the native parser falling over on malformed
+    input. Anything else is treated as a bad file, which is both the common
+    case and the safely retryable one.
+    """
+    # Windows has no SIGKILL; the constant is only ever matched against an
+    # exit code produced on the POSIX hosts the parser actually runs on.
+    if exitcode == -getattr(signal, "SIGKILL", 9):
+        return "IFC_PARSER_OUT_OF_MEMORY"
+    return "IFC_FILE_CORRUPTED"
 
 
 def transition_version(version: IFCModelVersion, target: str, progress: int) -> None:
@@ -309,7 +356,19 @@ def process_version(db: Session, version_id, actor_id=None) -> None:
         except Exception:
             db.rollback()
         if settings.IFC_GEOMETRY_ENABLED:
-            generate_geometry(db, version.id)
+            # `generate_geometry` records its own GEOMETRY_FAILED state for the
+            # failures it can see. This catches the ones it cannot — a lost
+            # connection while it commits, or the row disappearing underneath
+            # it — because the outer handler would otherwise mark a model that
+            # is already committed READY as FAILED over a viewer artefact.
+            try:
+                generate_geometry(db, version.id)
+                # Interference needs the per-element boxes tessellation just
+                # produced, so it runs here rather than with the metadata rules
+                # at QUALITY_CHECKS, where no geometry exists yet.
+                run_interference_analysis(db, version.id)
+            except Exception:
+                db.rollback()
     except Exception as exc:
         db.rollback(); version = db.get(IFCModelVersion, version_id); job = db.get(IFCProcessingJob, job.id)
         code = str(exc) if isinstance(exc, IFCParseError) else "IFC_PROCESSING_FAILED"
@@ -462,6 +521,99 @@ def _build_coordination_findings(db: Session, version: IFCModelVersion) -> None:
     georef = (version.model_summary_json or {}).get("georeferencing") or {}
     if georef.get("status") in {"MISSING", "LOCAL_COORDINATES_ONLY"}:
         add_finding("MISSING_GEOREFERENCING", elements[:1], "MEDIUM", "Georeferencing is incomplete", georef.get("impact") or "The model has no recognized coordinate reference system.", "Reliable map and survey coordination requires an agreed coordinate reference.", "Confirm the project coordinate reference and map conversion with the BIM coordinator or survey team.", "IFC_GEOREFERENCING")
+
+
+INTERFERENCE_FINDING_TYPE = "INTERFERENCE_STRUCTURAL_SERVICE"
+
+
+def run_interference_analysis(db: Session, version_id) -> dict:
+    """Detect structural/service interference, once real geometry exists.
+
+    Separate from `_build_coordination_findings` because it runs at a different
+    time and on different evidence. The metadata-quality rules run during
+    extraction and need only the parsed records; this needs the per-element
+    bounding boxes, which only exist after tessellation.
+
+    Re-running is safe. Pending findings for the revision are rebuilt, and any
+    pair a person has already ruled on keeps their decision — including the
+    false-positive marks, which is how this rule is meant to be corrected.
+    """
+    version = db.get(IFCModelVersion, version_id)
+    if not version or not settings.IFC_COORDINATION_CHECKS_ENABLED:
+        return {"analysed": False, "skippedReason": "DISABLED_OR_MISSING_VERSION"}
+
+    reviewed_pairs = {
+        (item.element_a_id, item.element_b_id)
+        for item in db.query(IFCCoordinationFinding).filter(
+            IFCCoordinationFinding.version_id == version.id,
+            IFCCoordinationFinding.finding_type == INTERFERENCE_FINDING_TYPE,
+            IFCCoordinationFinding.status != "PENDING",
+        ).all()
+    }
+    storeys = {
+        node.id: node.name
+        for node in db.query(IFCSpatialNode).filter(IFCSpatialNode.version_id == version.id).all()
+    }
+    records = []
+    for element in db.query(IFCElement).filter(IFCElement.version_id == version.id).all():
+        box = element.bounding_box_json if isinstance(element.bounding_box_json, dict) else None
+        low = (box or {}).get("min")
+        high = (box or {}).get("max")
+        usable = isinstance(low, list) and isinstance(high, list) and len(low) == 3 and len(high) == 3
+        records.append(InterferenceElement(
+            element_id=str(element.id), global_id=element.global_id, name=element.name,
+            entity_type=element.entity_type, discipline=element.discipline,
+            minimum=tuple(float(value) for value in low) if usable else None,
+            maximum=tuple(float(value) for value in high) if usable else None,
+            storey=storeys.get(element.storey_node_id), space=storeys.get(element.space_node_id),
+            system=element.system_name,
+        ))
+    findings, report = detect_interferences(
+        records, units=(version.model_summary_json or {}).get("units")
+    )
+
+    db.query(IFCCoordinationFinding).filter(
+        IFCCoordinationFinding.version_id == version.id,
+        IFCCoordinationFinding.finding_type == INTERFERENCE_FINDING_TYPE,
+        IFCCoordinationFinding.status == "PENDING",
+    ).delete(synchronize_session=False)
+    stored = 0
+    for finding in findings:
+        pair = (UUID(finding.structural.element_id), UUID(finding.service.element_id))
+        if pair in reviewed_pairs:
+            continue
+        location = finding.evidence.get("location") or {}
+        db.add(IFCCoordinationFinding(
+            project_id=version.project_id, version_id=version.id,
+            element_a_id=pair[0], element_b_id=pair[1],
+            finding_type=INTERFERENCE_FINDING_TYPE, severity=finding.severity,
+            confidence=finding.confidence, storey=location.get("storey"), space=location.get("space"),
+            title=finding.title, description=finding.description,
+            geometry_evidence_json={
+                **finding.evidence,
+                "rule": "IFC_STRUCTURAL_SERVICE_INTERFERENCE",
+                "whyItMatters": (
+                    "A service passing through a beam or column is a structural question, "
+                    "not a routing detail. Walls and slabs are excluded because services "
+                    "pass through them by design."
+                ),
+                "recommendedAction": (
+                    "Verify the solid geometry of both elements, then either confirm a "
+                    "coordinated penetration with the structural engineer or reroute the service."
+                ),
+                "elementIds": [finding.structural.element_id, finding.service.element_id],
+            },
+            affected_disciplines_json=sorted(
+                {finding.structural.discipline or "UNCLASSIFIED", finding.service.discipline or "UNCLASSIFIED"}
+            ),
+            affected_tasks_json=[], suggested_recipients_json=[], status="PENDING",
+        ))
+        stored += 1
+    report["stored"] = stored
+    report["reviewedPairsPreserved"] = len(reviewed_pairs)
+    version.model_summary_json = {**(version.model_summary_json or {}), "interference": report}
+    db.commit()
+    return report
 
 
 def _change(comparison_id, old, new, change_type, method, confidence):

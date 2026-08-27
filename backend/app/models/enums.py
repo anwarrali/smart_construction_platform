@@ -133,6 +133,12 @@ class DocumentType(str, enum.Enum):
     PERMIT = "permit"
     SPECIFICATION = "specification"
     INVOICE = "invoice"
+    #: A bill of quantities and a construction programme are among the most
+    #: consequential documents on a project, and both used to be filed as
+    #: "other" — which made them invisible to anything reasoning about type.
+    BOQ = "boq"
+    SCHEDULE = "schedule"
+    TECHNICAL = "technical"
     OTHER = "other"
 
 

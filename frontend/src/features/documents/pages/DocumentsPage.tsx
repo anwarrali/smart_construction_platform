@@ -116,6 +116,9 @@ export const DocumentsPage = () => {
               { value: "contract", label: t("docUploader.documentType.contract") },
               { value: "permit", label: t("docUploader.documentType.permit") },
               { value: "specification", label: t("docUploader.documentType.specification") },
+              { value: "boq", label: t("docUploader.documentType.boq") },
+              { value: "schedule", label: t("docUploader.documentType.schedule") },
+              { value: "technical", label: t("docUploader.documentType.technical") },
               { value: "invoice", label: t("docUploader.documentType.invoice") },
             ]}
             value={typeFilter}

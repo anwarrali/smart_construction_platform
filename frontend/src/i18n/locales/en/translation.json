@@ -1707,7 +1707,10 @@
       "permit": "Permit",
       "specification": "Specification",
       "invoice": "Invoice",
-      "other": "Other"
+      "other": "Other",
+      "boq": "Bill of Quantities",
+      "schedule": "Schedule / Programme",
+      "technical": "Technical Document"
     }
   },
   "documentList": {
@@ -1886,7 +1889,10 @@
     "no_reason_was_supplied": "No reason was supplied.",
     "review_may_improve_model": "Review may improve model data quality.",
     "review_the_available_ifc_evidence": "Review the available IFC evidence.",
-    "ifc_model_analysis": "IFC model analysis"
+    "ifc_model_analysis": "IFC model analysis",
+    "overlap_depth": "Overlap depth",
+    "location": "Location",
+    "candidate_not_confirmed": "Candidate, not a confirmed clash."
   },
   "ifcElements": {
     "not_defined_in_source_ifc": "Not defined in source IFC.",
@@ -2045,7 +2051,28 @@
     "stage_extracting_properties_and_quantities": "Extracting properties and quantities",
     "stage_running_model_quality_checks": "Running model-quality checks",
     "stage_generating_intelligence_summary": "Generating intelligence summary",
-    "stage_completed": "Completed"
+    "stage_completed": "Completed",
+    "error_IFC_FILE_CORRUPTED_title": "IFC file could not be read",
+    "error_IFC_FILE_CORRUPTED_action": "Export the model again from your authoring tool, then upload it once more.",
+    "error_IFC_PARSER_UNAVAILABLE_title": "IFC processing is unavailable",
+    "error_IFC_PARSER_UNAVAILABLE_action": "Contact support; the server IFC parser is not installed correctly.",
+    "error_IFC_ENTITY_LIMIT_EXCEEDED_title": "Model is too large",
+    "error_IFC_ENTITY_LIMIT_EXCEEDED_action": "Upload a single discipline or storey model instead of the federated model.",
+    "error_IFC_PARSE_TIMEOUT_title": "IFC processing timed out",
+    "error_IFC_PARSE_TIMEOUT_action": "Retry, or upload a smaller discipline model.",
+    "error_IFC_PARSER_OUT_OF_MEMORY_title": "Model needs more memory than this server has",
+    "error_IFC_PARSER_OUT_OF_MEMORY_action": "Upload a discipline or storey model, or ask an administrator for a larger processing host.",
+    "error_IFC_PROCESSING_FAILED_title": "IFC processing did not complete",
+    "error_IFC_PROCESSING_FAILED_action": "Retry processing. If it fails again, contact support with the support log ID below.",
+    "error_IFC_GEOMETRY_FAILED_title": "3D view could not be generated",
+    "error_IFC_GEOMETRY_FAILED_action": "Retry geometry processing. Hierarchy and properties remain available.",
+    "what_to_do_next": "What to do next:",
+    "original_file_is_kept": "The uploaded file is kept unchanged. Nothing has been deleted.",
+    "support_log_id": "Support log ID",
+    "file_must_be_ifc": "Select an IFC file ({{extensions}}).",
+    "file_is_empty": "The selected file is empty.",
+    "file_exceeds_limit": "This file is {{size}} MB. The server limit is {{limit}} MB.",
+    "upload_limits_hint": "Up to {{limit}} MB. Supported schemas: {{schemas}}."
   },
   "issuesPage": {
     "track_and_resolve_project_issues": "Track and resolve project issues",

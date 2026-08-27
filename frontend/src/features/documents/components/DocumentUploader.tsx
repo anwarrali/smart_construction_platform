@@ -20,7 +20,9 @@ interface DocumentUploaderProps {
   projects: Array<{ id: string; name: string }>;
 }
 
-const DOCUMENT_TYPES = ["drawing", "report", "contract", "permit", "specification", "invoice", "other"];
+// Ordered as a person files: what the document is, then the fallback.
+const DOCUMENT_TYPES = ["drawing", "specification", "boq", "schedule", "contract",
+  "permit", "invoice", "report", "technical", "other"];
 
 export const DocumentUploader = ({
   isOpen,

@@ -41,7 +41,7 @@ from app.services.file_storage import save_private_upload
 from app.services.private_storage import private_storage
 from app.services.ifc_parser import content_hash
 from app.services.ifc_policy import can_ifc, friendly_ifc_error
-from app.services.ifc_processing_service import compare_versions, process_version
+from app.services.ifc_processing_service import INTERFERENCE_FINDING_TYPE, compare_versions, process_version, run_interference_analysis
 from app.services.ifc_geometry_service import generate_geometry
 
 router = APIRouter(prefix="/projects/{project_id}/ifc", tags=["IFC Intelligence"])
@@ -79,8 +79,33 @@ def _background_geometry(version_id: uuid.UUID) -> None:
     db = SessionLocal()
     try:
         generate_geometry(db, version_id)
+        # Regenerating geometry produces fresh element extents, so the
+        # interference findings derived from them are rebuilt to match.
+        # Reviewed pairs keep their decision; see run_interference_analysis.
+        run_interference_analysis(db, version_id)
     finally:
         db.close()
+
+
+@router.get("/upload-constraints")
+def upload_constraints(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The rules the server will apply, so the client can check before uploading.
+
+    Without this the only way to learn a file is too large or is not really an
+    IFC is to transmit all of it and read the rejection, which on a half-
+    gigabyte model over a site connection is a long wait for a preventable
+    answer. These are the same limits `save_private_upload` enforces; the
+    server remains the authority and re-checks everything.
+    """
+    _require(db, current_user, project_id, "VIEW")
+    return {
+        "maxFileBytes": settings.IFC_MAX_FILE_MB * 1024 * 1024,
+        "maxFileMb": settings.IFC_MAX_FILE_MB,
+        "acceptedExtensions": [".ifc"],
+        "maxEntityCount": settings.IFC_MAX_ENTITY_COUNT,
+        "supportedSchemas": ["IFC2X3", "IFC4", "IFC4X3"],
+        "geometryEnabled": settings.IFC_GEOMETRY_ENABLED,
+    }
 
 
 @router.get("/models", response_model=list[IFCModelOut])
@@ -700,35 +725,77 @@ def bulk_review_suggestions(project_id: uuid.UUID, payload: IFCBulkReview, db: S
     db.commit(); return {"reviewed": len(items), "status": target}
 
 
+#: Worst first. Severity is stored as text, so ordering it in SQL sorts
+#: alphabetically — which put MEDIUM above HIGH and CRITICAL last.
+SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+
+def _finding_payload(item: IFCCoordinationFinding, evidence: dict) -> dict:
+    return {
+        "id": str(item.id), "versionId": str(item.version_id), "findingType": item.finding_type,
+        "severity": item.severity, "confidence": item.confidence,
+        "title": item.title, "description": item.description,
+        "discipline": ", ".join(item.affected_disciplines_json or []) or "Unclassified",
+        "disciplines": item.affected_disciplines_json or [], "status": item.status,
+        "ifcRule": evidence.get("rule") or item.finding_type,
+        "whyItMatters": evidence.get("whyItMatters") or "This may reduce model reliability for coordination workflows.",
+        "recommendedAction": evidence.get("recommendedAction") or "Review the affected elements in the source model.",
+        "storey": item.storey, "space": item.space,
+        "affectedElementIds": [], "createdAt": item.created_at,
+    }
+
+
 @router.get("/findings")
 def list_findings(project_id: uuid.UUID, status: str | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Model-quality findings aggregated per rule; interference kept per pair.
+
+    The two families need different shapes. "Materials are missing" is one
+    observation about many elements, so collapsing it to a single card with an
+    element list is what a reviewer wants. An interference is a statement about
+    *two specific elements*, and merging several into one card would leave a
+    reviewer unable to accept one and dismiss another — which is exactly how
+    this rule is meant to be corrected.
+    """
     _require(db, current_user, project_id, "VIEW"); query = db.query(IFCCoordinationFinding).filter(IFCCoordinationFinding.project_id == project_id)
     if status: query = query.filter(IFCCoordinationFinding.status == status.upper())
-    rows = query.order_by(IFCCoordinationFinding.severity.desc(), IFCCoordinationFinding.created_at.desc()).all()
+    rows = query.order_by(IFCCoordinationFinding.created_at.desc()).all()
     grouped: dict[tuple, dict] = {}
+    individual: list[dict] = []
     for item in rows:
         evidence = item.geometry_evidence_json if isinstance(item.geometry_evidence_json, dict) else {}
-        key = (item.version_id, item.finding_type, item.status)
-        element_ids = evidence.get("elementIds") if isinstance(evidence.get("elementIds"), list) else [str(item.element_a_id)]
-        if item.element_b_id:
+        element_ids = list(evidence.get("elementIds")) if isinstance(evidence.get("elementIds"), list) else [str(item.element_a_id)]
+        if item.element_b_id and str(item.element_b_id) not in element_ids:
             element_ids.append(str(item.element_b_id))
-        if key not in grouped:
-            grouped[key] = {
-                "id": str(item.id), "versionId": str(item.version_id), "findingType": item.finding_type,
-                "severity": item.severity, "title": item.title, "description": item.description,
-                "discipline": ", ".join(item.affected_disciplines_json or []) or "Unclassified",
-                "disciplines": item.affected_disciplines_json or [], "status": item.status,
-                "ifcRule": evidence.get("rule") or item.finding_type,
-                "whyItMatters": evidence.get("whyItMatters") or "This may reduce model reliability for coordination workflows.",
-                "recommendedAction": evidence.get("recommendedAction") or "Review the affected elements in the source model.",
-                "affectedElementIds": [], "createdAt": item.created_at,
+        if item.finding_type == INTERFERENCE_FINDING_TYPE:
+            payload = _finding_payload(item, evidence)
+            payload["affectedElementIds"] = element_ids
+            payload["evidence"] = evidence
+            payload["elementPair"] = {
+                "structural": evidence.get("structural"), "service": evidence.get("service"),
+                "penetrationMetres": evidence.get("penetrationMetres"),
+                "overlapBox": evidence.get("overlapBox"),
             }
+            payload["claim"] = evidence.get("claim")
+            payload["verification"] = evidence.get("verification")
+            individual.append(payload)
+            continue
+        key = (item.version_id, item.finding_type, item.status)
+        if key not in grouped:
+            grouped[key] = _finding_payload(item, evidence)
         grouped[key]["affectedElementIds"].extend(element_ids)
     result = []
     for value in grouped.values():
         value["affectedElementIds"] = list(dict.fromkeys(value["affectedElementIds"]))
         value["affectedElementCount"] = len(value["affectedElementIds"])
         result.append(value)
+    for value in individual:
+        value["affectedElementCount"] = len(value["affectedElementIds"])
+        result.append(value)
+    # Worst and most certain first, then newest, so a reviewer opening the tab
+    # sees what actually needs deciding.
+    result.sort(key=lambda value: (
+        SEVERITY_ORDER.get(value["severity"], 9), -(value.get("confidence") or 0), value["createdAt"],
+    ), reverse=False)
     return result
 
 

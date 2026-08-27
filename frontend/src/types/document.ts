@@ -5,7 +5,24 @@ export type DocumentType =
   | "permit"
   | "specification"
   | "invoice"
+  // A bill of quantities and a construction programme used to have nowhere to
+  // go but "other", which made them invisible to anything type-aware.
+  | "boq"
+  | "schedule"
+  | "technical"
   | "other";
+
+/** What the file itself turned out to be — a second opinion, not the record. */
+export interface DocumentClassification {
+  documentType?: string;
+  confidence?: number;
+  source?: "CONTENT" | "FILENAME" | "FORMAT" | "NONE";
+  evidence?: string;
+  detectedFormat?: string;
+  disagreesWithDeclared?: boolean;
+  declaredType?: string;
+  considered?: Record<string, string>;
+}
 export type MediaType = "image" | "video" | "audio" | "document";
 
 export interface Document {
@@ -22,6 +39,10 @@ export interface Document {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  /** Null on documents uploaded before classification existed. */
+  detectedFormat?: string;
+  suggestedDocumentType?: string;
+  classificationJson?: DocumentClassification;
   uploadedBy?: {
     id: string;
     fullName: string;

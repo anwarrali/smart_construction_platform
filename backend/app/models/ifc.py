@@ -222,6 +222,14 @@ class IFCCoordinationFinding(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     element_b_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("ifc_elements.id", ondelete="CASCADE"), nullable=True)
     finding_type: Mapped[str] = mapped_column(String(50), nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    #: How far the detection method can be trusted. The metadata-quality rules
+    #: are certain — a missing material is missing — and stay at 1.0. Geometric
+    #: interference is inferred from bounding boxes and is capped well below
+    #: that; see `app.services.ifc_interference`.
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default="1")
+    #: Where to go and look, when the source model placed the elements.
+    storey: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    space: Mapped[str | None] = mapped_column(String(250), nullable=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     geometry_evidence_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")

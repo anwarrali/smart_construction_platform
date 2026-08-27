@@ -50,3 +50,11 @@ class RagQueryResponse(CamelModel):
     found: bool
     citations: list[RagCitation]
     chunks_used: int
+    #: Which source the question was routed to. "DOCUMENTS" means retrieval
+    #: ran; anything else means it deliberately did not, because the project
+    #: holds a better answer elsewhere. Additive: clients that ignore these
+    #: three fields behave exactly as before.
+    route: str = "DOCUMENTS"
+    route_reason: Optional[str] = None
+    #: The phrase that decided the route, so the decision can be explained.
+    route_matched: Optional[str] = None

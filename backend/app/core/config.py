@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     VOICE_CONVERSATION_WINDOW_MINUTES: int = int(
         os.getenv("VOICE_CONVERSATION_WINDOW_MINUTES", "20")
     )
+    #: Whether a domain event may start an agent analysis pass on its own.
+    #: Off by default: proactive analysis writes to people's notification
+    #: queues, and turning that on is an operator's decision rather than a
+    #: deployment default. See `services/agents/event_subscriber.py`.
+    AGENT_AUTO_ANALYSIS_ENABLED: bool = os.getenv("AGENT_AUTO_ANALYSIS_ENABLED", "false").lower() == "true"
     IFC_FEATURE_ENABLED: bool = os.getenv("IFC_FEATURE_ENABLED", "true").lower() == "true"
     IFC_MAX_FILE_MB: int = int(os.getenv("IFC_MAX_FILE_MB", "500"))
     IFC_PARSE_TIMEOUT_SECONDS: int = int(os.getenv("IFC_PARSE_TIMEOUT_SECONDS", "600"))

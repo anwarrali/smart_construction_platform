@@ -49,6 +49,81 @@ and an answer that cannot be traced is not given at all.
 Each layer is replaceable without disturbing the others. **`store.py` is the
 only module that knows a vector is stored as JSONB** — see §9.
 
+## 2b. Routing — deciding whether to retrieve at all
+
+Retrieval used to be unconditional. `POST /rag/query` embedded every question
+and searched the document vectors, because searching was the only thing it
+could do. Ask it "what is the project progress?" and it searched contract PDFs,
+returned whichever passage happened to be nearest, and left the answering layer
+to notice the mismatch.
+
+That is the wrong shape for a platform that already holds the answer to most
+project questions as structured data. Progress is a number in `tasks`. The
+latest site report is a row. What conflicts with a beam is a coordination
+finding carrying measured evidence. None of those improve by being turned into
+a similarity search over PDFs, and injecting unrelated passages into the prompt
+makes a grounded answer *less* likely, not more.
+
+`services/knowledge_router.py` decides first, and does so **deterministically**
+— the platform's rule that AI decides intent while the backend decides
+execution applies here, because choosing a data source is closer to execution
+than to intent. Every decision carries the phrase that produced it, so it can
+be explained rather than guessed at.
+
+### Sources
+
+| Source | Answered by | Example |
+| --- | --- | --- |
+| `PROJECT_STRUCTURED` | `voice_query_service.answer_query` | "What is the project progress?" |
+| `SITE_REPORTS` | `voice_query_service.answer_query` | "What did the latest site report say?" |
+| `IFC_MODEL` | `services/ifc_knowledge.py` | "What conflicts with this beam?" |
+| `DOCUMENTS` | `rag.retrieve` + `AnswerService` | "What does the specification say about grout?" |
+
+The topic taxonomy is **not** reinvented. `VoiceQueryTopic` already enumerates
+the questions the backend can answer from project data, and `answer_query`
+already answers them, so routing maps a typed question onto that taxonomy. A
+typed question and a spoken one now reach the same facts through the same
+function and cannot drift into disagreeing about the project.
+
+### Two rules that matter more than accuracy
+
+**When unsure, documents.** A question the router cannot place goes to document
+retrieval — exactly where it went before routing existed. Routing may only take
+work *away* from the vector store on a confident match, never on a guess. This
+is why the pre-existing RAG behaviour is preserved for every unrouted question.
+
+**A source is never invented.** Availability is checked per project *and* per
+caller before a source is chosen: routing a model question to IFC on a project
+with no model, or for someone who may not open it, would be worse than not
+routing. Rejected sources are recorded in `unavailable` rather than dropped.
+
+### Where it applies
+
+`POST /rag/query` now routes before retrieving, and returns `route`,
+`routeReason` and `routeMatched` alongside its existing fields — additive, so a
+client ignoring them behaves as before. When the question belongs elsewhere it
+returns `found: false` with the reason instead of searching anyway. Naming a
+`documentId` explicitly skips routing entirely: that is an instruction, not a
+question about where to look.
+
+`POST /projects/{projectId}/knowledge/query` is the routed entry point that can
+answer from any source, with citations carrying `sourceType` so a project
+record, an IFC finding and a document page are distinguishable. It is mostly
+not new code — routing was the missing part, not the answering.
+
+### IFC knowledge is not vectorised
+
+Element names and GlobalIds are identifiers, not prose. Similarity search over
+them retrieves near-spellings rather than facts, so `ifc_knowledge.py` does
+database lookups and returns exact answers with evidence attached. A fact
+lifted out of a coordination finding carries that finding's own hedge —
+"potential interference, verify the solid geometry" — because a caveat dropped
+in transit is a caveat lost exactly where it matters.
+
+Naming a subject that does not exist is answered as such. "What conflicts with
+ZZZ999?" reports that no element matched, rather than returning every finding
+in the project, which would be answering a question nobody asked.
+
 ## 3. Ingestion flow
 
 1. A PDF is uploaded through the **existing** `POST /documents/upload`.

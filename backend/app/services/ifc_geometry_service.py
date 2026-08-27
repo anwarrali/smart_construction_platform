@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -28,6 +29,12 @@ MAGIC = b"BIMGEO1\x00"
 
 def geometry_storage_key(version_id) -> str:
     return f"ifc_geometry/{version_id}.bimgeom"
+
+
+#: Cap on per-element boxes carried back from the worker. Bounds travel through
+#: the result queue, so an unbounded federated model could otherwise return a
+#: payload far larger than the mesh summary it accompanies.
+MAX_ELEMENT_BOUNDS = 200_000
 
 
 def build_geometry_artifact(
@@ -62,6 +69,11 @@ def build_geometry_artifact(
     maximum = [-math.inf, -math.inf, -math.inf]
     shape_count = skipped_count = unmapped_shape_count = triangle_count = 0
     truncated = False
+    # Per-element axis-aligned bounds in *world* coordinates, captured here
+    # because this is the only place the real tessellated extent of each
+    # element is known. They are what lets coordination analysis cite where an
+    # element actually is, instead of guessing from names.
+    element_bounds: dict[int, dict] = {}
     while True:
         try:
             shape = iterator.get()
@@ -80,10 +92,16 @@ def build_geometry_artifact(
                 indices.extend(vertex_offset + int(value) for value in faces)
                 triangle_count += len(faces) // 3
                 shape_count += 1
+                low = [0.0, 0.0, 0.0]
+                high = [0.0, 0.0, 0.0]
                 for axis in range(3):
                     values = verts[axis::3]
-                    minimum[axis] = min(minimum[axis], min(values))
-                    maximum[axis] = max(maximum[axis], max(values))
+                    low[axis] = float(min(values))
+                    high[axis] = float(max(values))
+                    minimum[axis] = min(minimum[axis], low[axis])
+                    maximum[axis] = max(maximum[axis], high[axis])
+                if len(element_bounds) < MAX_ELEMENT_BOUNDS:
+                    element_bounds[int(shape.id)] = {"min": low, "max": high}
         except Exception:
             skipped_count += 1
         if not iterator.next():
@@ -112,6 +130,8 @@ def build_geometry_artifact(
             {"name": "index", "componentType": "UINT32", "components": 1, "count": len(indices)},
         ],
         "partial": bool(truncated or skipped_count), "truncated": truncated,
+        "boundsCaptured": len(element_bounds),
+        "boundsTruncated": len(element_bounds) >= MAX_ELEMENT_BOUNDS,
     }
     encoded = json.dumps(header, separators=(",", ":")).encode("utf-8")
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -124,6 +144,10 @@ def build_geometry_artifact(
     finally:
         temporary.unlink(missing_ok=True)
     header["byteSize"] = target.stat().st_size
+    # Carried inside the header so the worker keeps its single-value contract.
+    # `generate_geometry` lifts this out before the header is stored, because
+    # per-element boxes belong on the elements, not in the version's stats.
+    header["elementBounds"] = element_bounds
     return header
 
 
@@ -153,6 +177,52 @@ def _build_with_timeout(args: tuple, timeout_seconds: int) -> dict:
     if not result.get("ok"):
         raise RuntimeError(result.get("error") or "Geometry worker failed")
     return result["header"]
+
+
+def _store_element_bounds(db: Session, version: IFCModelVersion, bounds: dict) -> int:
+    """Attach each element's real world-coordinate extent to its own row.
+
+    The tessellator is the only component that knows where an element actually
+    sits: `IfcLocalPlacement` chains, mapped representations and transformed
+    geometry make placement unreadable from the STEP attributes alone, which is
+    why the parser leaves `bounding_box_json` empty. Storing the result here
+    turns "which elements might interfere" from a guess into arithmetic.
+
+    Keyed by IFC STEP id (the ExpressID the viewer already maps), so the same
+    identity links a box, a mesh and a database row.
+    """
+    if not bounds:
+        return 0
+    rows = db.query(IFCElement.id, IFCElement.metadata_json["stepId"].astext).filter(
+        IFCElement.version_id == version.id
+    ).all()
+    # The worker keys by int STEP id; the database returns it as text. Normalise
+    # both to strings, or every lookup silently misses and no element ever gets
+    # a box — which looks exactly like a model that has no geometry.
+    by_step = {str(key): value for key, value in bounds.items()}
+    units = (version.model_summary_json or {}).get("units") or {}
+    updates = []
+    for element_id, step_id in rows:
+        box = by_step.get(str(step_id)) if step_id else None
+        if not box:
+            continue
+        updates.append({
+            "id": element_id,
+            "bounding_box_json": {
+                "min": box["min"], "max": box["max"],
+                "size": [box["max"][axis] - box["min"][axis] for axis in range(3)],
+                "coordinateSpace": "IFC_WORLD",
+                "lengthUnit": units.get("LENGTHUNIT"),
+                "source": "IFC_GEOMETRY_TESSELLATION",
+            },
+        })
+    if not updates:
+        return 0
+    # ORM bulk UPDATE by primary key: one statement for the whole revision
+    # rather than one round trip per element, which matters on models with
+    # hundreds of thousands of them.
+    db.execute(update(IFCElement), updates)
+    return len(updates)
 
 
 def generate_geometry(db: Session, version_id) -> dict:
@@ -186,6 +256,8 @@ def generate_geometry(db: Session, version_id) -> dict:
                  "version_id": str(version.id), "source_hash": version.file_hash},
             )
             header = _build_with_timeout(args, settings.IFC_GEOMETRY_TIMEOUT_SECONDS)
+        bounds = header.pop("elementBounds", None) or {}
+        header["boundsStored"] = _store_element_bounds(db, version, bounds)
         duration_ms = int((perf_counter() - started) * 1000)
         header["durationMs"] = duration_ms
         version.geometry_storage_key = key

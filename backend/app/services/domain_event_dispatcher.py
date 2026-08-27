@@ -74,6 +74,14 @@ def process_event(db: Session, event: DomainEvent) -> None:
         event.status = "PROCESSED_RULES_ONLY"
         event.processed_at = datetime.now(timezone.utc)
         event.error = None
+        # Proactive agent analysis, off unless an operator enabled it. Imported
+        # here rather than at module scope because the agents import this
+        # module's event vocabulary, and a top-level import would close the
+        # cycle. `safe_handle_event` never raises: the rules above are the
+        # event's own validation and must not be undone by an analysis pass.
+        from app.services.agents.event_subscriber import safe_handle_event
+
+        safe_handle_event(db, event)
     except Exception as exc:
         event.status = "RETRY" if event.processing_attempts < 3 else "FAILED"
         event.error = f"{type(exc).__name__}: event validation failed"

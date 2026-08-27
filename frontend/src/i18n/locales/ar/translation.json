@@ -1759,7 +1759,10 @@
       "permit": "تصريح",
       "specification": "مواصفة",
       "invoice": "فاتورة",
-      "other": "أخرى"
+      "other": "أخرى",
+      "boq": "جدول الكميات",
+      "schedule": "الجدول الزمني",
+      "technical": "وثيقة فنية"
     }
   },
   "documentList": {
@@ -1938,7 +1941,10 @@
     "no_reason_was_supplied": "لم يُقدَّم سبب.",
     "review_may_improve_model": "قد تحسّن المراجعة جودة بيانات النموذج.",
     "review_the_available_ifc_evidence": "راجع أدلة IFC المتاحة.",
-    "ifc_model_analysis": "تحليل نموذج IFC"
+    "ifc_model_analysis": "تحليل نموذج IFC",
+    "overlap_depth": "عمق التداخل",
+    "location": "الموقع",
+    "candidate_not_confirmed": "حالة محتملة، وليست تعارضًا مؤكدًا."
   },
   "ifcElements": {
     "not_defined_in_source_ifc": "غير معرَّف في ملف IFC المصدر.",
@@ -2097,7 +2103,28 @@
     "stage_extracting_properties_and_quantities": "جارٍ استخلاص الخصائص والكميات",
     "stage_running_model_quality_checks": "جارٍ تشغيل فحوصات جودة النموذج",
     "stage_generating_intelligence_summary": "جارٍ إنشاء ملخص الذكاء",
-    "stage_completed": "اكتمل"
+    "stage_completed": "اكتمل",
+    "error_IFC_FILE_CORRUPTED_title": "تعذّرت قراءة ملف IFC",
+    "error_IFC_FILE_CORRUPTED_action": "أعد تصدير النموذج من برنامج التصميم، ثم ارفعه مرة أخرى.",
+    "error_IFC_PARSER_UNAVAILABLE_title": "معالجة IFC غير متاحة",
+    "error_IFC_PARSER_UNAVAILABLE_action": "تواصل مع الدعم الفني؛ محلّل IFC غير مثبَّت بشكل صحيح على الخادم.",
+    "error_IFC_ENTITY_LIMIT_EXCEEDED_title": "النموذج كبير جدًا",
+    "error_IFC_ENTITY_LIMIT_EXCEEDED_action": "ارفع نموذج تخصص واحد أو نموذج طابق واحد بدلًا من النموذج المدمج.",
+    "error_IFC_PARSE_TIMEOUT_title": "انتهت مهلة معالجة IFC",
+    "error_IFC_PARSE_TIMEOUT_action": "أعد المحاولة، أو ارفع نموذج تخصص أصغر.",
+    "error_IFC_PARSER_OUT_OF_MEMORY_title": "النموذج يحتاج ذاكرة أكبر مما يوفّره هذا الخادم",
+    "error_IFC_PARSER_OUT_OF_MEMORY_action": "ارفع نموذج تخصص أو طابق واحد، أو اطلب من المسؤول خادم معالجة أكبر.",
+    "error_IFC_PROCESSING_FAILED_title": "لم تكتمل معالجة IFC",
+    "error_IFC_PROCESSING_FAILED_action": "أعد المحاولة. إذا تكرّر الفشل، تواصل مع الدعم مع ذكر معرّف سجل الدعم أدناه.",
+    "error_IFC_GEOMETRY_FAILED_title": "تعذّر إنشاء العرض ثلاثي الأبعاد",
+    "error_IFC_GEOMETRY_FAILED_action": "أعد محاولة معالجة الأشكال الهندسية. يبقى التسلسل الهرمي والخصائص متاحين.",
+    "what_to_do_next": "الخطوة التالية:",
+    "original_file_is_kept": "الملف المرفوع محفوظ كما هو ولم يُحذف أي شيء.",
+    "support_log_id": "معرّف سجل الدعم",
+    "file_must_be_ifc": "اختر ملف IFC ({{extensions}}).",
+    "file_is_empty": "الملف المحدد فارغ.",
+    "file_exceeds_limit": "حجم هذا الملف {{size}} ميجابايت، والحد الأقصى على الخادم {{limit}} ميجابايت.",
+    "upload_limits_hint": "حتى {{limit}} ميجابايت. المخططات المدعومة: {{schemas}}."
   },
   "issuesPage": {
     "track_and_resolve_project_issues": "تتبّع مشكلات المشروع وحلّها",

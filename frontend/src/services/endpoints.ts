@@ -233,6 +233,7 @@ export const ENDPOINTS = {
 
   IFC: {
     BASE: (projectId: string) => `/projects/${projectId}/ifc`,
+    UPLOAD_CONSTRAINTS: (projectId: string) => `/projects/${projectId}/ifc/upload-constraints`,
     MODELS: (projectId: string) => `/projects/${projectId}/ifc/models`,
     VERSIONS: (projectId: string, modelId: string) => `/projects/${projectId}/ifc/models/${modelId}/versions`,
     VERSION: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}`,

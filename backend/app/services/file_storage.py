@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 from fastapi import HTTPException, UploadFile
 from app.core.config import settings
+from app.services.file_intelligence import identify_format
 from urllib.parse import urlparse
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -52,39 +53,38 @@ UPLOAD_RULES = {
 }
 
 
+#: Which detected format satisfies a claimed extension. Several extensions map
+#: to the same container format on purpose — a .docx and an .xlsx are both ZIP
+#: archives and magic bytes cannot separate them, so the extension is accepted
+#: as the discriminator here exactly as it always was.
+EXTENSION_FORMATS: dict[str, set[str]] = {
+    ".jpg": {"JPEG"}, ".jpeg": {"JPEG"}, ".png": {"PNG"}, ".pdf": {"PDF"},
+    ".docx": {"DOCX", "ZIP_CONTAINER"}, ".xlsx": {"XLSX", "ZIP_CONTAINER"},
+    ".doc": {"DOC", "OLE2_CONTAINER"}, ".xls": {"XLS", "OLE2_CONTAINER"},
+    ".webp": {"WEBP"}, ".wav": {"WAV"}, ".ogg": {"OGG"},
+    ".m4a": {"M4A", "MP4_CONTAINER"}, ".mp4": {"MP4", "MP4_CONTAINER"},
+    ".webm": {"WEBM"}, ".mpeg": {"MP3"}, ".mpga": {"MP3"}, ".mp3": {"MP3"},
+    ".dwg": {"DWG"}, ".ifc": {"IFC"},
+}
+
+
 def _matches_signature(extension: str, content: bytes) -> bool:
-    if extension in {".jpg", ".jpeg"}:
-        return content.startswith(b"\xff\xd8\xff")
-    if extension == ".png":
-        return content.startswith(b"\x89PNG\r\n\x1a\n")
-    if extension == ".pdf":
-        return content.startswith(b"%PDF-")
-    if extension in {".docx", ".xlsx"}:
-        return content.startswith(b"PK\x03\x04")
-    if extension in {".doc", ".xls"}:
-        return content.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
-    if extension == ".webp":
-        return content.startswith(b"RIFF") and content[8:12] == b"WEBP"
-    if extension == ".wav":
-        return content.startswith(b"RIFF") and content[8:12] == b"WAVE"
-    if extension == ".ogg":
-        return content.startswith(b"OggS")
-    if extension == ".m4a":
-        return len(content) >= 12 and content[4:8] == b"ftyp"
-    if extension == ".mp4":
-        return len(content) >= 12 and content[4:8] == b"ftyp"
-    if extension == ".webm":
-        return content.startswith(b"\x1a\x45\xdf\xa3")
-    if extension in {".mpeg", ".mpga"}:
-        return content.startswith(b"ID3") or (len(content) >= 2 and content[0] == 0xFF and content[1] & 0xE0 == 0xE0)
-    if extension == ".mp3":
-        return content.startswith(b"ID3") or (len(content) >= 2 and content[0] == 0xFF and content[1] & 0xE0 == 0xE0)
-    if extension == ".dwg":
-        return content.startswith(b"AC10")
-    if extension == ".ifc":
-        sample = content[:65536].lstrip(b"\xef\xbb\xbf\x00\t\r\n ").upper()
-        return sample.startswith(b"ISO-10303-21;") and b"HEADER;" in sample and b"DATA;" in sample
-    return extension == ".txt"
+    """Does the content match the extension it claims to be?
+
+    The magic-byte knowledge lives in `file_intelligence.FORMAT_SIGNATURES`, so
+    the upload gate and the classifier can never end up disagreeing about the
+    same bytes. This function still answers only the security question: is this
+    file allowed to call itself `.pdf`?
+
+    `.txt` has no signature — any byte sequence is arguably text — so it stays
+    the one extension accepted on its name alone, as before.
+    """
+    if extension == ".txt":
+        return True
+    allowed = EXTENSION_FORMATS.get(extension)
+    if not allowed:
+        return False
+    return identify_format(content, extension) in allowed
 
 async def save_upload(file: UploadFile, category: str) -> tuple[str, int]:
     safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", Path(file.filename or "file").name)

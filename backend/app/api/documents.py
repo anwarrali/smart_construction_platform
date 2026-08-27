@@ -18,6 +18,14 @@ from app.models.project import Project
 from app.models.task import Task
 from app.models.notification import Notification
 from app.services.audit_service import record_audit
+from app.services.file_intelligence import (
+    Classification, classify_document, identify_format, text_sample,
+)
+from app.services.rag.pdf_text import resolve_upload_path
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -117,6 +125,29 @@ def get_document_by_id(
             raise HTTPException(status_code=403, detail="This document is outside your discipline")
     return doc
 
+def _classify_upload(file_url: str, filename: str, declared: DocumentType) -> Classification | None:
+    """Identify and classify a stored upload, or give up quietly.
+
+    Never allowed to fail the upload. The file is already saved and the
+    document row is about to be written; a classifier that could not read a
+    PDF is a missing second opinion, not a reason to reject work a person has
+    successfully submitted.
+    """
+    try:
+        path = resolve_upload_path(file_url)
+        with path.open("rb") as handle:
+            head = handle.read(1024 * 1024)
+        detected = identify_format(head, path.suffix.lower())
+        return classify_document(
+            filename=filename, content=head, extension=path.suffix.lower(),
+            text_sample=text_sample(path, detected),
+            declared_type=declared.name,
+        )
+    except Exception:
+        logger.exception("[FileIntelligence] classification failed for %s", file_url)
+        return None
+
+
 @router.post("/upload", response_model=DocumentOut)
 async def upload_document(
     file: UploadFile = File(...),
@@ -153,6 +184,8 @@ async def upload_document(
         delete_upload(file_url)
         raise HTTPException(status_code=400, detail="Unsupported documentType")
     
+    classification = _classify_upload(file_url, file.filename or title, doc_type)
+
     new_doc = Document(
         project_id=proj_uuid,
         task_id=task_uuid,
@@ -163,7 +196,10 @@ async def upload_document(
         file_size_bytes=file_size,
         mime_type=file.content_type,
         version=1,
-        notes=notes
+        notes=notes,
+        detected_format=classification.detected_format if classification else None,
+        suggested_document_type=classification.document_type if classification else None,
+        classification_json=classification.as_json() if classification else {},
     )
     
     db.add(new_doc)

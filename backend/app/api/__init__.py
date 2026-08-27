@@ -29,6 +29,8 @@ from app.api.collaboration import router as collaboration_router
 from app.api.permissions import router as permissions_router
 from app.api.cost_validations import router as cost_validations_router
 from app.api.rag import router as rag_router
+from app.api.knowledge import router as knowledge_router
+from app.api.agents import router as agents_router
 from app.api.events import router as events_router
 
 api_router = APIRouter()
@@ -70,6 +72,8 @@ api_router.include_router(cost_validations_router)
 # Document question answering. Every route is gated on RAG_ENABLED and
 # resolves document permissions through the same rules the documents API uses.
 api_router.include_router(rag_router)
+api_router.include_router(knowledge_router)
+api_router.include_router(agents_router)
 # Server-Sent Events. Keeps an open application synchronized; distinct from
 # push, which reaches a user who is not looking at it.
 api_router.include_router(events_router)

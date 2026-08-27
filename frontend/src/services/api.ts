@@ -67,7 +67,7 @@ import type {
   EvidencePhotoFilters,
   PhotoCategory,
 } from "../types/photoArchive";
-import type { IFCComparison, IFCElement, IFCFinding, IFCModelGroup, IFCSpatialDetails, IFCSpatialNode, IFCSuggestion, IFCVersion } from "../types/ifc";
+import type { IFCComparison, IFCElement, IFCFinding, IFCModelGroup, IFCSpatialDetails, IFCSpatialNode, IFCSuggestion, IFCUploadConstraints, IFCVersion } from "../types/ifc";
 import type { AIActionPage, AIActionVersion } from "../types/aiAction";
 import type { DocumentIndexStatus, RagQueryResponse } from "../types/rag";
 import type { AIInsight, AIInsightSource, AIIntelligenceOverview } from "../types/aiInsight";
@@ -850,6 +850,7 @@ const api = {
   },
 
   ifc: {
+    uploadConstraints: (projectId: string) => axiosInstance.get<IFCUploadConstraints>(ENDPOINTS.IFC.UPLOAD_CONSTRAINTS(projectId)).then((res) => res.data),
     models: (projectId: string) => axiosInstance.get<IFCModelGroup[]>(ENDPOINTS.IFC.MODELS(projectId)).then((res) => res.data),
     createModel: (projectId: string, data: { name: string; discipline?: string; description?: string }) =>
       axiosInstance.post<IFCModelGroup>(ENDPOINTS.IFC.MODELS(projectId), data).then((res) => res.data),

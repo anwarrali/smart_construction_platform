@@ -75,7 +75,15 @@ def test_the_migration_chain_has_exactly_one_head():
     # when you add one.
     # Bumped by `e91c4d7a3f26`, which adds `document_chunks` (RAG-indexed
     # passages) and the document indexing-state columns.
-    assert heads == ["e91c4d7a3f26"], f"expected exactly one head, found: {heads}"
+    # Bumped by `f92d5e8b4a37`, which adds `confidence`, `storey` and `space`
+    # to `ifc_coordination_findings` — needed once findings could be inferred
+    # from geometry rather than only observed in metadata.
+    # Bumped by `a03e6f9c5b48`, which records what an uploaded file turned out
+    # to be alongside what its uploader called it, and adds the BOQ, SCHEDULE
+    # and TECHNICAL document kinds.
+    # Bumped by `b14f7a2c9e63`, which adds `agent_runs` — the record of which
+    # agent ran, why, what it called and what it produced.
+    assert heads == ["b14f7a2c9e63"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.
