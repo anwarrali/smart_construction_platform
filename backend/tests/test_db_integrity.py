@@ -83,7 +83,19 @@ def test_the_migration_chain_has_exactly_one_head():
     # and TECHNICAL document kinds.
     # Bumped by `b14f7a2c9e63`, which adds `agent_runs` — the record of which
     # agent ran, why, what it called and what it produced.
-    assert heads == ["b14f7a2c9e63"], f"expected exactly one head, found: {heads}"
+    # Bumped by `c15a8d2e7f10`, the RBAC expand step: configurable roles and
+    # disciplines, office membership, external project parties, and the rename
+    # of `field_submissions.worker_id` to `submitted_by_id`.
+    # Bumped by `d26b9f4a1e08`, which renames the discipline-scope permission
+    # and seeds the new work-scope codes onto existing roles.
+    # Bumped by `e48c1b6d3f27`, which records on each role which legacy enum
+    # value an account created under it is written with — the last thing
+    # provisioning still needed the retired `UserRole` for.
+    # Bumped by `f59d2c8e4a13`, which seeds `document.view`, `site_report.view`,
+    # `issue.view`, `design_change.view` and `client_portal.view` onto the roles
+    # that already reach those pages, so naming the navigation decision changes
+    # nobody's access.
+    assert heads == ["f59d2c8e4a13"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.
@@ -151,6 +163,15 @@ def test_no_foreign_key_referencing_users_cascades_over_audit_or_work_records(db
         ("contractor_profiles", "user_id"),
         ("conversation_participants", "user_id"),
         ("engineer_profiles", "user_id"),
+        # Same category as `engineer_profiles`: these say what somebody's
+        # position and specialisms are, not what they did. A deleted account
+        # should take its office membership and its discipline list with it —
+        # keeping them would leave a role assignment pointing at nobody.
+        # The records of *work* that account produced are unaffected:
+        # `field_submissions.submitted_by_id` is RESTRICT, which is why
+        # retiring worker accounts deactivates them rather than deleting them.
+        ("organization_memberships", "user_id"),
+        ("user_disciplines", "user_id"),
         ("message_recipient_states", "user_id"),
         ("notifications", "user_id"),
         # Credential-shaped rows, the same category as password reset tokens:

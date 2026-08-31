@@ -182,13 +182,13 @@ export const EngineerTaskDetailPage = () => {
 
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><h2 className="font-semibold">{t("engineerTask.worker_field_evidence")}</h2><p className="text-sm text-muted-foreground">Verification confirms evidence only; it does not change official task progress or Consultant review status.</p></div>
+        <div><h2 className="font-semibold">{t("engineerTask.field_evidence")}</h2><p className="text-sm text-muted-foreground">Verification confirms evidence only; it does not change official task progress or Consultant review status.</p></div>
         <Badge variant="info">{fieldSubmissions.filter((item) => item.status === "SUBMITTED").length} pending</Badge>
       </div>
       <div className="mt-4 space-y-4">
         {fieldSubmissions.map((submission) => <div key={submission.id} className="rounded-lg border p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div><p className="font-medium">{submission.worker.fullName}</p><p className="text-xs text-muted-foreground">{formatDateTime(submission.createdAt)}</p></div>
+            <div><p className="font-medium">{submission.submittedBy.fullName}</p><p className="text-xs text-muted-foreground">{formatDateTime(submission.createdAt)}</p></div>
             <Badge variant={submission.status === "VERIFIED" ? "success" : submission.status === "REJECTED" ? "danger" : "warning"}>{submission.status.toLowerCase()}</Badge>
           </div>
           {submission.description && <p className="mt-3 whitespace-pre-line text-sm">{submission.description}</p>}
@@ -212,12 +212,12 @@ export const EngineerTaskDetailPage = () => {
           </div>
           {submission.reviewComment && <p className={`mt-3 rounded p-2 text-sm ${submission.status === "REJECTED" ? "bg-wash-overdue text-state-overdue" : "bg-wash-verified text-state-verified"}`}>{submission.reviewComment}</p>}
           {submission.status === "SUBMITTED" && <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Button disabled={busy} onClick={() => run(() => api.fieldSubmissions.verify(submission.id), "Worker evidence verified. Official progress was not changed.")}>{t("engineerTask.verify_evidence")}</Button>
+            <Button disabled={busy} onClick={() => run(() => api.fieldSubmissions.verify(submission.id), "Field evidence verified. Official progress was not changed.")}>{t("engineerTask.verify_evidence")}</Button>
             <Input value={rejectionReasons[submission.id] || ""} onChange={(event) => setRejectionReasons((current) => ({ ...current, [submission.id]: event.target.value }))} placeholder={t("engineerTask.required_rejection_reason")} />
-            <Button variant="outline" disabled={busy || (rejectionReasons[submission.id] || "").trim().length < 3} onClick={() => run(() => api.fieldSubmissions.reject(submission.id, rejectionReasons[submission.id].trim()), "Evidence returned to the Worker.")}>{t("engineerTask.reject")}</Button>
+            <Button variant="outline" disabled={busy || (rejectionReasons[submission.id] || "").trim().length < 3} onClick={() => run(() => api.fieldSubmissions.reject(submission.id, rejectionReasons[submission.id].trim()), "Evidence returned for resubmission.")}>{t("engineerTask.reject")}</Button>
           </div>}
         </div>)}
-        {!fieldSubmissions.length && <p className="py-6 text-center text-sm text-muted-foreground">{t("engineerTask.no_worker_evidence_has_been_submitted")}</p>}
+        {!fieldSubmissions.length && <p className="py-6 text-center text-sm text-muted-foreground">{t("engineerTask.no_field_evidence_has_been_submitted")}</p>}
       </div>
     </Card>
 

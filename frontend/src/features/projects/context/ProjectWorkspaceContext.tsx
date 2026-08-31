@@ -19,34 +19,44 @@ interface ProjectWorkspaceValue {
 
 const ProjectWorkspaceContext = createContext<ProjectWorkspaceValue | null>(null);
 
+/**
+ * The workspace prefixes this provider recognises.
+ *
+ * `/projects/:id/…` is the only one anything produces now. The other three are
+ * retired, and they are still matched because this provider sits *above* the
+ * route that redirects them and therefore runs once on the pre-redirect
+ * pathname. Without them the sidebar would flash back to portfolio mode on
+ * every deep link that arrived from a notification sent before the collapse.
+ */
+const WORKSPACE_PATTERNS = [
+  /^\/projects\/([^/]+)(?:\/|$)/,
+  /^\/project-manager\/projects\/([^/]+)(?:\/|$)/,
+  /^\/engineer\/projects\/([^/]+)(?:\/|$)/,
+  /^\/consultant-engineer\/projects\/([^/]+)(?:\/|$)/,
+];
+
 export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  const { role, isConsultantEngineer } = useRole();
-  const managerMatch = location.pathname.match(/^\/project-manager\/projects\/([^/]+)(?:\/|$)/);
-  const engineerMatch = location.pathname.match(/^\/engineer\/projects\/([^/]+)(?:\/|$)/);
-  const consultantMatch = location.pathname.match(/^\/consultant-engineer\/projects\/([^/]+)(?:\/|$)/);
-  const genericMatch = location.pathname.match(/^\/projects\/([^/]+)(?:\/|$)/);
-  const preferred = role === "engineer" ? (isConsultantEngineer ? consultantMatch : engineerMatch)
-    : role === "project_manager" ? managerMatch : genericMatch;
-  // A project workspace must survive landing on a prefix that does not belong to the
-  // current role (deep links, notification URLs, links authored for another role).
-  // Without the fallback the sidebar silently drops back to portfolio mode.
-  const match = preferred || managerMatch || engineerMatch || consultantMatch || genericMatch;
-  const projectId = match?.[1] ? decodeURIComponent(match[1]) : undefined;
-  const supportsProjectWorkspace = ["admin", "owner", "project_manager", "engineer", "consultant"].includes(role || "");
-  const isProjectWorkspace = supportsProjectWorkspace && Boolean(projectId);
+  const { hasCapability } = useRole();
+  /* One address, so one match — no preference order keyed on who is asking.
+     The retired version chose a pattern by role and then fell back through the
+     others, which was three rules for something the product only ever had one
+     of, and which could not have answered for a role an office invented. */
+  const projectId = useMemo(() => {
+    for (const pattern of WORKSPACE_PATTERNS) {
+      const match = location.pathname.match(pattern);
+      if (match?.[1]) return decodeURIComponent(match[1]);
+    }
+    return undefined;
+  }, [location.pathname]);
+
+  const isProjectWorkspace = Boolean(projectId);
   const [project, setProject] = useState<Project | null>(null);
   const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!supportsProjectWorkspace) {
-      setProject(null);
-      setAssignedProjects([]);
-      setError("");
-      return;
-    }
     let cancelled = false;
     setIsLoading(true);
     setError("");
@@ -59,9 +69,11 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
       setAssignedProjects(projects);
       setProject(activeProject);
       if (projectId && !projects.some((item) => item.id === projectId)) {
-        setError(role === "engineer"
-          ? `This project is not assigned to your ${isConsultantEngineer ? "Consultant" : "Main Contractor"} Engineer account.`
-          : "This project is not assigned to your Project Manager account.");
+        /* One message, because there is one reason: this project is not one of
+           yours. The retired version named the reader's role in the sentence
+           ("your Main Contractor Engineer account"), which a configurable role
+           model cannot do — and which told them nothing they did not know. */
+        setError("This project is not assigned to your account.");
         setProject(null);
       }
     }).catch((err: any) => {
@@ -70,7 +82,7 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
       setError(errorMessage(err, "Unable to load the selected project workspace."));
     }).finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
-  }, [projectId, role, supportsProjectWorkspace, isConsultantEngineer]);
+  }, [projectId]);
 
   const value = useMemo<ProjectWorkspaceValue>(() => ({
     projectId,
@@ -79,13 +91,13 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
     isProjectWorkspace,
     isLoading,
     error,
-    path: (module: string) => {
-      return projectId
-        ? projectModulePath(projectId, module, role, isConsultantEngineer ? "external_consultant" : undefined)
-        : portfolioProjectsPath(role, isConsultantEngineer ? "external_consultant" : undefined);
-    },
-    portfolioPath: portfolioProjectsPath(role, isConsultantEngineer ? "external_consultant" : undefined),
-  }), [projectId, project, assignedProjects, isProjectWorkspace, isLoading, error, isConsultantEngineer, role]);
+    path: (module: string) => (
+      projectId
+        ? projectModulePath(projectId, module, hasCapability)
+        : portfolioProjectsPath()
+    ),
+    portfolioPath: portfolioProjectsPath(),
+  }), [projectId, project, assignedProjects, isProjectWorkspace, isLoading, error, hasCapability]);
 
   return <ProjectWorkspaceContext.Provider value={value}>{children}</ProjectWorkspaceContext.Provider>;
 };

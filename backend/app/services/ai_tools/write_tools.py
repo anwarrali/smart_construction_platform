@@ -23,7 +23,7 @@ from app.models.user import User
 from app.schemas.voice_analysis import SuggestedActionType
 from app.services.ai_tools.contracts import ToolError
 from app.services.voice_analysis_authorization import authorized_voice_tasks
-from app.services.voice_capabilities import capability_for, is_available, voice_role
+from app.services.voice_capabilities import capability_for, is_available
 
 
 def _capability_or_refuse(db, actor: User, project_id, action: SuggestedActionType):
@@ -37,12 +37,6 @@ def _capability_or_refuse(db, actor: User, project_id, action: SuggestedActionTy
     capability = capability_for(action)
     if capability is None:
         raise ToolError("UNSUPPORTED", f"No capability is registered for {action.value}", status=400)
-    if voice_role(actor) not in capability.roles:
-        raise ToolError(
-            "FORBIDDEN",
-            f"This role may not {capability.purpose}.",
-            status=403,
-        )
     if not is_available(db, user=actor, project_id=project_id, capability=capability):
         raise ToolError(
             "FORBIDDEN",

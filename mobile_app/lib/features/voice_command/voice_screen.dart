@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/dependency_injection.dart';
-import '../../core/auth/session_manager.dart';
 import '../../core/auth/voice_access.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/async_views.dart';
@@ -20,6 +19,7 @@ import '../../services/voice_service.dart';
 import '../projects/project_context_view_model.dart';
 import 'voice_outcome.dart';
 import 'voice_view_model.dart';
+import '../../core/auth/capabilities.dart';
 
 class VoiceScreen extends ConsumerStatefulWidget {
   const VoiceScreen({super.key, this.taskId});
@@ -67,7 +67,7 @@ class _VoiceScreenState extends ConsumerState<VoiceScreen> {
     // Voice is available to every normal system user and not to Admin. The
     // screen states that rather than 404-ing, because a route can be reached
     // by a deep link as well as by the navigation bar.
-    if (!canUseVoice(ref.watch(sessionProvider).user)) {
+    if (!canUseVoice(capabilitiesOf(ref))) {
       return Scaffold(
         appBar: AppBar(title: Text(context.l10n.voiceTitle)),
         body: MessageView(

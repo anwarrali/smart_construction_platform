@@ -10,9 +10,10 @@ import '../../core/widgets/async_views.dart';
 import '../../core/widgets/entity_actions.dart';
 import '../../core/widgets/status_badge.dart';
 import '../../models/task.dart';
-import '../field_evidence/worker_submissions_screen.dart';
+import '../field_evidence/field_submissions_screen.dart';
 import '../../core/l10n/l10n_formats.dart';
 import '../../core/l10n/l10n_labels.dart';
+import '../../core/auth/capabilities.dart';
 
 class TaskDetailScreen extends ConsumerStatefulWidget {
   const TaskDetailScreen({super.key, required this.taskId});
@@ -50,6 +51,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         final task = snapshot.data!;
         final user = ref.watch(sessionProvider).user!;
         final permission = const PermissionService();
+        // Resolved for this project: the same person can be office staff
+        // on one and a contractor's representative on another.
+        final capabilities = capabilitiesOf(ref, projectId: task.projectId);
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -158,7 +162,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             // away from Project Managers, Consultants, Owners and every
             // engineer not affiliated to the main contractor. It is a general
             // interaction layer for every role but Admin.
-            if (canUseVoice(user)) ...[
+            if (canUseVoice(capabilities)) ...[
               const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: () => context.push('/voice?taskId=${task.id}'),
@@ -170,7 +174,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               ),
             ],
             const SizedBox(height: 10),
-            if (permission.canStartTask(user, task))
+            if (permission.canStartTask(capabilities, user, task))
               FilledButton.icon(
                 onPressed: () => _action(
                   () => ref.read(taskRepositoryProvider).start(task.id),
@@ -178,7 +182,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 icon: const Icon(Icons.play_arrow),
                 label: Text(context.l10n.taskStart),
               ),
-            if (permission.canExecuteTask(user, task)) ...[
+            if (permission.canExecuteTask(capabilities, user, task)) ...[
               const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: () => _progress(task),
@@ -208,7 +212,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 label: Text(context.l10n.taskSubmitForReview),
               ),
             ],
-            if (user.isWorker) ...[
+            // Filing field evidence follows `field_evidence.submit` — the
+            // same code the server checks — rather than a job title. A
+            // Site Engineer normally holds it; so may anyone else the
+            // office decided should.
+            if (permission.canSubmitFieldEvidence(capabilities)) ...[
               const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: () async {
@@ -230,9 +238,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              WorkerSubmissionsScreen(taskId: task.id, embedded: true),
+              FieldSubmissionsScreen(taskId: task.id, embedded: true),
             ],
-            if (!permission.canExecuteTask(user, task) && user.isSiteEngineer)
+            if (!permission.canExecuteTask(capabilities, user, task)
+                && permission.canSubmitFieldEvidence(capabilities))
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Text(context.l10n.taskNoPermission),

@@ -15,8 +15,8 @@ const _directions = <String>[
   'FRONT', 'BACK', 'LEFT', 'RIGHT', 'TOP', 'DETAIL', 'OTHER',
 ];
 
-class WorkerFieldSubmissionScreen extends ConsumerStatefulWidget {
-  const WorkerFieldSubmissionScreen({
+class FieldSubmissionFormScreen extends ConsumerStatefulWidget {
+  const FieldSubmissionFormScreen({
     super.key,
     required this.taskId,
     this.resubmissionOfId,
@@ -25,12 +25,12 @@ class WorkerFieldSubmissionScreen extends ConsumerStatefulWidget {
   final String? resubmissionOfId;
 
   @override
-  ConsumerState<WorkerFieldSubmissionScreen> createState() =>
-      _WorkerFieldSubmissionScreenState();
+  ConsumerState<FieldSubmissionFormScreen> createState() =>
+      _FieldSubmissionFormScreenState();
 }
 
-class _WorkerFieldSubmissionScreenState
-    extends ConsumerState<WorkerFieldSubmissionScreen> {
+class _FieldSubmissionFormScreenState
+    extends ConsumerState<FieldSubmissionFormScreen> {
   final _note = TextEditingController();
   final _picker = ImagePicker();
   final List<XFile> _photos = [];

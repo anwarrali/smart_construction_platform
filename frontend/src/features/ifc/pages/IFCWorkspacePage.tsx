@@ -41,11 +41,17 @@ const ready = (version?: IFCVersion) => Boolean(version && ["READY", "READY_WITH
 
 export const IFCWorkspacePage = () => {
   const { t } = useTranslation();
-  const workspace = useProjectWorkspace(); const params = useParams<{ projectId?: string }>(); const { role, isConsultantEngineer } = useRole();
+  const workspace = useProjectWorkspace(); const params = useParams<{ projectId?: string }>();
+  const { permissionsReady, hasCapability } = useRole();
   const [searchParams] = useSearchParams();
   const projectId = workspace.projectId || params.projectId;
-  const canUpload = role === "admin" || role === "project_manager" || (role === "engineer" && !isConsultantEngineer);
-  const canReviewSuggestions = role === "admin" || role === "project_manager" || role === "engineer"; const canApplySuggestions = role === "project_manager";
+  /* Each of these is the code `app.services.ifc_policy.can_ifc` enforces, so
+     the button and the endpoint now agree by construction. They were three
+     role expressions, one of which asked whether somebody was a consultant
+     engineer — an identity the product no longer has. */
+  const allow = (code: string) => !permissionsReady || hasCapability(code);
+  const canUpload = allow("ifc.upload");
+  const canReviewSuggestions = allow("ifc.review_suggestion"); const canApplySuggestions = allow("ifc.manage_version");
   const [models, setModels] = useState<IFCModelGroup[]>([]); const [modelId, setModelId] = useState(""); const [versions, setVersions] = useState<IFCVersion[]>([]); const [versionId, setVersionId] = useState("");
   const [nodes, setNodes] = useState<IFCSpatialNode[]>([]); const [elements, setElements] = useState<IFCElement[]>([]); const [elementTotal, setElementTotal] = useState(0); const [findings, setFindings] = useState<IFCFinding[]>([]);
   const [tab, setTab] = useState<Tab>("overview"); const [affectedElementIds, setAffectedElementIds] = useState<string[]>([]);

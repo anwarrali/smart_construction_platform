@@ -8,7 +8,8 @@ from app.models.user import User
 from app.models.cost_validation import CostValidation
 from app.models.project import Project
 from app.schemas.cost_validation import CostValidationOut, CostValidationCreate, CostValidationReview
-from app.core.deps import get_current_user, is_consultant_engineer, user_has_project_access, accessible_project_ids
+from app.core.deps import get_current_user, user_has_project_access, accessible_project_ids
+from app.services.authorization import has_permission, require
 from app.models.enums import CostValidationStatus, UserRole
 
 router = APIRouter(prefix="/cost-validations", tags=["Cost Validations"])
@@ -21,8 +22,14 @@ def list_cost_validations(
     current_user: User = Depends(get_current_user)
 ):
     query = db.query(CostValidation)
-    if current_user.role != UserRole.ADMIN:
-        accessible_ids = accessible_project_ids(db, current_user) or []
+    # "Sees every project" is `platform.view_all_projects`, which
+    # `accessible_project_ids` already answers by returning None. Reading the
+    # role instead meant two things went wrong: an administrator whose
+    # permission had been explicitly revoked still bypassed the filter, and a
+    # non-administrator who had been *granted* it got `None or []` — an empty
+    # list, so they saw nothing at all.
+    accessible_ids = accessible_project_ids(db, current_user)
+    if accessible_ids is not None:
         query = query.filter(CostValidation.project_id.in_(accessible_ids))
     if project_id:
         query = query.filter(CostValidation.project_id == project_id)
@@ -62,15 +69,12 @@ def create_cost_validation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role != UserRole.PROJECT_MANAGER:
-        raise HTTPException(status_code=403, detail="Only the assigned Project Manager can submit payment claims")
-    # Check if project exists
     project = db.query(Project).filter(Project.id == val_data.project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-        
-    if not user_has_project_access(db, current_user, val_data.project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    # Submitting a payment claim is project setup. `require` carries the
+    # project-access check that used to follow it separately.
+    require(db, current_user, "project.edit", val_data.project_id)
         
     new_val = CostValidation(
         project_id=val_data.project_id,
@@ -107,7 +111,9 @@ def review_cost_validation(
     # persisted as ENGINEER with `engineer_affiliation="external_consultant"`
     # (see app.schemas.user.UserCreateByAdmin) — so this must check
     # `is_consultant_engineer`, matching app.api.design_changes.
-    if not is_consultant_engineer(current_user) or not user_has_project_access(db, current_user, val.project_id):
+    if not has_permission(
+        db, current_user, "cost_validation.review", val.project_id
+    ) or not user_has_project_access(db, current_user, val.project_id):
         raise HTTPException(status_code=403, detail="Only an assigned consultant can certify payment claims")
     if review_data.status == CostValidationStatus.APPROVED and review_data.certified_amount is None:
         raise HTTPException(status_code=400, detail="certifiedAmount is required when approving a claim")

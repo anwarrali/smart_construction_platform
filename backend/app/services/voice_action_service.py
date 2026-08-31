@@ -5,7 +5,8 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.deps import is_main_contractor_engineer, is_worker, user_has_project_access
+from app.core.deps import user_has_project_access
+from app.services.authorization import require
 from app.models.enums import (
     FieldSubmissionStatus,
     IssueSeverity,
@@ -34,8 +35,8 @@ from app.schemas.voice_analysis import (
     SuggestedActionType,
 )
 from app.services.audit_service import record_audit
-from app.services.field_submission_authorization import can_worker_submit_evidence
-from app.services.field_submission_authorization import authorized_engineer_ids
+from app.services.field_submission_authorization import can_submit_field_evidence
+from app.services.field_submission_authorization import authorized_reviewer_ids
 from app.services.task_progress_service import update_task_progress
 from app.services.domain_event_dispatcher import emit_domain_event
 
@@ -131,29 +132,20 @@ def execute_confirmed_actions(
     return results
 
 
-def action_allowed_for_role(role: str, action_type: SuggestedActionType) -> bool:
-    """Whether a coarse role may ever perform this action.
+def permission_for_action(action_type: SuggestedActionType) -> str | None:
+    """The catalogue permission that governs a spoken action.
 
-    Reads the capability registry rather than repeating its own list, so a new
-    capability is allowed in exactly one place. This is the *coarse* gate only:
-    project membership, the permission catalogue and every rule inside the
-    operation's own service still run afterwards, and any of them can refuse.
+    Replaces `action_allowed_for_role`, which asked whether one of four coarse
+    role names could ever perform an action. That question no longer has an
+    answer: roles are configurable, so what somebody may do is a property of
+    their role's permissions and the project they are on, not of a name. The
+    honest thing to expose is the permission itself, and let the caller resolve
+    it against a real person on a real project.
     """
-    from app.services.voice_capabilities import (
-        CONSULTANT, ENGINEER, MANAGER, WORKER, capability_for,
-    )
+    from app.services.voice_capabilities import capability_for
 
     capability = capability_for(action_type)
-    if capability is None:
-        return False
-    registry_role = {
-        "worker": WORKER,
-        "engineer": ENGINEER,
-        "project_manager": MANAGER,
-        "consultant": CONSULTANT,
-        "external_consultant": CONSULTANT,
-    }.get(role, role)
-    return registry_role in capability.roles
+    return capability.permission_code if capability is not None else None
 
 
 def _execute_one(
@@ -162,11 +154,18 @@ def _execute_one(
 ) -> ActionExecutionResult:
     if not user_has_project_access(db, current_user, analysis.project_id):
         raise HTTPException(status_code=403, detail="Project access is no longer available")
-    from app.services.voice_capabilities import capability_for, voice_role
+    from app.services.voice_capabilities import capability_for, is_available
 
     capability = capability_for(action.type)
-    if capability is None or voice_role(current_user) not in capability.roles:
-        raise HTTPException(status_code=403, detail="This role cannot confirm the suggested action")
+    if capability is None:
+        raise HTTPException(status_code=403, detail="This action cannot be confirmed by voice")
+    if not is_available(
+        db, user=current_user, project_id=analysis.project_id, capability=capability
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=f"You do not have permission to {capability.purpose} on this project",
+        )
     metadata = {
         "source": "AI_VOICE_ANALYSIS",
         "analysis_id": str(analysis.id),
@@ -175,8 +174,9 @@ def _execute_one(
     }
     payload = action.payload_dict()
     if action.type == SuggestedActionType.CREATE_TASK:
-        if current_user.role != UserRole.PROJECT_MANAGER:
-            raise HTTPException(status_code=403, detail="Only the assigned Project Manager can create tasks")
+        # `task.create` is what the tasks endpoint checks, so Voice cannot
+        # route anybody past it — nor refuse somebody the office granted it.
+        require(db, current_user, "task.create", analysis.project_id)
         from app.api.tasks import create_task
         from app.schemas.task import TaskCreate
         created = create_task(
@@ -427,13 +427,14 @@ def _execute_one(
         db.commit()
         return _success(action_index, action.type, "Issue created", issue.id)
     if action.type == SuggestedActionType.CREATE_FIELD_SUBMISSION:
-        if not is_worker(current_user):
-            raise HTTPException(status_code=403, detail="This action is reserved for Worker evidence")
         task = _task(db, analysis.project_id, action.target_id)
-        if not can_worker_submit_evidence(db, current_user, task):
-            raise HTTPException(status_code=403, detail="Worker is not assigned to this task")
+        if not can_submit_field_evidence(db, current_user, task):
+            raise HTTPException(
+                status_code=403,
+                detail="You cannot record field evidence against this task",
+            )
         submission = FieldSubmission(
-            project_id=analysis.project_id, task_id=task.id, worker_id=current_user.id,
+            project_id=analysis.project_id, task_id=task.id, submitted_by_id=current_user.id,
             description=str(payload["description"]).strip(),
             voice_metadata=json.dumps(metadata), status=FieldSubmissionStatus.SUBMITTED,
         )
@@ -452,13 +453,13 @@ def _execute_one(
                 attachment_id=attachment.id,
             ))
         analysis.field_submission_id = submission.id
-        recipients = authorized_engineer_ids(db, task)
+        recipients = authorized_reviewer_ids(db, task)
         project = db.get(Project, analysis.project_id)
         if not recipients and project:
             recipients.add(project.project_manager_id)
         for user_id in recipients - {current_user.id}:
             db.add(Notification(
-                user_id=user_id, title="Worker voice evidence submitted",
+                user_id=user_id, title="Field evidence submitted",
                 message=f"{current_user.full_name} submitted AI-assisted evidence for {task.task_code}.",
                 type=NotificationType.APPROVAL_REQUEST,
                 project_id=analysis.project_id, task_id=task.id,
@@ -638,10 +639,19 @@ def _execute_one(
 
 
 def _require_contractor_engineer(user: User) -> None:
-    if user.role == UserRole.PROJECT_MANAGER:
-        return
-    if not is_main_contractor_engineer(user):
-        raise HTTPException(status_code=403, detail="Active Contractor Engineer access required")
+    """Retained as a no-op seam.
+
+    This asserted that the speaker was a contractor-side Engineer, on top of
+    the capability check `_execute_one` already performs through
+    `voice_capabilities.is_available`. That check resolves the operation's own
+    permission against the project, which is both stricter and configurable, so
+    an affiliation test on the same call adds nothing but a role name.
+
+    Kept as a named function rather than deleted at each call site so the
+    execution branches still read as having an authorization step, and so a
+    future per-operation rule has an obvious home.
+    """
+    return
 
 
 def _as_date(value, field: str) -> date:

@@ -38,19 +38,29 @@ export const useRole = () => {
     return actions.every(checkPermission);
   };
 
+  /* `isAdmin` / `isProjectManager` / `isOwner` survive as *presentation*
+     conveniences only — a heading, an empty-state sentence. Nothing that
+     decides access reads them; that is `hasCapability`, which asks the backend
+     the same question the endpoint asks.
+
+     `isMainContractorEngineer` and `isConsultantEngineer` are gone. Both read
+     `engineerAffiliation`, a column the contract migration drops, and both
+     asked a question the product no longer has an answer to: a consultant-side
+     user is office staff, and whether somebody is on a project for an outside
+     party is a property of that membership, not of their account. */
   const isAdmin = role === "admin";
   const isProjectManager = role === "project_manager";
   const isOwner = role === "owner";
   const isEngineer = role === "engineer";
-  const isMainContractorEngineer = isEngineer
-    && user?.engineerAffiliation === "main_contractor"
-    && user?.status === "active";
-  const isConsultantEngineer = isEngineer
-    && user?.engineerAffiliation === "external_consultant"
-    && user?.status === "active";
+  /** Office staff, as opposed to an external participant. */
+  const isInternal = user?.orgRole ? user.orgRole.isInternalOnly : user?.isInternal !== false;
 
   const locale = (i18n.resolvedLanguage || i18n.language || "en").startsWith("ar") ? "ar" : "en";
-  const roleLabel = role ? getRoleLabel(role, locale) : "";
+  /** What the office calls this person, falling back to the retired label. */
+  const orgRoleLabel = user?.orgRole
+    ? (locale === "ar" ? user.orgRole.nameAr || user.orgRole.nameEn : user.orgRole.nameEn)
+    : (role ? getRoleLabel(role, locale) : "");
+  const roleLabel = orgRoleLabel;
   const dashboardRoute = role ? getDefaultRoute(role) : "/";
 
   return {
@@ -61,8 +71,10 @@ export const useRole = () => {
     isProjectManager,
     isOwner,
     isEngineer,
-    isMainContractorEngineer,
-    isConsultantEngineer,
+    isInternal,
+    orgRole: user?.orgRole ?? null,
+    orgRoleLabel,
+    disciplines: user?.disciplines ?? [],
     checkPermission,
     checkAnyPermission,
     checkAllPermissions,

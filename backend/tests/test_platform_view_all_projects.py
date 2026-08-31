@@ -124,6 +124,46 @@ def _grant(db, user, code, allowed=True, project_id=None):
     db.flush()
 
 
+def _configure_role(db, user, code, allowed):
+    """Change what the role this person holds may do, on the live mechanism.
+
+    `RolePermissionOverride` used to be how a role was configured, and these
+    tests used it directly. `effective_permissions` read that table only while
+    an account had no `org_role_id`; the contract step removed that branch, so
+    writing to it now changes nothing.
+
+    The role is **copied first**, into a row belonging to this test alone, and
+    the copy is what gets edited. Editing the seeded template in place would
+    outlive the test — the templates are shared by every office and by every
+    other test in the run, and `set_role_permission` writes to the database, so
+    one test granting `schedule.edit` to Engineer would hand it to every
+    engineer in every later test. That is the same reason
+    `organization._editable_role` copies a template into an office before
+    letting it be changed.
+    """
+    from app.models.rbac import Role, RolePermission
+    from app.services import rbac
+    from uuid import uuid4 as _uuid4
+
+    source = rbac.get_role(db, user.org_role_id)
+    assert source is not None, "the backstop should have given this account a role"
+    copy = Role(
+        organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
+        name_en=source.name_en, scope=source.scope,
+        is_internal_only=source.is_internal_only, is_system=False,
+        rank=source.rank, legacy_role=source.legacy_role,
+        legacy_affiliation=source.legacy_affiliation,
+    )
+    db.add(copy)
+    db.flush()
+    for existing in rbac.role_permission_codes(db, source.id):
+        db.add(RolePermission(role_id=copy.id, permission_code=existing, allowed=True))
+    db.flush()
+    user.org_role_id = copy.id
+    rbac.set_role_permission(db, role=copy, code=code, allowed=allowed)
+    db.flush()
+
+
 # --- the invariant the whole design leans on -----------------------------
 
 def test_platform_view_all_projects_is_not_project_scoped():
@@ -227,13 +267,19 @@ def _as_fresh_object(user: User) -> User:
     object across a mutation - which a real request never does to itself -
     would read back its own first, now-stale, answer instead of the change.
     """
-    return User(id=user.id, role=user.role, status=user.status)
+    # `org_role_id` and `is_internal` travel with it. Since the contract step
+    # an account without a role cannot resolve at all, so a stand-in that
+    # omitted them would raise `UnmigratedUser` instead of exercising the cache
+    # behaviour this helper exists to test.
+    return User(
+        id=user.id, role=user.role, status=user.status,
+        org_role_id=user.org_role_id, is_internal=user.is_internal,
+    )
 
 
 def test_revoking_view_all_projects_from_the_admin_role_actually_restricts_admins(db, world):
     assert user_has_project_access(db, world["admin"], world["project_b"].id)
-    db.add(RolePermissionOverride(role=UserRole.ADMIN, permission_code="platform.view_all_projects", allowed=False))
-    db.flush()
+    _configure_role(db, world["admin"], "platform.view_all_projects", False)
 
     admin = _as_fresh_object(world["admin"])
     assert not user_has_project_access(db, admin, world["project_b"].id)
@@ -250,8 +296,7 @@ def test_revoking_view_all_projects_does_not_touch_ordinary_project_membership(d
     here (admin holds no membership row), so this pins that an admin without
     the bypass genuinely cannot read project_a either, i.e. the revoke is a
     real restriction and not a no-op."""
-    db.add(RolePermissionOverride(role=UserRole.ADMIN, permission_code="platform.view_all_projects", allowed=False))
-    db.flush()
+    _configure_role(db, world["admin"], "platform.view_all_projects", False)
     admin = _as_fresh_object(world["admin"])
     assert not user_has_project_access(db, admin, world["project_a"].id)
 

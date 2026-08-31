@@ -92,18 +92,9 @@ def get_current_user(
     return user
 
 
-def require_roles(*allowed_roles: UserRole) -> Callable:
-    """Require the current user to have one of the given roles."""
-
-    def dependency(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions for this action",
-            )
-        return current_user
-
-    return dependency
+# `require_roles(*allowed_roles)` stood here and is gone: a dependency that
+# admits a fixed list of role names is the shape this redesign removes, and it
+# had no callers. Endpoints use `require_permission(code)` / `require(...)`.
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
@@ -124,48 +115,15 @@ def require_active_user(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def is_main_contractor_engineer(user: User) -> bool:
-    """Return whether a user is an active execution-side Engineer."""
-    return (
-        user.role == UserRole.ENGINEER
-        and user.engineer_affiliation == MAIN_CONTRACTOR_AFFILIATION
-        and user.status == UserStatus.ACTIVE
-    )
-
-
-def require_main_contractor_engineer(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    if not is_main_contractor_engineer(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Active Main Contractor Engineer access required",
-        )
-    return current_user
-
-
-def is_consultant_engineer(user: User) -> bool:
-    """Return whether a user is an active supervision-side Engineer."""
-    return (
-        user.role == UserRole.ENGINEER
-        and user.engineer_affiliation == CONSULTANT_AFFILIATION
-        and user.status == UserStatus.ACTIVE
-    )
-
-
-def is_worker(user: User) -> bool:
-    return user.role == UserRole.WORKER and user.status == UserStatus.ACTIVE
-
-
-def require_consultant_engineer(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    if not is_consultant_engineer(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Active Consultant Engineer access required",
-        )
-    return current_user
+# `is_main_contractor_engineer`, `require_main_contractor_engineer`,
+# `is_consultant_engineer` and `require_consultant_engineer` stood here and are
+# gone. All four asked the same retired question — which side of the
+# owner/contractor/consultant triangle somebody was on — from `User.role` plus
+# the `engineer_affiliation` string. `app.services.work_scope` replaced what
+# they were reaching for (what work you see, which disciplines narrow it, what
+# responsibility you carry), and `rbac.is_external_participant` replaced the
+# internal/external axis. Nothing had called any of them since; two were still
+# imported by `app.api.projects`, which never used them.
 
 
 def require_can_create_user(
@@ -208,9 +166,21 @@ def user_has_project_access(
     if not project:
         return False
 
-    if user.role == UserRole.PROJECT_MANAGER:
-        return project.project_manager_id == user.id
-
+    # There was an early return here for `role == UserRole.PROJECT_MANAGER`
+    # that answered `project.project_manager_id == user.id` and **skipped the
+    # membership check below**. It is gone, deliberately.
+    #
+    # It meant a project manager saw only the projects they managed: their
+    # `ProjectMember` rows were ignored, so somebody added to another office
+    # project as a discipline reviewer was locked out of it. That was coherent
+    # while "Project Manager" was one of six fixed identities. It is not
+    # coherent when the office defines its own roles — the job title carries no
+    # such meaning, and an office that calls somebody a Project Manager has not
+    # thereby said "and nothing else, anywhere".
+    #
+    # Everyone now falls through to the same union: owner, assigned manager, or
+    # active member. Declared as `project_manager_membership_honoured` in
+    # `app.db.rbac_equivalence`.
     if user.id == project.owner_id:
         return True
 
@@ -228,7 +198,15 @@ def user_has_project_access(
     )
     if membership:
         if require_management:
-            return user.role in {UserRole.ADMIN, UserRole.PROJECT_MANAGER} or user.id == project.project_manager_id
+            # "May this member *run* the project", not "is their account one of
+            # two enum values". `project.manage_members` is the capability the
+            # office configures for exactly this, and the assigned manager
+            # keeps it by virtue of the assignment.
+            from app.services.authorization import has_permission
+            return (
+                user.id == project.project_manager_id
+                or has_permission(db, user, "project.manage_members", project_id)
+            )
         return True
 
     return False
@@ -246,9 +224,10 @@ def accessible_project_ids(db: Session, user: User) -> list[uuid.UUID] | None:
     from app.services.authorization import can_view_all_projects_effective
     if can_view_all_projects_effective(db, user):
         return None
-    if user.role == UserRole.PROJECT_MANAGER:
-        return [project_id for (project_id,) in db.query(Project.id).filter(
-            Project.project_manager_id == user.id).all()]
+    # The same early return `user_has_project_access` carried, removed for the
+    # same reason: it replaced the membership union with "projects I manage",
+    # so a project manager's own memberships never counted. The union below is
+    # now everyone's answer.
     member_ids = db.query(ProjectMember.project_id).filter(
         ProjectMember.user_id == user.id, ProjectMember.is_active == True
     )
@@ -282,7 +261,9 @@ def get_manageable_project_or_403(
     if is_admin(current_user.role):
         return project
 
-    if current_user.role == UserRole.PROJECT_MANAGER and current_user.id == project.project_manager_id:
+    # The id comparison already implies the role: `project_manager_id` is
+    # validated to be an active PROJECT_MANAGER wherever it is written.
+    if current_user.id == project.project_manager_id:
         return project
 
     raise HTTPException(

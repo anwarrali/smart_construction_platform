@@ -36,8 +36,11 @@ export const DocumentsPage = () => {
   const isFirstRender = useRef(true);
   const workspace = useProjectWorkspace();
   const activeProjectId = workspace.projectId;
-  const { isProjectManager, isMainContractorEngineer } = useRole();
-  const canUpload = isProjectManager || isMainContractorEngineer;
+  /* `document.upload` is the code the endpoint checks. It used to be
+     "is a project manager or a main-contractor engineer", which withheld the
+     button from the office's own engineers — who hold the permission. */
+  const { permissionsReady, hasCapability } = useRole();
+  const canUpload = !permissionsReady || hasCapability("document.upload");
   const [searchParams, setSearchParams] = useSearchParams();
   const focusedDocumentId = searchParams.get("documentId");
   const visibleDocuments = focusedDocumentId ? documents.filter((document) => document.id === focusedDocumentId) : documents;

@@ -27,7 +27,7 @@ export const NotificationRedirectPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { role, isConsultantEngineer } = useRole();
+  const { hasCapability } = useRole();
   const markAsRead = useNotificationStore((state) => state.markAsRead);
   const [failed, setFailed] = useState(false);
 
@@ -52,18 +52,17 @@ export const NotificationRedirectPage = () => {
         const entityType =
           notification.relatedEntityType || (notification.taskId ? "TASK" : undefined);
         const entityId = notification.relatedEntityId || notification.taskId;
-        const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
 
         // `replace`, so the browser Back button returns to wherever the user
         // was rather than bouncing through this resolver again.
         if (!projectId) {
           navigate(notification.actionUrl || ROUTES.NOTIFICATIONS, { replace: true });
         } else if (entityType) {
-          navigate(projectEntityPath(projectId, entityType, entityId || "", role, affiliation), {
+          navigate(projectEntityPath(projectId, entityType, entityId || "", hasCapability), {
             replace: true,
           });
         } else {
-          navigate(projectModulePath(projectId, "activity", role, affiliation), { replace: true });
+          navigate(projectModulePath(projectId, "activity", hasCapability), { replace: true });
         }
       } catch {
         // A notification that no longer exists, or belongs to somebody else,
@@ -76,7 +75,7 @@ export const NotificationRedirectPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [id, navigate, role, isConsultantEngineer, markAsRead]);
+  }, [id, navigate, hasCapability, markAsRead]);
 
   useEffect(() => {
     if (!failed) return;

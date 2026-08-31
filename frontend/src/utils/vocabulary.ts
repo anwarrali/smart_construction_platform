@@ -26,7 +26,7 @@ export const useVocabulary = () => {
   };
 
   return {
-    /** Platform role: admin, project_manager, engineer, consultant, owner, worker. */
+    /** Retired platform role: admin, project_manager, engineer, consultant, owner. */
     role: (value: unknown) => lookup("roles", value),
     /** Role held on one project; the same vocabulary as platform roles. */
     projectRole: (value: unknown) => lookup("roles", value),

@@ -16,8 +16,7 @@ from app.models.audit_log import AuditLog
 from app.models.notification import Notification
 from app.models.task import TaskReview
 from app.core.deps import get_current_user, user_has_project_access
-from app.core.deps import is_main_contractor_engineer
-from app.services.authorization import can_view_all_projects_effective
+from app.services.authorization import can_view_all_projects_effective, has_permission
 from app.models.enums import ProjectStatus, IssueStatus, IssueSeverity, TaskStatus, UserStatus, UserRole, DesignChangeStatus
 from app.core.schedule_dates import inclusive_duration_days
 import json
@@ -60,13 +59,13 @@ def get_engineer_project_dashboard(
 ):
     from fastapi import HTTPException
 
-    if not is_main_contractor_engineer(current_user):
-        raise HTTPException(status_code=403, detail="Active Main Contractor Engineer access required")
+    # The field dashboard belongs to whoever is doing work on the project.
+    # Membership is the gate; the figures below are already filtered to the
+    # caller's own assignments.
     membership = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.user_id == current_user.id,
         ProjectMember.is_active == True,
-        ProjectMember.role_on_project == UserRole.ENGINEER,
     ).first()
     if not membership:
         raise HTTPException(status_code=403, detail="You do not have access to this project")
@@ -198,9 +197,12 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.ENGINEER:
+    # A portfolio dashboard is only meaningful to somebody who sees more than
+    # their own assignments. `task.view_all` is that distinction, asked without
+    # a project because this page has none.
+    if not has_permission(db, current_user, "task.view_all"):
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="Engineer dashboard requires an active project context")
+        raise HTTPException(status_code=400, detail="Open a project to see your assigned work")
     projects_query = db.query(Project)
     # Same "view-all gate first" shape as `_scoped_projects_query`
     # (app.api.projects) and `accessible_project_ids` (app.core.deps): this
@@ -209,16 +211,17 @@ def get_dashboard_stats(
     # non-admin changed nothing on this specific dashboard. Default behaviour
     # is unchanged - only ADMIN holds the permission by default.
     if not can_view_all_projects_effective(db, current_user):
-        if current_user.role == UserRole.PROJECT_MANAGER:
-            projects_query = projects_query.filter(Project.project_manager_id == current_user.id)
-        else:
-            member_ids = db.query(ProjectMember.project_id).filter(
-                ProjectMember.user_id == current_user.id, ProjectMember.is_active == True
-            )
-            projects_query = projects_query.filter(or_(
-                Project.id.in_(member_ids), Project.owner_id == current_user.id,
-                Project.project_manager_id == current_user.id,
-            ))
+        # Membership, ownership or management — the same union
+        # `accessible_project_ids` resolves. The branch this replaces gave a
+        # PROJECT_MANAGER only the projects they managed and ignored their
+        # memberships, which is the asymmetry the redesign removed.
+        member_ids = db.query(ProjectMember.project_id).filter(
+            ProjectMember.user_id == current_user.id, ProjectMember.is_active == True
+        )
+        projects_query = projects_query.filter(or_(
+            Project.id.in_(member_ids), Project.owner_id == current_user.id,
+            Project.project_manager_id == current_user.id,
+        ))
     project_ids = [row.id for row in projects_query.all()]
     scheduled_ranges = db.query(Task.planned_start_date, Task.planned_end_date).filter(
         Task.project_id.in_(project_ids),
@@ -314,10 +317,10 @@ def get_project_dashboard(project_id: uuid.UUID, db: Session = Depends(get_db),
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if current_user.role == UserRole.ENGINEER:
-        raise HTTPException(status_code=403, detail="Use the Engineer project dashboard for assigned-task metrics")
-    if current_user.role == UserRole.PROJECT_MANAGER and project.project_manager_id != current_user.id:
-        raise HTTPException(status_code=403, detail="This project is not assigned to the authenticated Project Manager")
+    # Project-wide metrics are for somebody who sees project-wide work.
+    # `user_has_project_access` has already settled that they are on it.
+    if not has_permission(db, current_user, "task.view_all", project_id):
+        raise HTTPException(status_code=403, detail="Open your own work for assigned-task metrics")
     today = date.today()
     tasks = db.query(Task).filter(Task.project_id == project_id)
     scheduled_task_days = sum(

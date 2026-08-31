@@ -11,7 +11,19 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class FieldSubmission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """A Worker's field evidence package awaiting Contractor Engineer review."""
+    """A package of evidence recorded from site: photos, notes, voice.
+
+    Built when workers were platform users, so the author used to be called the
+    worker. Workers are no longer accounts; the record is not a worker feature
+    and never was — it is the platform's structured field-evidence primitive,
+    and a Site Engineer produces exactly this. The author column is therefore
+    `submitted_by_id`, and who may fill it is decided by the
+    `field_evidence.submit` permission rather than by anybody's role name.
+
+    Historical rows are untouched by that change: the column was renamed, not
+    replaced, so evidence filed by a since-deactivated worker account stays
+    attributable to them.
+    """
 
     __tablename__ = "field_submissions"
     __table_args__ = (
@@ -20,7 +32,7 @@ class FieldSubmission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
             "project_id", "status", "created_at",
         ),
         Index("ix_field_submissions_task_status", "task_id", "status"),
-        Index("ix_field_submissions_worker_created", "worker_id", "created_at"),
+        Index("ix_field_submissions_submitted_by_created", "submitted_by_id", "created_at"),
     )
 
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -29,7 +41,10 @@ class FieldSubmission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     task_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    worker_id: Mapped[uuid.UUID] = mapped_column(
+    #: RESTRICT, deliberately: a person who filed evidence cannot be deleted
+    #: out from under it. Removing worker accounts therefore deactivates them
+    #: rather than deleting them — see `app.db.rbac_backfill`.
+    submitted_by_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -52,7 +67,7 @@ class FieldSubmission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     project: Mapped["Project"] = relationship()
     task: Mapped["Task"] = relationship()
-    worker: Mapped["User"] = relationship(foreign_keys=[worker_id])
+    submitted_by: Mapped["User"] = relationship(foreign_keys=[submitted_by_id])
     reviewed_by: Mapped["User | None"] = relationship(foreign_keys=[reviewed_by_id])
     photos: Mapped[list["FieldSubmissionPhoto"]] = relationship(
         back_populates="submission", cascade="all, delete-orphan", order_by="FieldSubmissionPhoto.created_at"

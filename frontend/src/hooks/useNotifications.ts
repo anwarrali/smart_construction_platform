@@ -6,7 +6,7 @@ import { useRole } from "./useRole";
 import { projectEntityPath, projectModulePath } from "../utils/projectRoutes";
 
 export const useNotifications = () => {
-  const { role, isConsultantEngineer } = useRole();
+  const { hasCapability } = useRole();
   const [error, setError] = useState("");
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 0 });
   const store = useNotificationStore();
@@ -21,7 +21,6 @@ export const useNotifications = () => {
         const items = (data.items || data.data || []).map((notification: any) => {
           const entityType = notification.relatedEntityType;
           const entityId = notification.relatedEntityId;
-          const affiliation = isConsultantEngineer ? "external_consultant" as const : undefined;
           const projectId = notification.projectId;
           const effectiveType = entityType || (notification.taskId ? "TASK" : undefined);
           const effectiveId = entityId || notification.taskId;
@@ -30,8 +29,8 @@ export const useNotifications = () => {
           // to a server-provided action URL.
           const link = projectId
             ? effectiveType
-              ? projectEntityPath(projectId, effectiveType, effectiveId || "", role, affiliation)
-              : projectModulePath(projectId, "activity", role, affiliation)
+              ? projectEntityPath(projectId, effectiveType, effectiveId || "", hasCapability)
+              : projectModulePath(projectId, "activity", hasCapability)
             : notification.actionUrl || undefined;
           return { ...notification, link };
         });
@@ -42,7 +41,7 @@ export const useNotifications = () => {
         setLoading(false);
       }
     },
-    [role, isConsultantEngineer, setLoading, setNotifications],
+    [hasCapability, setLoading, setNotifications],
   );
 
   const fetchUnreadCount = useCallback(async () => {

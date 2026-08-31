@@ -500,7 +500,12 @@ class AssignableTeamTests(TestCase):
                     {"assigneeIds": [str(uuid4())]},
                 )
         self.assertEqual(raised.exception.error_code, ASSIGNEE_NOT_ELIGIBLE)
-        self.assertIn("مهندس", raised.exception.text_ar)
+        # The refusal is Arabic and says what the caller can do about it. It
+        # deliberately no longer recites a list of role names: which roles may
+        # hold work is the office's own configuration now, so a message that
+        # named them would be wrong on any project that had been configured.
+        self.assertIn("المشروع", raised.exception.text_ar)
+        self.assertNotIn("عامل", raised.exception.text_ar)
 
     def test_an_eligible_person_passes(self):
         eligible = Person(uuid4(), "نور علي", "engineer")

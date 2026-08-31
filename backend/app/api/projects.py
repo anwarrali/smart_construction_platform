@@ -13,6 +13,7 @@ from app.models.enums import (
     DesignChangeStatus,
 )
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember, ProjectViewState
+from app.models.rbac import Discipline, ProjectMemberDiscipline, ProjectParty, Role
 from app.models.task import Task, TaskReview
 from app.models.milestone import Milestone as MilestoneModel
 from app.models.cost_validation import CostValidation
@@ -41,13 +42,15 @@ from app.core.deps import (
     get_manageable_project_or_403,
     require_project_creation,
     user_has_project_access,
-    is_main_contractor_engineer,
-    is_consultant_engineer,
 )
 from app.core.permissions import is_admin
+from app.services import rbac
 from app.services.user_service import create_provisioned_user, add_user_to_project
 from app.services.audit_service import record_audit
-from app.services.authorization import can_view_all_projects_effective, manageable_project, require_permission
+from app.services.authorization import (
+    can_view_all_projects_effective, has_permission, manageable_project, require,
+    require_permission,
+)
 from app.models.notification import Notification
 from app.models.enums import NotificationType
 from app.services.consultant_approval_service import normalize_discipline
@@ -94,6 +97,61 @@ def _remove_reviewer_assignments(
         db.delete(assignment)
 
 
+def _validated_project_role(db: Session, role_id, party_id, project_id):
+    """A role this person may actually be given on this project.
+
+    Two rules, both structural rather than configurable:
+
+      * the role must exist and be assignable on a project (`scope` is not
+        ORG-only), otherwise the assignment says something the platform cannot
+        honour;
+      * a role marked `is_internal_only` cannot be given to somebody taking
+        part for an outside party. `app.services.rbac` strips office authority
+        from external participants at resolution time regardless, so this is
+        the honest refusal rather than the security boundary — but an
+        administrator should be told, not silently ignored.
+    """
+    if role_id is None:
+        return None
+    role = db.get(Role, role_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Project role not found")
+    if role.scope == "ORG":
+        raise HTTPException(
+            status_code=422,
+            detail=f"{role.name_en} is an office role and cannot be given on a project",
+        )
+    if party_id is not None and role.is_internal_only:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{role.name_en} is for office staff and cannot be given to an external participant",
+        )
+    return role
+
+
+def _set_member_disciplines(db: Session, member: ProjectMember, discipline_ids) -> None:
+    """Replace the disciplines this person covers on this project."""
+    wanted = set(discipline_ids or [])
+    if wanted:
+        known = {
+            row.id for row in db.query(Discipline).filter(Discipline.id.in_(wanted)).all()
+        }
+        if known != wanted:
+            raise HTTPException(status_code=400, detail="Unknown discipline")
+    existing = db.query(ProjectMemberDiscipline).filter(
+        ProjectMemberDiscipline.project_member_id == member.id
+    ).all()
+    for row in existing:
+        if row.discipline_id not in wanted:
+            db.delete(row)
+        else:
+            wanted.discard(row.discipline_id)
+    for discipline_id in wanted:
+        db.add(ProjectMemberDiscipline(
+            project_member_id=member.id, discipline_id=discipline_id,
+        ))
+
+
 def _scoped_projects_query(db: Session, current_user: User):
     query = db.query(Project)
     # The "view all" gate is checked before the Project Manager branch (not
@@ -107,18 +165,18 @@ def _scoped_projects_query(db: Session, current_user: User):
     # an administrator configures it. This mirrors `accessible_project_ids`
     # (app.core.deps), which already had this ordering.
     if not can_view_all_projects_effective(db, current_user):
-        if current_user.role == UserRole.PROJECT_MANAGER:
-            query = query.filter(Project.project_manager_id == current_user.id)
-        else:
-            member_project_ids = db.query(ProjectMember.project_id).filter(
-                ProjectMember.user_id == current_user.id,
-                ProjectMember.is_active == True,
-            ).subquery()
-            query = query.filter(
-                (Project.owner_id == current_user.id)
-                | (Project.project_manager_id == current_user.id)
-                | Project.id.in_(member_project_ids)
-            )
+        # One union for everybody — membership, ownership or management. The
+        # branch this replaces gave a PROJECT_MANAGER only what they managed
+        # and ignored their memberships entirely.
+        member_project_ids = db.query(ProjectMember.project_id).filter(
+            ProjectMember.user_id == current_user.id,
+            ProjectMember.is_active == True,
+        ).subquery()
+        query = query.filter(
+            (Project.owner_id == current_user.id)
+            | (Project.project_manager_id == current_user.id)
+            | Project.id.in_(member_project_ids)
+        )
     # No `company_id` filter here, deliberately: cross-company collaboration
     # is how this app is actually modelled, not an edge case. The seeded demo
     # project (app.db.seed_demo) is owned by one company while its Main
@@ -149,10 +207,10 @@ def list_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == UserRole.ENGINEER and not (
-        is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)
-    ):
-        raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
+    # `_scoped_projects_query` already narrows to the projects this person is
+    # on. The retired refusal additionally required an Engineer to be
+    # contractor- or consultant-side, which excluded the office's own staff
+    # from listing the projects they had been assigned to.
     query = _scoped_projects_query(db, current_user)
     if status:
         query = query.filter(Project.status == status)
@@ -167,7 +225,8 @@ def list_projects(
     total_pages = max(1, (total + limit - 1) // limit)
     offset = (page - 1) * limit
     projects = query.offset(offset).limit(limit).all()
-    if current_user.role in {UserRole.ENGINEER, UserRole.WORKER}:
+    # Commercial figures follow the cost permission rather than a role list.
+    if not has_permission(db, current_user, "cost_validation.review"):
         for project in projects:
             project.budget_total = None
             project.budget_spent = None
@@ -192,8 +251,10 @@ def get_projects_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role in {UserRole.ENGINEER, UserRole.WORKER}:
-        raise HTTPException(status_code=403, detail="Field users cannot access portfolio or financial summaries")
+    # A portfolio summary is commercial. It follows the cost permission rather
+    # than a list of roles that are not allowed to see money.
+    if not has_permission(db, current_user, "cost_validation.review"):
+        raise HTTPException(status_code=403, detail="You are not authorized to see portfolio financials")
     projects = _scoped_projects_query(db, current_user).all()
     total_projects = len(projects)
     active_projects = sum(1 for p in projects if p.status.value == "active")
@@ -225,11 +286,10 @@ def get_project_by_id(
     project: Project = Depends(get_project_or_403),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == UserRole.ENGINEER and not (
-        is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)
-    ):
-        raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-    if current_user.role in {UserRole.ENGINEER, UserRole.WORKER}:
+    # Commercial figures are for whoever the office lets see them. `get_project_or_403`
+    # has already established membership; this only hides money from people
+    # whose role does not carry the cost permission.
+    if not has_permission(db, current_user, "cost_validation.review", project.id):
         project.budget_total = None
         project.budget_spent = None
     return project
@@ -241,13 +301,20 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("platform.create_project")),
 ):
-    pm_id = project_data.project_manager_id
-    if current_user.role == UserRole.PROJECT_MANAGER:
-        pm_id = current_user.id
-    elif pm_id:
+    # Whoever the office nominates to run the project, provided they can
+    # actually run one. `project.manage_members` is that capability; the role
+    # comparison this replaces meant an office could not nominate somebody in a
+    # role it had created, however it had permissioned them.
+    pm_id = project_data.project_manager_id or current_user.id
+    if pm_id != current_user.id:
         pm = db.query(User).filter(User.id == pm_id).first()
-        if not pm or pm.role != UserRole.PROJECT_MANAGER or pm.status != UserStatus.ACTIVE:
-            raise HTTPException(status_code=400, detail="Assigned project manager must be an active Project Manager")
+        if not pm or not rbac.is_staffable(db, pm) or not has_permission(
+            db, pm, "project.manage_members"
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="The nominated project manager must be an active member who can manage a project team",
+            )
 
     if project_data.owner_id:
         owner = db.query(User).filter(User.id == project_data.owner_id).first()
@@ -392,8 +459,6 @@ def get_project_approval_workflow(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == UserRole.WORKER:
-        raise HTTPException(status_code=403, detail="Workers cannot access Consultant approval configuration")
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     project = db.get(Project, project_id)
@@ -409,11 +474,13 @@ def update_project_approval_workflow(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only Administrators can configure Consultant approval")
-    project = db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    # Choosing who reviews on a project is project setup, so it is gated on the
+    # permission that already means "edit this project's settings".
+    # `project.edit` defaults to the administrator alone — the same answer the
+    # hardcoded role check gave — and is `office_only`, so no configuration can
+    # hand it to a contractor. `manageable_project` additionally re-checks
+    # project access, which a bare role comparison never did.
+    project = manageable_project(db, current_user, project_id, "project.edit")
 
     desired: set[tuple[uuid.UUID, str | None]] = set()
     if data.centralized_reviewer_id:
@@ -431,11 +498,16 @@ def update_project_approval_workflow(
         ).filter(
             ProjectMember.project_id == project_id,
             ProjectMember.user_id.in_(reviewer_ids),
-            ProjectMember.role_on_project == UserRole.CONSULTANT,
             ProjectMember.is_active == True,
-            User.role == UserRole.ENGINEER,
-            User.engineer_affiliation == "external_consultant",
             User.status == UserStatus.ACTIVE,
+            # Office staff, and nobody else: naming a reviewer is naming who
+            # carries the office's review authority on this project. Was
+            # "role is ENGINEER and affiliation is external_consultant", which
+            # is the retired Consultant Engineer identity — under the confirmed
+            # direction the office *is* the consultant, so its own people are
+            # the candidates and `task.review` (never_external) is what they
+            # must hold.
+            User.is_internal.is_(True),
         ).all()
     } if reviewer_ids else set()
     if eligible_ids != reviewer_ids:
@@ -506,8 +578,10 @@ def get_project_members(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    if current_user.role in {UserRole.ENGINEER, UserRole.WORKER}:
-        raise HTTPException(status_code=403, detail="Field users cannot access the complete project team")
+    # The full team list belongs to whoever staffs the project. Everybody else
+    # reaches the people they work with through the project's own screens.
+    if not has_permission(db, current_user, "project.manage_members", project_id):
+        raise HTTPException(status_code=403, detail="You are not authorized to see the complete project team")
 
     members = db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
     return members
@@ -522,10 +596,10 @@ def get_available_engineers(
     assigned_ids = db.query(ProjectMember.user_id).filter(
         ProjectMember.project_id == project_id, ProjectMember.is_active == True
     )
+    # The same "may be staffed onto a project" predicate the assignment
+    # endpoint uses. Was two retired enum values plus two affiliation strings.
     return db.query(User).filter(
-        User.role == UserRole.ENGINEER,
-        User.engineer_affiliation.in_(["internal_engineer", "main_contractor"]),
-        User.status == UserStatus.ACTIVE,
+        rbac.staffable_filter(db),
         ~User.id.in_(assigned_ids),
     ).order_by(User.full_name).all()
 
@@ -542,8 +616,8 @@ def get_available_team_members(
 ):
     """Backend-filtered active Engineers and Consultants eligible for a project."""
     get_manageable_project_or_403(project_id, db, current_user)
-    if role is not None and role not in {UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.WORKER}:
-        raise HTTPException(status_code=400, detail="Eligible team roles are Engineer, Consultant, and Worker")
+    if role is not None and role not in {UserRole.ENGINEER, UserRole.CONSULTANT}:
+        raise HTTPException(status_code=400, detail="Eligible team roles are Engineer and Consultant")
     assigned_ids = db.query(ProjectMember.user_id).filter(
         ProjectMember.project_id == project_id, ProjectMember.is_active == True
     )
@@ -555,9 +629,13 @@ def get_available_team_members(
         User.role == UserRole.CONSULTANT,
         and_(User.role == UserRole.ENGINEER, User.engineer_affiliation == CONSULTANT_AFFILIATION),
     )
+    # Who may be staffed onto a project, asked once and in the new model:
+    # active, and not parked on a role that exists only to hold history. This
+    # used to read `User.role.in_([ENGINEER, CONSULTANT])`, which meant an
+    # office could not put its own General Manager or Document Controller on a
+    # project — the candidate list only knew two of six retired enum values.
     query = db.query(User).outerjoin(EngineerProfile).filter(
-        User.role.in_([UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.WORKER]),
-        User.status == UserStatus.ACTIVE,
+        rbac.staffable_filter(db),
         ~User.id.in_(assigned_ids),
     )
     if search:
@@ -577,8 +655,6 @@ def get_available_team_members(
         query = query.filter(consultant_user)
     elif role == UserRole.ENGINEER:
         query = query.filter(User.role == UserRole.ENGINEER, User.engineer_affiliation != CONSULTANT_AFFILIATION)
-    elif role == UserRole.WORKER:
-        query = query.filter(User.role == UserRole.WORKER)
     if discipline:
         query = query.filter(EngineerProfile.discipline == discipline)
     if affiliation:
@@ -598,37 +674,69 @@ def add_project_member(
     user = db.query(User).filter(User.id == data.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.status != UserStatus.ACTIVE:
-        raise HTTPException(status_code=400, detail="Only active users can be assigned to projects")
-    is_external_consultant = (
-        user.role == UserRole.ENGINEER and user.engineer_affiliation == "external_consultant"
+    if not rbac.is_staffable(db, user):
+        # The same rule the candidate list applies, so the endpoint and the list
+        # that feeds it cannot disagree. Covers a deactivated account and a
+        # retired one parked on the archived role — assigning the latter would
+        # create a membership that grants nothing and confuse whoever did it.
+        raise HTTPException(
+            status_code=400,
+            detail="This account cannot be assigned to a project",
+        )
+    # The configurable role, when the client sent one. Everything below still
+    # writes `role_on_project` so the legacy column stays truthful until the
+    # contract migration drops it.
+    project_role = _validated_project_role(db, data.project_role_id, data.party_id, project_id)
+    # `role_on_project` is the retired column. It is still NOT NULL, so it is
+    # still written — derived from the account rather than asked for, because
+    # nothing reads it to make a decision any more.
+    #
+    # What used to stand here was two branches on the *actor's* legacy role: a
+    # project manager could add only Engineers and Consultants and only to the
+    # project they managed, an administrator could add one of four fixed enum
+    # values, and both demanded the requested value match the account's global
+    # role. Every one of those is the retired model. Who may staff a project is
+    # `project.manage_members`, already checked by `manageable_project` above;
+    # what somebody may be *on* the project is `_validated_project_role`, which
+    # enforces the rule that actually matters — an internal-only role cannot be
+    # given to somebody taking part for an outside party.
+    expected_project_role = (
+        UserRole.CONSULTANT
+        if user.role == UserRole.ENGINEER
+        and user.engineer_affiliation == "external_consultant"
+        else user.role
     )
-    expected_project_role = UserRole.CONSULTANT if is_external_consultant else user.role
-    if current_user.role == UserRole.PROJECT_MANAGER:
-        if project.project_manager_id != current_user.id:
-            raise HTTPException(status_code=403, detail="You can only manage your assigned project team")
-        if user.role not in {UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.WORKER}:
-            raise HTTPException(status_code=403, detail="Project Managers can assign only Engineers, Consultants, and Workers")
-        if data.role_on_project != expected_project_role:
-            raise HTTPException(status_code=400, detail="Project member role must match the user's global role")
-    elif current_user.role == UserRole.ADMIN:
-        if data.role_on_project not in {
-            UserRole.OWNER,
-            UserRole.PROJECT_MANAGER,
-            UserRole.ENGINEER,
-            UserRole.CONSULTANT,
-            UserRole.WORKER,
-        }:
-            raise HTTPException(status_code=400, detail="Unsupported project member role")
-        if expected_project_role != data.role_on_project:
-            raise HTTPException(status_code=400, detail="Project member role must match the user's system role")
+    data.role_on_project = expected_project_role
 
     active_member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id,
         ProjectMember.user_id == user.id, ProjectMember.is_active == True).first()
     if active_member:
         raise HTTPException(status_code=409, detail="User is already an active member of this project")
-    if data.is_site_engineer and (user.role != UserRole.ENGINEER or is_external_consultant):
-        raise HTTPException(status_code=400, detail="Only contractor-side Engineers can be assigned as Site Engineers")
+    # Site responsibility is a project assignment, not a job title. What used
+    # to stand here was `user.role != UserRole.ENGINEER or is_external_consultant`,
+    # and its first half was the retired model: it read the legacy enum on the
+    # *account*, so an office's own manager, architect or surveyor could not
+    # carry the site on a project the office itself runs — which is the whole
+    # point of a configurable role model. That half is gone.
+    #
+    # What replaces it is structural and reads the *membership*: somebody
+    # taking part for an outside party does not carry the office's site
+    # responsibility. That is the rule `update_member_assignment` has always
+    # enforced, and the rule the write below already applied — this guard
+    # simply stopped disagreeing with it.
+    #
+    # The `external_consultant` half is gone too, now that the product
+    # direction is settled: a consultant-side user is consulting-office staff.
+    # The office *is* the consultant, so an account carrying that retired
+    # affiliation is internal, and there is no reason it cannot carry the site
+    # on a project the office runs. `rbac_backfill` already migrates those
+    # accounts onto `senior_engineer`, an internal role, so the guard was the
+    # last place still treating them as outsiders.
+    if data.is_site_engineer and data.party_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Somebody taking part for an outside party cannot carry site responsibility",
+        )
 
     member = add_user_to_project(
         db,
@@ -640,8 +748,16 @@ def add_project_member(
     member.project_discipline = data.project_discipline.value if data.project_discipline else (
         user.engineer_profile.discipline.value if user.engineer_profile else None)
     member.project_notes = data.project_notes
-    member.is_site_engineer = bool(data.is_site_engineer and user.role == UserRole.ENGINEER and not is_external_consultant)
+    if project_role is not None:
+        member.project_role_id = project_role.id
+    member.party_id = data.party_id
+    # Site responsibility is a project assignment, not a role: any number of
+    # people may carry it, of any discipline. The one structural rule is that
+    # somebody taking part for an outside party does not carry the office's
+    # site responsibility.
+    member.is_site_engineer = bool(data.is_site_engineer and data.party_id is None)
     member.assigned_by_id = current_user.id
+    _set_member_disciplines(db, member, data.discipline_ids)
     record_audit(db, actor_id=current_user.id, action="project_member_assigned", entity_type="project_member",
                  entity_id=member.id, project_id=project_id, details={"user_id": user.id, "site_engineer": member.is_site_engineer})
     db.add(Notification(user_id=user.id, title="Project Assignment", message=f"You have been assigned to {project.name}.",
@@ -668,9 +784,18 @@ def update_member_assignment(
     if data.assignment_title is not None:
         member.assignment_title = data.assignment_title.strip() or None
     if data.is_site_engineer is not None:
-        if data.is_site_engineer and member.role_on_project != UserRole.ENGINEER:
-            raise HTTPException(status_code=400, detail="Only Engineers can be assigned as Site Engineers")
+        if data.is_site_engineer and member.party_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Somebody taking part for an outside party cannot carry site responsibility",
+            )
         member.is_site_engineer = data.is_site_engineer
+    if data.project_role_id is not None:
+        role = _validated_project_role(db, data.project_role_id, member.party_id, project_id)
+        if role is not None:
+            member.project_role_id = role.id
+    if data.discipline_ids is not None:
+        _set_member_disciplines(db, member, data.discipline_ids)
     if data.project_discipline is not None:
         member.project_discipline = data.project_discipline.value
     if data.project_notes is not None:
@@ -737,10 +862,10 @@ def remove_project_member(
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    if current_user.role == UserRole.PROJECT_MANAGER and member.role_on_project not in {
-        UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.WORKER
-    }:
-        raise HTTPException(status_code=403, detail="Project Managers can remove only Engineers, Consultants, and Workers")
+    # The office's principals are changed in project setup, not here. The
+    # branch above this asked whether the *actor* was a PROJECT_MANAGER and
+    # narrowed what they could remove to two enum values, which said nothing
+    # about a role an office had created.
     if member.role_on_project in {UserRole.OWNER, UserRole.PROJECT_MANAGER}:
         raise HTTPException(status_code=400, detail="Reassign the project owner or manager before removing this membership")
 
@@ -749,7 +874,9 @@ def remove_project_member(
         Task.assignees.any(User.id == user_id),
     ).all()
     active_tasks = [task for task in assigned_tasks if task.status not in {TaskStatus.DONE, TaskStatus.CANCELLED}]
-    if active_tasks and current_user.role != UserRole.ADMIN:
+    # Somebody who sees the whole project can take the consequences of
+    # unassigning live work; somebody narrowed to their own cannot.
+    if active_tasks and not has_permission(db, current_user, "task.view_all", project_id):
         raise HTTPException(status_code=409,
             detail=f"Reassign or complete {len(active_tasks)} active task(s) before removing this member")
     for task in assigned_tasks:
@@ -782,8 +909,10 @@ def transfer_project_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only Administrators can transfer project members")
+    # Moving somebody between projects touches both teams, so it needs the
+    # team-management capability — checked against each project below by
+    # `get_manageable_project_or_403`.
+    require(db, current_user, "project.manage_members", project_id)
     if data.target_project_id == project_id:
         raise HTTPException(status_code=400, detail="Source and target projects must be different")
 
@@ -796,8 +925,8 @@ def transfer_project_member(
     ).first()
     if not source_member:
         raise HTTPException(status_code=404, detail="Active source project membership not found")
-    if source_member.role_on_project not in {UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.WORKER}:
-        raise HTTPException(status_code=400, detail="Only Engineers, Consultants, and Workers can be transferred")
+    if source_member.role_on_project not in {UserRole.ENGINEER, UserRole.CONSULTANT}:
+        raise HTTPException(status_code=400, detail="Only Engineers and Consultants can be transferred")
 
     assigned_tasks = db.query(Task).filter(
         Task.project_id == project_id,
@@ -827,8 +956,11 @@ def transfer_project_member(
     target_member.assignment_title = source_member.assignment_title
     target_member.project_discipline = source_member.project_discipline
     target_member.project_notes = source_member.project_notes
+    # Same rule as the two endpoints above, and for the same reason: site
+    # responsibility follows the assignment, not the account's legacy role.
+    target_member.party_id = source_member.party_id
     target_member.is_site_engineer = bool(
-        data.is_site_engineer and source_member.role_on_project == UserRole.ENGINEER
+        data.is_site_engineer and source_member.party_id is None
     )
     target_member.assigned_by_id = current_user.id
     source_member.is_active = False
@@ -871,10 +1003,15 @@ def get_owner_dashboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role not in {UserRole.OWNER, UserRole.ADMIN}:
-        raise HTTPException(status_code=403, detail="Owner executive dashboard access required")
-    if not user_has_project_access(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    # `client_portal.view` is this check, named. Its default holders are ADMIN
+    # and OWNER, exactly the set the role comparison admitted, and it is
+    # deliberately not `office_only`: the client is an external party and this
+    # is the one view the platform builds for them, so the ceiling that strips
+    # the office's own authority must not strip this too.
+    #
+    # `require` re-checks project access for a project-scoped code, which is
+    # what the second refusal below used to do by hand.
+    require(db, current_user, "client_portal.view", project_id)
 
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:

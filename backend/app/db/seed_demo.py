@@ -404,19 +404,19 @@ def _ensure_tasks(
     anchor: date,
 ) -> dict[str, Task]:
     specs = [
-        ("site", "ANR-001", "Site Preparation", "civil", -90, -82, TaskStatus.DONE, TaskPriority.HIGH, 100, False, "structure", ["civil", "worker1"]),
-        ("excavation", "ANR-002", "Excavation", "civil", -81, -68, TaskStatus.DONE, TaskPriority.HIGH, 100, False, "structure", ["civil", "worker1"]),
-        ("foundations", "ANR-003", "Foundations", "civil", -67, -46, TaskStatus.DONE, TaskPriority.CRITICAL, 100, False, "structure", ["civil", "worker1"]),
-        ("reinforcement", "ANR-004", "Reinforcement Installation", "civil", -45, -25, TaskStatus.DONE, TaskPriority.CRITICAL, 100, False, "structure", ["civil", "worker1"]),
-        ("slab", "ANR-005", "Ground Floor Concrete Slab", "civil", -24, -9, TaskStatus.IN_PROGRESS, TaskPriority.CRITICAL, 70, False, "structure", ["civil", "worker1"]),
-        ("masonry", "ANR-006", "Masonry Works", "architectural", -8, 4, TaskStatus.UNDER_REVIEW, TaskPriority.HIGH, 90, True, "envelope", ["architect", "worker1"]),
-        ("electrical", "ANR-007", "Electrical Rough-In", "electrical", 5, 55, TaskStatus.UNDER_REVIEW, TaskPriority.HIGH, 85, True, "mep", ["electrical", "worker2"]),
-        ("plumbing", "ANR-008", "Plumbing Rough-In", "mechanical", 8, 58, TaskStatus.IN_PROGRESS, TaskPriority.HIGH, 55, False, "mep", ["mechanical", "worker2"]),
-        ("hvac", "ANR-009", "HVAC Installation", "mechanical", 59, 105, TaskStatus.BLOCKED, TaskPriority.MEDIUM, 20, False, "mep", ["mechanical", "worker2"]),
-        ("doors", "ANR-010", "Door Installation", "architectural", -20, -2, TaskStatus.DONE, TaskPriority.MEDIUM, 100, True, "envelope", ["architect", "worker3"]),
-        ("windows", "ANR-011", "Window Installation", "architectural", -5, 38, TaskStatus.REWORK_REQUIRED, TaskPriority.HIGH, 80, True, "envelope", ["architect", "worker3"]),
-        ("finishing", "ANR-012", "Internal Finishing", "architectural", 146, 220, TaskStatus.TODO, TaskPriority.MEDIUM, 0, True, "handover", ["architect", "worker3"]),
-        ("fire_alarm", "ANR-013", "Fire Alarm Installation", "electrical", 92, 145, TaskStatus.BACKLOG, TaskPriority.HIGH, 0, True, "handover", ["electrical", "worker2"]),
+        ("site", "ANR-001", "Site Preparation", "civil", -90, -82, TaskStatus.DONE, TaskPriority.HIGH, 100, False, "structure", ["civil", "site_civil"]),
+        ("excavation", "ANR-002", "Excavation", "civil", -81, -68, TaskStatus.DONE, TaskPriority.HIGH, 100, False, "structure", ["civil", "site_civil"]),
+        ("foundations", "ANR-003", "Foundations", "civil", -67, -46, TaskStatus.DONE, TaskPriority.CRITICAL, 100, False, "structure", ["civil", "site_civil"]),
+        ("reinforcement", "ANR-004", "Reinforcement Installation", "civil", -45, -25, TaskStatus.DONE, TaskPriority.CRITICAL, 100, False, "structure", ["civil", "site_civil"]),
+        ("slab", "ANR-005", "Ground Floor Concrete Slab", "civil", -24, -9, TaskStatus.IN_PROGRESS, TaskPriority.CRITICAL, 70, False, "structure", ["civil", "site_civil"]),
+        ("masonry", "ANR-006", "Masonry Works", "architectural", -8, 4, TaskStatus.UNDER_REVIEW, TaskPriority.HIGH, 90, True, "envelope", ["architect", "site_civil"]),
+        ("electrical", "ANR-007", "Electrical Rough-In", "electrical", 5, 55, TaskStatus.UNDER_REVIEW, TaskPriority.HIGH, 85, True, "mep", ["electrical", "site_mep"]),
+        ("plumbing", "ANR-008", "Plumbing Rough-In", "mechanical", 8, 58, TaskStatus.IN_PROGRESS, TaskPriority.HIGH, 55, False, "mep", ["mechanical", "site_mep"]),
+        ("hvac", "ANR-009", "HVAC Installation", "mechanical", 59, 105, TaskStatus.BLOCKED, TaskPriority.MEDIUM, 20, False, "mep", ["mechanical", "site_mep"]),
+        ("doors", "ANR-010", "Door Installation", "architectural", -20, -2, TaskStatus.DONE, TaskPriority.MEDIUM, 100, True, "envelope", ["architect", "site_arch"]),
+        ("windows", "ANR-011", "Window Installation", "architectural", -5, 38, TaskStatus.REWORK_REQUIRED, TaskPriority.HIGH, 80, True, "envelope", ["architect", "site_arch"]),
+        ("finishing", "ANR-012", "Internal Finishing", "architectural", 146, 220, TaskStatus.TODO, TaskPriority.MEDIUM, 0, True, "handover", ["architect", "site_arch"]),
+        ("fire_alarm", "ANR-013", "Fire Alarm Installation", "electrical", 92, 145, TaskStatus.BACKLOG, TaskPriority.HIGH, 0, True, "handover", ["electrical", "site_mep"]),
     ]
     result: dict[str, Task] = {}
     for order, spec in enumerate(specs, start=1):
@@ -609,7 +609,7 @@ def _ensure_field_submissions(
     specs = [
         (
             "reinforcement",
-            "worker1",
+            "site_civil",
             FieldSubmissionStatus.SUBMITTED,
             "Reinforcement for footing F3 completed and ready for Engineer inspection.",
             None,
@@ -617,7 +617,7 @@ def _ensure_field_submissions(
         ),
         (
             "electrical",
-            "worker2",
+            "site_mep",
             FieldSubmissionStatus.VERIFIED,
             "Electrical conduit installation completed in the east corridor.",
             "electrical",
@@ -625,21 +625,21 @@ def _ensure_field_submissions(
         ),
         (
             "windows",
-            "worker3",
+            "site_arch",
             FieldSubmissionStatus.REJECTED,
             "Window frames installed on the north elevation.",
             "architect",
             "Frames at grids N4-N6 are out of plumb. Correct alignment and resubmit.",
         ),
     ]
-    for task_key, worker_key, status, description, reviewer_key, comment in specs:
-        record_id = stable_id(f"field-submission:{task_key}:{worker_key}")
+    for task_key, author_key, status, description, reviewer_key, comment in specs:
+        record_id = stable_id(f"field-submission:{task_key}:{author_key}")
         submission = db.get(FieldSubmission, record_id)
         if submission:
             if (
                 submission.project_id != project.id
                 or submission.task_id != tasks[task_key].id
-                or submission.worker_id != users[worker_key].id
+                or submission.submitted_by_id != users[author_key].id
             ):
                 raise _conflict(f"field submission for '{task_key}' is inconsistent")
             continue
@@ -648,7 +648,7 @@ def _ensure_field_submissions(
                 id=record_id,
                 project_id=project.id,
                 task_id=tasks[task_key].id,
-                worker_id=users[worker_key].id,
+                submitted_by_id=users[author_key].id,
                 description=description,
                 status=status,
                 reviewed_at=now - timedelta(hours=8) if reviewer_key else None,
@@ -908,9 +908,14 @@ def seed_demo(db: Session, config: DemoSeedConfig) -> str:
         ("mechanical", "mechanical.engineer.demo@smartconstruction-demo.com", "Sami Darwish", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.MECHANICAL, "MECH-DEMO-104"),
         ("arch_consultant", "architectural.consultant.demo@smartconstruction-demo.com", "Nour Mansour", UserRole.ENGINEER, consultant_company, consultant_company.name, "external_consultant", EngineerDiscipline.ARCHITECTURAL, "ARCH-CONS-DEMO-201"),
         ("mep_consultant", "mep.consultant.demo@smartconstruction-demo.com", "Tariq Odeh", UserRole.ENGINEER, consultant_company, consultant_company.name, "external_consultant", EngineerDiscipline.ELECTRICAL, "MEP-CONS-DEMO-202"),
-        ("worker1", "worker.one.demo@smartconstruction-demo.com", "Ahmad Barakat", UserRole.WORKER, contractor_company, contractor_company.name, None, None, None),
-        ("worker2", "worker.two.demo@smartconstruction-demo.com", "Bilal Hamdan", UserRole.WORKER, contractor_company, contractor_company.name, None, None, None),
-        ("worker3", "worker.three.demo@smartconstruction-demo.com", "Kareem Zaid", UserRole.WORKER, contractor_company, contractor_company.name, None, None, None),
+        # Three Site Engineers of three disciplines on one project. This
+        # replaces the three worker accounts the demo used to seed: workers
+        # are no longer platform users, and field evidence is a site
+        # engineer's output now. It also gives the demo the "several site
+        # engineers, different specialisms" shape the product is built for.
+        ("site_civil", "site.civil.demo@smartconstruction-demo.com", "Ahmad Barakat", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.CIVIL, "CIV-SITE-105"),
+        ("site_mep", "site.mep.demo@smartconstruction-demo.com", "Bilal Hamdan", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.ELECTRICAL, "ELEC-SITE-106"),
+        ("site_arch", "site.arch.demo@smartconstruction-demo.com", "Kareem Zaid", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.ARCHITECTURAL, "ARCH-SITE-107"),
     ]
     users: dict[str, User] = {}
     for key, email, name, role, company, organization, affiliation, discipline, license_number in user_specs:
@@ -938,9 +943,9 @@ def seed_demo(db: Session, config: DemoSeedConfig) -> str:
         ("mechanical", UserRole.ENGINEER, "Mechanical Site Engineer", "mechanical", True),
         ("arch_consultant", UserRole.CONSULTANT, "Architectural Consultant Reviewer", "architectural", False),
         ("mep_consultant", UserRole.CONSULTANT, "Electrical / MEP Consultant Reviewer", "electrical", False),
-        ("worker1", UserRole.WORKER, "Civil Works Crew", "civil", False),
-        ("worker2", UserRole.WORKER, "MEP Installation Crew", "electrical", False),
-        ("worker3", UserRole.WORKER, "Architectural Finishes Crew", "architectural", False),
+        ("site_civil", UserRole.ENGINEER, "Civil Site Engineer", "civil", True),
+        ("site_mep", UserRole.ENGINEER, "MEP Site Engineer", "electrical", True),
+        ("site_arch", UserRole.ENGINEER, "Architectural Site Engineer", "architectural", True),
     ]
     for key, role, title, discipline, site_engineer in memberships:
         _ensure_membership(

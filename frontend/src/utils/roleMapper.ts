@@ -6,7 +6,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   project_manager: "Project Manager",
   engineer: "Engineer",
   consultant: "Consultant",
-  worker: "Worker",
 };
 
 export const ROLE_LABELS_AR: Record<UserRole, string> = {
@@ -15,7 +14,6 @@ export const ROLE_LABELS_AR: Record<UserRole, string> = {
   project_manager: "مدير المشروع",
   engineer: "مهندس",
   consultant: "استشاري",
-  worker: "عامل",
 };
 
 export const getRoleLabel = (
@@ -25,13 +23,19 @@ export const getRoleLabel = (
   return locale === "ar" ? ROLE_LABELS_AR[role] : ROLE_LABELS[role];
 };
 
+/**
+ * Display order only.
+ *
+ * This used to be consulted as seniority and is not an authorization
+ * input any more: what somebody may do comes from their role's
+ * permissions, which an office configures. Kept so lists sort sensibly.
+ */
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   admin: 10,
   owner: 8,
   project_manager: 7,
   engineer: 5,
   consultant: 6,
-  worker: 2,
 };
 
 export const isRoleHigherOrEqual = (
@@ -47,7 +51,6 @@ export const DASHBOARD_ROUTES: Record<UserRole, string> = {
   project_manager: "/dashboard",
   engineer: "/dashboard",
   consultant: "/dashboard",
-  worker: "/dashboard",
 };
 
 export const getDefaultRoute = (role: UserRole): string => {
@@ -60,5 +63,4 @@ export const ROLES_OPTIONS = [
   { value: "project_manager", label: "Project Manager" },
   { value: "engineer", label: "Engineer" },
   { value: "consultant", label: "Consultant" },
-  { value: "worker", label: "Worker" },
 ] as const;

@@ -55,10 +55,11 @@ from app.models.enums import NotificationType, UserStatus
 from app.models.ifc import AIInsight
 from app.models.project import Project
 from app.models.user import User
+from app.services.agents import finding_routing
 from app.services.agents.notification_policy import compose_message, decide_notification
 from app.services.agents.orchestrator import orchestrate_for_event
 from app.services.agents.subscriptions import agents_for_event
-from app.services.notification_service import notify
+from app.services.notification_service import notify_users
 
 logger = logging.getLogger(__name__)
 
@@ -140,9 +141,18 @@ def notify_for_findings(db: Session, *, project_id, report, recipient: User) -> 
                 continue
             claims = evidence.get("claims") or []
             location = (insight.affected_json or {}).get("storey") or None
-            created = notify(
+            # Who hears about it. Was the analysis principal alone, which is
+            # safe and nearly useless: a finding about the electrical model
+            # reached the project manager and nobody who could act on it.
+            # `finding_routing` resolves the people whose permissions,
+            # disciplines and project responsibility make the finding theirs —
+            # and always includes the principal, so nothing goes unowned.
+            recipients = finding_routing.resolve(
+                db, project_id=project_id, insight=insight, principal=recipient,
+            )
+            created = notify_users(
                 db,
-                user_id=recipient.id,
+                user_ids=sorted(recipients.user_ids, key=str),
                 title=insight.title,
                 message=compose_message(
                     finding_title=insight.title,
@@ -166,8 +176,7 @@ def notify_for_findings(db: Session, *, project_id, report, recipient: User) -> 
                 # finding in place; it does not re-announce it.
                 dedupe_key=f"agent-finding:{insight.id}",
             )
-            if created is not None:
-                sent += 1
+            sent += len(created or [])
     return sent
 
 

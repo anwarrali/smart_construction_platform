@@ -205,45 +205,32 @@ The Schedule Risk Agent uses it to report when site reports record delays that
 the schedule does not reflect — an inference, labelled as one, citing the other
 agent's findings as `AI_INSIGHT` evidence.
 
-## Deferred: the Organization / RBAC redesign
+## The Organization / RBAC redesign (done)
 
-Phase 7 deliberately did not touch roles. What follows is what a later
-organization redesign will need to address, recorded here so the AI layer's
-compatibility requirements are not rediscovered later.
+Phase 7 deferred this and recorded what it would need. It has since been
+implemented — see [RBAC.md](RBAC.md) and
+[CONSULTING_OFFICE_REDESIGN.md](CONSULTING_OFFICE_REDESIGN.md). What the note
+predicted held up: **no agent, orchestrator, tool or knowledge-routing decision
+keyed on a role**, so the redesign changed configuration and two foreign keys
+rather than agent code. Not one line of `analyzers.py`, `orchestrator.py`,
+`runtime.py` or the tool registry was touched.
 
-**Already flexible — no redesign needed:**
+What changed around the agents:
 
-- Permissions are configurable per role and per user (`RolePermissionOverride`,
-  `UserPermissionOverride`) without code changes.
-- Discipline is *already* separate from role: `ProjectMember.project_discipline`
-  and `EngineerProfile.discipline`.
-- **Site Engineer is already a first-class, unbounded per-project flag**
-  (`ProjectMember.is_site_engineer`, indexed). A project may have any number.
-- `ProjectMember.assignment_title` allows a custom label today.
-- Contractors are already external participants via `engineer_affiliation`.
-
-**Hardcoded, and what must change:**
-
-| Constraint | Effect |
+| Change | Effect here |
 | --- | --- |
-| `UserRole` is a 6-value PG enum | No Surveyor, BIM/CAD, MEP, or Resident Engineer without a migration and code change |
-| `EngineerDiscipline` has 4 values | No MEP, BIM, surveying; cannot express one engineer covering Mechanical *and* Electrical |
-| `ProjectMember.role_on_project` reuses that enum | Project-level roles inherit the same rigidity |
-| Two discipline vocabularies | `EngineerDiscipline` (4 values) and the IFC/agent set (`STRUCTURAL`, `MECHANICAL`, `ELECTRICAL`, `PLUMBING`, `FIRE_PROTECTION`, `ARCHITECTURAL`, `SITE_CIVIL`…) are unrelated and do not map |
+| `UserRole` / `EngineerDiscipline` enums replaced by `roles` / `disciplines` tables | An agent's `permission_code` now resolves against a role an office configured. No agent knows this happened. |
+| `ifc.view` became enforcing | `can_ifc` used to hold a private role dict, so the Revision Impact Agent's declared permission governed nothing. It does now. |
+| Discipline became many-to-many, with an IFC mapping | `Discipline.ifc_disciplines` joins the organization vocabulary to the IFC one, so a finding tagged `PLUMBING` can be routed to somebody scoped to `mep`. The two were unrelated before. |
+| Workers stopped being users | The Site Report Agent reads the same evidence; the author is a Site Engineer. |
+| External participants exist | Agent findings are internal review material and are never notified to an outside party. |
 
-The target shape — Organization → Projects → Members → configurable Roles →
-Permissions → Discipline — needs a `roles` table replacing the enum, a
-`disciplines` table reconciling the two vocabularies, and `role_on_project`
-becoming a foreign key.
-
-**Why the AI layer is already compatible:** no agent, orchestrator, tool or
-knowledge-routing decision keys on a `UserRole` or `EngineerDiscipline` value.
-Everything routes through `has_permission` and the tool layer. A role redesign
-therefore changes configuration and one FK, not agent code.
-
-The one place the AI layer *does* read discipline is IFC classification, which
-uses its own vocabulary derived from IFC classes rather than from the
-organization model — so it is unaffected either way.
+The analysis principal is unchanged: an event-triggered run borrows the
+project's assigned Project Manager's authority, and a project without one is
+skipped rather than analysed with more power. That reasoning survives the
+redesign intact — and improves, because Project Manager is now a configurable
+role, so an office that concentrates authority in a Technical Director can say
+so without the agents changing.
 
 ## Autonomous detection (Phase 8)
 

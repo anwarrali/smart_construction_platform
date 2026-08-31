@@ -1,4 +1,16 @@
-"""Role-based access control helpers for enterprise auth."""
+"""Role-based access control helpers for enterprise auth.
+
+Legacy. The office configures its own roles now (`app.services.rbac`), and
+`app.services.authorization` is the only module that decides what somebody may
+do. What is left here backs account *provisioning* — which legacy enum value a
+new account is created with — and nothing else. It goes with the rest of the
+legacy path in the contract migration; see docs/RBAC.md.
+
+`UserRole.WORKER` is absent from every set below on purpose: workers are not
+platform users, so no new account can be provisioned as one. Existing worker
+rows keep their enum value so their field evidence stays attributable, and the
+backfill parks them on the permissionless `archived_field_staff` role.
+"""
 
 from app.models.enums import UserRole
 
@@ -9,7 +21,6 @@ PRIMARY_ROLES = {
     UserRole.ENGINEER,
     UserRole.CONSULTANT,
     UserRole.OWNER,
-    UserRole.WORKER,
 }
 
 ENGINEER_ROLES = {UserRole.ENGINEER}
@@ -20,7 +31,6 @@ ROLE_LABELS = {
     UserRole.ENGINEER: "Engineer",
     UserRole.CONSULTANT: "Consultant",
     UserRole.OWNER: "Owner",
-    UserRole.WORKER: "Construction Worker",
 }
 
 
@@ -65,7 +75,6 @@ def can_create_team_role(creator_role: UserRole, target_role: UserRole) -> bool:
             UserRole.ENGINEER,
             UserRole.CONSULTANT,
             UserRole.OWNER,
-            UserRole.WORKER,
         }
     return False
 

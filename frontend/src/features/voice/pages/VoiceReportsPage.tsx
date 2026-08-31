@@ -85,7 +85,7 @@ export const VoiceReportsPage = () => {
     if (!value) return rows;
     return rows.filter(({ submission, task, voice }) => {
       const matchesQuery = !value ||
-        `${submission.worker.fullName} ${task.taskCode} ${task.name} ${task.discipline || ""}`
+        `${submission.submittedBy.fullName} ${task.taskCode} ${task.name} ${task.discipline || ""}`
           .toLowerCase().includes(value);
       const matchesDiscipline = !discipline || task.discipline === discipline;
       const matchesIntent = !intent || voice?.actionDrafts.some((item) => item.actionType === intent);
@@ -123,12 +123,12 @@ export const VoiceReportsPage = () => {
     <div>
       <h1 className="text-2xl font-bold">{t("voiceReports.voice_assistant_review_inbox")}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        {t("voiceReports.review_worker_reports_evidence_and")}
+        {t("voiceReports.review_field_reports_evidence_and")}
       </p>
     </div>
     <Card>
       <div className="grid gap-3 md:grid-cols-3">
-        <Input label={t("voiceReports.worker_task_or_code")} value={query}
+        <Input label={t("voiceReports.person_task_or_code")} value={query}
           onChange={(event) => setQuery(event.target.value)} placeholder={t("voiceReports.search_reports")} />
         <label className="text-sm">{t("voiceReports.discipline")}
           <select className="mt-1 w-full rounded-md border bg-background px-3 py-2" value={discipline}
@@ -142,7 +142,7 @@ export const VoiceReportsPage = () => {
           <select className="mt-1 w-full rounded-md border bg-background px-3 py-2" value={intent}
             onChange={(event) => setIntent(event.target.value)}>
             <option value="">{t("voiceReports.all_intents")}</option>
-            <option value="CREATE_FIELD_SUBMISSION">{t("voiceReports.worker_field_report")}</option>
+            <option value="CREATE_FIELD_SUBMISSION">{t("voiceReports.field_report")}</option>
             <option value="CREATE_ISSUE">{t("voiceReports.issue")}</option>
             <option value="UPDATE_TASK_PROGRESS">{t("voiceReports.progress_update")}</option>
           </select>
@@ -157,7 +157,7 @@ export const VoiceReportsPage = () => {
       return <Card key={submission.id} className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="font-semibold">{submission.worker.fullName}</p>
+            <p className="font-semibold">{submission.submittedBy.fullName}</p>
             <p className="text-sm text-muted-foreground">
               {task.taskCode} · {task.name} · {formatDateTime(submission.createdAt)}
             </p>
@@ -170,7 +170,7 @@ export const VoiceReportsPage = () => {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-lg border p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("voiceReports.worker_report")}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("voiceReports.field_report_label")}</p>
             <p className="mt-2 whitespace-pre-wrap text-sm">{submission.description || "No written summary."}</p>
             {voice?.rawTranscript && <>
               <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("voiceReports.original_transcript")}</p>
@@ -254,12 +254,12 @@ export const VoiceReportsPage = () => {
             onChange={(event) => setReason((current) => ({ ...current, [submission.id]: event.target.value }))}
             placeholder={t("voiceReports.required_reason_for_resubmission")} />
           <Button variant="outline" disabled={(reason[submission.id] || "").trim().length < 3 || busyId === submission.id}
-            onClick={() => run(submission.id, () => api.fieldSubmissions.reject(submission.id, reason[submission.id].trim()), "Worker was asked to resubmit.")}>
+            onClick={() => run(submission.id, () => api.fieldSubmissions.reject(submission.id, reason[submission.id].trim()), "The submitter was asked to resubmit.")}>
             {t("voiceReports.reject_request_resubmission")}
           </Button>
         </div>
       </Card>;
     })}
-    {!loading && !visible.length && <Card className="p-10 text-center text-muted-foreground">{t("voiceReports.no_pending_worker_voice_reports_match")}</Card>}
+    {!loading && !visible.length && <Card className="p-10 text-center text-muted-foreground">{t("voiceReports.no_pending_voice_reports_match")}</Card>}
   </div>;
 };

@@ -6,12 +6,8 @@ import uuid
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.core.deps import (
-    is_consultant_engineer,
-    is_main_contractor_engineer,
-    is_worker,
-    user_has_project_access,
-)
+from app.core.deps import user_has_project_access
+from app.services.authorization import has_permission
 from app.models.enums import ConversationType, UserRole, UserStatus
 from app.models.issue import Issue
 from app.models.design_change import DesignChange
@@ -28,7 +24,6 @@ from app.services.messaging_policy import (
     PROJECT_GROUPS,
     can_create_group,
     can_project_broadcast,
-    worker_can_message,
 )
 
 
@@ -51,23 +46,6 @@ def active_project_participant_ids(
     return active_ids
 
 
-def worker_recipient_ids(
-    db: Session, worker: User, project_id: uuid.UUID
-) -> set[uuid.UUID]:
-    project = db.get(Project, project_id)
-    result = {project.project_manager_id} if project and project.project_manager_id else set()
-    tasks = db.query(Task).filter(
-        Task.project_id == project_id,
-        Task.assignees.any(User.id == worker.id),
-    ).all()
-    for task in tasks:
-        result.update(
-            assignee.id for assignee in task.assignees
-            if is_main_contractor_engineer(assignee)
-        )
-    return result
-
-
 def can_message_user(
     db: Session, sender: User, project_id: uuid.UUID, recipient_id: uuid.UUID
 ) -> bool:
@@ -75,14 +53,6 @@ def can_message_user(
         return False
     if recipient_id not in active_project_participant_ids(db, project_id):
         return False
-    if is_worker(sender):
-        project = db.get(Project, project_id)
-        return worker_can_message(
-            target_is_project_manager=bool(project and project.project_manager_id == recipient_id),
-            target_is_assigned_engineer=recipient_id in worker_recipient_ids(
-                db, sender, project_id
-            ),
-        )
     return True
 
 
@@ -115,27 +85,37 @@ def resolve_group_recipient_ids(
     if code == "ALL_PROJECT_MEMBERS":
         result = active_ids
     elif code == "ALL_ENGINEERS":
-        result = {user.id for user in users if user.role == UserRole.ENGINEER}
-    elif code == "WORKERS":
-        result = {user.id for user in users if user.role == UserRole.WORKER}
-    elif code == "PROJECT_MANAGERS":
+        # Everybody doing technical work on the project: the office's own
+        # people, minus the ones who are only here to read. Was
+        # `role == ENGINEER`, which missed every role an office created.
         result = {
-            user.id for user in users if user.role == UserRole.PROJECT_MANAGER
+            user.id for user in users
+            if user.is_internal and has_permission(db, user, "task.update_progress", project_id)
+        }
+    elif code == "PROJECT_MANAGERS":
+        # Whoever runs this project — the assigned manager, and anybody the
+        # office gave team authority to.
+        result = {
+            user.id for user in users
+            if has_permission(db, user, "project.manage_members", project_id)
         }
         if project.project_manager_id:
             result.add(project.project_manager_id)
     elif code == "OWNERS":
         result = {project.owner_id} if project.owner_id in active_ids else set()
     elif code == "CONTRACTOR_TEAM":
+        # Everybody on the project for an outside contractor. Was "project
+        # managers, workers and main-contractor engineers" — three role names
+        # for one idea, and the idea is now recorded on the membership.
         result = {
-            user.id for user in users
-            if user.role in {UserRole.PROJECT_MANAGER, UserRole.WORKER}
-            or is_main_contractor_engineer(user)
+            member.user_id for member in memberships.values()
+            if member.party_id is not None and member.user_id in active_ids
         }
     elif code == "CONSULTANT_TEAM":
+        # The office's own reviewers on this project.
         result = {
             user.id for user in users
-            if user.role == UserRole.CONSULTANT or is_consultant_engineer(user)
+            if has_permission(db, user, "task.review", project_id) and user.is_internal
         }
     elif code.startswith("DISCIPLINE:"):
         discipline = code.split(":", 1)[1].strip().casefold()
@@ -167,12 +147,12 @@ def can_access_context(
         task = db.get(Task, context_id)
         if not task or task.project_id != project_id:
             return False
-        if is_worker(user) or is_main_contractor_engineer(user):
-            return any(assignee.id == user.id for assignee in task.assignees)
-        return True
+        from app.services import work_scope
+
+        return work_scope.can_see_task(db, user, task)
     if normalized == "ISSUE":
         issue = db.get(Issue, context_id)
-        return bool(issue and issue.project_id == project_id and not is_worker(user))
+        return bool(issue and issue.project_id == project_id)
     model_map = {
         "DESIGN_CHANGE": DesignChange, "DOCUMENT": Document, "SITE_REPORT": SiteReport,
         "FIELD_SUBMISSION": FieldSubmission, "OWNER_REQUEST": OwnerRequest, "SITE_VISIT": SiteVisit,
@@ -186,7 +166,22 @@ def can_access_context(
         entity_project_id = getattr(entity, "project_id", None) if entity else None
         if entity and normalized in {"IFC_ELEMENT", "ROOM", "FLOOR"}:
             entity_project_id = entity.version.project_id
-        return bool(entity and entity_project_id == project_id and not is_worker(user))
+        if not entity or entity_project_id != project_id:
+            return False
+        if normalized == "DOCUMENT":
+            # Documents have per-document access, so "is on the project" is not
+            # enough here. Before the redesign the only thing standing between a
+            # Worker and a project document in this branch was a role check;
+            # with external participants on projects that would have become a
+            # way to forward a drawing nobody had shared. Ask the one helper
+            # that decides document access instead.
+            from app.services.document_access import readable_documents_query
+            from app.models.document import Document as DocumentModel
+
+            return readable_documents_query(db, user, project_id).filter(
+                DocumentModel.id == context_id
+            ).first() is not None
+        return True
     return False
 
 

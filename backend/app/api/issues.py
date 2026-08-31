@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, time, timezone
 
 from app.db.database import get_db
-from app.services.authorization import require
+from app.services.authorization import has_permission, require
 from app.models.user import User
 from app.models.issue import Issue
 from app.schemas.issue import IssueOut, IssueCreate, IssueUpdate
@@ -14,9 +14,8 @@ from app.core.deps import (
     get_current_user,
     user_has_project_access,
     accessible_project_ids,
-    is_main_contractor_engineer,
-    is_consultant_engineer,
 )
+from app.services import work_scope
 from app.models.enums import IssueStatus, IssueSeverity, UserRole
 from app.models.project import Project, ProjectMember
 from app.models.notification import Notification
@@ -44,29 +43,35 @@ def list_issues(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.ENGINEER:
-        if not (is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)):
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-        if not project_id:
-            raise HTTPException(status_code=400, detail="Engineer issue queries require a selected project")
+    # See the note in `app.api.site_reports.list_site_reports`: the retired
+    # organization-side refusal blocked the office's own engineers.
     if project_id and not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     query = db.query(Issue)
-    if current_user.role != UserRole.ADMIN:
-        accessible_ids = accessible_project_ids(db, current_user) or []
+    # "Sees every project" is `platform.view_all_projects`, which
+    # `accessible_project_ids` already answers by returning None. Reading the
+    # role instead meant two things went wrong: an administrator whose
+    # permission had been explicitly revoked still bypassed the filter, and a
+    # non-administrator who had been *granted* it got `None or []` — an empty
+    # list, so they saw nothing at all.
+    accessible_ids = accessible_project_ids(db, current_user)
+    if accessible_ids is not None:
         query = query.filter(Issue.project_id.in_(accessible_ids))
     if project_id:
         query = query.filter(Issue.project_id == project_id)
     if status:
         query = query.filter(Issue.status == status)
-    effective_discipline = discipline
-    if is_consultant_engineer(current_user) and current_user.engineer_profile:
-        effective_discipline = current_user.engineer_profile.discipline.value
-    if effective_discipline:
+    if discipline:
+        # An explicitly requested filter, from the caller.
         discipline_task_ids = db.query(Task.id).filter(
-            Task.project_id == project_id, Task.discipline == effective_discipline,
-        ) if project_id else db.query(Task.id).filter(Task.discipline == effective_discipline)
+            Task.project_id == project_id, Task.discipline == discipline,
+        ) if project_id else db.query(Task.id).filter(Task.discipline == discipline)
         query = query.filter((Issue.task_id.is_(None)) | Issue.task_id.in_(discipline_task_ids))
+    if project_id:
+        # The caller's own scope, which they cannot widen by asking.
+        query = work_scope.narrow_to_disciplines(
+            query, Issue.task_id, db, current_user, project_id,
+        )
     if date_from:
         query = query.filter(Issue.created_at >= datetime.combine(date_from, time.min, tzinfo=timezone.utc))
     if date_to:
@@ -94,11 +99,10 @@ def get_issues_by_project(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    query = db.query(Issue).filter(Issue.project_id == project_id)
-    if is_consultant_engineer(current_user):
-        discipline = current_user.engineer_profile.discipline.value if current_user.engineer_profile else None
-        authorized_task_ids = db.query(Task.id).filter(Task.project_id == project_id, Task.discipline == discipline)
-        query = query.filter((Issue.task_id.is_(None)) | Issue.task_id.in_(authorized_task_ids))
+    query = work_scope.narrow_to_disciplines(
+        db.query(Issue).filter(Issue.project_id == project_id),
+        Issue.task_id, db, current_user, project_id,
+    )
     return query.all()
 
 @router.get("/{issue_id}", response_model=IssueOut)
@@ -112,11 +116,10 @@ def get_issue_by_id(
         raise HTTPException(status_code=404, detail="Issue not found")
     if not user_has_project_access(db, current_user, issue.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this issue")
-    if is_consultant_engineer(current_user) and issue.task_id:
-        task = db.get(Task, issue.task_id)
-        discipline = current_user.engineer_profile.discipline.value if current_user.engineer_profile else None
-        if not task or task.discipline != discipline:
-            raise HTTPException(status_code=403, detail="This issue is outside your discipline")
+    if issue.task_id and not work_scope.task_is_in_scope(
+        db, current_user, issue.project_id, db.get(Task, issue.task_id)
+    ):
+        raise HTTPException(status_code=403, detail="This issue is outside your discipline")
     issue.attachment_count = db.query(Attachment).filter(Attachment.entity_type == "ISSUE", Attachment.entity_id == issue.id).count()
     return issue
 
@@ -127,10 +130,6 @@ def create_issue(
     current_user: User = Depends(get_current_user)
 ):
     require(db, current_user, "issue.create", issue_data.project_id)
-    if current_user.role == UserRole.ENGINEER and not (
-        is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)
-    ):
-        raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
     if not user_has_project_access(db, current_user, issue_data.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     if issue_data.task_id:
@@ -140,14 +139,28 @@ def create_issue(
         ).first()
         if not task:
             raise HTTPException(status_code=400, detail="taskId must belong to the selected project")
-        if is_main_contractor_engineer(current_user) and not any(assignee.id == current_user.id for assignee in task.assignees):
-            raise HTTPException(status_code=403, detail="You can only raise task issues for work assigned to you")
-        if is_consultant_engineer(current_user):
-            discipline = current_user.engineer_profile.discipline.value if current_user.engineer_profile else None
-            if task.discipline != discipline:
-                raise HTTPException(status_code=403, detail="You cannot create observations for another discipline")
-    if current_user.role == UserRole.ENGINEER and issue_data.assigned_to_id:
-        raise HTTPException(status_code=403, detail="Engineers cannot assign issue resolvers")
+        # You may raise an issue against work you can actually see: your own
+        # assignments, or work you review. Both halves of the retired check
+        # said that in role terms; `can_see_task` says it in terms of the
+        # assignments themselves, and `task_is_in_scope` keeps the discipline
+        # boundary for a narrowed reviewer.
+        if not work_scope.can_see_task(db, current_user, task):
+            raise HTTPException(
+                status_code=403,
+                detail="You can only raise task issues for work assigned to you or under your review",
+            )
+        if not work_scope.task_is_in_scope(db, current_user, issue_data.project_id, task):
+            raise HTTPException(
+                status_code=403,
+                detail="You cannot create observations for another discipline",
+            )
+    # Choosing who resolves an issue is `issue.resolve`. Raising one is
+    # `issue.create`, which is wider — so somebody who may only raise issues
+    # may not also decide who fixes them.
+    if issue_data.assigned_to_id and not has_permission(
+        db, current_user, "issue.resolve", issue_data.project_id
+    ):
+        raise HTTPException(status_code=403, detail="You cannot assign issue resolvers")
     new_issue = Issue(
         project_id=issue_data.project_id,
         task_id=issue_data.task_id,
@@ -212,14 +225,19 @@ def update_issue(
     if not user_has_project_access(db, current_user, issue.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this issue")
     project = db.get(Project, issue.project_id)
-    can_manage = current_user.role == UserRole.PROJECT_MANAGER and project and project.project_manager_id == current_user.id
+    # `project_manager_id` is validated at both write paths to be an active
+    # PROJECT_MANAGER, so the role half was always implied by the id test.
+    can_manage = bool(project and project.project_manager_id == current_user.id)
     if not can_manage and current_user.id not in {issue.raised_by_id, issue.assigned_to_id}:
         raise HTTPException(status_code=403, detail="You cannot update this issue")
-    if current_user.role == UserRole.ENGINEER:
+    # Reassigning an issue and closing one are both `issue.resolve`, which is
+    # `office_only` — so an external participant never reaches either, however
+    # their project role is configured.
+    if not has_permission(db, current_user, "issue.resolve", issue.project_id):
         if issue_data.assigned_to_id is not None:
-            raise HTTPException(status_code=403, detail="Engineers cannot reassign issue ownership")
+            raise HTTPException(status_code=403, detail="You cannot reassign issue ownership")
         if issue_data.status in {IssueStatus.RESOLVED, IssueStatus.CLOSED}:
-            raise HTTPException(status_code=403, detail="Only the assigned Project Manager can resolve or close site issues")
+            raise HTTPException(status_code=403, detail="You cannot resolve or close site issues")
     if (
         issue.category
         and issue.category.startswith("blocker:")
@@ -321,10 +339,12 @@ def delete_issue(
         raise HTTPException(status_code=404, detail="Issue not found")
     project = db.get(Project, issue.project_id)
     require(db, current_user, "issue.resolve", issue.project_id)
-    # Holding the permission is not enough: an ordinary manager may only delete
-    # issues on a project they actually run.
-    if current_user.role == UserRole.PROJECT_MANAGER and (not project or project.project_manager_id != current_user.id):
-        raise HTTPException(status_code=403, detail="Only the assigned Project Manager can delete issues")
+    # `require` above already demanded `issue.resolve` *on this project*, and
+    # a project-scoped permission carries project access with it, so being on
+    # the project is settled. The extra refusal this replaces asked whether the
+    # account was a PROJECT_MANAGER running a different project — a confinement
+    # on one job title that never applied to an identically-permissioned role
+    # the office had created itself.
     db.delete(issue)
     db.commit()
     return {"message": "Issue deleted successfully"}

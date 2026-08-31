@@ -60,7 +60,10 @@
     "yesterday": "Yesterday",
     "add": "Add",
     "unknownTask": "Unknown task",
-    "reload": "Reload"
+    "reload": "Reload",
+    "account": "Account",
+    "enable": "Enable",
+    "disable": "Disable"
   },
   "empty": {
     "noData": "No data to show",
@@ -139,7 +142,9 @@
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "accessControl": "Permissions",
-    "voiceAssistant": "Voice Assistant"
+    "voiceAssistant": "Voice Assistant",
+    "officeRoles": "Roles & disciplines",
+    "projectParties": "Project parties"
   },
   "roles": {
     "admin": "Administrator",
@@ -147,7 +152,6 @@
     "project_manager": "Project manager",
     "engineer": "Engineer",
     "consultant": "Consultant",
-    "worker": "Worker",
     "main_contractor": "Main contractor engineer",
     "external_consultant": "Consultant engineer",
     "internal_engineer": "Internal engineer"
@@ -1482,7 +1486,6 @@
     "update_failed": "Team update failed.",
     "confirm_remove_member": "Remove {{name}} from this project? The global account will be preserved.",
     "member_removed": "Member removed from this project; the global account was preserved.",
-    "engineer_consultant_or_worker": "Engineer, Consultant, or Worker",
     "all_disciplines": "All disciplines",
     "all_affiliations": "All affiliations",
     "no_organization": "No organization",
@@ -1494,7 +1497,18 @@
     "saving": "Saving…",
     "save_approval_workflow": "Save Approval Workflow",
     "unknown_status": "Unknown",
-    "use_account_discipline": "Use account discipline"
+    "use_account_discipline": "Use account discipline",
+    "engineer_or_consultant": "Engineer or consultant",
+    "project_role": "Role on this project",
+    "use_office_role": "Same as their office role",
+    "disciplines": "Disciplines on this project",
+    "disciplines_help": "Leave empty to use the disciplines on their profile.",
+    "site_responsibility": "Carries site responsibility",
+    "site_responsibility_help": "Any number of people can, of any discipline. Not available to external participants.",
+    "internal": "Office staff",
+    "external_party": "External · {{party}}",
+    "external_unassigned": "External",
+    "participation": "Participation"
   },
   "adminDash": {
     "administrator_dashboard": "Administrator Dashboard",
@@ -1776,10 +1790,8 @@
     "no_linked_technical_documents": "No linked technical documents.",
     "related_issues_blockers": "Related Issues & Blockers",
     "no_related_issues": "No related issues.",
-    "worker_field_evidence": "Worker Field Evidence",
     "verify_evidence": "Verify Evidence",
     "reject": "Reject",
-    "no_worker_evidence_has_been_submitted": "No Worker evidence has been submitted for this task.",
     "comments_notes": "Comments & Notes",
     "no_comments_yet": "No comments yet.",
     "review_history": "Review History",
@@ -1798,7 +1810,9 @@
     "severity": "Severity",
     "required_rejection_reason": "Required rejection reason",
     "task_discussion": "Task Discussion",
-    "add_a_task_comment": "Add a task comment…"
+    "add_a_task_comment": "Add a task comment…",
+    "field_evidence": "Field Evidence",
+    "no_field_evidence_has_been_submitted": "No field evidence has been submitted for this task."
   },
   "executiveOverviewPage": {
     "executive_overview": "Executive overview",
@@ -2258,7 +2272,6 @@
     "next": "Next",
     "task": "Task",
     "discipline": "Discipline",
-    "worker": "Worker",
     "uploader": "Uploader",
     "submitted": "Submitted",
     "status": "Status",
@@ -2296,7 +2309,8 @@
     "to": "To",
     "general": "General",
     "not_reviewed": "Not reviewed",
-    "unlabelled": "Unlabelled"
+    "unlabelled": "Unlabelled",
+    "submitted_by": "Submitted by"
   },
   "projectDetail": {
     "back_to_projects": "Back to projects",
@@ -2587,15 +2601,22 @@
     "phone_number": "Phone Number",
     "organization": "Organization",
     "company_office": "Company / office",
-    "role": "Role *",
     "status": "Status",
-    "engineer_affiliation": "Engineer Affiliation *",
-    "specialization": "Specialization *"
+    "office_role": "Office role",
+    "select_office_role": "Select an office role",
+    "external_organization": "External organization",
+    "internal_role_note": "Consulting-office staff. What they may do is set by this role's permissions.",
+    "external_role_note": "An external participant. They reach only the projects they are added to, and only what is shared with their party.",
+    "disciplines": "Disciplines",
+    "disciplines_help": "Specializations this person practises. Several is normal — an office may combine Mechanical and Electrical. Disciplines grant nothing; they narrow what a permission applies to.",
+    "no_disciplines_configured": "No disciplines configured yet."
   },
   "userPage": {
     "users": "Users",
     "manage_company_accounts_roles": "Manage company accounts, roles, specialization, and access status",
-    "search_name_email_phone": "Search name, email, phone..."
+    "search_name_email_phone": "Search name, email, phone...",
+    "all_roles": "All roles",
+    "all_disciplines": "All disciplines"
   },
   "userTable": {
     "edit": "Edit",
@@ -2606,18 +2627,15 @@
   "voiceReports": {
     "select_a_project_to_review_voice_reports": "Select a project to review voice reports.",
     "voice_assistant_review_inbox": "Voice Assistant Review Inbox",
-    "review_worker_reports_evidence_and": "Review worker reports, evidence, and proposed project actions.",
     "discipline": "Discipline",
     "all_disciplines": "All disciplines",
     "intent": "Intent",
     "all_intents": "All intents",
-    "worker_field_report": "Worker field report",
     "issue": "Issue",
     "progress_update": "Progress update",
     "loading_voice_reports": "Loading voice reports…",
     "voice_report": "Voice report",
     "needs_review": "Needs review",
-    "worker_report": "Worker report",
     "original_transcript": "Original transcript",
     "english_summary": "English summary",
     "load_secure_audio": "Load secure audio",
@@ -2632,12 +2650,15 @@
     "verify_evidence_only": "Verify evidence only",
     "verify_and_apply_suggested_update": "Verify and apply suggested update",
     "reject_request_resubmission": "Reject / request resubmission",
-    "no_pending_worker_voice_reports_match": "No pending Worker voice reports match these filters.",
-    "worker_task_or_code": "Worker, task, or code",
     "search_reports": "Search reports…",
     "official_progress": "Official progress %",
     "engineer_note": "Engineer note",
-    "required_reason_for_resubmission": "Required reason for resubmission"
+    "required_reason_for_resubmission": "Required reason for resubmission",
+    "review_field_reports_evidence_and": "Review field reports, evidence, and proposed project actions.",
+    "field_report": "Field report",
+    "field_report_label": "Field report",
+    "no_pending_voice_reports_match": "No pending voice reports match these filters.",
+    "person_task_or_code": "Person, task, or code"
   },
   "review": {
     "status": {
@@ -2920,5 +2941,63 @@
     "understanding": "Understanding…",
     "updateFailed": "The action could not be updated. Try again.",
     "whichTask": "Which task do you mean?"
+  },
+  "officeRoles": {
+    "title": "Roles and disciplines",
+    "subtitle": "What the people in this office are called, what each may do, and which specialisms the office works in. Changes take effect immediately.",
+    "tab_roles": "Roles",
+    "tab_disciplines": "Disciplines",
+    "rolesHeading": "Office roles",
+    "disciplinesHeading": "Disciplines",
+    "disciplinesHelp": "A discipline is a specialism. It grants nothing on its own — it decides which work, documents and findings somebody sees.",
+    "newRoleName": "New role name",
+    "newRolePlaceholder": "Resident Engineer",
+    "newDisciplineName": "New discipline",
+    "newDisciplinePlaceholder": "Geotechnical",
+    "createRole": "Create role",
+    "createDiscipline": "Add discipline",
+    "scope": "Where it applies",
+    "scopeBoth": "Office and projects",
+    "scopeOrg": "Office only",
+    "scopeProject": "Projects only",
+    "internalOnly": "Office staff only",
+    "external": "External",
+    "selectRole": "Choose a role to see what it may do.",
+    "noDescription": "No description.",
+    "heldBy": "Held by {{count}} people.",
+    "administratorLocked": "This is the office administrator role. It cannot be deleted, and it always keeps the permissions needed to administer.",
+    "refusedForExternal": "Cannot be given to people outside the office.",
+    "roleCreated": "Created {{name}}.",
+    "roleDeleted": "Deleted {{name}}.",
+    "disciplineCreated": "Added {{name}}.",
+    "permissionAdded": "Permission added.",
+    "permissionRemoved": "Permission removed.",
+    "coversModelClasses": "Covers model classes: {{list}}"
+  },
+  "projectParties": {
+    "title": "Project parties",
+    "subtitle": "The client, contractors and other organizations taking part in this project. They are recorded here, on the project, because that is where the office meets them.",
+    "addHeading": "Add a party",
+    "kind": "Kind",
+    "name": "Organization name",
+    "namePlaceholder": "Barakat Contracting",
+    "contact": "Contact person",
+    "worksUnder": "Works under",
+    "worksUnderNone": "The project directly",
+    "worksUnderName": "Works under {{name}}",
+    "add": "Add party",
+    "added": "Added {{name}}.",
+    "removed": "Removed {{name}}.",
+    "primary": "Main",
+    "empty": "No external parties recorded on this project yet.",
+    "peopleOnProject": "{{count}} people on this project",
+    "accessNote": "People from an external party see only what has been explicitly shared with that party. Adding a party gives nobody access to project documents.",
+    "kind_CLIENT": "Client",
+    "kind_MAIN_CONTRACTOR": "Main contractor",
+    "kind_SUBCONTRACTOR": "Subcontractor",
+    "kind_CONSULTANT": "External consultant",
+    "kind_SUPPLIER": "Supplier",
+    "kind_AUTHORITY": "Authority",
+    "kind_OTHER": "Other"
   }
 }

@@ -47,21 +47,24 @@ const titleCase = (value?: string) => value
   ? value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
   : "—";
 
+/* Who this person is here: the party they take part for, else their own
+   organization, else the office. Read from the project membership rather than
+   from the account, because the same engineer can be office staff on one
+   project and a contractor's representative on another — which the retired
+   `engineerAffiliation` on the account could not express. */
 const affiliationLabel = (member: ProjectMember) =>
-  member.user.organization
-  || (member.user.role === "worker"
-    ? "Field Worker"
-    : member.user.engineerAffiliation === "external_consultant"
-      ? "External Consultant"
-      : member.user.engineerAffiliation === "main_contractor"
-        ? "Main Contractor"
-        : "Internal Engineer");
+  member.partyName
+  || member.user.organization
+  || (member.isExternal ? "External participant" : "Office staff");
 
 const memberLabel = (member: ProjectMember) => {
-  const discipline = member.projectDiscipline || member.user.engineerProfile?.discipline;
+  const discipline = (member.disciplineCodes || []).length
+    ? (member.disciplineCodes || []).map(titleCase).join(", ")
+    : member.projectDiscipline || member.user.engineerProfile?.discipline;
+  const role = member.projectRoleName || titleCase(member.user.role);
   const responsibility = member.assignmentTitle ? ` · ${member.assignmentTitle}` : "";
   const site = member.isSiteEngineer ? " · Site Engineer" : "";
-  return `${member.user.fullName} — ${titleCase(member.user.role)} · ${titleCase(discipline)} · ${affiliationLabel(member)}${responsibility}${site}`;
+  return `${member.user.fullName} — ${role} · ${titleCase(discipline)} · ${affiliationLabel(member)}${responsibility}${site}`;
 };
 
 export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFormProps) => {
@@ -130,7 +133,7 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
 
   const eligibleMembers = useMemo(() => members.filter((member) => {
     if (!member.isActive || member.user.status !== "active") return false;
-    if (!["engineer", "consultant", "project_manager", "worker"].includes(member.user.role)) return false;
+    if (!["engineer", "consultant", "project_manager"].includes(member.user.role)) return false;
     if (member.user.engineerAffiliation === "external_consultant" || member.roleOnProject === "consultant") return false;
     const haystack = memberLabel(member).toLowerCase();
     return !assigneeSearch.trim() || haystack.includes(assigneeSearch.trim().toLowerCase());

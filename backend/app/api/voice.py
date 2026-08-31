@@ -17,7 +17,8 @@ from app.ai.exceptions import (
 from app.ai.construction_analysis_service import ConstructionVoiceAnalysisService
 from app.ai.transcription_service import validate_audio
 from app.core.config import settings
-from app.core.deps import get_current_user, is_worker, user_has_project_access
+from app.core.deps import get_current_user, user_has_project_access
+from app.services import rbac
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.enums import VoiceAnalysisStatus
@@ -67,16 +68,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/voice", tags=["Voice Commands"])
 
 
-def _provider_role(user: User) -> str:
-    return (
-        "worker"
-        if is_worker(user)
-        else "external_consultant"
-        if getattr(user, "engineer_affiliation", None) == "external_consultant"
-        else "contractor_engineer"
-        if user.role.value == "engineer"
-        else user.role.value
-    )
+def _provider_role(db, user: User) -> str:
+    """How the speaker is described to the model.
+
+    The office's own name for their role. The retired version collapsed
+    everybody into four coarse labels, which told the model less than the real
+    one does — "Site Engineer" and "BIM Engineer" were both "contractor_engineer".
+    """
+    return rbac.role_label_for(db, user)
 
 
 def _command(db: Session, command_id: UUID, user: User, *, owner_only: bool = False) -> VoiceAnalysis:
@@ -250,7 +249,7 @@ async def create_voice_command_from_transcript(
         result = await run_in_threadpool(
             ConstructionVoiceAnalysisService().analyze,
             transcript=transcript,
-            user_role=_provider_role(current_user),
+            user_role=_provider_role(db, current_user),
             authorized_tasks=context["tasks"],
             application_context=context,
         )
@@ -537,7 +536,7 @@ async def _interpret_clarified_request(
         result = await run_in_threadpool(
             ConstructionVoiceAnalysisService().analyze,
             transcript=combined,
-            user_role=_provider_role(user),
+            user_role=_provider_role(db, user),
             authorized_tasks=context["tasks"],
             application_context=context,
         )

@@ -10,7 +10,9 @@ from app.services.authorization import require
 from app.models.user import User
 from app.models.design_change import DesignChange, DesignChangeAffectedDiscipline
 from app.schemas.design_change import DesignChangeOut, DesignChangeCreate
-from app.core.deps import get_current_user, is_consultant_engineer, user_has_project_access, accessible_project_ids
+from app.core.deps import get_current_user, user_has_project_access, accessible_project_ids
+from app.services import rbac, work_scope
+from app.services.authorization import has_permission
 from app.models.enums import DesignChangeStatus, UserRole
 from app.models.attachment import Attachment
 from app.models.project import Project, ProjectMember
@@ -42,23 +44,39 @@ def list_design_changes(
     current_user: User = Depends(get_current_user)
 ):
     query = db.query(DesignChange)
-    if current_user.role != UserRole.ADMIN:
-        accessible_ids = accessible_project_ids(db, current_user) or []
+    # "Sees every project" is `platform.view_all_projects`, which
+    # `accessible_project_ids` already answers by returning None. Reading the
+    # role instead meant two things went wrong: an administrator whose
+    # permission had been explicitly revoked still bypassed the filter, and a
+    # non-administrator who had been *granted* it got `None or []` — an empty
+    # list, so they saw nothing at all.
+    accessible_ids = accessible_project_ids(db, current_user)
+    if accessible_ids is not None:
         query = query.filter(DesignChange.project_id.in_(accessible_ids))
-    if current_user.role == UserRole.OWNER:
+    # The client sees the changes that matter to them. Asked as "is this
+    # person on this project as the client" rather than "is their account
+    # an Owner", so an office with two client contacts, or a client on one
+    # project and nothing on another, is representable.
+    if rbac.is_client_participant(db, current_user, project_id):
         query = _important_for_owner(query)
     if project_id:
         query = query.filter(DesignChange.project_id == project_id)
     if status:
         query = query.filter(DesignChange.status == status)
     effective_discipline = discipline
-    # `User.role` is never literally CONSULTANT: `UserCreateByAdmin` persists
-    # that request as ENGINEER with `engineer_affiliation="external_consultant"`
-    # (see app.schemas.user, "persist the unified Engineer role"), so this must
-    # check `is_consultant_engineer`, not the retired role value, to actually
-    # auto-scope a Consultant Engineer's own list to their discipline.
-    if is_consultant_engineer(current_user) and current_user.engineer_profile:
-        effective_discipline = current_user.engineer_profile.discipline.value
+    # A reviewer whose view is narrowed sees the disciplines they cover. Was
+    # keyed on `is_consultant_engineer` plus the single-valued
+    # `EngineerProfile.discipline`; it now uses the configurable assignment,
+    # so somebody covering Mechanical *and* Electrical sees both.
+    if project_id:
+        scoped = work_scope.scoped_discipline_codes(db, current_user, project_id)
+        if scoped and not effective_discipline:
+            affected_ids = db.query(DesignChangeAffectedDiscipline.design_change_id).filter(
+                DesignChangeAffectedDiscipline.discipline.in_(scoped)
+            )
+            query = query.filter(
+                DesignChange.source_discipline.in_(scoped) | DesignChange.id.in_(affected_ids)
+            )
     if effective_discipline:
         affected_ids = db.query(DesignChangeAffectedDiscipline.design_change_id).filter(
             DesignChangeAffectedDiscipline.discipline == effective_discipline
@@ -90,7 +108,7 @@ def get_design_changes_by_project(
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     query = db.query(DesignChange).filter(DesignChange.project_id == project_id)
-    if current_user.role == UserRole.OWNER:
+    if rbac.is_client_participant(db, current_user, project_id):
         query = _important_for_owner(query)
     return query.all()
 
@@ -105,13 +123,14 @@ def get_design_change_by_id(
         raise HTTPException(status_code=404, detail="Design change not found")
     if not user_has_project_access(db, current_user, change.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this design change")
-    if current_user.role == UserRole.OWNER and not _important_for_owner(
+    if rbac.is_client_participant(db, current_user, change.project_id) and not _important_for_owner(
         db.query(DesignChange).filter(DesignChange.id == change.id)
     ).first():
         raise HTTPException(status_code=403, detail="This design change is not classified as owner-relevant")
-    if is_consultant_engineer(current_user) and current_user.engineer_profile:
+    scoped = work_scope.scoped_discipline_codes(db, current_user, change.project_id)
+    if scoped is not None:
         disciplines = {change.source_discipline, *(item.discipline for item in change.affected_disciplines)}
-        if current_user.engineer_profile.discipline.value not in disciplines:
+        if not (scoped & {value for value in disciplines if value}):
             raise HTTPException(status_code=403, detail="This design change is outside your discipline")
     change.attachment_count = db.query(Attachment).filter(Attachment.entity_type == "DESIGN_CHANGE", Attachment.entity_id == change.id).count()
     return change
@@ -239,12 +258,15 @@ def approve_design_change(
     # `User.role` is ENGINEER, not the retired UserRole.CONSULTANT value — so
     # this hard gate is what actually keeps a non-consultant (e.g. Main
     # Contractor) Engineer from approving, matching `reject_design_change`.
-    if not is_consultant_engineer(current_user):
-        raise HTTPException(status_code=403, detail="Only an assigned consultant can approve this design change")
-    if current_user.engineer_profile:
-        relevant = {change.source_discipline, *(item.discipline for item in change.affected_disciplines)}
-        if current_user.engineer_profile.discipline.value not in relevant:
-            raise HTTPException(status_code=403, detail="This design change is outside your discipline")
+    # Approving is `design_change.approve`, which an office grants to whichever
+    # role reviews design work. The discipline boundary is unchanged, and now
+    # reads the configurable assignment rather than one enum value.
+    if not has_permission(db, current_user, "design_change.approve", change.project_id):
+        raise HTTPException(status_code=403, detail="You are not authorized to approve design changes")
+    relevant = {change.source_discipline, *(item.discipline for item in change.affected_disciplines)}
+    scoped = work_scope.scoped_discipline_codes(db, current_user, change.project_id)
+    if scoped is not None and not (scoped & {value for value in relevant if value}):
+        raise HTTPException(status_code=403, detail="This design change is outside your discipline")
     change.status = DesignChangeStatus.APPROVED
     change.approved_by_id = current_user.id
     project = db.get(Project, change.project_id)
@@ -274,7 +296,9 @@ def reject_design_change(
     change = db.get(DesignChange, change_id)
     if not change:
         raise HTTPException(status_code=404, detail="Design change not found")
-    if not is_consultant_engineer(current_user) or not user_has_project_access(db, current_user, change.project_id):
+    if not has_permission(
+        db, current_user, "design_change.approve", change.project_id
+    ) or not user_has_project_access(db, current_user, change.project_id):
         raise HTTPException(status_code=403, detail="Only an assigned consultant can reject this design change")
     if current_user.engineer_profile:
         relevant = {change.source_discipline, *(item.discipline for item in change.affected_disciplines)}

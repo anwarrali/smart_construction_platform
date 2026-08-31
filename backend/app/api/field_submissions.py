@@ -9,7 +9,7 @@ from typing import List
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, is_worker, user_has_project_access
+from app.core.deps import get_current_user, user_has_project_access
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.enums import (
@@ -37,13 +37,14 @@ from app.schemas.field_submission import (
 )
 from app.services.audit_service import record_audit
 from app.services.field_submission_authorization import (
-    authorized_engineer_ids,
-    can_engineer_review_field_submission,
+    authorized_reviewer_ids,
+    can_review_field_submission,
+    can_submit_field_evidence,
     can_view_field_submission,
-    can_worker_submit_evidence,
+    verification_required,
 )
 from app.services.file_storage import delete_upload, save_upload
-from app.services.field_submission_policy import AUDIT_ACTIONS
+from app.services.field_submission_policy import AUDIT_ACTIONS, initial_status
 from app.services.photo_archive_policy import category_belongs_to_project
 from app.services.task_progress_service import update_task_progress
 
@@ -138,7 +139,7 @@ def _photo_categories(
 async def _add_photo(
     db: Session,
     submission: FieldSubmission,
-    worker: User,
+    author: User,
     file: UploadFile,
     direction: EvidencePhotoDirection | None,
     categories: list[PhotoCategory] | None = None,
@@ -150,7 +151,7 @@ async def _add_photo(
         file_url=file_url,
         mime_type=file.content_type or "application/octet-stream",
         file_size_bytes=file_size,
-        uploaded_by_id=worker.id,
+        uploaded_by_id=author.id,
         project_id=submission.project_id,
         entity_type="FIELD_SUBMISSION",
         entity_id=submission.id,
@@ -168,7 +169,7 @@ async def _add_photo(
         db.add(PhotoCategoryAssignment(
             field_submission_photo_id=photo.id,
             category_id=category.id,
-            assigned_by_id=worker.id,
+            assigned_by_id=author.id,
             source="HUMAN",
         ))
     return photo, file_url
@@ -195,7 +196,7 @@ async def create_field_submission(
     task = db.get(Task, task_uuid)
     if not task or task.project_id != project_uuid:
         raise HTTPException(status_code=404, detail="Assigned task not found in this project")
-    if not can_worker_submit_evidence(db, current_user, task):
+    if not can_submit_field_evidence(db, current_user, task):
         raise HTTPException(status_code=403, detail="You cannot submit field evidence for this task")
     uploads = files or []
     note = (description or "").strip() or None
@@ -210,7 +211,7 @@ async def create_field_submission(
         previous = db.get(FieldSubmission, resubmission_uuid)
         if (
             not previous
-            or previous.worker_id != current_user.id
+            or previous.submitted_by_id != current_user.id
             or previous.task_id != task.id
             or previous.status != FieldSubmissionStatus.REJECTED
         ):
@@ -219,10 +220,16 @@ async def create_field_submission(
     submission = FieldSubmission(
         project_id=project_uuid,
         task_id=task_uuid,
-        worker_id=current_user.id,
+        submitted_by_id=current_user.id,
         description=note,
         voice_metadata=voice_metadata,
-        status=FieldSubmissionStatus.SUBMITTED,
+        # A project can decide that the person filing the evidence is the
+        # qualified person, in which case there is no second step to wait for.
+        # Verification stays on by default, which is what every project the
+        # migration touched already had.
+        status=FieldSubmissionStatus(
+            initial_status(verification_required(db, project_uuid))
+        ),
         resubmission_of_id=previous.id if previous else None,
     )
     db.add(submission)
@@ -236,13 +243,13 @@ async def create_field_submission(
                 db, submission, current_user, file, direction, categories
             )
             stored_urls.append(file_url)
-        engineer_ids = authorized_engineer_ids(db, task)
+        reviewer_ids = authorized_reviewer_ids(db, task)
         project = db.get(Project, project_uuid)
-        if not engineer_ids and project and project.project_manager_id:
-            engineer_ids.add(project.project_manager_id)
-        for engineer_id in engineer_ids:
+        if not reviewer_ids and project and project.project_manager_id:
+            reviewer_ids.add(project.project_manager_id)
+        for reviewer_id in reviewer_ids:
             _notify(
-                db, engineer_id, submission, "Worker evidence submitted",
+                db, reviewer_id, submission, "Field evidence submitted",
                 f"{current_user.full_name} submitted field evidence for {task.task_code}.",
             )
         record_audit(
@@ -272,10 +279,9 @@ async def add_field_submission_photo(
 ):
     submission = _submission_or_404(db, submission_id)
     if (
-        not is_worker(current_user)
-        or submission.worker_id != current_user.id
+        submission.submitted_by_id != current_user.id
         or submission.status != FieldSubmissionStatus.SUBMITTED
-        or not can_worker_submit_evidence(db, current_user, submission.task)
+        or not can_submit_field_evidence(db, current_user, submission.task)
     ):
         raise HTTPException(status_code=403, detail="You cannot add photos to this submission")
     file_url = None
@@ -303,9 +309,10 @@ def list_my_field_submissions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not is_worker(current_user):
-        raise HTTPException(status_code=403, detail="Worker access required")
-    query = db.query(FieldSubmission).filter(FieldSubmission.worker_id == current_user.id)
+    # Anybody's own evidence. There is nothing to gate here beyond identity:
+    # the filter is `submitted_by_id == you`, so the endpoint cannot return
+    # somebody else's work regardless of role.
+    query = db.query(FieldSubmission).filter(FieldSubmission.submitted_by_id == current_user.id)
     if project_id:
         query = query.filter(FieldSubmission.project_id == project_id)
     if task_id:
@@ -327,7 +334,7 @@ def list_pending_field_submissions(
     ).order_by(FieldSubmission.created_at.asc()).all()
     return [
         item for item in values
-        if can_engineer_review_field_submission(db, current_user, item)
+        if can_review_field_submission(db, current_user, item)
     ]
 
 
@@ -346,21 +353,31 @@ def list_task_field_submissions(
     return [item for item in values if can_view_field_submission(db, current_user, item)]
 
 
-@router.get("/worker-dashboard")
-def worker_dashboard(
+# The path the shipped mobile client calls. Kept as an alias so renaming the
+# endpoint does not 404 an app already on somebody's phone; the mobile
+# build moves to `/my-field-work` and this goes in the contract step.
+@router.get("/worker-dashboard", deprecated=True)
+@router.get("/my-field-work")
+def my_field_work(
     project_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not is_worker(current_user):
-        raise HTTPException(status_code=403, detail="Worker access required")
+    """This person's own field activity on a project.
+
+    Was `/worker-dashboard`, and served the removed worker role. The figures it
+    returns — assigned tasks, evidence filed, confirmed, rejected — are just as
+    useful to a Site Engineer, so the endpoint was renamed rather than deleted.
+    """
+    if not user_has_project_access(db, current_user, project_id):
+        raise HTTPException(status_code=403, detail="You do not have access to this project")
     tasks = db.query(Task).filter(
         Task.project_id == project_id,
         Task.assignees.any(User.id == current_user.id),
     ).all()
     submissions = db.query(FieldSubmission).filter(
         FieldSubmission.project_id == project_id,
-        FieldSubmission.worker_id == current_user.id,
+        FieldSubmission.submitted_by_id == current_user.id,
     ).all()
     return {
         "assignedTasks": len(tasks),
@@ -401,7 +418,7 @@ def verify_field_submission(
     ).with_for_update().first()
     if not submission:
         raise HTTPException(status_code=404, detail="Field submission not found")
-    if not can_engineer_review_field_submission(db, current_user, submission):
+    if not can_review_field_submission(db, current_user, submission):
         raise HTTPException(status_code=403, detail="You cannot verify this field submission")
     if submission.status != FieldSubmissionStatus.SUBMITTED:
         raise HTTPException(status_code=409, detail="This field submission has already been reviewed")
@@ -410,7 +427,7 @@ def verify_field_submission(
     submission.reviewed_by_id = current_user.id
     submission.review_comment = (data.comment or "").strip() or None
     _notify(
-        db, submission.worker_id, submission, "Field evidence verified",
+        db, submission.submitted_by_id, submission, "Field evidence verified",
         f"Your evidence for {submission.task.task_code} was verified.",
     )
     record_audit(
@@ -435,7 +452,7 @@ def verify_and_apply_field_submission(
     ).with_for_update().first()
     if not submission:
         raise HTTPException(status_code=404, detail="Field submission not found")
-    if not can_engineer_review_field_submission(db, current_user, submission):
+    if not can_review_field_submission(db, current_user, submission):
         raise HTTPException(status_code=403, detail="You cannot review this field submission")
     if submission.status != FieldSubmissionStatus.SUBMITTED:
         raise HTTPException(status_code=409, detail="This field submission has already been reviewed")
@@ -461,7 +478,7 @@ def verify_and_apply_field_submission(
         task_id=task.id,
         progress_percentage=data.progress_percentage,
         note=data.comment,
-        source="worker_voice_evidence_review",
+        source="field_voice_evidence_review",
         audit_metadata={"field_submission_id": str(submission.id)},
         commit=False,
     )
@@ -473,7 +490,7 @@ def verify_and_apply_field_submission(
     )
     _notify(
         db,
-        submission.worker_id,
+        submission.submitted_by_id,
         submission,
         "Field evidence verified",
         f"Your evidence for {submission.task.task_code} was verified by the Engineer.",
@@ -508,7 +525,7 @@ def reject_field_submission(
     ).with_for_update().first()
     if not submission:
         raise HTTPException(status_code=404, detail="Field submission not found")
-    if not can_engineer_review_field_submission(db, current_user, submission):
+    if not can_review_field_submission(db, current_user, submission):
         raise HTTPException(status_code=403, detail="You cannot reject this field submission")
     if submission.status != FieldSubmissionStatus.SUBMITTED:
         raise HTTPException(status_code=409, detail="This field submission has already been reviewed")
@@ -518,7 +535,7 @@ def reject_field_submission(
     submission.reviewed_by_id = current_user.id
     submission.review_comment = reason
     _notify(
-        db, submission.worker_id, submission, "Field evidence needs correction",
+        db, submission.submitted_by_id, submission, "Field evidence needs correction",
         f"Evidence for {submission.task.task_code} was rejected: {reason}",
     )
     record_audit(

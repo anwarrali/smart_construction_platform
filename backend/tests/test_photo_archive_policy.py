@@ -3,11 +3,9 @@ from datetime import date
 
 from app.services.photo_archive_policy import (
     SYSTEM_PHOTO_CATEGORIES,
-    archive_scope,
     category_belongs_to_project,
     category_code,
     category_management_allowed,
-    human_tagging_allowed,
     matches_archive_filters,
     paginate_records,
 )
@@ -21,8 +19,8 @@ class PhotoArchivePolicyTests(unittest.TestCase):
             "task_code": "TASK-12",
             "task_title": "Foundation concrete",
             "discipline": "structural",
-            "uploader_id": "worker-a",
-            "worker_id": "worker-a",
+            "uploader_id": "site-engineer-a",
+            "submitted_by_id": "site-engineer-a",
             "engineer_id": "engineer-a",
             "status": "VERIFIED",
             "direction": "FRONT",
@@ -46,7 +44,7 @@ class PhotoArchivePolicyTests(unittest.TestCase):
 
     def test_02c_unauthorized_user_cannot_create_category(self):
         self.assertFalse(category_management_allowed(
-            "worker", is_assigned_pm=False
+            "engineer", is_assigned_pm=False
         ))
 
     def test_03_custom_category_is_isolated_to_project(self):
@@ -56,30 +54,21 @@ class PhotoArchivePolicyTests(unittest.TestCase):
     def test_04_system_category_is_global(self):
         self.assertTrue(category_belongs_to_project(None, "project-b", True))
 
-    def test_05_worker_archive_scope_is_own_evidence(self):
-        self.assertEqual(archive_scope("worker"), "OWN")
+    def test_05_archive_scope_and_tagging_are_not_decided_here(self):
+        """The role-name copies of both rules are gone, not relocated.
 
-    def test_05b_worker_can_tag_only_their_pending_submission(self):
-        self.assertTrue(human_tagging_allowed(
-            "worker", owns_submission=True, submission_pending=True,
-            assigned_contractor_engineer=False,
-        ))
-        self.assertFalse(human_tagging_allowed(
-            "worker", owns_submission=False, submission_pending=True,
-            assigned_contractor_engineer=False,
-        ))
+        `archive_scope` and `human_tagging_allowed` answered "what may this
+        role see / tag" from a role name and had no production caller. The
+        shipped gates are `photo_archive._scope_archive` and
+        `field_submission_authorization.can_categorize_field_photo`, both of
+        which ask `has_permission`; they are covered against a real database in
+        test_photo_archive.py. Asserting their absence here is what stops the
+        role-name copy coming back.
+        """
+        from app.services import photo_archive_policy
 
-    def test_06_consultant_archive_scope_is_verified_only(self):
-        self.assertEqual(archive_scope("engineer", is_consultant=True), "VERIFIED_ONLY")
-
-    def test_07_engineer_scope_is_assigned_tasks(self):
-        self.assertEqual(archive_scope("engineer"), "ASSIGNED_TASKS")
-
-    def test_07b_assigned_engineer_can_correct_categories(self):
-        self.assertTrue(human_tagging_allowed(
-            "engineer", owns_submission=False, submission_pending=False,
-            assigned_contractor_engineer=True,
-        ))
+        self.assertFalse(hasattr(photo_archive_policy, "archive_scope"))
+        self.assertFalse(hasattr(photo_archive_policy, "human_tagging_allowed"))
 
     def test_08_one_photo_supports_multiple_categories(self):
         self.assertTrue(matches_archive_filters(
@@ -119,7 +108,7 @@ class PhotoArchivePolicyTests(unittest.TestCase):
 
     def test_13_uploader_filtering(self):
         self.assertTrue(matches_archive_filters(
-            self.record, project_id="project-a", uploader_id="worker-a"
+            self.record, project_id="project-a", uploader_id="site-engineer-a"
         ))
 
     def test_14_submission_status_filtering(self):

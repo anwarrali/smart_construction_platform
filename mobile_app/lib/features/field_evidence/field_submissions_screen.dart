@@ -9,8 +9,8 @@ import '../../core/widgets/async_views.dart';
 import '../../models/field_submission.dart';
 import '../projects/project_context_view_model.dart';
 
-class WorkerSubmissionsScreen extends ConsumerWidget {
-  const WorkerSubmissionsScreen({super.key, this.taskId, this.embedded = false});
+class FieldSubmissionsScreen extends ConsumerWidget {
+  const FieldSubmissionsScreen({super.key, this.taskId, this.embedded = false});
   final String? taskId;
   final bool embedded;
 

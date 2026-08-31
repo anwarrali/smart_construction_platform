@@ -48,11 +48,10 @@ const EngineerEntry = () => {
  * Engineers → EngineerDashboard
  * Owner → redirect to /owner-dashboard
  * Admin → redirect to /admin
- * Worker → redirect to /my-actions (no dedicated Worker dashboard exists yet;
- * this is the nearest already-built, role-agnostic "what needs my attention"
- * page — not the `default` fallback, which is the Admin/PM project-management
- * page (`/projects`, "Manage project setup, owner, project manager,
- * consultants, and members") and was landing every Worker there instead.
+ *
+ * The Worker branch is gone with the role. It used to land on /my-actions,
+ * which stays reachable to everybody — it is simply no longer anybody's
+ * default landing page.
  */
 export const DashboardSelectorPage = () => {
   const { role } = useRole();
@@ -70,8 +69,6 @@ export const DashboardSelectorPage = () => {
       return <ConsultantDashboard />;
     case "engineer":
       return <EngineerEntry />;
-    case "worker":
-      return <Navigate to="/my-actions" replace />;
     default:
       return <Navigate to="/projects" replace />;
   }

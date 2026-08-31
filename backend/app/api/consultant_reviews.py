@@ -14,7 +14,8 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.tasks import _can_consult_task, _normalized_discipline
-from app.core.deps import get_current_user, is_consultant_engineer
+from app.core.deps import get_current_user
+from app.services.authorization import has_permission
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.audit_log import AuditLog
@@ -33,15 +34,15 @@ HISTORY_REVIEW_STATUSES = {"approved", "rejected"}
 
 
 def _membership_or_403(db: Session, user: User, project_id: uuid.UUID) -> tuple[Project, ProjectMember]:
-    if not is_consultant_engineer(user):
-        raise HTTPException(status_code=403, detail="An active Consultant Engineer account is required")
+    # The review queue belongs to whoever reviews work on this project.
+    if not has_permission(db, user, "task.review", project_id):
+        raise HTTPException(status_code=403, detail="You are not a reviewer on this project")
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     membership = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.user_id == user.id,
-        ProjectMember.role_on_project == UserRole.CONSULTANT,
         ProjectMember.is_active == True,
     ).first()
     if not membership:

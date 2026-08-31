@@ -4,11 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/dependency_injection.dart';
 import '../../core/auth/session_manager.dart';
 import '../../core/constants/api_endpoints.dart';
-import '../../core/constants/role_constants.dart';
 import '../../core/widgets/async_views.dart';
 import '../projects/project_context_view_model.dart';
 import '../../core/l10n/l10n_formats.dart';
 import '../../core/l10n/l10n_labels.dart';
+import '../../core/auth/capabilities.dart';
 
 class CollaborationScreen extends ConsumerStatefulWidget {
   const CollaborationScreen({super.key});
@@ -57,8 +57,10 @@ class _CollaborationScreenState extends ConsumerState<CollaborationScreen> with 
         ),
       );
     }
-    final canRequest = user.isOwner || user.isProjectManager || user.role == RoleConstants.admin;
-    final canVisit = user.isSiteEngineer || user.isProjectManager || user.role == RoleConstants.admin;
+    // The two codes the endpoints behind these buttons check.
+    final capabilities = capabilitiesOf(ref, projectId: project.id);
+    final canRequest = capabilities.has('owner_request.create');
+    final canVisit = capabilities.has('site_visit.schedule');
     return Scaffold(
       appBar: AppBar(
         title: Text(context.l10n.collabMyActions),

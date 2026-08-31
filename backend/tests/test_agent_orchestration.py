@@ -53,15 +53,15 @@ def world(db):
 
     manager = user("OrchPm", UserRole.PROJECT_MANAGER)
     outsider = user("OrchOutsider", UserRole.PROJECT_MANAGER)
-    worker = user("OrchWorker", UserRole.WORKER)
+    site_engineer = user("OrchSiteEngineer", UserRole.ENGINEER)
     owner = user("OrchOwner", UserRole.OWNER)
-    db.add_all([manager, outsider, worker, owner])
+    db.add_all([manager, outsider, site_engineer, owner])
     db.flush()
     project = Project(name=f"Orch {suffix}", status=ProjectStatus.ACTIVE,
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    for person, role in ((manager, UserRole.PROJECT_MANAGER), (worker, UserRole.WORKER)):
+    for person, role in ((manager, UserRole.PROJECT_MANAGER), (site_engineer, UserRole.ENGINEER)):
         db.add(ProjectMember(project_id=project.id, user_id=person.id,
                              role_on_project=role, is_active=True))
     db.add(Task(project_id=project.id, task_code="T-001", name="Blocked work",
@@ -69,9 +69,9 @@ def world(db):
                 created_by_id=manager.id))
     db.commit()
     try:
-        yield {"project": project, "manager": manager, "outsider": outsider, "worker": worker}
+        yield {"project": project, "manager": manager, "outsider": outsider, "site_engineer": site_engineer}
     finally:
-        _purge(db, project.id, [manager.id, outsider.id, worker.id, owner.id])
+        _purge(db, project.id, [manager.id, outsider.id, site_engineer.id, owner.id])
 
 
 def _purge(db, project_id, user_ids):
@@ -123,7 +123,7 @@ def test_an_outsider_gets_an_empty_pass_rather_than_an_error(db, world):
 
 
 def test_agents_the_caller_may_not_run_are_skipped_with_a_reason(db, world):
-    report = run(db, world, actor="worker", persist=False)
+    report = run(db, world, actor="site_engineer", persist=False)
     for skip in report.skipped:
         assert skip["reason"]
         assert skip["skipCode"] in {"FORBIDDEN", "COOLDOWN", "NOT_SUBSCRIBED", "UNKNOWN_AGENT"}

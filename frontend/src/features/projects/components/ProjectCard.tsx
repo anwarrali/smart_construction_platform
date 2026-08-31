@@ -33,8 +33,7 @@ export const ProjectCard = ({ project }: ProjectCardProps) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const vocabulary = useVocabulary();
-  const { role, isConsultantEngineer } = useRole();
-  const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
+  const { hasCapability } = useRole();
   const daysRemaining = getDaysRemaining(project.plannedEndDate || "");
   const state = STATE[project.status] || STATE.planning;
   const progress = Math.max(0, Math.min(100, Number(project.completionPercentage) || 0));
@@ -45,7 +44,7 @@ export const ProjectCard = ({ project }: ProjectCardProps) => {
   return (
     <button
       type="button"
-      onClick={() => navigate(projectModulePath(project.id, "dashboard", role, affiliation))}
+      onClick={() => navigate(projectModulePath(project.id, "dashboard", hasCapability))}
       className="group panel relative w-full overflow-hidden p-0 text-start transition-[box-shadow,transform] duration-200 hover:-translate-y-px hover:shadow-lift"
     >
       {/* Status carried by a rule on the leading edge. */}

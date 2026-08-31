@@ -89,8 +89,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
   const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const { user } = useAuth();
-  const { role, isProjectManager, isAdmin, isConsultantEngineer } = useRole();
-  const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
+  const { isProjectManager, isAdmin, hasCapability } = useRole();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [projects, setProjects] = useState<Project[]>(workspace.assignedProjects);
@@ -186,8 +185,12 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
     return items;
   }, [actions, actionFilter]);
 
-  const canSchedule = role === "engineer" || isProjectManager || isAdmin;
-  const canCreateRequest = role === "owner" || isProjectManager || isAdmin;
+  /* Capability, not job title. Scheduling a site visit and raising a client
+     request each have a catalogue code the endpoint already checks; asking
+     for the code means an office that grants it to a role it invented gets
+     the button too. */
+  const canSchedule = hasCapability("site_visit.schedule") || isProjectManager || isAdmin;
+  const canCreateRequest = hasCapability("owner_request.create") || isProjectManager || isAdmin;
   const canReview = (item: OwnerRequest) => isProjectManager || isAdmin || item.assignedToId === user?.id;
 
   const run = async (key: string, operation: () => Promise<unknown>, message: string) => {
@@ -292,8 +295,8 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
         {Object.entries(actions?.counts || {}).map(([key, value]) => <Card key={key} className="p-4"><p className="text-xs text-muted-foreground">{t("collaboration.counts." + key, { defaultValue: humanize(key) })}</p><p className="mt-2 text-3xl font-bold">{value}</p></Card>)}
       </div>
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="p-5"><div className="flex items-center gap-2"><MessageSquareWarning size={18} /><h2 className="font-semibold">{t("collaboration.needsMyResponse")}</h2></div><div className="mt-4 space-y-3">{actions?.ownerRequests.map((item) => <div key={item.id} className="rounded-lg border p-3"><div className="flex items-start justify-between gap-3"><div><Link to={projectEntityPath(item.projectId, "OWNER_REQUEST", item.id, role, affiliation)} className="font-medium hover:text-primary hover:underline">{item.title}</Link><p className="text-xs text-muted-foreground">{item.discipline ? humanize(item.discipline) : t("ownerRequest.category." + item.category, { defaultValue: humanize(item.category) })} · {t("task.priority." + item.priority.toLowerCase(), { defaultValue: humanize(item.priority) })}</p></div><Badge variant={statusTone(item.status) as any}>{t("ownerRequest.status." + item.status, { defaultValue: humanize(item.status) })}</Badge></div>{item.assignedToId === user?.id && !item.acknowledgedAt && <Button className="mt-3" size="sm" variant="outline" disabled={busy === item.id} onClick={() => patchRequest(item, { status: item.status === "ASSIGNED" ? "UNDER_REVIEW" : undefined }, t("collaboration.acknowledge"))}>{t("collaboration.acknowledgeAction")}</Button>}</div>)}{!actions?.ownerRequests.length && <div className="empty-state"><p className="empty-state-title">{t("empty.noActionsNeeded")}</p><p className="text-sm text-muted-foreground">{t("empty.noActionsNeededHint")}</p></div>}</div></Card>
-        <Card className="p-5"><div className="flex items-center gap-2"><CalendarDays size={18} /><h2 className="font-semibold">{t("collaboration.upcomingSiteVisits")}</h2></div><div className="mt-4 space-y-3">{actions?.upcomingSiteVisits.map((visit) => <Link key={visit.id} to={projectEntityPath(visit.projectId, "SITE_VISIT", visit.id, role, affiliation)} className="block rounded-lg border p-3 transition-colors hover:bg-muted/40"><p className="font-medium">{visit.title}</p><p className="text-sm text-muted-foreground">{dateTime(visit.scheduledStart)} · {t("siteVisit.type." + visit.visitType, { defaultValue: humanize(visit.visitType) })}</p></Link>)}{!actions?.upcomingSiteVisits.length && <p className="text-sm text-muted-foreground">{t("empty.noVisitsHint")}</p>}</div></Card>
+        <Card className="p-5"><div className="flex items-center gap-2"><MessageSquareWarning size={18} /><h2 className="font-semibold">{t("collaboration.needsMyResponse")}</h2></div><div className="mt-4 space-y-3">{actions?.ownerRequests.map((item) => <div key={item.id} className="rounded-lg border p-3"><div className="flex items-start justify-between gap-3"><div><Link to={projectEntityPath(item.projectId, "OWNER_REQUEST", item.id, hasCapability)} className="font-medium hover:text-primary hover:underline">{item.title}</Link><p className="text-xs text-muted-foreground">{item.discipline ? humanize(item.discipline) : t("ownerRequest.category." + item.category, { defaultValue: humanize(item.category) })} · {t("task.priority." + item.priority.toLowerCase(), { defaultValue: humanize(item.priority) })}</p></div><Badge variant={statusTone(item.status) as any}>{t("ownerRequest.status." + item.status, { defaultValue: humanize(item.status) })}</Badge></div>{item.assignedToId === user?.id && !item.acknowledgedAt && <Button className="mt-3" size="sm" variant="outline" disabled={busy === item.id} onClick={() => patchRequest(item, { status: item.status === "ASSIGNED" ? "UNDER_REVIEW" : undefined }, t("collaboration.acknowledge"))}>{t("collaboration.acknowledgeAction")}</Button>}</div>)}{!actions?.ownerRequests.length && <div className="empty-state"><p className="empty-state-title">{t("empty.noActionsNeeded")}</p><p className="text-sm text-muted-foreground">{t("empty.noActionsNeededHint")}</p></div>}</div></Card>
+        <Card className="p-5"><div className="flex items-center gap-2"><CalendarDays size={18} /><h2 className="font-semibold">{t("collaboration.upcomingSiteVisits")}</h2></div><div className="mt-4 space-y-3">{actions?.upcomingSiteVisits.map((visit) => <Link key={visit.id} to={projectEntityPath(visit.projectId, "SITE_VISIT", visit.id, hasCapability)} className="block rounded-lg border p-3 transition-colors hover:bg-muted/40"><p className="font-medium">{visit.title}</p><p className="text-sm text-muted-foreground">{dateTime(visit.scheduledStart)} · {t("siteVisit.type." + visit.visitType, { defaultValue: humanize(visit.visitType) })}</p></Link>)}{!actions?.upcomingSiteVisits.length && <p className="text-sm text-muted-foreground">{t("empty.noVisitsHint")}</p>}</div></Card>
       </div>
       <Card className="p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -310,13 +313,13 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
             <div className="flex gap-2">
               {!["ACKNOWLEDGED", "RESPONDED", "RESOLVED"].includes(item.status) && <Button size="sm" variant="outline" disabled={busy === item.messageId} onClick={() => run(item.messageId, () => axios.post(`/messages/${item.messageId}/accountability`, { action: "ACKNOWLEDGE" }), "Acknowledged.")}>{t("collaboration.acknowledge")}</Button>}
               {item.status !== "RESOLVED" && <Button size="sm" variant="outline" disabled={busy === item.messageId} onClick={() => run(item.messageId, () => axios.post(`/messages/${item.messageId}/accountability`, { action: "RESOLVED" }), "Marked resolved.")}>{t("collaboration.markResolved")}</Button>}
-              {projectId && <Link to={projectModulePath(projectId, "messages", role, affiliation)} className="inline-flex items-center gap-1 text-sm font-medium text-primary"><ExternalLink size={14} /> {t("common.openRecord")}</Link>}
+              {projectId && <Link to={projectModulePath(projectId, "messages", hasCapability)} className="inline-flex items-center gap-1 text-sm font-medium text-primary"><ExternalLink size={14} /> {t("common.openRecord")}</Link>}
             </div>
           </div>)}
           {!filteredAccountability.length && <p className="text-sm text-muted-foreground">{t("empty.noResults")}</p>}
         </div>
       </Card>
-      <Card className="border-primary/20 bg-primary/5 p-5"><div className="flex gap-3"><Sparkles className="text-primary" /><div><h2 className="font-semibold">{t("collaboration.counts.aiAlertsRequiringReview")}: {actions?.counts.aiAlertsRequiringReview || 0}</h2><p className="text-sm text-muted-foreground">{t("ai.reviewRequiredHint")}</p>{projectId && <Link className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary" to={projectModulePath(projectId, "ai-intelligence", role, affiliation)}><ExternalLink size={14} /> {t("ai.reviewQueue")}</Link>}</div></div></Card>
+      <Card className="border-primary/20 bg-primary/5 p-5"><div className="flex gap-3"><Sparkles className="text-primary" /><div><h2 className="font-semibold">{t("collaboration.counts.aiAlertsRequiringReview")}: {actions?.counts.aiAlertsRequiringReview || 0}</h2><p className="text-sm text-muted-foreground">{t("ai.reviewRequiredHint")}</p>{projectId && <Link className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary" to={projectModulePath(projectId, "ai-intelligence", hasCapability)}><ExternalLink size={14} /> {t("ai.reviewQueue")}</Link>}</div></div></Card>
     </>}
 
     {!loading && tab === "requests" && <>
@@ -331,7 +334,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
             <p className="mt-3 text-xs text-muted-foreground">{t("ownerRequest.submittedBy", { name: memberName(focusedRequest.createdById) })} · {t("ownerRequest.assignedTo", { name: memberName(focusedRequest.assignedToId) })}</p>
             {focusedRequest.clarificationText && <div className="mt-3 rounded-lg border border-state-review/30 bg-wash-review/50 p-3 text-sm"><strong>{t("ownerRequest.clarification")}:</strong> {focusedRequest.clarificationText}</div>}
             {focusedRequest.responseText && <div className="mt-3 rounded-lg bg-muted p-3 text-sm"><strong>{t("ownerRequest.engineeringResponse")}:</strong> {focusedRequest.responseText}</div>}
-            {focusedRequest.convertedDesignChangeId && <Link className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary" to={projectEntityPath(focusedRequest.projectId, "DESIGN_CHANGE", focusedRequest.convertedDesignChangeId, role, affiliation)}><ExternalLink size={14} /> {t("ownerRequest.openLinkedChange")}</Link>}
+            {focusedRequest.convertedDesignChangeId && <Link className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary" to={projectEntityPath(focusedRequest.projectId, "DESIGN_CHANGE", focusedRequest.convertedDesignChangeId, hasCapability)}><ExternalLink size={14} /> {t("ownerRequest.openLinkedChange")}</Link>}
           </div>
           <div className="rounded-xl border p-4"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("ownerRequest.workflowTimeline")}</p><RequestTimeline request={focusedRequest} /></div>
         </div>
@@ -413,7 +416,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
         </div>
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Users size={13} /> {memberName(visit.engineerId)}{visit.participantIds.length ? " " + t("siteVisit.participantCount", { count: visit.participantIds.length }) : " · " + t("siteVisit.noParticipants")}</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Link className="inline-flex items-center gap-1 text-sm font-medium text-primary" to={`${projectModulePath(visit.projectId, "site-reports", role, affiliation)}?siteVisitId=${visit.id}`}>{t("siteVisit.createOrOpenReport")}</Link>
+          <Link className="inline-flex items-center gap-1 text-sm font-medium text-primary" to={`${projectModulePath(visit.projectId, "site-reports", hasCapability)}?siteVisitId=${visit.id}`}>{t("siteVisit.createOrOpenReport")}</Link>
           {canSchedule && visit.status !== "COMPLETED" && visit.status !== "CANCELLED" &&
             <Button size="sm" variant="outline" disabled={busy === visit.id} onClick={() => run(visit.id, () => axios.patch(`/site-visits/${visit.id}`, { status: "COMPLETED" }), t("siteVisit.completedToast"))}>{t("siteVisit.markCompleted")}</Button>}
         </div>
@@ -421,7 +424,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
     </Card>}
 
     {!loading && tab === "activity" && <Card className="p-5"><h2 className="text-xl font-semibold">{t("collaboration.activityFeed")}</h2><p className="text-sm text-muted-foreground">{t("collaboration.activityHint")}</p><div className="mt-5 space-y-1">{activity.map((item) => <div key={item.id} className="flex gap-4 border-l-2 border-primary/30 py-3 pl-4"><Clock3 size={16} className="mt-1 shrink-0 text-primary" /><div>{projectId && item.entityId
-      ? <Link to={projectEntityPath(projectId, item.entityType, item.entityId, role, affiliation)} className="font-medium hover:text-primary hover:underline">{t("activity.action." + item.action, { defaultValue: humanize(item.action) })}</Link>
+      ? <Link to={projectEntityPath(projectId, item.entityType, item.entityId, hasCapability)} className="font-medium hover:text-primary hover:underline">{t("activity.action." + item.action, { defaultValue: humanize(item.action) })}</Link>
       : <p className="font-medium">{t("activity.action." + item.action, { defaultValue: humanize(item.action) })}</p>}<p className="text-sm text-muted-foreground">{t("activity.entity." + item.entityType, { defaultValue: humanize(item.entityType) })} · {dateTime(item.occurredAt)}</p></div></div>)}{!projectId && <p className="text-sm text-muted-foreground">{t("empty.selectProject")}</p>}{projectId && !activity.length && <div className="empty-state"><CheckCircle2 className="mx-auto mb-2" /><p className="empty-state-title">{t("empty.noActivity")}</p><p className="text-sm text-muted-foreground">{t("empty.noActivityHint")}</p></div>}</div></Card>}
   </div>;
 };

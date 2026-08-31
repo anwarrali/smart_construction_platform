@@ -7,7 +7,6 @@ PROJECT_GROUPS = (
     "ALL_ENGINEERS",
     "CONTRACTOR_TEAM",
     "CONSULTANT_TEAM",
-    "WORKERS",
     "PROJECT_MANAGERS",
     "OWNERS",
 )
@@ -19,10 +18,6 @@ def can_project_broadcast(role: str) -> bool:
 
 def can_create_group(role: str) -> bool:
     return role in {"admin", "project_manager"}
-
-
-def worker_can_message(*, target_is_project_manager: bool, target_is_assigned_engineer: bool) -> bool:
-    return target_is_project_manager or target_is_assigned_engineer
 
 
 def participants_belong_to_project(
@@ -58,32 +53,10 @@ def conversation_search_visible(
     )
 
 
-def resolve_group_records(group_code: str, members: list[dict]) -> set[str]:
-    code = group_code.upper()
-    if code == "ALL_PROJECT_MEMBERS":
-        selected = members
-    elif code == "CONTRACTOR_TEAM":
-        selected = [
-            item for item in members
-            if item.get("role") in {"project_manager", "worker"}
-            or item.get("affiliation") == "main_contractor"
-        ]
-    elif code == "CONSULTANT_TEAM":
-        selected = [
-            item for item in members
-            if item.get("role") == "consultant"
-            or item.get("affiliation") == "external_consultant"
-        ]
-    elif code == "ALL_ENGINEERS":
-        selected = [item for item in members if item.get("role") == "engineer"]
-    elif code.startswith("DISCIPLINE:"):
-        discipline = code.split(":", 1)[1].casefold()
-        selected = [
-            item for item in members
-            if str(item.get("discipline") or "").casefold() == discipline
-        ]
-    elif code == "WORKERS":
-        selected = [item for item in members if item.get("role") == "worker"]
-    else:
-        selected = []
-    return {str(item["id"]) for item in selected if item.get("active", True)}
+# `resolve_group_records` lived here and was removed. It resolved a broadcast
+# group from role names and the retired `engineer_affiliation` — "contractor
+# team" meant `project_manager | worker | main_contractor` — while the shipped
+# resolution in `messaging_authorization.resolve_group_recipients` reads the
+# project membership (`party_id is not None`) and `has_permission`. Nothing but
+# its own tests called this copy, and a reference implementation that disagrees
+# with the real one is a trap, not documentation.

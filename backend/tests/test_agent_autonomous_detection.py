@@ -54,15 +54,15 @@ def world(db, monkeypatch):
                     hashed_password="x", role=role, status=UserStatus.ACTIVE)
 
     manager = user("AutoPm", UserRole.PROJECT_MANAGER)
-    worker = user("AutoWorker", UserRole.WORKER)
+    site_engineer = user("AutoSiteEngineer", UserRole.ENGINEER)
     owner = user("AutoOwner", UserRole.OWNER)
-    db.add_all([manager, worker, owner])
+    db.add_all([manager, site_engineer, owner])
     db.flush()
     project = Project(name=f"Auto {suffix}", status=ProjectStatus.ACTIVE,
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    for person, role in ((manager, UserRole.PROJECT_MANAGER), (worker, UserRole.WORKER)):
+    for person, role in ((manager, UserRole.PROJECT_MANAGER), (site_engineer, UserRole.ENGINEER)):
         db.add(ProjectMember(project_id=project.id, user_id=person.id,
                              role_on_project=role, is_active=True))
     task = Task(project_id=project.id, task_code="T-001", name="Blocked work",
@@ -70,9 +70,9 @@ def world(db, monkeypatch):
     db.add(task)
     db.commit()
     try:
-        yield {"project": project, "manager": manager, "worker": worker, "task": task}
+        yield {"project": project, "manager": manager, "site_engineer": site_engineer, "task": task}
     finally:
-        _purge(db, project.id, [manager.id, worker.id, owner.id])
+        _purge(db, project.id, [manager.id, site_engineer.id, owner.id])
 
 
 def _purge(db, project_id, user_ids):
@@ -103,7 +103,7 @@ def emit(db, world, event_type="TASK_PROGRESS_CHANGED", actor=None):
     return emit_domain_event(
         db, project_id=world["project"].id, event_type=event_type,
         entity_type="TASK", entity_id=world["task"].id,
-        actor_user_id=(actor or world["worker"]).id,
+        actor_user_id=(actor or world["site_engineer"]).id,
         idempotency_key=f"{event_type}:{uuid4().hex}",
     )
 
@@ -176,13 +176,13 @@ def test_analysis_runs_as_the_accountable_project_manager(db, world):
 
 
 def test_it_does_not_run_as_whoever_happened_to_trigger_it(db, world):
-    """A worker's action must not give a worker's narrow visibility to analysis."""
-    emit(db, world, actor=world["worker"])
+    """A narrow participant's action must not give analysis their narrow visibility."""
+    emit(db, world, actor=world["site_engineer"])
     db.commit()
     run = db.query(AgentRunRecord).filter(
         AgentRunRecord.project_id == world["project"].id).first()
     assert run.actor_user_id == world["manager"].id
-    assert run.actor_user_id != world["worker"].id
+    assert run.actor_user_id != world["site_engineer"].id
 
 
 def test_a_project_without_a_manager_is_skipped_rather_than_escalated(db, world):

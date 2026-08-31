@@ -43,6 +43,7 @@ from app.services.ifc_parser import content_hash
 from app.services.ifc_policy import can_ifc, friendly_ifc_error
 from app.services.ifc_processing_service import INTERFERENCE_FINDING_TYPE, compare_versions, process_version, run_interference_analysis
 from app.services.ifc_geometry_service import generate_geometry
+from app.services.authorization import require
 
 router = APIRouter(prefix="/projects/{project_id}/ifc", tags=["IFC Intelligence"])
 
@@ -809,8 +810,9 @@ def get_finding(project_id: uuid.UUID, finding_id: uuid.UUID, db: Session = Depe
 @router.post("/findings/{finding_id}/create-issue", status_code=201)
 def finding_to_issue(project_id: uuid.UUID, finding_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require(db, current_user, project_id, "REVIEW_FINDING")
-    if current_user.role not in {UserRole.PROJECT_MANAGER, UserRole.ENGINEER}:
-        raise HTTPException(status_code=403, detail="This role cannot create an official issue from an IFC finding")
+    # Turning a finding into an official issue is `issue.create`, the same code
+    # the issues endpoint checks. `_require` above already settled the IFC half.
+    require(db, current_user, "issue.create", project_id)
     finding = db.query(IFCCoordinationFinding).filter(IFCCoordinationFinding.id == finding_id, IFCCoordinationFinding.project_id == project_id).first()
     if not finding: raise HTTPException(status_code=404, detail="IFC finding not found")
     if finding.status != "PENDING": raise HTTPException(status_code=409, detail="This finding has already been reviewed")

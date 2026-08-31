@@ -36,25 +36,13 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from app.ai.action_payload_contract import ACTION_CONTRACTS
-from app.core.deps import (
-    is_consultant_engineer,
-    is_main_contractor_engineer,
-    is_worker,
-    user_has_project_access,
-)
-from app.models.enums import UserRole, UserStatus
+from app.core.deps import user_has_project_access
+from app.models.enums import UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.voice_analysis import ActionRiskLevel, SuggestedActionType
 from app.services.authorization import has_permission
 from app.services.voice_action_policy import action_risk
-
-#: Coarse role names used by the registry, matching how the rest of the voice
-#: code already talks about people.
-WORKER = "worker"
-ENGINEER = "contractor_engineer"
-CONSULTANT = "external_consultant"
-MANAGER = "project_manager"
 
 #: Categories exist for one reason: to group the rendered capability list so a
 #: speaker's prompt reads as sections rather than as thirty flat lines.
@@ -78,12 +66,10 @@ class Capability:
     #: model, not patterns to match — the model generalizes from them, which is
     #: exactly what a phrase list cannot do.
     examples: tuple[str, ...]
-    #: Roles that may perform it at all, mirroring `VoiceRulesEngine`.
-    roles: frozenset[str]
-    #: Catalogue permission checked before proposing, when the platform has one
-    #: for this operation. `None` means the operation's own service is the only
-    #: gate — messaging, for example, decides per recipient.
-    permission_code: str | None = None
+    #: The catalogue permission that governs this operation. Mandatory: a
+    #: capability without one would be a capability nothing authorizes, which
+    #: is what the retired `roles` set had become.
+    permission_code: str
     #: True when the operation is meaningless without a task.
     needs_task: bool = False
     #: True when it targets an issue instead of a task.
@@ -92,6 +78,11 @@ class Capability:
     #: than by permission code — the site-report draft, which only an assigned
     #: Site Engineer may create.
     membership_flag: str | None = None
+    #: True for operations the platform reserves for whoever runs *this*
+    #: project. Holding `task.edit` somewhere is not the same as running the
+    #: job the sentence is about, and the retired registry expressed this by
+    #: giving those capabilities to the project-manager role alone.
+    requires_project_management: bool = False
 
     @property
     def required_fields(self) -> tuple[str, ...]:
@@ -118,9 +109,6 @@ DESTRUCTIVE: frozenset[SuggestedActionType] = frozenset({
 })
 
 
-_ALL_ENGINEERS = frozenset({ENGINEER, MANAGER})
-
-
 CAPABILITIES: tuple[Capability, ...] = (
     # -- tasks --------------------------------------------------------------
     Capability(
@@ -131,15 +119,14 @@ CAPABILITIES: tuple[Capability, ...] = (
             "ضيف مهمة جديدة اسمها فحص العزل",
             "create a task to inspect the waterproofing",
         ),
-        frozenset({MANAGER}),
-        permission_code="task.create",
+        "task.create",
+        requires_project_management=True,
     ),
     Capability(
         SuggestedActionType.START_TASK, TASKS,
         "start a task that has not begun",
         ("ابدأ المهمة السادسة", "بلشنا بمهمة الحفر", "start the excavation task"),
-        _ALL_ENGINEERS,
-        permission_code="task.update_progress",
+        "task.update_progress",
         needs_task=True,
     ),
     Capability(
@@ -150,8 +137,7 @@ CAPABILITIES: tuple[Capability, ...] = (
             "المهمة تبعت الكهرباء صارت 70%",
             "the rebar task is at eighty percent",
         ),
-        _ALL_ENGINEERS,
-        permission_code="task.update_progress",
+        "task.update_progress",
         needs_task=True,
     ),
     Capability(
@@ -163,9 +149,9 @@ CAPABILITIES: tuple[Capability, ...] = (
             "أجّل مهمة التكييف لبعد أسبوعين",
             "move the ductwork deadline to 15 September",
         ),
-        frozenset({MANAGER}),
-        permission_code="task.edit",
+        "task.edit",
         needs_task=True,
+        requires_project_management=True,
     ),
     Capability(
         SuggestedActionType.UPDATE_TASK_ASSIGNMENT, TASKS,
@@ -175,9 +161,9 @@ CAPABILITIES: tuple[Capability, ...] = (
             "خلّي مهمة الكهرباء على المهندس سامي",
             "assign the HVAC task to Layla",
         ),
-        frozenset({MANAGER}),
-        permission_code="task.edit",
+        "task.edit",
         needs_task=True,
+        requires_project_management=True,
     ),
     Capability(
         SuggestedActionType.UPDATE_TASK_PRIORITY, TASKS,
@@ -187,9 +173,9 @@ CAPABILITIES: tuple[Capability, ...] = (
             "خلي أولوية مهمة التكييف حرجة",
             "make the electrical task low priority",
         ),
-        frozenset({MANAGER}),
-        permission_code="task.edit",
+        "task.edit",
         needs_task=True,
+        requires_project_management=True,
     ),
     Capability(
         SuggestedActionType.UPDATE_TASK_DETAILS, TASKS,
@@ -199,17 +185,17 @@ CAPABILITIES: tuple[Capability, ...] = (
             "ضيف على وصف المهمة إنها تشمل الطابق الثاني",
             "rename task six",
         ),
-        frozenset({MANAGER}),
-        permission_code="task.edit",
+        "task.edit",
         needs_task=True,
+        requires_project_management=True,
     ),
     Capability(
         SuggestedActionType.DELETE_TASK, TASKS,
         "delete a task from the project",
         ("احذف المهمة السادسة", "امسح مهمة التكييف", "delete the ductwork task"),
-        frozenset({MANAGER}),
-        permission_code="task.edit",
+        "task.edit",
         needs_task=True,
+        requires_project_management=True,
     ),
     Capability(
         SuggestedActionType.SUBMIT_TASK_FOR_REVIEW, TASKS,
@@ -219,15 +205,14 @@ CAPABILITIES: tuple[Capability, ...] = (
             "خلصنا المهمة وجاهزة لمراجعة الاستشاري",
             "submit the columns task for review",
         ),
-        _ALL_ENGINEERS,
-        permission_code="task.update_progress",
+        "task.update_progress",
         needs_task=True,
     ),
     Capability(
         SuggestedActionType.ADD_TASK_NOTE, TASKS,
         "add a note to a task",
         ("سجل ملاحظة على المهمة السادسة", "add a note to the excavation task"),
-        _ALL_ENGINEERS,
+        "task.add_note",
         needs_task=True,
     ),
     # -- issues -------------------------------------------------------------
@@ -239,8 +224,7 @@ CAPABILITIES: tuple[Capability, ...] = (
             "في مشكلة بالعزل بالطابق الثاني",
             "report an issue about the missing drawings",
         ),
-        _ALL_ENGINEERS | {CONSULTANT},
-        permission_code="issue.create",
+        "issue.create",
     ),
     Capability(
         SuggestedActionType.UPDATE_ISSUE_STATUS, ISSUES,
@@ -250,24 +234,24 @@ CAPABILITIES: tuple[Capability, ...] = (
             "سكّر مشكلة العزل",
             "reopen the drawings issue",
         ),
-        frozenset({MANAGER}),
-        permission_code="issue.resolve",
+        "issue.resolve",
         needs_issue=True,
+        requires_project_management=True,
     ),
     Capability(
         SuggestedActionType.ASSIGN_ISSUE, ISSUES,
         "give an issue an owner",
         ("خلّي مشكلة المواد على أحمد", "assign the insulation issue to Sami"),
-        frozenset({MANAGER}),
-        permission_code="issue.resolve",
+        "issue.resolve",
         needs_issue=True,
+        requires_project_management=True,
     ),
     # -- field evidence and reports ----------------------------------------
     Capability(
         SuggestedActionType.CREATE_FIELD_SUBMISSION, REPORTS,
         "record what was done on site for the engineer to verify",
         ("خلصنا صب الأعمدة بالمنطقة B", "we finished the block work today"),
-        frozenset({WORKER}),
+        "field_evidence.submit",
         needs_task=True,
     ),
     Capability(
@@ -278,16 +262,14 @@ CAPABILITIES: tuple[Capability, ...] = (
             "بدي أرفع تقرير، خلصنا صب الأعمدة بالمنطقة B",
             "write up today's site report",
         ),
-        _ALL_ENGINEERS,
-        permission_code="site_report.submit",
+        "site_report.submit",
         membership_flag="is_site_engineer",
     ),
     Capability(
         SuggestedActionType.CREATE_DESIGN_CHANGE_REPORT, REPORTS,
         "report a design change for review",
         ("في تغيير بمسار الكهرباء", "report a design change on the duct routing"),
-        _ALL_ENGINEERS,
-        permission_code="design_change.propose",
+        "design_change.propose",
     ),
     # -- messaging ----------------------------------------------------------
     Capability(
@@ -298,7 +280,7 @@ CAPABILITIES: tuple[Capability, ...] = (
             "ابعت لأحمد إنه الاجتماع الساعة 10",
             "message the consultant about tomorrow's inspection",
         ),
-        _ALL_ENGINEERS,
+        "message.send",
     ),
     Capability(
         SuggestedActionType.SEND_OWNER_UPDATE, MESSAGING,
@@ -308,13 +290,13 @@ CAPABILITIES: tuple[Capability, ...] = (
             "خبّر المالك إننا خلصنا الطابق الأول",
             "update the owner about the delay",
         ),
-        _ALL_ENGINEERS,
+        "message.send_client",
     ),
     Capability(
         SuggestedActionType.CREATE_TASK_MESSAGE, MESSAGING,
         "post a message on a task's discussion",
         ("اكتب على المهمة السادسة إننا مستنيين المواد", "post on the task thread"),
-        _ALL_ENGINEERS,
+        "task.comment",
         needs_task=True,
     ),
     # -- reviews ------------------------------------------------------------
@@ -322,8 +304,7 @@ CAPABILITIES: tuple[Capability, ...] = (
         SuggestedActionType.PREPARE_CONSULTANT_REVIEW, REVIEWS,
         "record a consultant's review decision",
         ("وافقت على المهمة السادسة", "reject the columns submission, cover is short"),
-        frozenset({CONSULTANT}),
-        permission_code="task.review",
+        "task.review",
         needs_task=True,
     ),
 )
@@ -340,29 +321,22 @@ def capability_for(action: SuggestedActionType | str) -> Capability | None:
         return None
 
 
-def voice_role(user: User) -> str:
-    """The registry's name for this person's role.
+def _manages_this_project(db: Session, user: User, project_id) -> bool:
+    """Whether this person runs *this* job.
 
-    The same mapping the provider call already uses, kept in one place so a
-    consultant is a consultant everywhere in the voice layer.
+    Some operations — creating work, moving deadlines, reassigning, closing
+    issues — belong to whoever is accountable for the project, not to anybody
+    who happens to hold the permission on some other one. The retired registry
+    expressed this by reserving those capabilities for the project-manager
+    role; expressed as authority rather than as a job title it is: the assigned
+    manager, or somebody who may manage this project's team.
     """
-    if is_worker(user):
-        return WORKER
-    if is_consultant_engineer(user):
-        return CONSULTANT
-    if user.role == UserRole.PROJECT_MANAGER:
-        return MANAGER
-    if user.role == UserRole.ENGINEER:
-        return ENGINEER
-    return str(user.role.value)
-
-
-def _is_project_manager(db: Session, user: User, project_id) -> bool:
-    """Manager *of this project*, which is what every task rule actually means."""
-    if user.role != UserRole.PROJECT_MANAGER:
-        return False
     project = db.get(Project, project_id)
-    return bool(project and project.project_manager_id == user.id)
+    if project is None:
+        return False
+    if project.project_manager_id == user.id:
+        return True
+    return has_permission(db, user, "project.manage_members", project_id)
 
 
 def _has_membership_flag(db: Session, user: User, project_id, flag: str) -> bool:
@@ -377,34 +351,28 @@ def _has_membership_flag(db: Session, user: User, project_id, flag: str) -> bool
 def is_available(
     db: Session, *, user: User, project_id, capability: Capability
 ) -> bool:
-    """Whether this person could perform this capability on this project.
+    """Whether this person may perform this capability on this project.
 
-    A mirror of the platform's own rules, never a replacement for them: the
-    service that performs the operation checks again, and that check is the one
-    that decides. This exists so the assistant can say "ما عندك صلاحية" in a
-    sentence instead of walking somebody through a review card for something
-    that was never going to work.
+    This is now a *use* of the platform's authorization, not a mirror of it.
+    The registry used to carry its own four-name role vocabulary and decide
+    from that, which made Voice a second authorization system — a role could be
+    reconfigured everywhere in the platform and Voice would carry on answering
+    from its own table. Every decision below comes from `has_permission`, the
+    same call the web endpoint makes.
+
+    The operation's own service still checks again when the action executes,
+    and that check is still the one that counts. This runs early so the
+    assistant can decline in a sentence instead of walking somebody through a
+    confirmation card for something that was never going to work.
     """
     if user.status != UserStatus.ACTIVE:
         return False
     if not user_has_project_access(db, user, project_id):
         return False
-    if voice_role(user) not in capability.roles:
+    if not has_permission(db, user, capability.permission_code, project_id):
         return False
-    # Task-level operations that the platform reserves for the project's own
-    # manager. Role alone is not enough: a manager of another project is not a
-    # manager here.
-    if capability.roles == frozenset({MANAGER}) and not _is_project_manager(
+    if capability.requires_project_management and not _manages_this_project(
         db, user, project_id
-    ):
-        return False
-    if MANAGER in capability.roles and ENGINEER in capability.roles:
-        # Shared engineer/manager capabilities still require the engineer to be
-        # a main-contractor engineer, exactly as the rules engine requires.
-        if user.role == UserRole.ENGINEER and not is_main_contractor_engineer(user):
-            return False
-    if capability.permission_code and not has_permission(
-        db, user, capability.permission_code, project_id
     ):
         return False
     if capability.membership_flag and not _has_membership_flag(

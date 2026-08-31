@@ -27,6 +27,7 @@ from app.api.ai_intelligence import router as ai_intelligence_router
 from app.api.ai_actions import router as ai_actions_router
 from app.api.collaboration import router as collaboration_router
 from app.api.permissions import router as permissions_router
+from app.api.organization import router as organization_router, parties_router
 from app.api.cost_validations import router as cost_validations_router
 from app.api.rag import router as rag_router
 from app.api.knowledge import router as knowledge_router
@@ -38,6 +39,11 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 api_router.include_router(step_up_router)
 api_router.include_router(permissions_router)
+# Configuring the office itself: roles, disciplines, and each project's external
+# parties. This is what makes the role model configurable rather than a second
+# enum — see app/api/organization.py.
+api_router.include_router(organization_router)
+api_router.include_router(parties_router)
 api_router.include_router(users_router)
 api_router.include_router(projects_router)
 api_router.include_router(tasks_router)

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/dependency_injection.dart';
-import '../../core/auth/session_manager.dart';
 import '../../core/widgets/async_views.dart';
 import '../../core/widgets/task_card.dart';
 import '../../core/l10n/l10n_formats.dart';
@@ -11,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/task.dart';
 import '../projects/project_context_view_model.dart';
+import '../../core/auth/capabilities.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
@@ -20,10 +20,16 @@ class TasksScreen extends ConsumerStatefulWidget {
 
 class _TasksScreenState extends ConsumerState<TasksScreen> {
   String _filter = 'all';
+  /// Whether this person sees the project's whole task list, or only the work
+  /// they hold. `task.view_all` is the code the server narrows by — it used to
+  /// be "is a contractor-side engineer", which gave the narrow view to exactly
+  /// one job title and the wide one to everybody else.
+  bool _seesWholeProject(WidgetRef ref, String projectId) =>
+      capabilitiesOf(ref, projectId: projectId).has('task.view_all');
+
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(projectContextProvider).selected;
-    final user = ref.watch(sessionProvider).user!;
     if (project == null) {
       return MessageView(
         icon: Icons.apartment,
@@ -37,9 +43,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              user.isSiteEngineer || user.isWorker
-                  ? context.l10n.tasksMyTasks
-                  : context.l10n.tasksProjectTasks,
+              _seesWholeProject(ref, project.id)
+                  ? context.l10n.tasksProjectTasks
+                  : context.l10n.tasksMyTasks,
             ),
             Text(
               project.name,
@@ -57,7 +63,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       body: FutureBuilder<List<ProjectTask>>(
         future: ref
             .read(taskRepositoryProvider)
-            .list(project.id, assignedOnly: user.isSiteEngineer || user.isWorker),
+            .list(project.id, assignedOnly: !_seesWholeProject(ref, project.id)),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return LoadingView(label: context.l10n.tasksLoading);

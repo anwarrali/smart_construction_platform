@@ -30,7 +30,7 @@ from app.schemas.voice_analysis import (
     SuggestedAction,
     SuggestedActionType,
 )
-from app.services.voice_action_service import action_allowed_for_role
+from app.services.voice_action_service import permission_for_action
 from app.services.voice_action_service import _execute_one
 from app.services.voice_analysis_authorization import can_create_voice_analysis
 from app.models.enums import UserRole, UserStatus
@@ -242,30 +242,59 @@ class StructuredConstructionAnalysisTests(TestCase):
         self.assertIn(transcript, sent)
 
 
-class VoiceConfirmationPolicyTests(TestCase):
-    def test_engineer_may_confirm_progress(self):
-        self.assertTrue(action_allowed_for_role(
-            "engineer", SuggestedActionType.UPDATE_TASK_PROGRESS,
-        ))
+class VoiceCapabilityPermissionTests(TestCase):
+    """Voice no longer decides authorization; it names the permission.
 
-    def test_worker_cannot_confirm_official_progress(self):
-        self.assertFalse(action_allowed_for_role(
-            "worker", SuggestedActionType.UPDATE_TASK_PROGRESS,
-        ))
+    These used to assert what four coarse role names could do. That question
+    has no answer any more — roles are configurable, so whether somebody may
+    update progress depends on their role's permissions and the project they
+    are on, which `is_available` resolves against the real authorization
+    service. What is worth pinning here is the wiring: every capability maps to
+    a real catalogue permission, and the mapping is the one the equivalent
+    screen uses.
+    """
 
-    def test_worker_may_confirm_unverified_field_submission(self):
-        self.assertTrue(action_allowed_for_role(
-            "worker", SuggestedActionType.CREATE_FIELD_SUBMISSION,
-        ))
+    def test_every_capability_names_a_real_permission(self):
+        from app.core.permission_catalogue import BY_CODE
+        from app.services.voice_capabilities import CAPABILITIES
 
-    def test_worker_cannot_confirm_issue_or_message(self):
-        self.assertFalse(action_allowed_for_role(
-            "worker", SuggestedActionType.CREATE_ISSUE,
-        ))
-        self.assertFalse(action_allowed_for_role(
-            "worker", SuggestedActionType.CREATE_TASK_MESSAGE,
-        ))
+        for capability in CAPABILITIES:
+            self.assertIsNotNone(
+                capability.permission_code,
+                f"{capability.action.value} has no permission behind it",
+            )
+            self.assertIn(
+                capability.permission_code, BY_CODE,
+                f"{capability.action.value} names an unknown permission",
+            )
 
+    def test_progress_updates_are_governed_by_the_task_progress_permission(self):
+        self.assertEqual(
+            permission_for_action(SuggestedActionType.UPDATE_TASK_PROGRESS),
+            "task.update_progress",
+        )
+
+    def test_field_evidence_is_governed_by_the_field_evidence_permission(self):
+        # Was reserved for the Worker role. It is now the permission a Site
+        # Engineer holds, which is the whole of the worker-removal change as it
+        # reaches Voice.
+        self.assertEqual(
+            permission_for_action(SuggestedActionType.CREATE_FIELD_SUBMISSION),
+            "field_evidence.submit",
+        )
+
+    def test_voice_holds_no_role_vocabulary_of_its_own(self):
+        import app.services.voice_capabilities as registry
+
+        for retired in ("voice_role", "WORKER", "MANAGER", "CONSULTANT"):
+            self.assertFalse(
+                hasattr(registry, retired),
+                f"voice_capabilities still exposes {retired}; Voice must not "
+                "carry a second role model",
+            )
+
+
+class VoiceSiteReportDraftTests(TestCase):
     def test_site_report_action_is_draft_only(self):
         self.assertIn(
             "DRAFT", SuggestedActionType.CREATE_SITE_REPORT_DRAFT.value,
@@ -275,6 +304,7 @@ class VoiceConfirmationPolicyTests(TestCase):
         user = SimpleNamespace(
             id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
             engineer_affiliation="main_contractor", full_name="Engineer",
+            org_role_id=None, is_internal=True,
         )
         project_id, task_id, analysis_id = uuid4(), uuid4(), uuid4()
         analysis = SimpleNamespace(id=analysis_id, project_id=project_id)
@@ -285,6 +315,7 @@ class VoiceConfirmationPolicyTests(TestCase):
         )
         with (
             patch("app.services.voice_action_service.user_has_project_access", return_value=True),
+            patch("app.services.voice_capabilities.is_available", return_value=True),
             patch("app.services.voice_action_service._task", return_value=SimpleNamespace(id=task_id)),
             patch(
                 "app.services.voice_action_service.update_task_progress",
@@ -299,19 +330,25 @@ class VoiceConfirmationPolicyTests(TestCase):
         self.assertEqual(update.call_args.kwargs["audit_metadata"]["analysis_id"], str(analysis_id))
         self.assertEqual(update.call_args.kwargs["progress_percentage"], 65)
 
-    def test_worker_execution_rejects_official_progress(self):
+    def test_execution_is_refused_without_the_governing_permission(self):
+        """Was "a worker cannot apply official progress".
+
+        The rule that test protected is intact and now stated in the terms that
+        survive the redesign: whoever is speaking, execution goes ahead only if
+        they hold the permission the capability names, on that project.
+        """
         user = SimpleNamespace(
-            id=uuid4(), role=UserRole.WORKER, status=UserStatus.ACTIVE,
-            full_name="Worker",
+            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+            full_name="Speaker", org_role_id=None, is_internal=True,
         )
         action = SuggestedAction(
             type=SuggestedActionType.UPDATE_TASK_PROGRESS,
-            target_id=uuid4(), reason="Worker reported progress",
+            target_id=uuid4(), reason="Progress reported",
             payload={"progressPercentage": 80}, confidence=.9,
         )
-        with patch(
-            "app.services.voice_action_service.user_has_project_access",
-            return_value=True,
+        with (
+            patch("app.services.voice_action_service.user_has_project_access", return_value=True),
+            patch("app.services.voice_capabilities.is_available", return_value=False),
         ):
             with self.assertRaises(HTTPException) as raised:
                 _execute_one(
@@ -319,15 +356,16 @@ class VoiceConfirmationPolicyTests(TestCase):
                     analysis=SimpleNamespace(id=uuid4(), project_id=uuid4()),
                     current_user=user, action=action, action_index=0,
                 )
-        self.assertIn("cannot confirm", raised.exception.detail)
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertIn("permission", raised.exception.detail)
 
-    def test_worker_confirmation_creates_unverified_field_submission(self):
+    def test_field_evidence_confirmation_creates_a_submission(self):
         user_id, project_id, task_id, submission_id = (
             uuid4(), uuid4(), uuid4(), uuid4(),
         )
         user = SimpleNamespace(
-            id=user_id, role=UserRole.WORKER, status=UserStatus.ACTIVE,
-            full_name="Worker",
+            id=user_id, role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+            full_name="Site Engineer", org_role_id=None, is_internal=True,
         )
         analysis = SimpleNamespace(
             id=uuid4(), project_id=project_id, field_submission_id=None,
@@ -338,15 +376,16 @@ class VoiceConfirmationPolicyTests(TestCase):
         db.get.return_value = SimpleNamespace(project_manager_id=user_id)
         action = SuggestedAction(
             type=SuggestedActionType.CREATE_FIELD_SUBMISSION,
-            target_id=task_id, reason="Worker evidence",
+            target_id=task_id, reason="Site evidence",
             payload={"description": "First waterproofing layer completed"},
             confidence=.9,
         )
         with (
             patch("app.services.voice_action_service.user_has_project_access", return_value=True),
+            patch("app.services.voice_capabilities.is_available", return_value=True),
             patch("app.services.voice_action_service._task", return_value=task),
-            patch("app.services.voice_action_service.can_worker_submit_evidence", return_value=True),
-            patch("app.services.voice_action_service.authorized_engineer_ids", return_value=set()),
+            patch("app.services.voice_action_service.can_submit_field_evidence", return_value=True),
+            patch("app.services.voice_action_service.authorized_reviewer_ids", return_value=set()),
             patch("app.services.voice_action_service.FieldSubmission", return_value=submission),
             patch("app.services.voice_action_service.record_audit"),
         ):
@@ -362,29 +401,16 @@ class VoiceConfirmationPolicyTests(TestCase):
     def test_engineer_can_start_analysis_for_assigned_task(self):
         user = SimpleNamespace(
             id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-            engineer_affiliation="main_contractor",
+            engineer_affiliation="main_contractor", org_role_id=None, is_internal=True,
         )
         task = SimpleNamespace(project_id=uuid4(), assignees=[user])
-        with patch(
-            "app.services.voice_analysis_authorization.user_has_project_access",
-            return_value=True,
-        ):
-            self.assertTrue(
-                can_create_voice_analysis(Mock(), user, task.project_id, task)
-            )
-
-    def test_worker_can_start_analysis_for_assigned_task(self):
-        user = SimpleNamespace(
-            id=uuid4(), role=UserRole.WORKER, status=UserStatus.ACTIVE,
-        )
-        task = SimpleNamespace(project_id=uuid4())
         with (
             patch(
                 "app.services.voice_analysis_authorization.user_has_project_access",
                 return_value=True,
             ),
             patch(
-                "app.services.voice_analysis_authorization.can_worker_submit_evidence",
+                "app.services.voice_analysis_authorization.has_permission",
                 return_value=True,
             ),
         ):
@@ -392,9 +418,39 @@ class VoiceConfirmationPolicyTests(TestCase):
                 can_create_voice_analysis(Mock(), user, task.project_id, task)
             )
 
+    def test_an_external_participant_speaks_only_about_their_own_task(self):
+        """Was the worker case; the narrowing survives as an external one.
+
+        Somebody from a contractor may dictate about work they hold and not
+        about the rest of the project.
+        """
+        outsider = SimpleNamespace(
+            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+            org_role_id=None, is_internal=False,
+        )
+        mine = SimpleNamespace(project_id=uuid4(), assignees=[outsider])
+        theirs = SimpleNamespace(project_id=mine.project_id, assignees=[])
+        with (
+            patch(
+                "app.services.voice_analysis_authorization.user_has_project_access",
+                return_value=True,
+            ),
+            patch(
+                "app.services.voice_analysis_authorization.has_permission",
+                return_value=True,
+            ),
+        ):
+            self.assertTrue(
+                can_create_voice_analysis(Mock(), outsider, mine.project_id, mine)
+            )
+            self.assertFalse(
+                can_create_voice_analysis(Mock(), outsider, theirs.project_id, theirs)
+            )
+
     def test_inaccessible_project_cannot_start_analysis(self):
         user = SimpleNamespace(
-            id=uuid4(), role=UserRole.WORKER, status=UserStatus.ACTIVE,
+            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+            org_role_id=None, is_internal=True,
         )
         with patch(
             "app.services.voice_analysis_authorization.user_has_project_access",
@@ -408,6 +464,7 @@ class VoiceConfirmationPolicyTests(TestCase):
         user = SimpleNamespace(
             id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
             engineer_affiliation="main_contractor", full_name="Engineer",
+            org_role_id=None, is_internal=True,
         )
         analysis = SimpleNamespace(id=uuid4(), project_id=uuid4())
         issue_id = uuid4()
@@ -427,6 +484,7 @@ class VoiceConfirmationPolicyTests(TestCase):
         )
         with (
             patch("app.services.voice_action_service.user_has_project_access", return_value=True),
+            patch("app.services.voice_capabilities.is_available", return_value=True),
             patch("app.services.voice_action_service._optional_task", return_value=None),
             patch("app.services.voice_action_service.Issue", return_value=issue) as issue_model,
             patch("app.services.voice_action_service.record_audit"),
@@ -443,6 +501,7 @@ class VoiceConfirmationPolicyTests(TestCase):
         user = SimpleNamespace(
             id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
             engineer_affiliation="main_contractor", full_name="Engineer",
+            org_role_id=None, is_internal=True,
         )
         analysis = SimpleNamespace(id=uuid4(), project_id=uuid4())
         report = SimpleNamespace(id=uuid4())
@@ -456,6 +515,7 @@ class VoiceConfirmationPolicyTests(TestCase):
         )
         with (
             patch("app.services.voice_action_service.user_has_project_access", return_value=True),
+            patch("app.services.voice_capabilities.is_available", return_value=True),
             patch("app.services.voice_action_service._optional_task", return_value=None),
             patch("app.services.voice_action_service.SiteReport", return_value=report) as report_model,
             patch("app.services.voice_action_service.record_audit"),

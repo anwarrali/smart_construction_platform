@@ -77,8 +77,13 @@ class RegistryCoversThePlatform(TestCase):
             SuggestedActionType.UPDATE_TASK_ASSIGNMENT,
             SuggestedActionType.DELETE_TASK,
         ):
-            self.assertEqual(capability_for(action).roles, frozenset({"project_manager"}))
-            self.assertEqual(capability_for(action).permission_code, "task.edit")
+            capability = capability_for(action)
+            # The registry no longer carries a role vocabulary of its own. What
+            # made these "manager only" is expressed as the permission that
+            # governs them plus the rule that holding it elsewhere is not
+            # enough — you have to be running *this* project.
+            self.assertEqual(capability.permission_code, "task.edit")
+            self.assertTrue(capability.requires_project_management)
 
     def test_deletion_is_the_only_destructive_capability_and_is_high_risk(self):
         self.assertEqual(DESTRUCTIVE, frozenset({SuggestedActionType.DELETE_TASK}))

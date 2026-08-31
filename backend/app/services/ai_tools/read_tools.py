@@ -106,11 +106,26 @@ def get_project_users(db, actor: User, project_id, args) -> dict:
         .filter(ProjectMember.project_id == project_id, ProjectMember.is_active.is_(True))
         .all()
     )
+    # Display only — no branch anywhere in the agent or tool layer reads these.
+    # They are the configurable role first and the retired enum only as a
+    # fallback for a membership the backfill has not reached, so this stops
+    # describing people by a vocabulary the office may no longer use (and stops
+    # depending on a column the contract migration drops). `party` is here for
+    # the same reason `role` is: an agent summarising a project should be able
+    # to say who is the office's and who is a contractor's.
     return {"users": [
         {
             "id": str(person.id), "fullName": person.full_name,
-            "role": person.role.value if person.role else None,
-            "roleOnProject": membership.role_on_project.value if membership.role_on_project else None,
+            "role": (
+                membership.project_role_name
+                or (person.role.value if person.role else None)
+            ),
+            "roleOnProject": (
+                membership.project_role_name
+                or (membership.role_on_project.value if membership.role_on_project else None)
+            ),
+            "party": membership.party_name,
+            "isExternal": membership.is_external,
         }
         for person, membership in members
     ]}

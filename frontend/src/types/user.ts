@@ -20,6 +20,19 @@ export interface UserProfile {
   specialization?: string;
   bio?: string;
   createdAt?: string;
+  /**
+   * The configurable model. `orgRole` is the authority; `role` above is the
+   * retired column, still returned so nothing breaks mid-migration.
+   */
+  orgRole?: {
+    id: string;
+    code: string;
+    nameEn: string;
+    nameAr?: string | null;
+    isInternalOnly: boolean;
+  } | null;
+  disciplines?: Array<{ id: string; code: string; nameEn: string; nameAr?: string | null }>;
+  isInternal?: boolean;
 }
 
 export interface UserFilters {

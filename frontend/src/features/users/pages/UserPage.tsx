@@ -10,27 +10,18 @@ import { UserForm, type UserFormData } from "../components/UserForm";
 import { usersService } from "../services/users.service";
 import { useDebounce } from "../../../hooks/useDebounce";
 import type { UserProfile } from "../../../types/user";
-import type { EngineerDiscipline, UserRole, UserStatus } from "../../../types/auth";
+import type { UserStatus } from "../../../types/auth";
 import toast from "react-hot-toast";
 import { useAuth } from "../../../hooks/useAuth";
+import organizationService, {
+  type Discipline,
+  type Role,
+} from "../../admin/services/organization.service";
 import { useStepUp } from "../../../hooks/useStepUp";
 
-const ROLE_FILTER_OPTIONS = [
-  { value: "", label: "All Roles" },
-  { value: "admin", label: "Administrator" },
-  { value: "owner", label: "Owner" },
-  { value: "project_manager", label: "Project Manager" },
-  { value: "engineer", label: "Engineer" },
-  { value: "consultant", label: "Consultant" },
-];
-
-const SPECIALIZATION_FILTER_OPTIONS = [
-  { value: "", label: "All Specializations" },
-  { value: "civil", label: "Civil" },
-  { value: "architectural", label: "Architectural" },
-  { value: "electrical", label: "Electrical" },
-  { value: "mechanical", label: "Mechanical" },
-];
+/* The filters read the office's own vocabulary, fetched once. A hardcoded list
+   of six roles and four specializations was the last place this screen
+   asserted what a consulting office is allowed to contain. */
 
 const normalizeUsers = (response: unknown): UserProfile[] => {
   if (Array.isArray(response)) return response as UserProfile[];
@@ -45,6 +36,8 @@ export const UsersPage = () => {
   const { t } = useTranslation();
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -70,15 +63,29 @@ export const UsersPage = () => {
     fetchUsers();
   }, [fetchUsers]);
 
+  useEffect(() => {
+    Promise.all([organizationService.roles(), organizationService.disciplines()])
+      .then(([roleRows, disciplineRows]) => {
+        setRoles(roleRows.filter((role) => role.isActive));
+        setDisciplines(disciplineRows.filter((item) => item.isActive));
+      })
+      .catch(() => { /* Filters degrade to "all"; the list itself still loads. */ });
+  }, []);
+
   const filteredUsers = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     return users.filter((user) => {
+      /* Both filters read the configured model, with the retired fields as a
+         fallback for an account the backfill has not reached. */
+      const disciplineCodes = (user.disciplines || []).map((item) => item.code);
       const specialization = user.engineerProfile?.discipline || user.specialization || "";
       const matchesSearch = !q || [user.fullName, user.email, user.phoneNumber, user.organization]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
-      const matchesRole = !roleFilter || user.role === roleFilter;
-      const matchesSpecialization = !specializationFilter || specialization === specializationFilter;
+      const matchesRole = !roleFilter || user.orgRole?.id === roleFilter;
+      const matchesSpecialization = !specializationFilter
+        || disciplineCodes.includes(specializationFilter)
+        || (!disciplineCodes.length && specialization === specializationFilter);
       const matchesStatus = !statusFilter || user.status === statusFilter;
       return matchesSearch && matchesRole && matchesSpecialization && matchesStatus;
     });
@@ -127,21 +134,21 @@ export const UsersPage = () => {
   };
 
   const handleSubmit = async (data: UserFormData) => {
-    const role = data.role as UserRole;
     const status = data.status as UserStatus;
-    const specialization = data.specialization as EngineerDiscipline | undefined;
+    /* The office role and the disciplines are the whole payload now. No
+       `role`, no `engineerAffiliation`, no single `engineerProfile.discipline`:
+       the server derives what it still has to write to the retired columns
+       from the role itself, so the client never has to know the retired
+       vocabulary existed. */
     const payload = {
       fullName: data.fullName || "",
       email: data.email || "",
       password: data.password || "",
-      role,
+      orgRoleId: data.orgRoleId,
+      disciplineIds: data.disciplineIds || [],
       status,
       phoneNumber: data.phoneNumber || undefined,
       organization: data.organization || undefined,
-      engineerAffiliation: data.engineerAffiliation,
-      engineerProfile: ["engineer", "consultant"].includes(role)
-        ? { discipline: specialization || "civil" }
-        : undefined,
     };
 
     if (editingUser) {
@@ -181,12 +188,18 @@ export const UsersPage = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
           <Select
-            options={ROLE_FILTER_OPTIONS}
+            options={[
+              { value: "", label: t("userPage.all_roles") },
+              ...roles.map((role) => ({ value: role.id, label: role.nameEn })),
+            ]}
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
           />
           <Select
-            options={SPECIALIZATION_FILTER_OPTIONS}
+            options={[
+              { value: "", label: t("userPage.all_disciplines") },
+              ...disciplines.map((item) => ({ value: item.code, label: item.nameEn })),
+            ]}
             value={specializationFilter}
             onChange={(e) => setSpecializationFilter(e.target.value)}
           />

@@ -201,10 +201,11 @@ def shift_task_schedule(
         raise HTTPException(status_code=404, detail="Task not found")
     project = db.get(Project, project_id)
     require(db, current_user, "schedule.edit", project_id)
-    # Beyond holding the permission, an ordinary project manager may only move
-    # the schedule of a project they actually run.
-    if current_user.role == UserRole.PROJECT_MANAGER and (not project or project.project_manager_id != current_user.id):
-        raise HTTPException(status_code=403, detail="Only the assigned Project Manager can shift schedules")
+    # `require` above demanded `schedule.edit` on this project, which carries
+    # project access with it. The refusal this replaces confined one legacy job
+    # title to its own projects and left every configurable role unconfined.
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
     if payload.shift_days == 0:
         return {"message": "No shift applied"}

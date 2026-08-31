@@ -26,7 +26,10 @@ type Person = { id: string; fullName: string; email: string; role: string; statu
 type ProjectRow = { id: string; name: string };
 type MemberRow = { userId: string; roleOnProject?: string; isActive?: boolean; user?: { id: string; fullName: string; role?: string; status?: string } };
 
-const ROLES = ["admin", "project_manager", "engineer", "consultant", "owner", "worker"] as const;
+// The legacy role matrix. Roles an office creates are edited on the
+// Roles page (`/organization/roles`); this grid still covers the seeded
+// ones so an existing installation keeps the screen it knows.
+const ROLES = ["admin", "project_manager", "engineer", "consultant", "owner"] as const;
 
 /**
  * Access control for administrators.

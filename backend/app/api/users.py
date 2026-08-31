@@ -31,11 +31,11 @@ from app.schemas.user import (
     ChangePasswordRequest,
     UserCreateByAdmin,
     UserCreateResponse,
-    EngineerCreateRequest,
-    OwnerCreateRequest,
 )
 from app.core.deps import get_current_user, require_can_create_user
-from app.services.authorization import require_permission
+from app.models.rbac import Discipline, Role
+from app.services import rbac
+from app.services.authorization import has_permission, require, require_permission
 from app.core.permissions import can_create_team_role, can_manage_all_users, is_engineer
 from app.core.security import hash_password, verify_password
 from app.services.user_service import create_provisioned_user, generate_temporary_password
@@ -79,7 +79,14 @@ def search_users(
     current_user: User = Depends(get_current_user),
 ):
     """Search existing company users by name or email (for assigning to projects)."""
-    if current_user.role not in {UserRole.ADMIN, UserRole.PROJECT_MANAGER}:
+    # This search exists to staff projects, so it follows the permission that
+    # staffs them. `project.manage_members` is project-scoped; asked without a
+    # project it answers "could this person manage a team anywhere", which is
+    # the right question for a directory lookup that precedes choosing one.
+    if not (
+        has_permission(db, current_user, "project.manage_members")
+        or has_permission(db, current_user, "platform.manage_users")
+    ):
         raise HTTPException(status_code=403, detail="Not authorized to search users")
 
     query = db.query(User).filter(
@@ -90,10 +97,67 @@ def search_users(
         query = query.filter(User.company_id == current_user.company_id)
     if role:
         query = query.filter(User.role == role)
-    elif current_user.role == UserRole.PROJECT_MANAGER:
-        query = query.filter(User.role.in_([UserRole.ENGINEER, UserRole.CONSULTANT]))
+    else:
+        # Everybody an office may staff onto a project, by the same predicate
+        # the candidate list and the assignment endpoint use. It used to narrow
+        # to two retired enum values, and only when the *searcher* happened to
+        # be a PROJECT_MANAGER — so the same query returned different people
+        # depending on a job title.
+        query = query.filter(rbac.staffable_filter(db))
 
     return query.limit(20).all()
+
+
+def _requested_org_role(db: Session, role_id: uuid.UUID) -> Role:
+    """The office role this request names, or a 400 explaining why not.
+
+    Three refusals, and each one is a rule the office cannot configure around:
+    the role has to exist and be active, it has to belong to this office (or be
+    a shared template), and it has to be one accounts may be created under at
+    all — which excludes the archived field-staff role that retired worker
+    accounts sit on. That last check is what keeps Worker unreachable through
+    the new provisioning path as well as the old one.
+    """
+    office = rbac.ensure_tenant_organization(db)
+    role = db.get(Role, role_id)
+    if role is None or not role.is_active:
+        raise HTTPException(status_code=400, detail="That office role does not exist")
+    if role.organization_id is not None and role.organization_id != office.id:
+        raise HTTPException(status_code=400, detail="That role belongs to another office")
+    if not role.legacy_role:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Accounts cannot be created under the '{role.name_en}' role",
+        )
+    return role
+
+
+def _requested_disciplines(db: Session, discipline_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Validate the disciplines a request asks for, preserving their order.
+
+    Order matters only because the first is recorded as primary — the one
+    shown when a single discipline has to be named. It carries no authority.
+    """
+    if not discipline_ids:
+        return []
+    office = rbac.ensure_tenant_organization(db)
+    found = {
+        row.id for row in db.query(Discipline).filter(
+            Discipline.id.in_(discipline_ids),
+            Discipline.is_active.is_(True),
+            or_(
+                Discipline.organization_id.is_(None),
+                Discipline.organization_id == office.id,
+            ),
+        ).all()
+    }
+    missing = [str(item) for item in discipline_ids if item not in found]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown or inactive discipline: {', '.join(missing)}",
+        )
+    return list(discipline_ids)
 
 
 @router.post("", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -102,8 +166,23 @@ def create_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a complete active user account with an administrator-supplied password."""
-    if not can_create_team_role(current_user.role, user_data.role):
+    """Create an active account under one of the office's configured roles.
+
+    Two paths, and the difference is what the request names. With
+    `orgRoleId`, the account is created under a role the office maintains and
+    the gate is `platform.manage_users` — the permission an office can actually
+    administer, and the one that already guards every other endpoint on this
+    router. Without it, the retired `role` enum path still works and is still
+    gated by `can_create_team_role`, so a client that has not been updated
+    behaves exactly as before.
+    """
+    org_role = None
+    discipline_ids: list[uuid.UUID] = []
+    if user_data.org_role_id is not None:
+        require(db, current_user, "platform.manage_users")
+        org_role = _requested_org_role(db, user_data.org_role_id)
+        discipline_ids = _requested_disciplines(db, user_data.discipline_ids)
+    elif not can_create_team_role(current_user.role, user_data.role):
         raise HTTPException(
             status_code=403,
             detail=f"You are not authorized to create users with role '{user_data.role.value}'",
@@ -122,6 +201,8 @@ def create_user(
             email=user_data.email,
             full_name=user_data.full_name,
             role=user_data.role,
+            org_role=org_role,
+            discipline_ids=discipline_ids,
             phone_number=user_data.phone_number,
             organization=user_data.organization,
             engineer_affiliation=user_data.engineer_affiliation,
@@ -135,65 +216,26 @@ def create_user(
 
     response = UserCreateResponse.model_validate(user)
     record_audit(db, actor_id=current_user.id, action="created", entity_type="user", entity_id=user.id,
-                 details={"role": user.role.value, "engineer_affiliation": user.engineer_affiliation, "direct_account": True})
+                 details={"role": user.role.value, "org_role": org_role.code if org_role else None,
+                          "disciplines": [str(item) for item in discipline_ids],
+                          "engineer_affiliation": user.engineer_affiliation, "direct_account": True})
     db.commit()
     return response
 
 
-@router.post("/engineers", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
-def create_engineer(
-    data: EngineerCreateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    role = UserRole.ENGINEER
-    if not can_create_team_role(current_user.role, role):
-        raise HTTPException(status_code=403, detail="Not authorized to create engineer accounts")
-
-    try:
-        user, temp_password = create_provisioned_user(
-            db,
-            creator=current_user,
-            email=data.email,
-            full_name=data.full_name,
-            role=role,
-            phone_number=data.phone_number,
-            engineer_discipline=data.discipline,
-            employee_id=data.employee_id,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    response = UserCreateResponse.model_validate(user)
-    response.temporary_password = temp_password
-    return response
-
-
-@router.post("/owners", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
-def create_owner(
-    data: OwnerCreateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if not can_create_team_role(current_user.role, UserRole.OWNER):
-        raise HTTPException(status_code=403, detail="Not authorized to create owner accounts")
-
-    try:
-        user, temp_password = create_provisioned_user(
-            db,
-            creator=current_user,
-            email=data.email,
-            full_name=data.full_name,
-            role=UserRole.OWNER,
-            phone_number=data.phone_number,
-            organization=data.organization,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    response = UserCreateResponse.model_validate(user)
-    response.temporary_password = temp_password
-    return response
+# `POST /users/engineers` and `POST /users/owners` stood here and are gone.
+#
+# Each hardcoded one legacy identity — `UserRole.ENGINEER`, `UserRole.OWNER` —
+# as the whole of what an account could be, which is exactly the shape a
+# configurable office cannot use: there is no endpoint to add for "Surveyor"
+# or "BIM Engineer" without adding one per job title forever. `POST /users`
+# takes `orgRoleId` and `disciplineIds` and covers all of them, including roles
+# an office invents after this release.
+#
+# Removed rather than deprecated because nothing called them: neither the web
+# client nor the Flutter app references either path, so there is no build in
+# the field that breaks. A deprecated alias would have been compatibility for
+# a caller that does not exist.
 
 
 @router.get("/profile", response_model=UserOut)
@@ -346,6 +388,33 @@ def update_user_by_admin(
             if user.id == current_user.id and update_data.status != UserStatus.ACTIVE:
                 raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
             user.status = update_data.status
+
+        # --- the configurable model ----------------------------------------
+        # Changing somebody's office role changes what they may do, so it is
+        # the same class of act as changing the retired enum below and takes
+        # the same step-up challenge. `assign_org_role` moves `is_internal`
+        # with it, which is what keeps an account from being reclassified
+        # internal/external by half.
+        if update_data.org_role_id is not None and update_data.org_role_id != user.org_role_id:
+            org_role = _requested_org_role(db, update_data.org_role_id)
+            require_step_up(db, current_user, "admin.change_user_role")
+            if user.id == current_user.id and not org_role.undeletable:
+                raise HTTPException(
+                    status_code=400,
+                    detail="You cannot move yourself off the administrator role",
+                )
+            rbac.assign_org_role(
+                db, user=user, role=org_role,
+                organization_id=user.company_id or rbac.ensure_tenant_organization(db).id,
+            )
+        if update_data.discipline_ids is not None:
+            # An empty list clears them; omitting the field leaves them alone.
+            wanted = _requested_disciplines(db, update_data.discipline_ids)
+            rbac.set_user_disciplines(
+                db, user=user, discipline_ids=wanted,
+                primary_id=wanted[0] if wanted else None,
+            )
+
         if update_data.role is not None:
             if user.id == current_user.id and update_data.role != UserRole.ADMIN:
                 raise HTTPException(status_code=400, detail="You cannot remove your own administrator role")
@@ -357,41 +426,43 @@ def update_user_by_admin(
                 require_step_up(db, current_user, "admin.change_user_role")
             user.role = resolved_role
 
-        if user.role == UserRole.ENGINEER:
-            affiliation = update_data.engineer_affiliation or (
-                user.engineer_affiliation
-                if user.engineer_affiliation in {"internal_engineer", "main_contractor", "external_consultant"}
-                else ("external_consultant" if update_data.role == UserRole.CONSULTANT else "internal_engineer")
+        # The retired columns, kept truthful without being asked for.
+        #
+        # What stood here validated `engineer_affiliation` against three magic
+        # strings, demanded an organization for an "external consultant", and
+        # required a single-valued `EngineerProfile.discipline`. All three are
+        # the retired model: the office side is `is_internal` (moved by
+        # `assign_org_role` above), and disciplines are many-to-many on
+        # `user_disciplines`.
+        #
+        # `engineer_affiliation` is still written because `users.role` is still
+        # NOT NULL and the pre-backfill bridges read it during the migration
+        # window. It is derived from the role the account holds, never supplied.
+        if user.org_role is not None:
+            user.engineer_affiliation = user.org_role.legacy_affiliation or (
+                "internal_engineer" if user.role == UserRole.ENGINEER else None
             )
-            if affiliation not in {"internal_engineer", "main_contractor", "external_consultant"}:
-                raise HTTPException(status_code=400, detail="Unsupported Engineer organization side")
-            user.engineer_affiliation = affiliation
-        else:
+        elif user.role != UserRole.ENGINEER:
             user.engineer_affiliation = None
-        if user.role == UserRole.ENGINEER and user.engineer_affiliation == "external_consultant" and not (user.organization or "").strip():
-            raise HTTPException(status_code=400, detail="External consultant company/organization is required")
 
-        if user.role == UserRole.ENGINEER:
-            if not update_data.engineer_profile and not user.engineer_profile:
-                raise HTTPException(status_code=400, detail="Specialization is required for Engineer and Consultant users")
-            if update_data.engineer_profile:
-                if user.engineer_profile:
-                    user.engineer_profile.discipline = update_data.engineer_profile.discipline
-                    user.engineer_profile.license_number = update_data.engineer_profile.license_number
-                    user.engineer_profile.years_of_experience = update_data.engineer_profile.years_of_experience
-                    user.engineer_profile.employee_id = update_data.engineer_profile.employee_id
-                    user.engineer_profile.can_act_as_project_manager = False
-                else:
-                    user.engineer_profile = EngineerProfile(
-                        user_id=user.id,
-                        discipline=update_data.engineer_profile.discipline,
-                        license_number=update_data.engineer_profile.license_number,
-                        years_of_experience=update_data.engineer_profile.years_of_experience,
-                        employee_id=update_data.engineer_profile.employee_id,
-                        can_act_as_project_manager=False,
-                    )
-        else:
-            user.engineer_profile = None
+        # `EngineerProfile` is likewise legacy. It is updated when a client
+        # still sends one, and never demanded.
+        if update_data.engineer_profile:
+            if user.engineer_profile:
+                user.engineer_profile.discipline = update_data.engineer_profile.discipline
+                user.engineer_profile.license_number = update_data.engineer_profile.license_number
+                user.engineer_profile.years_of_experience = update_data.engineer_profile.years_of_experience
+                user.engineer_profile.employee_id = update_data.engineer_profile.employee_id
+                user.engineer_profile.can_act_as_project_manager = False
+            else:
+                user.engineer_profile = EngineerProfile(
+                    user_id=user.id,
+                    discipline=update_data.engineer_profile.discipline,
+                    license_number=update_data.engineer_profile.license_number,
+                    years_of_experience=update_data.engineer_profile.years_of_experience,
+                    employee_id=update_data.engineer_profile.employee_id,
+                    can_act_as_project_manager=False,
+                )
 
         record_audit(db, actor_id=current_user.id, action="updated", entity_type="user", entity_id=user.id,
                      details={"fields": sorted(update_data.model_fields_set), "role": user.role.value})
@@ -500,7 +571,7 @@ def permanently_delete_user(
         "attachments": db.query(Attachment.id).filter(Attachment.uploaded_by_id == user.id).first(),
         "cost records": db.query(CostValidation.id).filter(CostValidation.requested_by_id == user.id).first(),
         "voice recordings": db.query(VoiceRecording.id).filter(VoiceRecording.recorded_by_id == user.id).first(),
-        "field submissions": db.query(FieldSubmission.id).filter(FieldSubmission.worker_id == user.id).first(),
+        "field submissions": db.query(FieldSubmission.id).filter(FieldSubmission.submitted_by_id == user.id).first(),
         "IFC model groups": db.query(IFCModelGroup.id).filter(IFCModelGroup.created_by_id == user.id).first(),
         "IFC model versions": db.query(IFCModelVersion.id).filter(IFCModelVersion.uploaded_by_id == user.id).first(),
         "IFC comparisons": db.query(IFCComparison.id).filter(IFCComparison.created_by_id == user.id).first(),

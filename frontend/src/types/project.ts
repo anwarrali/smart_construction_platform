@@ -45,6 +45,15 @@ export interface ProjectMember {
   assignmentTitle?: string;
   projectDiscipline?: string;
   projectNotes?: string;
+  /** The configurable role held on this project. */
+  projectRoleId?: string | null;
+  projectRoleName?: string | null;
+  /** The external party this person takes part for; null means office staff. */
+  partyId?: string | null;
+  partyName?: string | null;
+  isExternal?: boolean;
+  /** Every discipline they cover here, not just one. */
+  disciplineCodes?: string[];
   isSiteEngineer: boolean;
   assignedById?: string;
   createdAt?: string;

@@ -33,6 +33,7 @@ from app.models.enums import (
     DocumentType, EngineerDiscipline, ProjectStatus, TaskStatus, UserRole, UserStatus,
 )
 from app.models.project import Project, ProjectMember
+from app.models.rbac import ProjectParty
 from app.models.task import Task
 from app.models.user import User, EngineerProfile
 from app.services.rag import ingestion
@@ -196,6 +197,21 @@ def world(db, tmp_path):
         project_id=project_a.id, user_id=consultant.id,
         role_on_project=UserRole.ENGINEER, is_active=True,
     ))
+    # The client, recorded as the external party they are. Without this the
+    # owner is an external participant with no party, which `document_access`
+    # correctly refuses everything to — a different refusal than the client
+    # rule this suite is about. Under the redesign a client *is* a
+    # `ProjectParty(kind="CLIENT")`, and the client document scope (official
+    # files plus evidence of approved completed work) hangs off that record.
+    client_party = ProjectParty(
+        project_id=project_a.id, kind="CLIENT", display_name=f"Client {suffix}",
+    )
+    db.add(client_party)
+    db.flush()
+    db.add(ProjectMember(
+        project_id=project_a.id, user_id=owner.id,
+        role_on_project=UserRole.OWNER, is_active=True, party_id=client_party.id,
+    ))
     db.flush()
 
     # A civil (not electrical) task, so a document attached to it is outside
@@ -253,6 +269,11 @@ def world(db, tmp_path):
         db.query(Task).filter(Task.id == structural_task.id).delete(synchronize_session=False)
         db.query(ProjectMember).filter(
             ProjectMember.project_id == project_a.id
+        ).delete(synchronize_session=False)
+        # After the memberships that reference it, before the project it hangs
+        # off: the party is the middle of that chain.
+        db.query(ProjectParty).filter(
+            ProjectParty.project_id.in_([project_a.id, project_b.id])
         ).delete(synchronize_session=False)
         db.query(Project).filter(
             Project.id.in_([project_a.id, project_b.id])

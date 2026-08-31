@@ -65,6 +65,20 @@ class Settings(BaseSettings):
     #: queues, and turning that on is an operator's decision rather than a
     #: deployment default. See `services/agents/event_subscriber.py`.
     AGENT_AUTO_ANALYSIS_ENABLED: bool = os.getenv("AGENT_AUTO_ANALYSIS_ENABLED", "false").lower() == "true"
+    #: Refuse to fall back to the retired role enum when a user has no
+    #: database role yet. Off during the RBAC backfill, because a hard failure
+    #: there would lock out every account the backfill has not reached; an
+    #: operator turns it on once `app.db.rbac_backfill` reports zero remaining,
+    #: which then makes an unmigrated account an error instead of a silent
+    #: fallback. See app.services.rbac.
+    # `RBAC_REQUIRE_DB_ROLES` stood here and is retired. It gated the
+    # pre-backfill fallback in `rbac.resolved_permissions`; the contract step
+    # removed that fallback, so the invariant it expressed — every account
+    # holds a database role — is now structural rather than optional.
+    # `app.db.user_role_backstop` guarantees it at write time and
+    # `resolved_permissions` refuses anything that slipped through. A setting
+    # whose only remaining effect would be to break the system is worse than no
+    # setting.
     IFC_FEATURE_ENABLED: bool = os.getenv("IFC_FEATURE_ENABLED", "true").lower() == "true"
     IFC_MAX_FILE_MB: int = int(os.getenv("IFC_MAX_FILE_MB", "500"))
     IFC_PARSE_TIMEOUT_SECONDS: int = int(os.getenv("IFC_PARSE_TIMEOUT_SECONDS", "600"))

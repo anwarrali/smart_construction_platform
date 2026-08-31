@@ -60,7 +60,10 @@
     "yesterday": "أمس",
     "add": "إضافة",
     "unknownTask": "مهمة غير معروفة",
-    "reload": "إعادة التحميل"
+    "reload": "إعادة التحميل",
+    "account": "الحساب",
+    "enable": "تفعيل",
+    "disable": "تعطيل"
   },
   "empty": {
     "noData": "لا توجد بيانات للعرض",
@@ -139,7 +142,9 @@
     "openMenu": "فتح القائمة",
     "closeMenu": "إغلاق القائمة",
     "accessControl": "الصلاحيات",
-    "voiceAssistant": "المساعد الصوتي"
+    "voiceAssistant": "المساعد الصوتي",
+    "officeRoles": "الأدوار والتخصصات",
+    "projectParties": "أطراف المشروع"
   },
   "roles": {
     "admin": "مدير النظام",
@@ -147,7 +152,6 @@
     "project_manager": "مدير المشروع",
     "engineer": "مهندس",
     "consultant": "الاستشاري",
-    "worker": "عامل",
     "main_contractor": "مهندس المقاول الرئيسي",
     "external_consultant": "المهندس الاستشاري",
     "internal_engineer": "مهندس داخلي"
@@ -1534,7 +1538,6 @@
     "update_failed": "تعذّر تحديث الفريق.",
     "confirm_remove_member": "إزالة {{name}} من هذا المشروع؟ سيتم الاحتفاظ بالحساب العام.",
     "member_removed": "تمت إزالة العضو من هذا المشروع، مع الاحتفاظ بالحساب العام.",
-    "engineer_consultant_or_worker": "مهندس أو استشاري أو عامل",
     "all_disciplines": "كل التخصصات",
     "all_affiliations": "كل الجهات التابعة",
     "no_organization": "لا توجد جهة",
@@ -1546,7 +1549,18 @@
     "saving": "جارٍ الحفظ…",
     "save_approval_workflow": "حفظ سير عمل الاعتماد",
     "unknown_status": "غير معروف",
-    "use_account_discipline": "استخدام تخصص الحساب"
+    "use_account_discipline": "استخدام تخصص الحساب",
+    "engineer_or_consultant": "مهندس أو استشاري",
+    "project_role": "الدور في هذا المشروع",
+    "use_office_role": "نفس دوره في المكتب",
+    "disciplines": "التخصصات في هذا المشروع",
+    "disciplines_help": "اتركه فارغاً لاستخدام تخصصات الملف الشخصي.",
+    "site_responsibility": "مسؤولية الموقع",
+    "site_responsibility_help": "يمكن لأي عدد من الأشخاص تحملها، بأي تخصص. غير متاحة للمشاركين الخارجيين.",
+    "internal": "موظف المكتب",
+    "external_party": "خارجي · {{party}}",
+    "external_unassigned": "خارجي",
+    "participation": "المشاركة"
   },
   "adminDash": {
     "administrator_dashboard": "لوحة مدير النظام",
@@ -1828,10 +1842,8 @@
     "no_linked_technical_documents": "لا توجد مستندات فنية مرتبطة.",
     "related_issues_blockers": "المشكلات والمعوقات ذات الصلة",
     "no_related_issues": "لا توجد مشكلات ذات صلة.",
-    "worker_field_evidence": "أدلة العامل الميدانية",
     "verify_evidence": "التحقق من الأدلة",
     "reject": "رفض",
-    "no_worker_evidence_has_been_submitted": "لم تُقدَّم أي أدلة من العامل لهذه المهمة.",
     "comments_notes": "التعليقات والملاحظات",
     "no_comments_yet": "لا توجد تعليقات بعد.",
     "review_history": "سجل المراجعات",
@@ -1850,7 +1862,9 @@
     "severity": "درجة الخطورة",
     "required_rejection_reason": "سبب الرفض المطلوب",
     "task_discussion": "نقاش المهمة",
-    "add_a_task_comment": "أضف تعليقًا على المهمة…"
+    "add_a_task_comment": "أضف تعليقًا على المهمة…",
+    "field_evidence": "إثباتات الموقع",
+    "no_field_evidence_has_been_submitted": "لم يتم تقديم أي إثباتات ميدانية لهذه المهمة."
   },
   "executiveOverviewPage": {
     "executive_overview": "نظرة تنفيذية عامة",
@@ -2310,7 +2324,6 @@
     "next": "التالي",
     "task": "المهمة",
     "discipline": "التخصص",
-    "worker": "عامل",
     "uploader": "الرافع",
     "submitted": "مُرسل",
     "status": "الحالة",
@@ -2348,7 +2361,8 @@
     "to": "إلى",
     "general": "عام",
     "not_reviewed": "لم تتم مراجعته",
-    "unlabelled": "بدون تصنيف"
+    "unlabelled": "بدون تصنيف",
+    "submitted_by": "قدّمه"
   },
   "projectDetail": {
     "back_to_projects": "العودة إلى المشاريع",
@@ -2643,15 +2657,22 @@
     "phone_number": "رقم الهاتف",
     "organization": "المؤسسة",
     "company_office": "الشركة / المكتب",
-    "role": "الدور *",
     "status": "الحالة",
-    "engineer_affiliation": "جهة انتساب المهندس *",
-    "specialization": "التخصص *"
+    "office_role": "الدور في المكتب",
+    "select_office_role": "اختر دوراً في المكتب",
+    "external_organization": "الجهة الخارجية",
+    "internal_role_note": "من طاقم المكتب الاستشاري. صلاحياته محددة بأذونات هذا الدور.",
+    "external_role_note": "مشارك خارجي. يصل فقط إلى المشاريع المضاف إليها، وإلى ما تمت مشاركته مع جهته.",
+    "disciplines": "التخصصات",
+    "disciplines_help": "التخصصات التي يمارسها هذا الشخص. تعدد التخصصات أمر طبيعي — قد يجمع المكتب بين الميكانيكا والكهرباء. التخصصات لا تمنح صلاحيات؛ إنما تحدد نطاق تطبيق الأذونات.",
+    "no_disciplines_configured": "لم يتم إعداد أي تخصصات بعد."
   },
   "userPage": {
     "users": "المستخدمون",
     "manage_company_accounts_roles": "إدارة حسابات الشركة والأدوار والتخصصات وحالة الوصول",
-    "search_name_email_phone": "البحث بالاسم أو البريد أو الهاتف..."
+    "search_name_email_phone": "البحث بالاسم أو البريد أو الهاتف...",
+    "all_roles": "كل الأدوار",
+    "all_disciplines": "كل التخصصات"
   },
   "userTable": {
     "edit": "تعديل",
@@ -2662,18 +2683,15 @@
   "voiceReports": {
     "select_a_project_to_review_voice_reports": "اختر مشروعًا لمراجعة التقارير الصوتية.",
     "voice_assistant_review_inbox": "صندوق مراجعة المساعد الصوتي",
-    "review_worker_reports_evidence_and": "راجع تقارير العمال والأدلة والإجراءات المقترحة للمشروع.",
     "discipline": "التخصص",
     "all_disciplines": "جميع التخصصات",
     "intent": "الغرض",
     "all_intents": "جميع الأغراض",
-    "worker_field_report": "تقرير العامل الميداني",
     "issue": "ملاحظة",
     "progress_update": "تحديث التقدّم",
     "loading_voice_reports": "جارٍ تحميل التقارير الصوتية…",
     "voice_report": "تقرير صوتي",
     "needs_review": "يحتاج مراجعة",
-    "worker_report": "تقرير العامل",
     "original_transcript": "النص الأصلي",
     "english_summary": "ملخص بالإنجليزية",
     "load_secure_audio": "تحميل الصوت الآمن",
@@ -2688,12 +2706,15 @@
     "verify_evidence_only": "التحقق من الأدلة فقط",
     "verify_and_apply_suggested_update": "تحقق وطبّق التحديث المقترح",
     "reject_request_resubmission": "رفض / طلب إعادة التقديم",
-    "no_pending_worker_voice_reports_match": "لا توجد تقارير صوتية معلّقة من العمال تطابق عوامل التصفية هذه.",
-    "worker_task_or_code": "العامل أو المهمة أو الرمز",
     "search_reports": "البحث في التقارير…",
     "official_progress": "نسبة التقدّم الرسمية ٪",
     "engineer_note": "ملاحظة المهندس",
-    "required_reason_for_resubmission": "السبب المطلوب لإعادة التقديم"
+    "required_reason_for_resubmission": "السبب المطلوب لإعادة التقديم",
+    "review_field_reports_evidence_and": "راجع التقارير الميدانية والإثباتات وإجراءات المشروع المقترحة.",
+    "field_report": "تقرير ميداني",
+    "field_report_label": "تقرير ميداني",
+    "no_pending_voice_reports_match": "لا توجد تقارير صوتية معلّقة تطابق هذه المرشحات.",
+    "person_task_or_code": "الشخص أو المهمة أو الرمز"
   },
   "review": {
     "status": {
@@ -2984,5 +3005,63 @@
     "understanding": "جارٍ الفهم…",
     "updateFailed": "تعذّر تحديث الإجراء. حاول مرة أخرى.",
     "whichTask": "أي مهمة تقصد؟"
+  },
+  "officeRoles": {
+    "title": "الأدوار والتخصصات",
+    "subtitle": "مسميات العاملين في المكتب، وصلاحيات كل دور، والتخصصات التي يعمل بها المكتب. التغييرات تسري فوراً.",
+    "tab_roles": "الأدوار",
+    "tab_disciplines": "التخصصات",
+    "rolesHeading": "أدوار المكتب",
+    "disciplinesHeading": "التخصصات",
+    "disciplinesHelp": "التخصص لا يمنح صلاحية بحد ذاته — بل يحدد الأعمال والوثائق والملاحظات التي يراها الشخص.",
+    "newRoleName": "اسم الدور الجديد",
+    "newRolePlaceholder": "مهندس مقيم",
+    "newDisciplineName": "تخصص جديد",
+    "newDisciplinePlaceholder": "جيوتقني",
+    "createRole": "إنشاء دور",
+    "createDiscipline": "إضافة تخصص",
+    "scope": "نطاق التطبيق",
+    "scopeBoth": "المكتب والمشاريع",
+    "scopeOrg": "المكتب فقط",
+    "scopeProject": "المشاريع فقط",
+    "internalOnly": "موظفو المكتب فقط",
+    "external": "خارجي",
+    "selectRole": "اختر دوراً لعرض صلاحياته.",
+    "noDescription": "لا يوجد وصف.",
+    "heldBy": "يشغله {{count}} أشخاص.",
+    "administratorLocked": "هذا دور مدير النظام. لا يمكن حذفه، ويحتفظ دائماً بالصلاحيات اللازمة للإدارة.",
+    "refusedForExternal": "لا يمكن منحها لأشخاص من خارج المكتب.",
+    "roleCreated": "تم إنشاء {{name}}.",
+    "roleDeleted": "تم حذف {{name}}.",
+    "disciplineCreated": "تمت إضافة {{name}}.",
+    "permissionAdded": "تمت إضافة الصلاحية.",
+    "permissionRemoved": "تمت إزالة الصلاحية.",
+    "coversModelClasses": "يشمل أصناف النموذج: {{list}}"
+  },
+  "projectParties": {
+    "title": "أطراف المشروع",
+    "subtitle": "العميل والمقاولون والجهات الأخرى المشاركة في هذا المشروع. تُسجَّل هنا على مستوى المشروع لأن المشروع هو نقطة التقاء المكتب بها.",
+    "addHeading": "إضافة طرف",
+    "kind": "النوع",
+    "name": "اسم الجهة",
+    "namePlaceholder": "مقاولات بركات",
+    "contact": "الشخص المسؤول",
+    "worksUnder": "يعمل تحت",
+    "worksUnderNone": "المشروع مباشرة",
+    "worksUnderName": "يعمل تحت {{name}}",
+    "add": "إضافة طرف",
+    "added": "تمت إضافة {{name}}.",
+    "removed": "تمت إزالة {{name}}.",
+    "primary": "رئيسي",
+    "empty": "لا توجد أطراف خارجية مسجلة على هذا المشروع بعد.",
+    "peopleOnProject": "{{count}} أشخاص على هذا المشروع",
+    "accessNote": "لا يرى أفراد الطرف الخارجي إلا ما تمت مشاركته صراحةً مع ذلك الطرف. إضافة طرف لا تمنح أحداً حق الاطلاع على وثائق المشروع.",
+    "kind_CLIENT": "العميل",
+    "kind_MAIN_CONTRACTOR": "المقاول الرئيسي",
+    "kind_SUBCONTRACTOR": "مقاول من الباطن",
+    "kind_CONSULTANT": "استشاري خارجي",
+    "kind_SUPPLIER": "مورّد",
+    "kind_AUTHORITY": "جهة رسمية",
+    "kind_OTHER": "أخرى"
   }
 }

@@ -52,6 +52,16 @@ class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         server_default=ConsultantApprovalMode.DISCIPLINE_BASED_REVIEW.name,
     )
 
+    #: Whether field evidence needs a second person to confirm it.
+    #: The submit-then-verify handshake was built for workers, whose evidence
+    #: an engineer checked. A site engineer filing their own observations is
+    #: already the qualified person, so an office can turn the second step off
+    #: per project rather than having it imposed. Defaults to true, which is
+    #: the behaviour every existing project already has.
+    field_evidence_verification_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true",
+    )
+
     cover_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     task_code_counter: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     milestone_code_counter: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
@@ -108,6 +118,21 @@ class ProjectMember(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         PG_ENUM(UserRole, name="user_role", create_type=False),
         nullable=False,
     )
+    #: The configurable role held on this project. Need not match the person's
+    #: office role: a Senior Engineer may be the Project Manager here, which
+    #: `role_on_project` could not express because it was required to equal the
+    #: user's global role.
+    project_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("roles.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
+    #: The external party this member belongs to. NULL means consulting-office
+    #: staff. This single column is the internal/external boundary: everything
+    #: that scopes an external participant keys off it.
+    party_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("project_parties.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     assignment_title: Mapped[str | None] = mapped_column(String(120), nullable=True)
     project_discipline: Mapped[str | None] = mapped_column(String(30), nullable=True)
@@ -122,6 +147,37 @@ class ProjectMember(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     project: Mapped["Project"] = relationship(back_populates="members")
     user: Mapped["User"] = relationship(back_populates="project_memberships", foreign_keys=[user_id])
     assigned_by: Mapped["User | None"] = relationship(foreign_keys=[assigned_by_id])
+    project_role: Mapped["Role | None"] = relationship(foreign_keys=[project_role_id])
+    party: Mapped["ProjectParty | None"] = relationship(foreign_keys=[party_id])
+    member_disciplines: Mapped[list["ProjectMemberDiscipline"]] = relationship(
+        cascade="all, delete-orphan",
+        primaryjoin="ProjectMember.id == ProjectMemberDiscipline.project_member_id",
+    )
+
+    # --- read-only views for the API -------------------------------------
+    # The membership row is what the team screen renders, and these are the
+    # four things it needs to say that the retired `role_on_project` enum
+    # could not: which configurable role, which outside party (if any),
+    # whether that makes them external, and every discipline they cover
+    # rather than the single one the old column held.
+
+    @property
+    def project_role_name(self) -> str | None:
+        return self.project_role.name_en if self.project_role else None
+
+    @property
+    def party_name(self) -> str | None:
+        return self.party.display_name if self.party else None
+
+    @property
+    def is_external(self) -> bool:
+        return self.party_id is not None
+
+    @property
+    def discipline_codes(self) -> list[str]:
+        return [
+            row.discipline.code for row in self.member_disciplines if row.discipline
+        ]
 
 
 class ProjectConsultantReviewer(Base, UUIDPrimaryKeyMixin, TimestampMixin):

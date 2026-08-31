@@ -8,7 +8,7 @@ export interface FieldSubmission {
   id: string;
   projectId: string;
   taskId: string;
-  workerId: string;
+  submittedById: string;
   description?: string;
   voiceMetadata?: string;
   status: FieldSubmissionStatus;
@@ -16,7 +16,7 @@ export interface FieldSubmission {
   reviewedById?: string;
   reviewComment?: string;
   resubmissionOfId?: string;
-  worker: { id: string; fullName: string; email: string };
+  submittedBy: { id: string; fullName: string; email: string };
   reviewedBy?: { id: string; fullName: string };
   photos: Array<{
     id: string;

@@ -37,6 +37,13 @@ class SiteReport(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     delays: Mapped[str | None] = mapped_column(Text, nullable=True)
     issues_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Which discipline the visit covered. A project with several site
+    #: engineers of different disciplines produces several reports a day, and
+    #: without this they cannot be filtered or routed to the right reviewer.
+    discipline_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("disciplines.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
     review_status: Mapped[str] = mapped_column(String(30), nullable=False, default="submitted", index=True)
     reviewed_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

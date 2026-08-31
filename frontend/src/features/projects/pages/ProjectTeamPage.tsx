@@ -14,15 +14,38 @@ import type { ApprovalMode, Project, ProjectMember } from "../../../types/projec
 import { useProjectWorkspace } from "../context/ProjectWorkspaceContext";
 import { useParams } from "react-router-dom";
 import { useRole } from "../../../hooks/useRole";
+import organizationService, {
+  type Discipline,
+  type ProjectParty,
+  type Role,
+} from "../../admin/services/organization.service";
 
-const DISCIPLINES = ["civil", "architectural", "electrical", "mechanical"];
+/**
+ * Which memberships this page may adjust.
+ *
+ * The server refuses to edit, transfer or remove the membership that carries
+ * the project's owner or its assigned manager — those are changed in project
+ * setup, not here. That is the rule the row actions mirror. It used to be
+ * written as `["engineer", "consultant"].includes(member.user.role)`, which
+ * asked what the *account* is instead of what the membership is, and so hid
+ * the actions from anybody an office puts on a project under a role it created
+ * itself.
+ */
+const isAdjustableMembership = (member: ProjectMember) =>
+  !["owner", "project_manager"].includes(member.roleOnProject || "");
 
 export const ProjectTeamPage = () => {
   const { t } = useTranslation();
   const vocabulary = useVocabulary();
   const workspace = useProjectWorkspace();
   const { projectId: routeProjectId } = useParams<{ projectId?: string }>();
-  const { isAdmin } = useRole();
+  /* Permissions, not a role name. `project.edit` is what the approval-workflow
+     endpoint checks; `project.manage_members` is what everything else on this
+     page checks. Both default to the same people the retired `isAdmin` gate
+     admitted, and an office can now widen either without a release. */
+  const { hasCapability, permissionsReady } = useRole();
+  const canConfigureApproval = !permissionsReady || hasCapability("project.edit");
+  const canManageMembers = !permissionsReady || hasCapability("project.manage_members");
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -35,14 +58,29 @@ export const ProjectTeamPage = () => {
   const [transferMember, setTransferMember] = useState<ProjectMember | null>(null);
   const [targetProjectId, setTargetProjectId] = useState("");
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
+  /* The legacy "Engineer or Consultant" select is gone. Splitting the office's
+     own directory by the retired enum was the last place this page asked which
+     of six fixed roles somebody was; what actually narrows a search here is
+     the discipline and the name, and what the assignment *is* — party, project
+     role, disciplines, site responsibility — is chosen in the form below. */
   const [disciplineFilter, setDisciplineFilter] = useState("");
-  const [affiliationFilter, setAffiliationFilter] = useState("");
+  // Kept as a constant rather than a control: the eligible-user query still
+  // accepts the retired affiliation filter, and sending nothing means "no
+  // affiliation filter". Internal vs external is now a property of the
+  // assignment being made, chosen in the form below.
+  const affiliationFilter = "";
   const [selectedUserId, setSelectedUserId] = useState("");
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [projectDiscipline, setProjectDiscipline] = useState("");
   const [projectNotes, setProjectNotes] = useState("");
   const [siteEngineer, setSiteEngineer] = useState(false);
+  // The configurable model, loaded from the office rather than hardcoded.
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [disciplines, setDisciplines] = useState<Discipline[]>([]);
+  const [parties, setParties] = useState<ProjectParty[]>([]);
+  const [projectRoleId, setProjectRoleId] = useState("");
+  const [partyId, setPartyId] = useState("");
+  const [disciplineIds, setDisciplineIds] = useState<string[]>([]);
   const [approvalMode, setApprovalMode] = useState<ApprovalMode>("DISCIPLINE_BASED_REVIEW");
   const [centralizedReviewerId, setCentralizedReviewerId] = useState("");
   const [disciplineReviewers, setDisciplineReviewers] = useState<Record<string, string>>({});
@@ -55,6 +93,21 @@ export const ProjectTeamPage = () => {
       setProjectId(routeProjectId || workspace.projectId || list[0]?.id || "");
     }).catch(() => setError("Unable to load assigned projects."));
   }, [routeProjectId, workspace.projectId]);
+
+  useEffect(() => {
+    // Roles and disciplines are office-wide; parties belong to the project.
+    Promise.all([organizationService.roles(), organizationService.disciplines()])
+      .then(([roleRows, disciplineRows]) => {
+        setRoles(roleRows.filter((role) => role.scope !== "ORG" && role.isActive));
+        setDisciplines(disciplineRows.filter((item) => item.isActive));
+      })
+      .catch(() => setError("Unable to load the office's roles and disciplines."));
+  }, []);
+
+  useEffect(() => {
+    if (!projectId) return;
+    organizationService.parties(projectId).then(setParties).catch(() => setParties([]));
+  }, [projectId]);
 
   const loadTeam = useCallback(async () => {
     if (!projectId) return;
@@ -69,7 +122,7 @@ export const ProjectTeamPage = () => {
       setApprovalMode(approval.mode);
       setCentralizedReviewerId(approval.centralizedReviewerId || "");
       setDisciplineReviewers(Object.fromEntries(
-        DISCIPLINES.map((discipline) => [
+        disciplineCodes.map((discipline) => [
           discipline,
           approval.disciplineReviewers[discipline]?.[0] || "",
         ]),
@@ -86,7 +139,6 @@ export const ProjectTeamPage = () => {
     const timer = window.setTimeout(() => {
       api.projects.getAvailableTeamMembers(projectId, {
         search: search || undefined,
-        role: roleFilter || undefined,
         discipline: disciplineFilter || undefined,
         affiliation: affiliationFilter || undefined,
       }).then((users) => {
@@ -95,10 +147,11 @@ export const ProjectTeamPage = () => {
       }).catch((err: any) => setError(err?.response?.data?.detail || "Unable to load eligible users."));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [addOpen, affiliationFilter, disciplineFilter, projectId, roleFilter, search]);
+  }, [addOpen, affiliationFilter, disciplineFilter, projectId, search]);
 
   const selectedUser = useMemo(() => available.find((user) => user.id === selectedUserId), [available, selectedUserId]);
   const otherProjects = projects.filter((project) => project.id !== projectId);
+  const disciplineCodes = useMemo(() => disciplines.map((item) => item.code), [disciplines]);
   /* Everyone serving as a Consultant on this project is eligible to be its
      reviewer. Requiring the external-consultant affiliation on top of the
      project role also excluded accounts whose global role is Consultant, which
@@ -118,7 +171,20 @@ export const ProjectTeamPage = () => {
 
   const resetAssignmentForm = () => {
     setAssignmentTitle(""); setProjectDiscipline(""); setProjectNotes(""); setSiteEngineer(false);
+    setProjectRoleId(""); setPartyId(""); setDisciplineIds([]);
   };
+
+  const toggleDiscipline = (id: string) =>
+    setDisciplineIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+
+  /* Roles an office marks `isInternalOnly` cannot be given to somebody taking
+     part for an outside party — the server refuses it, so the picker should
+     not offer it. */
+  const assignableRoles = useMemo(
+    () => roles.filter((role) => (partyId ? !role.isInternalOnly : true)),
+    [roles, partyId],
+  );
 
   const saveApprovalWorkflow = async () => {
     const mappings = Object.fromEntries(
@@ -151,26 +217,31 @@ export const ProjectTeamPage = () => {
     }
   };
 
-  /* The server derives the project role from the account and rejects a mismatch,
-     so this must use the same rule: only an *Engineer* marked as an external
-     consultant is assigned as a Consultant. A Worker who carries that
-     affiliation stays a Worker. */
-  const isExternalConsultantEngineer = (user: User) =>
-    user.role === "engineer" && user.engineerAffiliation === "external_consultant";
-  const canBeSiteEngineer = (user?: User | null) =>
-    !!user && user.role === "engineer" && !isExternalConsultantEngineer(user);
+  /* Site responsibility is a project assignment, not a role: any number of
+     people may carry it, of any discipline. The one structural rule is that
+     somebody on the project for an outside party does not carry the office's
+     site responsibility — which is a property of the *assignment* being made,
+     not of the account. */
+  const canBeSiteEngineer = () => !partyId;
 
   const addMember = async () => {
     if (!selectedUser) return;
-    const projectRole = isExternalConsultantEngineer(selectedUser) ? "consultant" : selectedUser.role;
-    /* The Site Engineer box is hidden for anyone who cannot hold that
-       responsibility, but hiding it left the last value behind: after looking at
-       an engineer the flag stayed set, and assigning a consultant next was
-       rejected with 400. Send it only when it can apply. */
-    const ok = await run(() => api.projects.addMember(projectId, selectedUser.id, projectRole,
-      assignmentTitle || undefined, canBeSiteEngineer(selectedUser) && siteEngineer,
+    /* `roleOnProject` is the retired column and the server derives it when the
+       configurable role is supplied; it is still sent for a client that has
+       not been updated. The Site Engineer flag is only sent when it can
+       apply, so switching from an internal assignment to an external one does
+       not carry a stale value into a 400. */
+    const ok = await run(() => api.projects.addMember(
+      projectId, selectedUser.id, selectedUser.role,
+      assignmentTitle || undefined, canBeSiteEngineer() && siteEngineer,
       projectDiscipline || selectedUser.engineerProfile?.discipline,
-      projectNotes || undefined));
+      projectNotes || undefined,
+      {
+        projectRoleId: projectRoleId || undefined,
+        partyId: partyId || null,
+        disciplineIds,
+      },
+    ));
     if (ok) { setAddOpen(false); resetAssignmentForm(); }
   };
 
@@ -180,6 +251,13 @@ export const ProjectTeamPage = () => {
     setProjectDiscipline(member.projectDiscipline || member.user?.engineerProfile?.discipline || "");
     setProjectNotes(member.projectNotes || "");
     setSiteEngineer(member.isSiteEngineer);
+    setProjectRoleId(member.projectRoleId || "");
+    setPartyId(member.partyId || "");
+    setDisciplineIds(
+      disciplines
+        .filter((item) => (member.disciplineCodes || []).includes(item.code))
+        .map((item) => item.id),
+    );
   };
 
   return <div className="page-container space-y-6">
@@ -193,7 +271,7 @@ export const ProjectTeamPage = () => {
         : <Select label={t("projectTeam.project")} value={projectId} onChange={(event) => setProjectId(event.target.value)} options={projects.map((project) => ({ value: project.id, label: project.name }))} />}
       {error && <p className={`text-sm ${error.includes("added") || error.includes("transferred") || error.includes("preserved") || error.includes("saved") ? "text-green-600" : "text-red-600"}`}>{error}</p>}
     </Card>
-    {isAdmin && <Card className="space-y-5">
+    {canConfigureApproval && <Card className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold">{t("projectTeam.approval_workflow")}</h2>
         <p className="text-sm text-muted-foreground">{t("projectTeam.configure_which_project_consultants_may")}</p>
@@ -221,7 +299,7 @@ export const ProjectTeamPage = () => {
           }))]} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {DISCIPLINES.map((discipline) => <Select key={discipline} label={t("projectTeam.discipline_reviewer", { discipline: vocabulary.discipline(discipline) })}
+          {disciplineCodes.map((discipline) => <Select key={discipline} label={t("projectTeam.discipline_reviewer", { discipline: vocabulary.discipline(discipline) })}
             value={disciplineReviewers[discipline] || ""}
             onChange={(event) => setDisciplineReviewers((current) => ({ ...current, [discipline]: event.target.value }))}
             options={[{ value: "", label: t("projectTeam.not_assigned") }, ...consultantMembers.map((member) => ({
@@ -241,14 +319,14 @@ export const ProjectTeamPage = () => {
         <th className="p-3">{t("projectTeam.member")}</th><th className="p-3">{t("projectTeam.role_discipline")}</th><th className="p-3">{t("projectTeam.company_affiliation")}</th><th className="p-3">{t("projectTeam.project_responsibility")}</th><th className="p-3">{t("projectTeam.assigned")}</th><th className="p-3">{t("projectTeam.actions")}</th>
       </tr></thead><tbody>{members.map((member) => <tr key={member.id} className="border-b align-top last:border-0">
         <td className="p-3"><p className="font-medium">{member.user?.fullName}</p><p className="text-xs text-muted-foreground">{member.user?.email}</p><Badge size="sm" variant={member.user?.status === "active" ? "success" : "neutral"}>{member.user?.status ? vocabulary.term(member.user.status) : t("projectTeam.unknown_status")}</Badge></td>
-        <td className="p-3"><p>{vocabulary.role(member.user?.role)}</p><p className="text-muted-foreground">{member.projectDiscipline || member.user?.engineerProfile?.discipline ? vocabulary.discipline(member.projectDiscipline || member.user?.engineerProfile?.discipline) : "—"}</p></td>
-        <td className="p-3"><p>{member.user?.organization || "—"}</p>{member.user?.engineerAffiliation && <Badge size="sm" variant={member.user.engineerAffiliation === "external_consultant" ? "warning" : "neutral"}>{vocabulary.role(member.user.engineerAffiliation)}</Badge>}</td>
+        <td className="p-3"><p>{member.projectRoleName || vocabulary.role(member.user?.role)}</p><p className="text-muted-foreground">{(member.disciplineCodes || []).length ? (member.disciplineCodes || []).map((code) => vocabulary.discipline(code)).join(", ") : (member.projectDiscipline ? vocabulary.discipline(member.projectDiscipline) : "—")}</p></td>
+        <td className="p-3"><p>{member.user?.organization || "—"}</p><Badge size="sm" variant={member.isExternal ? "warning" : "neutral"}>{member.isExternal ? (member.partyName ? t("projectTeam.external_party", { party: member.partyName }) : t("projectTeam.external_unassigned")) : t("projectTeam.internal")}</Badge></td>
         <td className="p-3"><p>{member.assignmentTitle || t("projectTeam.project_participant")}</p>{member.isSiteEngineer && <Badge size="sm" variant="success">{t("projectTeam.site_engineer")}</Badge>}<p className="mt-1 max-w-xs text-xs text-muted-foreground">{member.projectNotes}</p></td>
         <td className="p-3 text-muted-foreground">{formatDate(member.createdAt || "")}</td>
-        <td className="p-3">{["engineer", "consultant", "worker"].includes(member.user?.role || "") && <div className="flex flex-wrap gap-2">
+        <td className="p-3">{canManageMembers && isAdjustableMembership(member) && <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => openEdit(member)}>{t("projectTeam.edit_project_assignment")}</Button>
           {otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setAnotherMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.add_to_another_project")}</Button>}
-          {isAdmin && otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setTransferMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.transfer")}</Button>}
+          {canConfigureApproval && otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setTransferMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.transfer")}</Button>}
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm(t("projectTeam.confirm_remove_member", { name: member.user.fullName }))) run(() => api.projects.removeMember(projectId, member.userId), t("projectTeam.member_removed")); }}>{t("projectTeam.remove_from_project")}</Button>
         </div>}</td>
       </tr>)}{!busy && members.length === 0 && <tr><td className="p-6 text-center text-muted-foreground" colSpan={6}>{t("projectTeam.no_participants_assigned")}</td></tr>}</tbody></table></div>
@@ -256,15 +334,30 @@ export const ProjectTeamPage = () => {
 
     <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title={t("projectTeam.add_team_member")} size="lg"><div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.search_database_users")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("projectTeam.name_or_email")} />
-        <Select label={t("projectTeam.global_role")} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} options={[{ value: "", label: t("projectTeam.engineer_consultant_or_worker") }, { value: "engineer", label: vocabulary.role("engineer") }, { value: "consultant", label: vocabulary.role("consultant") }, { value: "worker", label: vocabulary.role("worker") }]} />
-        <Select label={t("projectTeam.discipline")} value={disciplineFilter} onChange={(event) => setDisciplineFilter(event.target.value)} options={[{ value: "", label: t("projectTeam.all_disciplines") }, ...DISCIPLINES.map((value) => ({ value, label: vocabulary.discipline(value) }))]} />
-        <Select label={t("projectTeam.company_affiliation")} value={affiliationFilter} onChange={(event) => setAffiliationFilter(event.target.value)} options={[{ value: "", label: t("projectTeam.all_affiliations") }, { value: "internal_engineer", label: vocabulary.role("internal_engineer") }, { value: "main_contractor", label: vocabulary.role("main_contractor") }, { value: "external_consultant", label: vocabulary.role("external_consultant") }]} /></div>
+        <Select label={t("projectTeam.discipline")} value={disciplineFilter} onChange={(event) => setDisciplineFilter(event.target.value)} options={[{ value: "", label: t("projectTeam.all_disciplines") }, ...disciplines.map((item) => ({ value: item.code, label: item.nameEn }))]} /></div>
       <Select label={t("projectTeam.eligible_active_user")} value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${vocabulary.role(user.role)} · ${user.engineerProfile?.discipline ? vocabulary.discipline(user.engineerProfile.discipline) : t("projectTeam.no_discipline")} · ${user.organization || t("projectTeam.no_organization")}` }))} />
       {selectedUser && <div className="rounded border p-3 text-sm"><p className="font-medium">{selectedUser.fullName}</p><p>{selectedUser.email} · {vocabulary.role(selectedUser.role)} · {selectedUser.engineerProfile?.discipline}</p><p>{selectedUser.organization || t("projectTeam.no_organization")} · {selectedUser.engineerAffiliation ? vocabulary.role(selectedUser.engineerAffiliation) : ""}</p></div>}
-      <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.project_responsibility_title")} value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder={t("projectTeam.technical_reviewer_project_engineer")} />
-        <Select label={t("projectTeam.project_discipline")} value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={[{ value: "", label: t("projectTeam.use_account_discipline") }, ...DISCIPLINES.map((value) => ({ value, label: vocabulary.discipline(value) }))]} /></div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label={t("projectTeam.participation")} value={partyId} onChange={(event) => { setPartyId(event.target.value); if (event.target.value) { setSiteEngineer(false); setProjectRoleId(""); } }}
+          options={[{ value: "", label: t("projectTeam.internal") }, ...parties.map((party) => ({ value: party.id, label: `${party.displayName} · ${t(`projectParties.kind_${party.kind}`)}` }))]} />
+        <Select label={t("projectTeam.project_role")} value={projectRoleId} onChange={(event) => setProjectRoleId(event.target.value)}
+          options={[{ value: "", label: t("projectTeam.use_office_role") }, ...assignableRoles.map((role) => ({ value: role.id, label: role.nameEn }))]} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.project_responsibility_title")} value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder={t("projectTeam.technical_reviewer_project_engineer")} /></div>
+      <fieldset className="rounded border p-3">
+        <legend className="px-1 text-sm font-medium">{t("projectTeam.disciplines")}</legend>
+        <p className="mb-2 text-xs text-muted-foreground">{t("projectTeam.disciplines_help")}</p>
+        <div className="flex flex-wrap gap-2">
+          {disciplines.map((item) => (
+            <label key={item.id} className="flex items-center gap-1.5 rounded border px-2 py-1 text-sm">
+              <input type="checkbox" checked={disciplineIds.includes(item.id)} onChange={() => toggleDiscipline(item.id)} />
+              {item.nameEn}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <label className="block text-sm"><span className="font-medium">{t("projectTeam.project_specific_notes")}</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
-      {canBeSiteEngineer(selectedUser) && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> {t("projectTeam.assign_as_site_engineer")}</label>}
+      {canBeSiteEngineer() && <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /><span>{t("projectTeam.site_responsibility")}<span className="block text-xs text-muted-foreground">{t("projectTeam.site_responsibility_help")}</span></span></label>}
       {!available.length && <p className="text-sm text-muted-foreground">{t("projectTeam.no_eligible_active_users_match_these")}</p>}
       <ModalActions><Button variant="outline" onClick={() => setAddOpen(false)}>{t("projectTeam.cancel")}</Button><Button disabled={!selectedUserId || busy} onClick={addMember}>{t("projectTeam.add_team_member")}</Button></ModalActions>
     </div></Modal>
@@ -272,10 +365,22 @@ export const ProjectTeamPage = () => {
     <Modal isOpen={!!editing} onClose={() => setEditing(null)} title={t("projectTeam.edit_project_assignment")} size="lg"><div className="space-y-4">
       <p className="text-sm text-muted-foreground">Only this project membership is changed. Email, global role, account status, and organization remain Administrator-only.</p>
       <Input label={t("projectTeam.project_responsibility_title")} value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} />
-      <Select label={t("projectTeam.project_discipline")} value={projectDiscipline} onChange={(event) => setProjectDiscipline(event.target.value)} options={DISCIPLINES.map((value) => ({ value, label: value }))} />
+      <Select label={t("projectTeam.project_role")} value={projectRoleId} onChange={(event) => setProjectRoleId(event.target.value)}
+        options={[{ value: "", label: t("projectTeam.use_office_role") }, ...assignableRoles.map((role) => ({ value: role.id, label: role.nameEn }))]} />
+      <fieldset className="rounded border p-3">
+        <legend className="px-1 text-sm font-medium">{t("projectTeam.disciplines")}</legend>
+        <div className="flex flex-wrap gap-2">
+          {disciplines.map((item) => (
+            <label key={item.id} className="flex items-center gap-1.5 rounded border px-2 py-1 text-sm">
+              <input type="checkbox" checked={disciplineIds.includes(item.id)} onChange={() => toggleDiscipline(item.id)} />
+              {item.nameEn}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <label className="block text-sm"><span className="font-medium">{t("projectTeam.project_specific_notes")}</span><textarea className="mt-1 w-full rounded-md border bg-background p-2" rows={3} value={projectNotes} onChange={(event) => setProjectNotes(event.target.value)} /></label>
-      {editing?.user?.role === "engineer" && editing.user.engineerAffiliation !== "external_consultant" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> {t("projectTeam.site_engineer_responsibility")}</label>}
-      <ModalActions><Button variant="outline" onClick={() => setEditing(null)}>{t("projectTeam.cancel")}</Button><Button disabled={busy} onClick={async () => { if (!editing) return; const ok = await run(() => api.projects.updateMemberAssignment(projectId, editing.userId, { assignmentTitle, projectDiscipline, projectNotes, isSiteEngineer: editing.user?.role === "engineer" ? siteEngineer : false })); if (ok) setEditing(null); }}>{t("projectTeam.save_project_assignment")}</Button></ModalActions>
+      {editing && !editing.isExternal && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={siteEngineer} onChange={(event) => setSiteEngineer(event.target.checked)} /> {t("projectTeam.site_engineer_responsibility")}</label>}
+      <ModalActions><Button variant="outline" onClick={() => setEditing(null)}>{t("projectTeam.cancel")}</Button><Button disabled={busy} onClick={async () => { if (!editing) return; const ok = await run(() => api.projects.updateMemberAssignment(projectId, editing.userId, { assignmentTitle, projectDiscipline, projectNotes, projectRoleId: projectRoleId || undefined, disciplineIds, isSiteEngineer: editing.isExternal ? false : siteEngineer })); if (ok) setEditing(null); }}>{t("projectTeam.save_project_assignment")}</Button></ModalActions>
     </div></Modal>
 
     <Modal isOpen={!!anotherMember} onClose={() => setAnotherMember(null)} title={t("projectTeam.add_to_another_project")}><div className="space-y-4">

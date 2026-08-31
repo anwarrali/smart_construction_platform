@@ -3,8 +3,16 @@
 The claim Phase 5 makes is that the tool layer is not a bypass. That is only
 worth anything if it is checked against the platform's real roles on a real
 database, with the same helpers the web UI uses — so this suite builds a
-project with a manager, an outside user and a worker, and asks the tools to
+project with a manager, an outside user and a surveyor, and asks the tools to
 misbehave.
+
+The narrow caller is a **Surveyor** rather than the retired Worker role it used
+to be. That is not a cosmetic rename: the property under test is "somebody who
+neither reviews nor edits the project's work sees only the work they were
+given", and Surveyor is the office role the seeded templates define that way
+(`_NO_REVIEW_AUTHORITY`). It is therefore assigned a real `org_role_id`, so the
+suite exercises the configurable role model rather than the pre-backfill
+catalogue fallback.
 """
 
 from uuid import uuid4
@@ -18,6 +26,7 @@ from app.models.enums import ProjectStatus, TaskStatus, UserRole, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.user import User
+from app.services import rbac
 from app.services.ai_tools import BY_NAME, available_tools, call_tool
 
 
@@ -39,28 +48,35 @@ def db():
 @pytest.fixture()
 def world(db):
     suffix = uuid4().hex[:10]
+    rbac.seed_disciplines(db)
+    roles = rbac.seed_roles(db)
 
-    def user(name, role):
+    def user(name, role, org_role_code=None):
         return User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+                    hashed_password="x", role=role, status=UserStatus.ACTIVE,
+                    org_role_id=roles[org_role_code].id if org_role_code else None,
+                    is_internal=True if org_role_code else None)
 
     manager = user("ToolPm", UserRole.PROJECT_MANAGER)
     outsider = user("ToolOutsider", UserRole.PROJECT_MANAGER)
-    worker = user("ToolWorker", UserRole.WORKER)
+    surveyor = user("ToolSurveyor", UserRole.ENGINEER, "surveyor")
     owner = user("ToolOwner", UserRole.OWNER)
     suspended = user("ToolSuspended", UserRole.PROJECT_MANAGER)
     suspended.status = UserStatus.INACTIVE
-    db.add_all([manager, outsider, worker, owner, suspended])
+    db.add_all([manager, outsider, surveyor, owner, suspended])
     db.flush()
 
     project = Project(name=f"Tools {suffix}", status=ProjectStatus.ACTIVE,
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    for person, role in ((manager, UserRole.PROJECT_MANAGER), (worker, UserRole.WORKER),
+    for person, role in ((manager, UserRole.PROJECT_MANAGER), (surveyor, UserRole.ENGINEER),
                          (suspended, UserRole.PROJECT_MANAGER)):
         db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=role, is_active=True))
+                             role_on_project=role, is_active=True,
+                             project_role_id=(
+                                 roles["surveyor"].id if person is surveyor else None
+                             )))
     task = Task(project_id=project.id, task_code="T-001", name="Pour slab",
                 status=TaskStatus.IN_PROGRESS, progress_percentage=30,
                 created_by_id=manager.id)
@@ -68,9 +84,9 @@ def world(db):
     db.commit()
     try:
         yield {"project": project, "manager": manager, "outsider": outsider,
-               "worker": worker, "suspended": suspended, "task": task}
+               "surveyor": surveyor, "suspended": suspended, "task": task}
     finally:
-        _purge(db, project.id, [manager.id, outsider.id, worker.id, owner.id, suspended.id])
+        _purge(db, project.id, [manager.id, outsider.id, surveyor.id, owner.id, suspended.id])
 
 
 def _purge(db, project_id, user_ids):
@@ -157,15 +173,15 @@ def test_task_reads_are_scoped_to_what_the_caller_may_see(db, world):
     assert manager.ok is True
     assert any(task["name"] == "Pour slab" for task in manager.data["tasks"])
 
-    worker = call(db, world, "worker", "get_tasks")
-    # A worker sees only work assigned to them; this task is assigned to nobody.
-    if worker.ok:
-        assert all(task["name"] != "Pour slab" for task in worker.data["tasks"])
+    surveyor = call(db, world, "surveyor", "get_tasks")
+    # A site engineer sees only work assigned to them; this task is assigned to nobody.
+    if surveyor.ok:
+        assert all(task["name"] != "Pour slab" for task in surveyor.data["tasks"])
 
 
 def test_a_task_outside_the_callers_scope_reads_as_not_found(db, world):
     """Indistinguishable from absent, which is the correct thing for it to be."""
-    result = call(db, world, "worker", "get_task", {"taskId": str(world["task"].id)})
+    result = call(db, world, "surveyor", "get_task", {"taskId": str(world["task"].id)})
     assert result.ok is False
     assert result.error_code in {"NOT_FOUND", "FORBIDDEN"}
 
@@ -206,7 +222,7 @@ def test_a_proposal_response_is_flagged_as_needing_confirmation(db, world):
 
 def test_a_role_that_may_not_perform_an_operation_cannot_propose_it(db, world):
     """The proposal path applies the same registry the voice path applies."""
-    result = call(db, world, "worker", "create_task", {"name": "Something a worker cannot add"})
+    result = call(db, world, "surveyor", "create_task", {"name": "Something a surveyor cannot add"})
     assert result.ok is False
     assert result.error_code == "FORBIDDEN"
 
@@ -229,11 +245,11 @@ def test_proposing_against_a_task_in_another_project_is_refused(db, world):
 def test_the_tool_list_offered_to_an_agent_reflects_the_callers_permissions(db, world):
     manager = {tool["name"] for tool in available_tools(db, user=world["manager"],
                                                         project_id=world["project"].id)}
-    worker = {tool["name"] for tool in available_tools(db, user=world["worker"],
+    surveyor = {tool["name"] for tool in available_tools(db, user=world["surveyor"],
                                                        project_id=world["project"].id)}
     assert "create_task" in manager
-    assert worker <= manager
-    assert "create_task" not in worker or worker != manager
+    assert surveyor <= manager
+    assert "create_task" not in surveyor or surveyor != manager
 
 
 def test_an_outsider_is_offered_no_tools_at_all(db, world):

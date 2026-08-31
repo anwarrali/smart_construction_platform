@@ -22,7 +22,8 @@ from app.ai.exceptions import (
 )
 from app.ai.transcription_service import MAX_AUDIO_BYTES, TranscriptionService, validate_audio
 from app.core.config import settings
-from app.core.deps import get_current_user, is_worker, user_has_project_access
+from app.core.deps import get_current_user, user_has_project_access
+from app.services import rbac
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.enums import VoiceAnalysisStatus
@@ -70,14 +71,14 @@ async def create_voice_analysis(
     if not can_create_voice_analysis(db, current_user, project_id, task):
         raise HTTPException(
             status_code=403,
-            detail="Only an assigned Worker or Contractor Engineer can analyze this field update",
+            detail="You are not authorized to analyze field updates on this project",
         )
     if field_submission_id is not None:
         from app.models.field_submission import FieldSubmission
         submission = db.get(FieldSubmission, field_submission_id)
         if (
             not submission or submission.project_id != project_id
-            or submission.worker_id != current_user.id
+            or submission.submitted_by_id != current_user.id
         ):
             raise HTTPException(status_code=403, detail="Field submission context is not accessible")
 
@@ -337,15 +338,11 @@ async def _process_analysis(
             result = await run_in_threadpool(
                 ConstructionVoiceAnalysisService().analyze,
                 transcript=transcription.transcript,
-                user_role=(
-                    "worker"
-                    if is_worker(current_user)
-                    else "external_consultant"
-                    if getattr(current_user, "engineer_affiliation", None) == "external_consultant"
-                    else "contractor_engineer"
-                    if current_user.role.value == "engineer"
-                    else current_user.role.value
-                ),
+                # The speaker's role, as the office named it. Was a
+                # four-way mapping onto the retired coarse vocabulary; the
+                # model is better served by the office's own role name, which
+                # is also what the person calls themselves.
+                user_role=rbac.role_label_for(db, current_user),
                 authorized_tasks=task_context,
                 application_context=context,
             )

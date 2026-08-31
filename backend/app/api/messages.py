@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.deps import get_current_user, is_worker, user_has_project_access
+from app.core.deps import get_current_user, user_has_project_access
 from app.db.database import get_db
 from app.models.design_change import DesignChange
 from app.models.document import Document
@@ -49,7 +49,6 @@ from app.services.messaging_authorization import (
     can_send_to_conversation,
     can_view_conversation,
     resolve_group_recipient_ids,
-    worker_recipient_ids,
 )
 
 
@@ -61,7 +60,6 @@ GROUP_LABELS = {
     "ALL_ENGINEERS": "All Engineers",
     "CONTRACTOR_TEAM": "Contractor Team",
     "CONSULTANT_TEAM": "Consultant Team",
-    "WORKERS": "Workers",
     "PROJECT_MANAGERS": "Project Managers",
     "OWNERS": "Owners",
 }
@@ -469,10 +467,6 @@ def _create_conversation(
         recipient_ids.update(
             _context_default_recipients(db, project, context_type, data.context_id)
         )
-        if is_worker(current_user):
-            recipient_ids.intersection_update(
-                worker_recipient_ids(db, current_user, project.id)
-            )
     recipient_ids.discard(current_user.id)
     if not recipient_ids:
         raise HTTPException(status_code=422, detail="At least one authorized recipient is required")
@@ -561,11 +555,7 @@ def recipient_options(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    ids = (
-        worker_recipient_ids(db, current_user, project_id)
-        if is_worker(current_user)
-        else active_project_participant_ids(db, project_id) - {current_user.id}
-    )
+    ids = active_project_participant_ids(db, project_id) - {current_user.id}
     users = db.query(User).filter(
         User.id.in_(ids), User.status == UserStatus.ACTIVE
     ).order_by(User.full_name).all() if ids else []

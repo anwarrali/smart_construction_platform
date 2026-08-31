@@ -45,6 +45,9 @@ describe("resolvePermission", () => {
     // has no entry for them, so an empty (loaded) backend list must not
     // suppress the static answer the way it does for a genuinely mapped code.
     expect(resolvePermission("project_manager", "edit_task", [])).toBe(true);
-    expect(resolvePermission("worker", "edit_task", [])).toBe(false);
+    // The negative case used to be a Worker. Workers are no longer platform
+    // users; an Owner is the role that still must not get an editing button
+    // from an empty-but-loaded backend list.
+    expect(resolvePermission("owner", "edit_task", [])).toBe(false);
   });
 });

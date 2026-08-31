@@ -920,22 +920,6 @@ def build_action_drafts(
             confidence=float(result.progress.confidence or 0.5),
         )]
 
-    # A Worker statement is always evidence. If the model returned only an
-    # informational summary, deterministically create the evidence draft.
-    if user.role.value == "worker" and not suggestions:
-        from app.schemas.voice_analysis import SuggestedAction
-
-        target_id = command.task_id or result.detected_task.task_id
-        suggestions = [
-            SuggestedAction(
-                type=SuggestedActionType.CREATE_FIELD_SUBMISSION,
-                target_id=target_id,
-                reason="Worker voice report requires Engineer verification",
-                payload={"description": result.summary},
-                confidence=max(float(result.detected_task.confidence), 0.5),
-            )
-        ]
-
     # Candidates per draft, so the clarification can offer the few tasks that
     # actually resemble what was said instead of the whole project.
     draft_candidates: dict[str, list[TaskMatch]] = {}
@@ -1023,14 +1007,6 @@ def build_action_drafts(
                 "Percentage inferred from your wording, not stated directly. "
                 "Confirm or edit it."
             )
-        if user.role.value == "worker" and suggestion.type != SuggestedActionType.CREATE_FIELD_SUBMISSION:
-            warnings.append("Worker reports cannot change official task values.")
-            suggestion = suggestion.model_copy(update={
-                "type": SuggestedActionType.CREATE_FIELD_SUBMISSION,
-                "payload": {"description": result.summary},
-            })
-            capability = capability_for(suggestion.type)
-            payload = suggestion.payload_dict()
         snapshot = None
         if task:
             snapshot = {

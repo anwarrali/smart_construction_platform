@@ -1,4 +1,16 @@
-"""User provisioning for invite-only enterprise auth."""
+"""User provisioning for invite-only enterprise auth.
+
+An account is created under one of the **office's own configured roles**, not
+under a fixed enum. `org_role` is the input that matters: it decides the
+permissions the account holds, whether the person is office staff, and — for
+as long as `users.role` exists — which legacy value that column is written
+with (`Role.legacy_role`, recorded on the role rather than guessed here).
+
+The legacy `role` argument is still accepted, because the contract migration
+has not run and several callers still speak that vocabulary. When both are
+given the configured role wins; when only the legacy one is given the account
+is created exactly as before and the pre-backfill fallback resolves it.
+"""
 
 import secrets
 import string
@@ -10,8 +22,10 @@ from sqlalchemy.orm import Session
 from app.core.permissions import ROLE_LABELS, can_create_team_role
 from app.models.enums import EngineerDiscipline, UserRole, UserStatus
 from app.models.project import ProjectMember
+from app.models.rbac import Role
 from app.models.user import EngineerProfile, User
 from app.core.security import hash_password
+from app.services import rbac
 from app.services.email_service import send_invitation_email
 
 
@@ -34,13 +48,37 @@ def _resolve_engineer_discipline(role: UserRole, discipline: Optional[EngineerDi
     return mapping.get(role, EngineerDiscipline.CIVIL)
 
 
+def legacy_role_for(org_role: Role) -> UserRole:
+    """The retired enum value an account under this configured role is written with.
+
+    Read from the role, never inferred from its permissions: an office that
+    re-permissions a role must not thereby change what kind of account it
+    creates. A role with no value recorded cannot provision anybody — that is
+    the archived field-staff template, and refusing here is what stops a worker
+    account being minted again through the new path.
+    """
+    if not org_role.legacy_role:
+        raise ValueError(
+            f"Role '{org_role.code}' cannot be used to create accounts"
+        )
+    try:
+        return UserRole[org_role.legacy_role]
+    except KeyError as exc:  # pragma: no cover - guarded by a test
+        raise ValueError(
+            f"Role '{org_role.code}' records an unknown legacy role "
+            f"'{org_role.legacy_role}'"
+        ) from exc
+
+
 def create_provisioned_user(
     db: Session,
     *,
     creator: User,
     email: str,
     full_name: str,
-    role: UserRole,
+    role: Optional[UserRole] = None,
+    org_role: Optional[Role] = None,
+    discipline_ids: Optional[list[uuid.UUID]] = None,
     phone_number: Optional[str] = None,
     organization: Optional[str] = None,
     engineer_affiliation: Optional[str] = None,
@@ -50,8 +88,22 @@ def create_provisioned_user(
     password: Optional[str] = None,
     send_email: bool = True,
 ) -> Tuple[User, str]:
-    """Create a user with either an administrator-supplied or generated password."""
-    if not can_create_team_role(creator.role, role):
+    """Create a user with either an administrator-supplied or generated password.
+
+    Pass `org_role` to create under one of the office's configured roles — the
+    path the administrator UI uses. `role` alone is the legacy path, kept
+    working until the contract migration.
+    """
+    if org_role is not None:
+        # The configured role decides everything the legacy arguments used to.
+        role = legacy_role_for(org_role)
+        engineer_affiliation = org_role.legacy_affiliation
+    elif role is None:
+        raise ValueError("An office role is required to create an account")
+    elif not can_create_team_role(creator.role, role):
+        # Only the legacy path is gated this way. Creating under a configured
+        # role is gated by `platform.manage_users` at the endpoint, which is
+        # the permission the office can actually administer.
         raise ValueError(f"Role '{role.value}' cannot be created by {creator.role.value}")
 
     if role == UserRole.CONSULTANT:
@@ -82,6 +134,28 @@ def create_provisioned_user(
     )
     db.add(user)
     db.flush()
+
+    # Every account gets a database role, including one created through the
+    # legacy path. Without this, that path would mint accounts with
+    # `org_role_id IS NULL` — which resolve through the pre-backfill fallback,
+    # and which `RBAC_REQUIRE_DB_ROLES` turns into a hard failure. A creation
+    # path that produces accounts the platform is about to refuse to serve is
+    # not a fallback, it is a trap, so the legacy path resolves the seeded role
+    # its enum maps to and assigns that.
+    effective_role = org_role or rbac.template_role_for_legacy_user(db, user)
+    if effective_role is not None:
+        # `assign_org_role` sets `org_role_id` and `is_internal`, so the
+        # account is resolved through the configured model from its first
+        # request rather than through the pre-backfill fallback.
+        rbac.assign_org_role(
+            db, user=user, role=effective_role,
+            organization_id=resolved_company_id or rbac.ensure_tenant_organization(db).id,
+        )
+        if discipline_ids:
+            rbac.set_user_disciplines(
+                db, user=user, discipline_ids=list(discipline_ids),
+                primary_id=discipline_ids[0],
+            )
 
     if role == UserRole.ENGINEER:
         discipline = _resolve_engineer_discipline(role, engineer_discipline)

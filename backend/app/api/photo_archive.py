@@ -9,7 +9,9 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.core.deps import get_current_user, is_consultant_engineer, is_main_contractor_engineer, is_worker
+from app.core.deps import get_current_user
+from app.services import rbac
+from app.services.authorization import has_permission
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.enums import EvidencePhotoDirection, FieldSubmissionStatus, UserRole
@@ -57,13 +59,25 @@ def _photo_query(db: Session):
     )
 
 
-def _scope_archive(query, current_user: User):
-    if is_worker(current_user):
-        return query.filter(FieldSubmission.worker_id == current_user.id)
-    if is_main_contractor_engineer(current_user):
-        return query.filter(Task.assignees.any(User.id == current_user.id))
-    if is_consultant_engineer(current_user) or current_user.role == UserRole.CONSULTANT:
+def _scope_archive(query, db, current_user: User, project_id):
+    """Narrow the photo archive to what this person may see.
+
+    Three bands, and they now follow authority rather than job title: somebody
+    outside the office sees confirmed evidence only; office staff who neither
+    review nor edit the project's work see the work they were given; everybody
+    else sees the project.
+    """
+    if not current_user.is_internal or rbac.membership_context(
+        db, current_user.id, project_id
+    ).is_external:
         return query.filter(FieldSubmission.status == FieldSubmissionStatus.VERIFIED)
+    if not has_permission(db, current_user, "task.review", project_id) and not has_permission(
+        db, current_user, "task.edit", project_id
+    ):
+        return query.filter(
+            (Task.assignees.any(User.id == current_user.id))
+            | (FieldSubmission.submitted_by_id == current_user.id)
+        )
     return query
 
 
@@ -78,8 +92,8 @@ def _archive_item(photo: FieldSubmissionPhoto) -> dict:
         "task_code": submission.task.task_code,
         "task_title": submission.task.name,
         "discipline": submission.task.discipline,
-        "worker_id": submission.worker_id,
-        "worker_name": submission.worker.full_name,
+        "submitted_by_id": submission.submitted_by_id,
+        "submitted_by_name": submission.submitted_by.full_name,
         "uploader_id": attachment.uploaded_by_id,
         "uploader_name": attachment.uploaded_by.full_name,
         "submission_status": submission.status,
@@ -282,7 +296,7 @@ def list_evidence_photos(
     discipline: str | None = None,
     task_id: uuid.UUID | None = None,
     uploader_id: uuid.UUID | None = None,
-    worker_id: uuid.UUID | None = None,
+    submitted_by_id: uuid.UUID | None = None,
     engineer_id: uuid.UUID | None = None,
     status: FieldSubmissionStatus | None = None,
     date_from: date | None = None,
@@ -299,7 +313,7 @@ def list_evidence_photos(
         raise HTTPException(status_code=403, detail="You cannot access this project's evidence archive")
     query = _scope_archive(
         _photo_query(db).filter(FieldSubmission.project_id == project_id),
-        current_user,
+        db, current_user, project_id,
     )
     if category:
         category_term = category.strip()
@@ -318,8 +332,8 @@ def list_evidence_photos(
         query = query.filter(FieldSubmission.task_id == task_id)
     if uploader_id:
         query = query.filter(Attachment.uploaded_by_id == uploader_id)
-    if worker_id:
-        query = query.filter(FieldSubmission.worker_id == worker_id)
+    if submitted_by_id:
+        query = query.filter(FieldSubmission.submitted_by_id == submitted_by_id)
     if engineer_id:
         query = query.filter(FieldSubmission.reviewed_by_id == engineer_id)
     if status:
@@ -353,7 +367,7 @@ def list_evidence_photos(
     items = query.options(
         joinedload(FieldSubmissionPhoto.attachment).joinedload(Attachment.uploaded_by),
         joinedload(FieldSubmissionPhoto.submission).joinedload(FieldSubmission.task),
-        joinedload(FieldSubmissionPhoto.submission).joinedload(FieldSubmission.worker),
+        joinedload(FieldSubmissionPhoto.submission).joinedload(FieldSubmission.submitted_by),
         joinedload(FieldSubmissionPhoto.submission).joinedload(FieldSubmission.reviewed_by),
         selectinload(FieldSubmissionPhoto.category_assignments).joinedload(
             PhotoCategoryAssignment.category
@@ -395,11 +409,11 @@ def get_evidence_photo(
             FieldSubmission.project_id == project_id,
             FieldSubmissionPhoto.id == photo_id,
         ),
-        current_user,
+        db, current_user, project_id,
     ).options(
         joinedload(FieldSubmissionPhoto.attachment).joinedload(Attachment.uploaded_by),
         joinedload(FieldSubmissionPhoto.submission).joinedload(FieldSubmission.task),
-        joinedload(FieldSubmissionPhoto.submission).joinedload(FieldSubmission.worker),
+        joinedload(FieldSubmissionPhoto.submission).joinedload(FieldSubmission.submitted_by),
         joinedload(FieldSubmissionPhoto.submission).joinedload(FieldSubmission.reviewed_by),
         selectinload(FieldSubmissionPhoto.category_assignments).joinedload(
             PhotoCategoryAssignment.category

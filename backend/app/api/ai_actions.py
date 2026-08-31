@@ -24,11 +24,22 @@ def _action_or_404(db: Session, action_id: uuid.UUID) -> AIActionVersion:
 
 
 def _can_view_project_actions(db: Session, user: User, project_id: uuid.UUID) -> bool:
+    """Who may read the history of AI actions taken on a project.
+
+    Reading what the assistant did on a project is the accountability half of
+    acting on its findings, so it follows `ai.view_insights` — which the office
+    configures — plus the project's own principals, who are accountable for it
+    whatever their role is called. The `role == ADMIN` clause this replaces made
+    the first half unrevokable and said nothing about an office that had given
+    the capability to somebody else.
+    """
+    from app.services.authorization import has_permission
+
     project = db.get(Project, project_id)
     return bool(
-        user.role == UserRole.ADMIN
-        or (project and project.project_manager_id == user.id)
+        (project and project.project_manager_id == user.id)
         or (project and project.owner_id == user.id)
+        or has_permission(db, user, "ai.view_insights", project_id)
     )
 
 

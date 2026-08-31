@@ -23,8 +23,8 @@ export interface EvidencePhotoArchiveItem {
   taskCode: string;
   taskTitle: string;
   discipline?: string;
-  workerId: string;
-  workerName: string;
+  submittedById: string;
+  submittedByName: string;
   uploaderId: string;
   uploaderName: string;
   submissionStatus: FieldSubmissionStatus;
@@ -50,7 +50,7 @@ export interface EvidencePhotoFilters {
   discipline?: string;
   taskId?: string;
   uploaderId?: string;
-  workerId?: string;
+  submittedById?: string;
   engineerId?: string;
   status?: FieldSubmissionStatus | "";
   dateFrom?: string;

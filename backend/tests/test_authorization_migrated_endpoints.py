@@ -61,7 +61,11 @@ def world(db):
         "manager": user("MigPm", UserRole.PROJECT_MANAGER),
         "other_manager": user("MigOtherPm", UserRole.PROJECT_MANAGER),
         "owner": user("MigOwner", UserRole.OWNER),
-        "engineer": user("MigEngineer", UserRole.ENGINEER, "main_contractor"),
+        # Office staff. `project.manage_members` is `never_external`, so the
+        # contractor-side engineer below can never hold it however it is
+        # granted — which is the point of `test_a_grant_cannot_reach_an_external_member`.
+        "engineer": user("MigEngineer", UserRole.ENGINEER, "internal_engineer"),
+        "contractor": user("MigContractor", UserRole.ENGINEER, "main_contractor"),
         "outsider": user("MigOutsider", UserRole.ENGINEER, "main_contractor"),
         "candidate": user("MigCandidate", UserRole.ENGINEER, "main_contractor"),
     }
@@ -73,7 +77,7 @@ def world(db):
                     owner_id=people["owner"].id, project_manager_id=people["other_manager"].id)
     db.add_all([project, other])
     db.flush()
-    for person in (people["manager"], people["engineer"]):
+    for person in (people["manager"], people["engineer"], people["contractor"]):
         db.add(ProjectMember(project_id=project.id, user_id=person.id,
                              role_on_project=person.role, is_active=True))
     db.flush()
@@ -100,6 +104,21 @@ def _purge(db, project_ids, user_ids):
         "DELETE FROM consultant_engineer_scopes WHERE project_id = ANY(:projects) OR consultant_user_id = ANY(:users)",
         "DELETE FROM user_permission_overrides WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
         "DELETE FROM role_permission_overrides WHERE updated_by_id = ANY(:users)",
+        # `PUT /access-control/roles` writes through to every configured role
+        # that provisions the legacy value being edited, and commits. A test
+        # that exercises it therefore changes *seeded templates* shared by every
+        # office and every later test in the run. This restores them, mirroring
+        # the write-through's own target set (`Role.legacy_role`) rather than a
+        # hand-listed set of codes, so the two cannot drift.
+        """DELETE FROM role_permissions
+            WHERE permission_code IN ('schedule.edit', 'project.edit')
+              AND role_id IN (
+                  SELECT id FROM roles
+                   WHERE organization_id IS NULL
+                     AND legacy_role IN ('ENGINEER', 'ADMIN', 'PROJECT_MANAGER')
+                     AND code NOT IN ('org_admin', 'office_director',
+                                      'technical_director', 'project_manager')
+              )""",
         "DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ANY(:projects))",
         "DELETE FROM tasks WHERE project_id = ANY(:projects) OR created_by_id = ANY(:users)",
         "DELETE FROM ai_insights WHERE project_id = ANY(:projects)",
@@ -120,6 +139,46 @@ def _purge(db, project_ids, user_ids):
 def _grant(db, user, code, allowed=True, project_id=None):
     db.add(UserPermissionOverride(user_id=user.id, permission_code=code,
                                   allowed=allowed, project_id=project_id))
+    db.flush()
+
+
+def _configure_role(db, user, code, allowed):
+    """Change what the role this person holds may do, on the live mechanism.
+
+    `RolePermissionOverride` used to be how a role was configured, and these
+    tests used it directly. `effective_permissions` read that table only while
+    an account had no `org_role_id`; the contract step removed that branch, so
+    writing to it now changes nothing.
+
+    The role is **copied first**, into a row belonging to this test alone, and
+    the copy is what gets edited. Editing the seeded template in place would
+    outlive the test — the templates are shared by every office and by every
+    other test in the run, and `set_role_permission` writes to the database, so
+    one test granting `schedule.edit` to Engineer would hand it to every
+    engineer in every later test. That is the same reason
+    `organization._editable_role` copies a template into an office before
+    letting it be changed.
+    """
+    from app.models.rbac import Role, RolePermission
+    from app.services import rbac
+    from uuid import uuid4 as _uuid4
+
+    source = rbac.get_role(db, user.org_role_id)
+    assert source is not None, "the backstop should have given this account a role"
+    copy = Role(
+        organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
+        name_en=source.name_en, scope=source.scope,
+        is_internal_only=source.is_internal_only, is_system=False,
+        rank=source.rank, legacy_role=source.legacy_role,
+        legacy_affiliation=source.legacy_affiliation,
+    )
+    db.add(copy)
+    db.flush()
+    for existing in rbac.role_permission_codes(db, source.id):
+        db.add(RolePermission(role_id=copy.id, permission_code=existing, allowed=True))
+    db.flush()
+    user.org_role_id = copy.id
+    rbac.set_role_permission(db, role=copy, code=code, allowed=allowed)
     db.flush()
 
 
@@ -152,9 +211,7 @@ def test_the_assigned_manager_can_still_staff_their_project(db, world):
 
 
 def test_revoking_manage_members_from_the_role_blocks_the_endpoint(db, world):
-    db.add(RolePermissionOverride(role=UserRole.PROJECT_MANAGER,
-                                  permission_code="project.manage_members", allowed=False))
-    db.flush()
+    _configure_role(db, world["manager"], "project.manage_members", False)
     with pytest.raises(HTTPException) as error:
         add_project_member(
             world["project"].id,
@@ -202,8 +259,7 @@ def test_editing_project_setup_still_works_for_an_administrator(db, world):
 
 def test_project_edit_can_be_revoked_from_administrators_role_wide(db, world):
     """`project.edit` is not admin-locked, so it is genuinely configurable."""
-    db.add(RolePermissionOverride(role=UserRole.ADMIN, permission_code="project.edit", allowed=False))
-    db.flush()
+    _configure_role(db, world["admin"], "project.edit", False)
     with pytest.raises(HTTPException) as error:
         update_project(world["project"].id, ProjectUpdate(location="Nablus"),
                        db=db, current_user=world["admin"])
@@ -254,3 +310,22 @@ def test_every_migrated_code_is_in_the_catalogue(db, world):
                  "project.edit", "site_report.submit", "design_change.approve",
                  "ai.review_insight", "ai.promote_insight"):
         assert is_known(code), code
+
+
+def test_a_grant_cannot_reach_an_external_member(db, world):
+    """The ceiling the office cannot configure around.
+
+    `project.manage_members` is `never_external`: running the office's project
+    team is the office's own job. A contractor's engineer is on this project and
+    has been granted the permission outright, and still cannot staff it — the
+    grant is removed at resolution, after every override, so a mistake in
+    Access Control cannot become a breach.
+    """
+    _grant(db, world["contractor"], "project.manage_members")
+    assert not has_permission(
+        db, world["contractor"], "project.manage_members", world["project"].id
+    )
+    with pytest.raises(HTTPException) as error:
+        manageable_project(db, world["contractor"], world["project"].id,
+                           "project.manage_members")
+    assert error.value.status_code == 403

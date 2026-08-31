@@ -31,34 +31,24 @@ def normalized_page(page: int, page_size: int) -> tuple[int, int, int]:
     return safe_page, safe_size, (safe_page - 1) * safe_size
 
 
-def archive_scope(role: str, *, is_consultant: bool = False) -> str:
-    if role == "worker":
-        return "OWN"
-    if role == "engineer" and not is_consultant:
-        return "ASSIGNED_TASKS"
-    if is_consultant or role == "consultant":
-        return "VERIFIED_ONLY"
-    return "PROJECT"
+# `archive_scope` and `human_tagging_allowed` lived here and were removed.
+# Both answered "what may this role see / tag" from a role name, both had no
+# production caller — the shipped gates are `photo_archive._scope_archive` and
+# `field_submission_authorization.can_categorize_field_photo`, which ask
+# `has_permission` — and one of their three branches was the retired Worker
+# role. A reference implementation that disagrees with the real one is worse
+# than none, so they are gone rather than partially corrected.
 
 
 def category_management_allowed(role: str, *, is_assigned_pm: bool) -> bool:
     return role == "admin" or (role == "project_manager" and is_assigned_pm)
 
 
-def human_tagging_allowed(
-    role: str, *, owns_submission: bool, submission_pending: bool,
-    assigned_contractor_engineer: bool,
-) -> bool:
-    if role == "worker":
-        return owns_submission and submission_pending
-    return role == "engineer" and assigned_contractor_engineer
-
-
 def matches_archive_filters(record: dict, *, project_id, **filters) -> bool:
     """Reference filter semantics used by unit tests and non-SQL consumers."""
     if str(record["project_id"]) != str(project_id):
         return False
-    exact_fields = ("task_id", "uploader_id", "worker_id", "engineer_id", "status", "direction")
+    exact_fields = ("task_id", "uploader_id", "submitted_by_id", "engineer_id", "status", "direction")
     for field in exact_fields:
         expected = filters.get(field)
         if expected and str(record.get(field)) != str(expected):

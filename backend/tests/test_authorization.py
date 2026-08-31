@@ -58,13 +58,18 @@ def world(db):
 
     admin = user("Admin", UserRole.ADMIN)
     manager = user("Manager", UserRole.PROJECT_MANAGER)
+    # Office staff, for the role-configuration tests. `civil` below is
+    # contractor-side, so an `office_only` code granted to its role is stripped
+    # at resolution — correct, and the wrong subject for "can an administrator
+    # configure a role".
+    office_engineer = user("OfficeEng", UserRole.ENGINEER, "internal_engineer")
     civil = user("CivilEng", UserRole.ENGINEER, "main_contractor")
     electrical = user("ElecEng", UserRole.ENGINEER, "main_contractor")
     consultant_a = user("ConsultantA", UserRole.ENGINEER, "external_consultant")
     consultant_b = user("ConsultantB", UserRole.ENGINEER, "external_consultant")
     owner = user("Client", UserRole.OWNER)
     outsider = user("Outsider", UserRole.ENGINEER, "main_contractor")
-    people = [admin, manager, civil, electrical, consultant_a, consultant_b, owner, outsider]
+    people = [admin, manager, office_engineer, civil, electrical, consultant_a, consultant_b, owner, outsider]
     db.add_all(people)
     db.flush()
 
@@ -75,6 +80,7 @@ def world(db):
     db.flush()
 
     for person, role_on_project, discipline in (
+        (office_engineer, UserRole.ENGINEER, "civil"),
         (civil, UserRole.ENGINEER, "civil"),
         (electrical, UserRole.ENGINEER, "electrical"),
         (consultant_a, UserRole.CONSULTANT, "civil"),
@@ -93,6 +99,7 @@ def world(db):
     ids = [person.id for person in people]
     try:
         yield {"db": db, "project": project, "admin": admin, "manager": manager,
+               "office_engineer": office_engineer,
                "civil": civil, "electrical": electrical, "consultantA": consultant_a,
                "consultantB": consultant_b, "owner": owner, "outsider": outsider}
     finally:
@@ -105,6 +112,21 @@ def _purge(db, project_id, user_ids):
         "DELETE FROM consultant_engineer_scopes WHERE project_id = :project",
         "DELETE FROM user_permission_overrides WHERE project_id = :project OR user_id = ANY(:users)",
         "DELETE FROM role_permission_overrides WHERE updated_by_id = ANY(:users)",
+        # `PUT /access-control/roles` writes through to every configured role
+        # that provisions the legacy value being edited, and commits. A test
+        # that exercises it therefore changes *seeded templates* shared by every
+        # office and every later test in the run. This restores them, mirroring
+        # the write-through's own target set (`Role.legacy_role`) rather than a
+        # hand-listed set of codes, so the two cannot drift.
+        """DELETE FROM role_permissions
+            WHERE permission_code IN ('schedule.edit', 'project.edit')
+              AND role_id IN (
+                  SELECT id FROM roles
+                   WHERE organization_id IS NULL
+                     AND legacy_role IN ('ENGINEER', 'ADMIN', 'PROJECT_MANAGER')
+                     AND code NOT IN ('org_admin', 'office_director',
+                                      'technical_director', 'project_manager')
+              )""",
         "DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE project_id = :project)",
         "DELETE FROM tasks WHERE project_id = :project",
         "DELETE FROM project_consultant_reviewers WHERE project_id = :project",
@@ -162,17 +184,62 @@ def test_an_unknown_permission_code_is_denied_rather_than_ignored(world):
 
 # --- overrides --------------------------------------------------------------
 
+
+def _configure_role(db, user, code, allowed):
+    """Change what the role this person holds may do, on the live mechanism.
+
+    `RolePermissionOverride` used to be how a role was configured, and these
+    tests used it directly. `effective_permissions` read that table only while
+    an account had no `org_role_id`; the contract step removed that branch, so
+    writing to it now changes nothing.
+
+    The role is **copied first**, into a row belonging to this test alone, and
+    the copy is what gets edited. Editing the seeded template in place would
+    outlive the test — the templates are shared by every office and by every
+    other test in the run, and `set_role_permission` writes to the database, so
+    one test granting `schedule.edit` to Engineer would hand it to every
+    engineer in every later test. That is the same reason
+    `organization._editable_role` copies a template into an office before
+    letting it be changed.
+    """
+    from app.models.rbac import Role, RolePermission
+    from app.services import rbac
+    from uuid import uuid4 as _uuid4
+
+    source = rbac.get_role(db, user.org_role_id)
+    assert source is not None, "the backstop should have given this account a role"
+    copy = Role(
+        organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
+        name_en=source.name_en, scope=source.scope,
+        is_internal_only=source.is_internal_only, is_system=False,
+        rank=source.rank, legacy_role=source.legacy_role,
+        legacy_affiliation=source.legacy_affiliation,
+    )
+    db.add(copy)
+    db.flush()
+    for existing in rbac.role_permission_codes(db, source.id):
+        db.add(RolePermission(role_id=copy.id, permission_code=existing, allowed=True))
+    db.flush()
+    user.org_role_id = copy.id
+    rbac.set_role_permission(db, role=copy, code=code, allowed=allowed)
+    db.flush()
+
+
 def test_an_administrator_can_grant_a_permission_to_a_whole_role(world):
+    engineer = world["office_engineer"]
+    assert not has_permission(world["db"], engineer, "schedule.edit", world["project"].id)
+    _configure_role(world["db"], engineer, "schedule.edit", True)
+    assert has_permission(world["db"], engineer, "schedule.edit", world["project"].id)
+
+    # And the ceiling the configuration cannot lift: the same code, the same
+    # role edit, a contractor-side member — still refused, because
+    # `schedule.edit` is the office's own authority.
     assert not has_permission(world["db"], world["civil"], "schedule.edit", world["project"].id)
-    world["db"].add(RolePermissionOverride(role=UserRole.ENGINEER, permission_code="schedule.edit", allowed=True))
-    world["db"].flush()
-    assert has_permission(world["db"], world["civil"], "schedule.edit", world["project"].id)
 
 
 def test_an_administrator_can_revoke_a_default_permission_from_a_role(world):
     assert has_permission(world["db"], world["manager"], "task.create", world["project"].id)
-    world["db"].add(RolePermissionOverride(role=UserRole.PROJECT_MANAGER, permission_code="task.create", allowed=False))
-    world["db"].flush()
+    _configure_role(world["db"], world["manager"], "task.create", False)
     assert not has_permission(world["db"], world["manager"], "task.create", world["project"].id)
 
 
@@ -357,7 +424,7 @@ def test_an_administrator_can_read_and_change_permissions(world):
         RolePermissionUpdate(role="engineer", permissionCode="schedule.edit", allowed=True),
         db=world["db"], current_user=world["admin"])
     assert result["effective_allowed"] is True
-    assert has_permission(world["db"], world["civil"], "schedule.edit", world["project"].id)
+    assert has_permission(world["db"], world["office_engineer"], "schedule.edit", world["project"].id)
 
 
 def test_an_administrator_cannot_revoke_their_own_administration_through_the_api(world):

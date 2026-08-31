@@ -19,7 +19,20 @@ class ProjectMemberOut(CamelModel):
     id: UUID
     project_id: UUID
     user_id: UUID
+    #: Retired. Still emitted while the legacy column exists so a client that
+    #: has not been updated keeps working; `project_role_id` is the answer.
     role_on_project: UserRole
+    #: The configurable role this person holds on this project. May differ from
+    #: their office role — a Senior Engineer can be the Project Manager here.
+    project_role_id: Optional[UUID] = None
+    project_role_name: Optional[str] = None
+    #: The external party they take part for. NULL means office staff, and that
+    #: single field is the internal/external boundary.
+    party_id: Optional[UUID] = None
+    party_name: Optional[str] = None
+    is_external: bool = False
+    #: Every discipline they cover on this project, not just one.
+    discipline_codes: list[str] = Field(default_factory=list)
     is_active: bool
     assignment_title: Optional[str] = None
     project_discipline: Optional[str] = None
@@ -65,9 +78,18 @@ class ProjectCreate(CamelModel):
 
 class ProjectMemberAssignExisting(CamelModel):
     user_id: UUID
-    role_on_project: UserRole
+    #: Retired, and now optional. Supplied by clients that predate configurable
+    #: roles; when `project_role_id` is given it decides instead.
+    role_on_project: Optional[UserRole] = None
+    #: The configurable role to give them on this project.
+    project_role_id: Optional[UUID] = None
+    #: The external party they represent. Omitted for office staff.
+    party_id: Optional[UUID] = None
     assignment_title: Optional[str] = None
     project_discipline: Optional[EngineerDiscipline] = None
+    #: Disciplines they cover on this project. Replaces the single
+    #: `project_discipline`, which could not express somebody covering two.
+    discipline_ids: list[UUID] = Field(default_factory=list, max_length=30)
     project_notes: Optional[str] = Field(default=None, max_length=1000)
     is_site_engineer: bool = False
 
@@ -75,7 +97,9 @@ class ProjectMemberAssignExisting(CamelModel):
 class ProjectMemberAssignmentUpdate(CamelModel):
     assignment_title: Optional[str] = None
     is_site_engineer: Optional[bool] = None
+    project_role_id: Optional[UUID] = None
     project_discipline: Optional[EngineerDiscipline] = None
+    discipline_ids: Optional[list[UUID]] = Field(default=None, max_length=30)
     project_notes: Optional[str] = Field(default=None, max_length=1000)
 
 

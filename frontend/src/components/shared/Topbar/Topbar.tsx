@@ -118,7 +118,7 @@ export const Topbar = ({ onOpenMenu }: { onOpenMenu?: () => void }) => {
             {initials}
           </div>
           <div className="hidden md:block">
-            <p className="text-sm font-medium">{user?.fullName || t("roles.worker")}</p>
+            <p className="text-sm font-medium">{user?.fullName || t("common.account")}</p>
             <Badge variant="neutral" size="sm">
               {roleLabel}
             </Badge>

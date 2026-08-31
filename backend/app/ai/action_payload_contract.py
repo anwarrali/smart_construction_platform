@@ -116,7 +116,7 @@ ACTION_CONTRACTS: dict[SuggestedActionType, ActionContract] = {
         optional=("completionNote",),
     ),
     SuggestedActionType.CREATE_FIELD_SUBMISSION: ActionContract(
-        "Record a worker's field evidence for later verification.",
+        "Record field evidence for later verification.",
         required=("description",),
     ),
     SuggestedActionType.CREATE_ISSUE: ActionContract(

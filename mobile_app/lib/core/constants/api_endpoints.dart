@@ -67,7 +67,7 @@ abstract final class ApiEndpoints {
   static String taskFieldSubmissions(String taskId) =>
       '/field-submissions/task/$taskId';
   static const myFieldSubmissions = '/field-submissions/mine';
-  static const workerDashboard = '/field-submissions/worker-dashboard';
+  static const myFieldWork = '/field-submissions/my-field-work';
   static String photoCategories(String projectId) =>
       '/projects/$projectId/photo-categories';
   static String ifcModels(String projectId) => '/projects/$projectId/ifc/models';
@@ -96,6 +96,8 @@ abstract final class ApiEndpoints {
   static String ownerRequest(String id) => '/owner-requests/$id';
   static const siteVisits = '/site-visits';
   static const myActionCenter = '/my-action-center';
+  /// What the caller may do, as the server resolves it. Presentation only.
+  static const myPermissions = '/access-control/me';
   static String projectActivity(String id) => '/projects/$id/activity';
   static String retryVoiceAnalysis(String id) =>
       '/ai/voice-analyses/$id/retry';

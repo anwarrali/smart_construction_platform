@@ -156,7 +156,7 @@ export const EvidencePhotoArchivePage = () => {
             {!photo.categories.length && <span className="text-xs text-muted-foreground">{t("photoArchive.uncategorized")}</span>}
           </div>
           <p className="text-xs text-muted-foreground">
-            {photo.discipline || t("photoArchive.general")} · {photo.workerName} · {formatDate(photo.submissionCreatedAt)}
+            {photo.discipline || t("photoArchive.general")} · {photo.submittedByName} · {formatDate(photo.submissionCreatedAt)}
             {photo.direction ? ` · ${t(`photoArchive.directionValue.${photo.direction}`)}` : ""}
           </p>
         </div>
@@ -177,7 +177,7 @@ export const EvidencePhotoArchivePage = () => {
         <dl className="grid content-start grid-cols-[130px_1fr] gap-2 text-sm">
           <dt className="text-muted-foreground">{t("photoArchive.task")}</dt><dd>{selected.taskCode} — {selected.taskTitle}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.discipline")}</dt><dd>{selected.discipline || t("photoArchive.general")}</dd>
-          <dt className="text-muted-foreground">{t("photoArchive.worker")}</dt><dd>{selected.workerName}</dd>
+          <dt className="text-muted-foreground">{t("photoArchive.submitted_by")}</dt><dd>{selected.submittedByName}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.uploader")}</dt><dd>{selected.uploaderName}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.submitted")}</dt><dd>{formatDateTime(selected.submissionCreatedAt)}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.status")}</dt><dd>{t(`photoArchive.statusValue.${selected.submissionStatus}`)}</dd>

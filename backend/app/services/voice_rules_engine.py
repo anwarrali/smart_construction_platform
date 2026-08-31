@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import user_has_project_access
-from app.core.deps import is_consultant_engineer
 from app.models.enums import TaskStatus, UserRole, UserStatus, VoiceAnalysisStatus
 from app.models.task import Task
 from app.models.attachment import Attachment
@@ -32,7 +31,7 @@ from app.services.voice_action_errors import (
     missing_field_failure,
     success_message,
 )
-from app.services.voice_capabilities import capability_for, is_available, voice_role
+from app.services.voice_capabilities import capability_for, is_available
 
 
 logger = logging.getLogger(__name__)
@@ -62,24 +61,26 @@ class VoiceRulesEngine:
         # three sets, which is how a new capability could reach execution
         # without anybody deciding which roles it belonged to.
         capability = capability_for(action_type)
-        if capability is None or voice_role(actor) not in capability.roles:
-            # The reason is named rather than generic, because this string is
-            # what support reads in the execution log when somebody asks why a
-            # spoken instruction did nothing.
+        if capability is None:
             raise HTTPException(
                 status_code=403,
-                detail=(
-                    "Only the assigned Project Manager can perform this action"
-                    if capability is not None and capability.roles == {"project_manager"}
-                    else "This role cannot execute the proposed voice action"
-                ),
+                detail="This action cannot be executed by voice",
             )
         if not is_available(
             db, user=actor, project_id=command.project_id, capability=capability
         ):
+            # The reason is named rather than generic, because this string is
+            # what support reads in the execution log when somebody asks why a
+            # spoken instruction did nothing. `requires_project_management` is
+            # the one refusal a person is likely to find surprising — they hold
+            # the permission, just not on this job.
             raise HTTPException(
                 status_code=403,
-                detail="You do not have permission to perform this action on this project",
+                detail=(
+                    "Only the people who run this project can perform this action"
+                    if capability.requires_project_management
+                    else "You do not have permission to perform this action on this project"
+                ),
             )
         if draft.missing_fields:
             # Named rather than generic. "لسه في معلومة ناقصة" is true of every
@@ -190,8 +191,7 @@ class VoiceRulesEngine:
         raise VoiceActionError(
             ASSIGNEE_NOT_ELIGIBLE,
             detail=(
-                "Every assignee must be an active Engineer, Worker, Consultant, "
-                "or this project's assigned Project Manager"
+                "Every assignee must be an active member of this project"
             ),
             status_code=400,
         )

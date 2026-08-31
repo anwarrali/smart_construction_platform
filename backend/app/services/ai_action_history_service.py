@@ -6,7 +6,8 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.deps import is_main_contractor_engineer, user_has_project_access
+from app.core.deps import user_has_project_access
+from app.services.authorization import has_permission
 from app.models.ai_governance import AIActionVersion
 from app.models.design_change import DesignChange
 from app.models.enums import TaskStatus, UserRole
@@ -189,14 +190,25 @@ def revert_action(
     if not user_has_project_access(db, actor, action.project_id):
         raise HTTPException(status_code=403, detail="Project access is required")
     project = db.get(Project, action.project_id)
-    is_pm = bool(actor.role == UserRole.PROJECT_MANAGER and project and project.project_manager_id == actor.id)
-    if actor.id != action.actor_user_id and actor.role != UserRole.ADMIN and not is_pm:
-        raise HTTPException(status_code=403, detail="Only the original actor, project manager, or administrator can revert this action")
+    # The id comparison already implies the role — see `project_manager_id`
+    # validation in app.api.projects.
+    is_pm = bool(project and project.project_manager_id == actor.id)
+    # Reverting somebody else's AI-assisted action is acting on an AI finding,
+    # which `ai.review_insight` names — and which is `office_only`, so no
+    # external participant reverts the office's work.
+    if actor.id != action.actor_user_id and not is_pm and not has_permission(
+        db, actor, "ai.review_insight", action.project_id
+    ):
+        raise HTTPException(status_code=403, detail="You cannot revert this action")
     task = db.query(Task).filter(Task.id == action.entity_id).with_for_update().first()
     available, unavailable_reason = undo_status(db, action)
     if not available:
         raise HTTPException(status_code=409, detail=unavailable_reason or "Manual review required")
-    if not (is_pm or actor.role == UserRole.ADMIN or (is_main_contractor_engineer(actor) and any(item.id == actor.id for item in task.assignees))):
+    if not (
+        is_pm
+        or any(item.id == actor.id for item in task.assignees)
+        or has_permission(db, actor, "ai.review_insight", action.project_id)
+    ):
         raise HTTPException(status_code=403, detail="Current task authorization no longer permits this revert")
 
     current = task_state(task)

@@ -7,6 +7,7 @@
 /// identifier finding its way back into the activity feed.
 library;
 
+import 'package:construction_field/core/auth/capabilities.dart';
 import 'package:construction_field/core/auth/voice_access.dart';
 import 'package:construction_field/core/l10n/l10n_labels.dart';
 import 'package:construction_field/core/theme/app_colors.dart';
@@ -16,23 +17,9 @@ import 'package:construction_field/core/widgets/entity_actions.dart';
 import 'package:construction_field/core/widgets/mobile_shell.dart';
 import 'package:construction_field/core/widgets/struct_nav_bar.dart';
 import 'package:construction_field/l10n/app_localizations.dart';
-import 'package:construction_field/models/user.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-User _user({
-  required String role,
-  String? affiliation,
-  String name = 'Sara Haddad',
-}) => User(
-  id: 'u1',
-  fullName: name,
-  email: 'x@example.com',
-  role: role,
-  status: 'active',
-  engineerAffiliation: affiliation,
-);
 
 Widget _app(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
   theme: AppTheme.light,
@@ -270,38 +257,38 @@ void main() {
   });
 
   group('voice access', () {
-    test('every normal system role has voice', () {
-      for (final role in [
-        'project_manager',
-        'engineer',
-        'consultant',
-        'owner',
-        'worker',
+    Capabilities holding(List<String> codes) => Capabilities(codes.toSet());
+
+    test('anybody who can act through Voice is offered it', () {
+      // One code each, to show the gate is a union rather than a list of
+      // roles: a site engineer filing evidence, an engineer updating
+      // progress, somebody who only files site reports, somebody who only
+      // raises issues. Each is a different person in a real office, and each
+      // has something to say into a microphone.
+      for (final code in [
+        'task.update_progress',
+        'field_evidence.submit',
+        'site_report.submit',
+        'issue.create',
+        'message.send',
       ]) {
-        expect(canUseVoice(_user(role: role)), isTrue, reason: role);
+        expect(canUseVoice(holding([code])), isTrue, reason: code);
       }
     });
 
-    test('an engineer of any discipline or affiliation has voice', () {
-      // The previous gate was `isSiteEngineer`, which is engineer AND main
-      // contractor. An architect or an electrical engineer working for the
-      // consultant lost the feature entirely.
-      expect(
-        canUseVoice(_user(role: 'engineer', affiliation: 'external_consultant')),
-        isTrue,
-      );
-      expect(
-        canUseVoice(_user(role: 'engineer', affiliation: 'main_contractor')),
-        isTrue,
-      );
+    test('somebody with nothing to do through Voice is not offered it', () {
+      // An account that can only read. The retired gate said "every role but
+      // Admin", which meant an office role created after that line was written
+      // got an answer nobody had thought about.
+      expect(canUseVoice(holding(['task.view', 'document.view'])), isFalse);
+      expect(canUseVoice(holding([])), isFalse);
     });
 
-    test('admin does not', () {
-      expect(canUseVoice(_user(role: 'admin')), isFalse);
-    });
-
-    test('a signed-out session does not', () {
-      expect(canUseVoice(null), isFalse);
+    test('the answer is optimistic until the server has replied', () {
+      // Permissions arrive asynchronously. Hiding the microphone and then
+      // showing it is worse than showing it and having the action refused, so
+      // the pending state answers yes.
+      expect(canUseVoice(const Capabilities.pending()), isTrue);
     });
   });
 

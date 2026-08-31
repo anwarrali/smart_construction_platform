@@ -14,13 +14,12 @@ from app.core.deps import (
     get_current_user,
     user_has_project_access,
     accessible_project_ids,
-    is_main_contractor_engineer,
-    is_consultant_engineer,
 )
+from app.services import rbac, work_scope
 from app.services.file_storage import save_upload, delete_upload
 from app.models.enums import VoiceProcessingStatus
 from app.models.enums import UserRole, NotificationType
-from app.services.authorization import require, manageable_project
+from app.services.authorization import has_permission, require, manageable_project
 from app.models.project import Project
 from app.models.project import ProjectMember
 from app.models.notification import Notification
@@ -46,24 +45,32 @@ def list_site_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.ENGINEER:
-        if not (is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)):
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-        if not project_id:
-            raise HTTPException(status_code=400, detail="Engineer report queries require a selected project")
+    # The "Active Engineer organization side is required" refusal is gone. It
+    # rejected any Engineer who was neither contractor-side nor
+    # consultant-side — which, in a consulting office, is the office's own
+    # engineers. There is no reason to hide a project's reports from staff the
+    # office put on that project; discipline narrowing below still applies.
     if project_id and not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     query = db.query(SiteReport)
-    if current_user.role.value != "admin":
-        query = query.filter(SiteReport.project_id.in_(accessible_project_ids(db, current_user) or []))
-    if current_user.role == UserRole.OWNER:
+    # "Sees every project" is `platform.view_all_projects`, which
+    # `accessible_project_ids` already answers by returning None. Reading the
+    # role instead meant two things went wrong: an administrator whose
+    # permission had been explicitly revoked still bypassed the filter, and a
+    # non-administrator who had been *granted* it got `None or []` — an empty
+    # list, so they saw nothing at all.
+    accessible_ids = accessible_project_ids(db, current_user)
+    if accessible_ids is not None:
+        query = query.filter(SiteReport.project_id.in_(accessible_ids))
+    # The client sees finished work, not drafts. A relationship on this
+    # project, not an identity on the account.
+    if rbac.is_client_participant(db, current_user, project_id):
         query = query.filter(SiteReport.review_status.in_(["submitted", "approved"]))
     if project_id:
         query = query.filter(SiteReport.project_id == project_id)
-        if is_consultant_engineer(current_user):
-            discipline = current_user.engineer_profile.discipline if current_user.engineer_profile else None
-            discipline_task_ids = db.query(Task.id).filter(Task.project_id == project_id, Task.discipline == (discipline.value if discipline else ""))
-            query = query.filter((SiteReport.task_id.is_(None)) | SiteReport.task_id.in_(discipline_task_ids))
+        query = work_scope.narrow_to_disciplines(
+            query, SiteReport.task_id, db, current_user, project_id,
+        )
     if status:
         query = query.filter(SiteReport.review_status == status)
     if discipline:
@@ -96,16 +103,11 @@ def get_site_reports_by_project(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    if current_user.role == UserRole.ENGINEER and not (
-        is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)
-    ):
-        raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-    query = db.query(SiteReport).filter(SiteReport.project_id == project_id)
-    if is_consultant_engineer(current_user):
-        discipline = current_user.engineer_profile.discipline if current_user.engineer_profile else None
-        discipline_task_ids = db.query(Task.id).filter(Task.project_id == project_id, Task.discipline == (discipline.value if discipline else ""))
-        query = query.filter((SiteReport.task_id.is_(None)) | SiteReport.task_id.in_(discipline_task_ids))
-    if current_user.role == UserRole.OWNER:
+    query = work_scope.narrow_to_disciplines(
+        db.query(SiteReport).filter(SiteReport.project_id == project_id),
+        SiteReport.task_id, db, current_user, project_id,
+    )
+    if rbac.is_client_participant(db, current_user, project_id):
         query = query.filter(SiteReport.review_status.in_(["submitted", "approved"]))
     items = query.order_by(SiteReport.report_date.desc()).all()
     counts = dict(db.query(Attachment.entity_id, func.count(Attachment.id)).filter(
@@ -128,13 +130,12 @@ def get_site_report_by_id(
         raise HTTPException(status_code=404, detail="Site report not found")
     if not user_has_project_access(db, current_user, rep.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this report")
-    if current_user.role == UserRole.OWNER and rep.review_status not in {"submitted", "approved"}:
-        raise HTTPException(status_code=403, detail="Owners can view submitted or finalized site reports only")
-    if is_consultant_engineer(current_user) and rep.task_id:
-        task = db.get(Task, rep.task_id)
-        discipline = current_user.engineer_profile.discipline.value if current_user.engineer_profile else None
-        if not task or task.discipline != discipline:
-            raise HTTPException(status_code=403, detail="This report is outside your discipline")
+    if rbac.is_client_participant(db, current_user, rep.project_id) and rep.review_status not in {"submitted", "approved"}:
+        raise HTTPException(status_code=403, detail="Clients can view submitted or finalized site reports only")
+    if rep.task_id and not work_scope.task_is_in_scope(
+        db, current_user, rep.project_id, db.get(Task, rep.task_id)
+    ):
+        raise HTTPException(status_code=403, detail="This report is outside your discipline")
     rep.attachment_count = db.query(Attachment).filter(Attachment.entity_type == "SITE_REPORT", Attachment.entity_id == rep.id).count()
     return rep
 
@@ -170,24 +171,29 @@ async def submit_site_report(
     # Who may file a report is configurable; which project they may file it
     # against, and the contractor-side and discipline-assignment rules below,
     # are not — `require` re-checks project access for a project-scoped code.
+    # `site_report.submit` plus the site-engineer assignment below is the whole
+    # decision. The affiliation check that used to sit here refused any Engineer
+    # who was not contractor-side, which in a consulting office excludes the
+    # office's own site engineers — the people the feature is for.
     require(db, current_user, "site_report.submit", proj_uuid)
-    if current_user.role == UserRole.ENGINEER and not is_main_contractor_engineer(current_user):
-        raise HTTPException(status_code=403, detail="Active Main Contractor Engineer access required")
     if not user_has_project_access(db, current_user, proj_uuid):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    if current_user.role == UserRole.ENGINEER:
-        assignment = db.query(ProjectMember).filter(
-            ProjectMember.project_id == proj_uuid,
-            ProjectMember.user_id == current_user.id,
-            ProjectMember.is_active == True,
-            ProjectMember.is_site_engineer == True,
-        ).first()
-        if not assignment:
-            raise HTTPException(status_code=403, detail="Only engineers assigned as Site Engineers can submit field reports")
+    # Site responsibility is the narrowing, and it is an assignment on the
+    # membership — any number of people may carry it, of any discipline. It
+    # used to be asked only of accounts whose legacy role was ENGINEER, so an
+    # office that gave `site_report.submit` to a role it created skipped the
+    # check entirely. Everybody who is narrowed is narrowed the same way now:
+    # holding `task.view_all` means you are not.
+    if not work_scope.sees_all_tasks(db, current_user, proj_uuid):
+        if not work_scope.is_site_engineer(db, current_user, proj_uuid):
+            raise HTTPException(
+                status_code=403,
+                detail="Only members carrying site responsibility can file field reports",
+            )
     linked_task = db.query(Task).filter(Task.id == task_uuid, Task.project_id == proj_uuid).first() if task_uuid else None
     if task_uuid and not linked_task:
         raise HTTPException(status_code=400, detail="taskId must belong to the selected project")
-    if linked_task and current_user.role == UserRole.ENGINEER and not any(
+    if linked_task and not work_scope.sees_all_tasks(db, current_user, proj_uuid) and not any(
         assignee.id == current_user.id for assignee in linked_task.assignees
     ):
         raise HTTPException(status_code=403, detail="You can only report against a task assigned to you")
@@ -204,7 +210,7 @@ async def submit_site_report(
         visit = db.query(SiteVisit).filter(SiteVisit.id == visit_uuid, SiteVisit.project_id == proj_uuid).first()
         if not visit:
             raise HTTPException(status_code=400, detail="siteVisitId must belong to the selected project")
-        if current_user.role == UserRole.ENGINEER and visit.engineer_id != current_user.id:
+        if not work_scope.sees_all_tasks(db, current_user, proj_uuid) and visit.engineer_id != current_user.id:
             raise HTTPException(status_code=403, detail="Only the scheduled engineer can report this visit")
         if db.query(SiteReport).filter(SiteReport.site_visit_id == visit_uuid).first():
             raise HTTPException(status_code=409, detail="This site visit already has a site report")
@@ -225,6 +231,12 @@ async def submit_site_report(
         issues_summary=issues_summary,
         notes=notes,
         review_status=review_status,
+        # Which discipline this visit covered. Without it a project with three
+        # site engineers produces three reports a day that cannot be told
+        # apart, filtered, or routed to the right reviewer.
+        discipline_id=work_scope.report_discipline_id(
+            db, current_user, proj_uuid, linked_task,
+        ),
     )
     
     db.add(new_report)
@@ -343,8 +355,6 @@ def update_site_report_draft(
         raise HTTPException(status_code=403, detail="You do not have access to this report")
     if current_user.id != report.submitted_by_id:
         raise HTTPException(status_code=403, detail="You can only edit site reports you created")
-    if current_user.role == UserRole.ENGINEER and not is_main_contractor_engineer(current_user):
-        raise HTTPException(status_code=403, detail="Active Main Contractor Engineer access required")
     if report.review_status != "draft":
         raise HTTPException(status_code=409, detail="Submitted or reviewed reports cannot be overwritten")
     if data.review_status and data.review_status not in {"draft", "submitted"}:
@@ -353,7 +363,7 @@ def update_site_report_draft(
         task = db.query(Task).filter(Task.id == data.task_id, Task.project_id == report.project_id).first()
         if not task:
             raise HTTPException(status_code=400, detail="taskId must belong to the report project")
-        if current_user.role == UserRole.ENGINEER and not any(
+        if not work_scope.sees_all_tasks(db, current_user, report.project_id) and not any(
             assignee.id == current_user.id for assignee in task.assignees
         ):
             raise HTTPException(status_code=403, detail="You can only link a task assigned to you")
@@ -393,8 +403,13 @@ def delete_site_report(report_id: uuid.UUID, db: Session = Depends(get_db), curr
     if not report:
         raise HTTPException(status_code=404, detail="Site report not found")
     project = db.get(Project, report.project_id)
-    can_delete = (current_user.id == report.submitted_by_id and report.review_status == "draft") or current_user.role == UserRole.ADMIN or (
-        current_user.role == UserRole.PROJECT_MANAGER and project and project.project_manager_id == current_user.id)
+    # The id comparison already implies the role: `project_manager_id` is
+    # validated to be an active PROJECT_MANAGER wherever it is written.
+    can_delete = (
+        (current_user.id == report.submitted_by_id and report.review_status == "draft")
+        or bool(project and project.project_manager_id == current_user.id)
+        or has_permission(db, current_user, "site_report.verify", report.project_id)
+    )
     if not can_delete:
         raise HTTPException(status_code=403, detail="You cannot delete this site report")
     for asset in db.query(Attachment).filter(Attachment.entity_type == "SITE_REPORT", Attachment.entity_id == report.id).all():

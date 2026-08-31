@@ -120,11 +120,6 @@ const ROLE_PERMISSIONS: Record<UserRole, PermissionAction[]> = {
     "review_cost_validation",
     "create_issue",
   ],
-  worker: [
-    "view_project_details",
-    "view_own_tasks",
-    "view_notifications",
-  ],
 };
 
 export const hasPermission = (

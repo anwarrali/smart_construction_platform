@@ -155,10 +155,10 @@ _MESSAGES: dict[str, tuple[str, str]] = {
         "to. Who should be responsible for it?",
     ),
     ASSIGNEE_NOT_ELIGIBLE: (
-        "ما بقدر أعيّن المهمة لهذا الشخص. المهام بتنعطى لمهندس أو عامل أو "
-        "استشاري أو مدير المشروع المعيّن على هذا المشروع.",
-        "I cannot assign the task to that person. Tasks go to an Engineer, a "
-        "Worker, a Consultant, or this project's assigned Project Manager.",
+        "ما بقدر أعيّن المهمة لهذا الشخص. المهام بتنعطى لأعضاء المشروع "
+        "النشطين فقط.",
+        "I cannot assign the task to that person. Tasks go to active members "
+        "of this project.",
     ),
     DATE_REQUIRED: (
         "المهمة جاهزة للتحديث، بس التاريخ المطلوب مش واضح. لأي يوم بدك تخليه؟",

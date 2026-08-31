@@ -130,6 +130,46 @@ def _grant(db, user, code, allowed=True, project_id=None):
     db.flush()
 
 
+def _configure_role(db, user, code, allowed):
+    """Change what the role this person holds may do, on the live mechanism.
+
+    `RolePermissionOverride` used to be how a role was configured, and these
+    tests used it directly. `effective_permissions` read that table only while
+    an account had no `org_role_id`; the contract step removed that branch, so
+    writing to it now changes nothing.
+
+    The role is **copied first**, into a row belonging to this test alone, and
+    the copy is what gets edited. Editing the seeded template in place would
+    outlive the test — the templates are shared by every office and by every
+    other test in the run, and `set_role_permission` writes to the database, so
+    one test granting `schedule.edit` to Engineer would hand it to every
+    engineer in every later test. That is the same reason
+    `organization._editable_role` copies a template into an office before
+    letting it be changed.
+    """
+    from app.models.rbac import Role, RolePermission
+    from app.services import rbac
+    from uuid import uuid4 as _uuid4
+
+    source = rbac.get_role(db, user.org_role_id)
+    assert source is not None, "the backstop should have given this account a role"
+    copy = Role(
+        organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
+        name_en=source.name_en, scope=source.scope,
+        is_internal_only=source.is_internal_only, is_system=False,
+        rank=source.rank, legacy_role=source.legacy_role,
+        legacy_affiliation=source.legacy_affiliation,
+    )
+    db.add(copy)
+    db.flush()
+    for existing in rbac.role_permission_codes(db, source.id):
+        db.add(RolePermission(role_id=copy.id, permission_code=existing, allowed=True))
+    db.flush()
+    user.org_role_id = copy.id
+    rbac.set_role_permission(db, role=copy, code=code, allowed=allowed)
+    db.flush()
+
+
 # --- schedule.view -----------------------------------------------------------
 
 def test_the_default_holders_can_see_the_gantt(db, world):
@@ -204,8 +244,7 @@ def test_an_administrator_can_still_grant_a_specific_consultant_engineer_the_sch
 
 def test_revoking_schedule_view_from_consultants_blocks_the_endpoint(db, world):
     assert get_gantt_data(world["project"].id, db=db, current_user=world["consultant"])
-    db.add(RolePermissionOverride(role=UserRole.CONSULTANT, permission_code="schedule.view", allowed=False))
-    db.flush()
+    _configure_role(db, world["consultant"], "schedule.view", False)
     with pytest.raises(HTTPException) as error:
         get_gantt_data(world["project"].id, db=db, current_user=world["consultant"])
     assert error.value.status_code == 403
@@ -253,19 +292,28 @@ def test_a_worker_member_cannot_list_ai_insights(db, world):
 
 def test_revoking_ai_view_insights_from_engineers_blocks_the_endpoint(db, world):
     assert list_insights(world["project"].id, db=db, current_user=world["engineer"], page=1, page_size=50) == []
-    db.add(RolePermissionOverride(role=UserRole.ENGINEER, permission_code="ai.view_insights", allowed=False))
-    db.flush()
+    _configure_role(db, world["engineer"], "ai.view_insights", False)
     with pytest.raises(HTTPException) as error:
         list_insights(world["project"].id, db=db, current_user=world["engineer"], page=1, page_size=50)
     assert error.value.status_code == 403
 
 
-def test_granting_ai_view_insights_to_a_worker_still_requires_project_access(db, world):
-    _grant(db, world["worker"], "ai.view_insights")
-    assert list_insights(world["project"].id, db=db, current_user=world["worker"], page=1, page_size=50) == []
+def test_a_grant_of_ai_view_insights_still_requires_project_access(db, world):
+    """A grant is an AND with project access, never a bypass of it.
+
+    The subject used to be a Worker, which no longer holds anything at all —
+    retired accounts sit on a permissionless role, so granting them one code
+    would not get them past `can_ifc` and the test would be proving the wrong
+    refusal. A contractor-side engineer is the right narrow subject: genuinely
+    on the project, genuinely limited, and `ai.view_insights` is one of the
+    codes an external participant may legitimately hold.
+    """
+    _grant(db, world["engineer"], "ai.view_insights")
+    assert list_insights(world["project"].id, db=db, current_user=world["engineer"], page=1, page_size=50) == []
 
     outsider = User(full_name="RbacAiOutsider", email=f"ai-outsider-{uuid4().hex[:8]}@test.local",
-                    hashed_password="x", role=UserRole.WORKER, status=UserStatus.ACTIVE)
+                    hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+                    engineer_affiliation="main_contractor")
     db.add(outsider)
     db.flush()
     _grant(db, outsider, "ai.view_insights")

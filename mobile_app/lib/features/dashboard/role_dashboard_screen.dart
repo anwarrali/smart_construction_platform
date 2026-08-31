@@ -15,6 +15,7 @@ import '../../models/user.dart';
 import '../projects/project_context_view_model.dart';
 import '../../core/l10n/l10n_formats.dart';
 import '../../core/l10n/l10n_labels.dart';
+import '../../core/auth/capabilities.dart';
 
 class RoleDashboardScreen extends ConsumerStatefulWidget {
   const RoleDashboardScreen({super.key});
@@ -42,7 +43,7 @@ class _RoleDashboardScreenState extends ConsumerState<RoleDashboardScreen> {
         ),
       );
     }
-    final kind = _kindFor(user);
+    final kind = _kindFor(capabilitiesOf(ref, projectId: project.id));
     if (_loadedProjectId != project.id || _dashboard == null) {
       _loadedProjectId = project.id;
       _dashboard = ref
@@ -96,26 +97,29 @@ class _RoleDashboardScreenState extends ConsumerState<RoleDashboardScreen> {
   }
 
   Future<void> _refresh() async {
-    final user = ref.read(sessionProvider).user;
     final project = ref.read(projectContextProvider).selected;
-    if (user == null || project == null) return;
+    if (project == null) return;
+    final kind = _kindFor(capabilitiesOf(ref, projectId: project.id));
     setState(
       () => _dashboard = ref
           .read(projectRepositoryProvider)
-          .dashboard(project.id, kind: _kindFor(user)),
+          .dashboard(project.id, kind: kind),
     );
     await _dashboard;
   }
 
-  String _kindFor(User user) => user.isWorker
-      ? 'worker'
-      : user.isSiteEngineer
-      ? 'engineer'
-      : user.isConsultant
-      ? 'consultant'
-      : user.isOwner
-      ? 'owner'
-      : 'manager';
+  /// Which dashboard shape the server should build.
+  ///
+  /// The four kinds are views, not roles: reviewing work, running a project,
+  /// the client's summary, or your own assignments. Each is chosen by the
+  /// capability that makes it meaningful, so an office that gives review
+  /// authority to a role it invented gets the review dashboard for it.
+  String _kindFor(Capabilities capabilities) {
+    if (capabilities.has('task.review')) return 'consultant';
+    if (capabilities.has('task.view_all')) return 'manager';
+    if (capabilities.has('client_portal.view')) return 'owner';
+    return 'engineer';
+  }
 }
 
 class _DashboardContent extends StatelessWidget {
@@ -277,22 +281,6 @@ class _DashboardContent extends StatelessWidget {
           Icons.gavel_outlined,
           AppColors.stateProgress,
           '/actions',
-        ),
-      ],
-      'worker' => [
-        _Attention(
-          l10n.dashboardNeedsCorrection,
-          count('rejectedEvidence'),
-          Icons.refresh_rounded,
-          AppColors.stateOverdue,
-          '/evidence',
-        ),
-        _Attention(
-          l10n.dashboardAssignedTasks,
-          count('assignedTasks'),
-          Icons.task_alt_outlined,
-          AppColors.stateProgress,
-          '/tasks',
         ),
       ],
       _ => [
@@ -599,7 +587,6 @@ class _DashboardHeader extends StatelessWidget {
     'engineer' => context.l10n.roleCaptionSiteEngineer,
     'consultant' => context.l10n.roleCaptionConsultant,
     'owner' => context.l10n.roleCaptionOwner,
-    'worker' => context.l10n.roleCaptionWorker,
     _ => context.l10n.roleCaptionProjectManager,
   };
 }
@@ -697,10 +684,6 @@ class _QuickActions extends StatelessWidget {
         (l10n.navMyActions, Icons.checklist_rounded, '/actions'),
         (l10n.navDesignChanges, Icons.architecture_rounded, '/design-changes'),
         (l10n.navDocuments, Icons.folder_outlined, '/documents'),
-      ],
-      'worker' => [
-        (l10n.navDocuments, Icons.folder_outlined, '/documents'),
-        (l10n.navMyActions, Icons.checklist_rounded, '/actions'),
       ],
       _ => [
         (l10n.navMyActions, Icons.checklist_rounded, '/actions'),

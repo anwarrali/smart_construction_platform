@@ -28,11 +28,10 @@ export const MessagesPage = () => {
   const workspace = useProjectWorkspace();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { isAdmin, isProjectManager, role, isConsultantEngineer } = useRole();
+  const { isAdmin, isProjectManager, hasCapability } = useRole();
   // "View original" must land inside the role's own project workspace: the
   // portfolio-level /issues route redirects role-scoped users to their
   // dashboard and drops the query parameter, so the entity would be lost.
-  const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
   // Sharing an entity happens away from this page and then lands here, so the
   // conversation it created is selected from the URL on arrival.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -289,7 +288,7 @@ export const MessagesPage = () => {
                       type="button"
                       onClick={() => navigate(projectEntityPath(
                         detail.projectId, message.sharedEntityType!, message.sharedEntityId!,
-                        role, affiliation,
+                        hasCapability,
                       ))}
                       className={`mt-2 inline-flex items-center gap-1 text-xs font-medium underline ${mine ? "text-primary-foreground/90" : "text-primary"}`}
                     >

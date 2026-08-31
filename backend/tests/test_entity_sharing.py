@@ -27,6 +27,7 @@ from app.models.issue import Issue
 from app.models.message import Conversation, Message
 from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
+from app.models.rbac import ProjectParty
 from app.models.site_report import SiteReport
 from app.models.task import Task
 from app.models.user import User
@@ -62,11 +63,18 @@ def world(db):
     people = {
         "manager": user("SharePm", UserRole.PROJECT_MANAGER),
         "owner": user("ShareOwner", UserRole.OWNER),
-        "engineer_a": user("ShareEngineerA", UserRole.ENGINEER, "main_contractor"),
-        "engineer_b": user("ShareEngineerB", UserRole.ENGINEER, "main_contractor"),
-        "worker": user("ShareWorker", UserRole.WORKER),
-        "outsider": user("ShareOutsider", UserRole.ENGINEER, "main_contractor"),
-        "other_project_engineer": user("ShareOtherEngineer", UserRole.ENGINEER, "main_contractor"),
+        # Office staff, not contractor-side. What this suite is about is
+        # *sharing an item as a message* between two engineers on a project;
+        # the `main_contractor` affiliation these carried made them external
+        # participants under the redesign, so deny-by-default document scope
+        # correctly refused the share and the test failed for a reason that had
+        # nothing to do with sharing. `contractor_rep` keeps the affiliation
+        # deliberately — it is the one that exists to be an outside party.
+        "engineer_a": user("ShareEngineerA", UserRole.ENGINEER, "internal_engineer"),
+        "engineer_b": user("ShareEngineerB", UserRole.ENGINEER, "internal_engineer"),
+        "contractor_rep": user("ShareContractorRep", UserRole.ENGINEER, "main_contractor"),
+        "outsider": user("ShareOutsider", UserRole.ENGINEER, "internal_engineer"),
+        "other_project_engineer": user("ShareOtherEngineer", UserRole.ENGINEER, "internal_engineer"),
     }
     db.flush()
 
@@ -76,9 +84,23 @@ def world(db):
                             owner_id=people["owner"].id, project_manager_id=people["manager"].id)
     db.add_all([project, other_project])
     db.flush()
-    for person in (people["manager"], people["engineer_a"], people["engineer_b"], people["worker"]):
+    for person in (people["manager"], people["engineer_a"], people["engineer_b"]):
         db.add(ProjectMember(project_id=project.id, user_id=person.id,
                              role_on_project=person.role, is_active=True))
+    # On the project for an outside firm. Deny-by-default means they read
+    # no documents on it until something is shared with their party.
+    contractor_party = ProjectParty(
+        project_id=project.id, kind="MAIN_CONTRACTOR",
+        display_name=f"Sharing Contractor {suffix}", is_primary=True,
+    )
+    db.add(contractor_party)
+    db.flush()
+    people["contractor_rep"].is_internal = False
+    db.add(ProjectMember(
+        project_id=project.id, user_id=people["contractor_rep"].id,
+        role_on_project=UserRole.ENGINEER, party_id=contractor_party.id,
+        is_active=True,
+    ))
     db.add(ProjectMember(project_id=other_project.id, user_id=people["other_project_engineer"].id,
                          role_on_project=UserRole.ENGINEER, is_active=True))
     db.flush()
@@ -139,6 +161,8 @@ def _purge(db, project_ids, user_ids):
         "DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ANY(:projects))",
         "DELETE FROM tasks WHERE project_id = ANY(:projects)",
         "DELETE FROM project_members WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
+        "DELETE FROM document_party_shares WHERE party_id IN (SELECT id FROM project_parties WHERE project_id = ANY(:projects))",
+        "DELETE FROM project_parties WHERE project_id = ANY(:projects)",
         "DELETE FROM projects WHERE id = ANY(:projects)",
         "DELETE FROM users WHERE id = ANY(:users)",
     ):
@@ -310,19 +334,28 @@ def test_cannot_use_sharing_to_leak_into_an_unrelated_project(db, world):
 
 
 def test_a_user_without_access_to_the_entity_cannot_share_it(db, world):
-    """A Worker is excluded from Issues by the entity's own access rules, so
-    they must not be able to read one out through sharing either."""
+    """Sharing must not become a second, softer read path.
+
+    Was written with a Worker, whom the entity rules excluded. The person who
+    now stands for "on the project but not entitled to this" is a contractor's
+    representative, and the property is the same: you cannot pass on what you
+    were not given.
+    """
     with pytest.raises(HTTPException) as error:
-        _share(db, world["worker"], "ISSUE", world["issue"].id, world["manager"])
+        _share(db, world["contractor_rep"], "DOCUMENT", world["document"].id,
+               world["manager"])
     assert error.value.status_code == 403
 
 
 def test_a_recipient_who_cannot_access_the_entity_is_rejected(db, world):
-    """The document/issue permission must not be weakened by sharing: a Worker
-    cannot access project documents, so sharing one *to* them is refused
-    rather than silently delivering the content."""
+    """Sharing to somebody must not hand them what they may not open.
+
+    An external participant reads a document only once it has been shared with
+    their party. Forwarding one to them personally must not route around that.
+    """
     with pytest.raises(HTTPException) as error:
-        _share(db, world["manager"], "DOCUMENT", world["document"].id, world["worker"])
+        _share(db, world["manager"], "DOCUMENT", world["document"].id,
+               world["contractor_rep"])
     assert error.value.status_code == 403
     assert "cannot access" in error.value.detail.lower()
 

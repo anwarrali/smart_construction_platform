@@ -11,7 +11,7 @@ import { ROUTES } from "../../../utils/constants";
 import { useProjectWorkspace } from "../../../features/projects/context/ProjectWorkspaceContext";
 import { StructIQMark } from "../../brand/StructIQLogo";
 
-type NavItem = { to:string; label:string; icon:React.ElementType };
+type NavItem = { to:string; label:string; icon:React.ElementType; permission?:string };
 
 /* A titled run of links. The workspace has sixteen modules, which as one flat
    list makes nothing look more important than anything else; grouping them by
@@ -45,138 +45,81 @@ const LinkList = ({ items, onNavigate }: { items:NavItem[]; onNavigate?:()=>void
  */
 export const Sidebar = ({ className = "", onNavigate }: { className?:string; onNavigate?:()=>void } = {}) => {
   const { t } = useTranslation();
-  const { role, isAdmin, isOwner, isProjectManager, isConsultantEngineer, permissionsReady, hasCapability } = useRole();
-  // Hide only once we positively know the capability is revoked; before that,
-  // show it (matching the previous always-visible behaviour) so a link never
-  // flickers away and back while permissions are still loading. The backing
-  // pages/endpoints remain the actual authorization boundary either way.
-  const canSeeSchedule = !permissionsReady || hasCapability("schedule.view");
-  const canSeeAiIntelligence = !permissionsReady || hasCapability("ai.view_insights");
+  const { isAdmin, permissionsReady, hasCapability, orgRoleLabel } = useRole();
   const workspace = useProjectWorkspace();
 
-  const globalByRole:Record<string,NavItem[]> = {
-    admin: [
-      {to:ROUTES.ADMIN_DASHBOARD,label:t("nav.platformDashboard"),icon:LayoutDashboard},
-      {to:ROUTES.PROJECTS,label:t("project.projects"),icon:FolderKanban},
-      {to:ROUTES.USERS,label:t("nav.peopleAndAccess"),icon:Users},
-      {to:ROUTES.ADMIN_TEAMS,label:t("nav.projectTeams"),icon:Building2},
-      {to:ROUTES.ADMIN_ACCESS_CONTROL,label:t("nav.accessControl"),icon:ShieldCheck},
-    ],
-    project_manager: [
-      {to:ROUTES.DASHBOARD,label:t("nav.portfolioDashboard"),icon:LayoutDashboard},
-      {to:ROUTES.MY_ACTIONS,label:t("nav.myActions"),icon:ListChecks},
-      {to:ROUTES.PM_PROJECTS,label:t("nav.myProjects"),icon:FolderKanban},
-      {to:ROUTES.SCHEDULE,label:t("nav.crossProjectSchedule"),icon:CalendarDays},
-      {to:ROUTES.TASKS,label:t("nav.tasksAcrossProjects"),icon:CheckSquare},
-      {to:ROUTES.REQUESTS,label:t("nav.ownerRequests"),icon:ClipboardCheck},
-    ],
-    engineer: [
-      {to:ROUTES.DASHBOARD,label:isConsultantEngineer?"Supervision Dashboard":"My Dashboard",icon:LayoutDashboard},
-      {to:ROUTES.MY_ACTIONS,label:t("nav.myActions"),icon:ListChecks},
-      {to:isConsultantEngineer?ROUTES.CONSULTANT_PROJECTS:ROUTES.ENGINEER_PROJECTS,label:t("nav.assignedProjects"),icon:FolderKanban},
-      {to:ROUTES.SCHEDULE,label:t("nav.mySchedule"),icon:CalendarDays},
-    ],
-    owner: [
-      {to:ROUTES.OWNER_DASHBOARD,label:t("nav.ownerDashboard"),icon:LayoutDashboard},
-      {to:ROUTES.PROJECTS,label:t("nav.myProjects"),icon:FolderKanban},
-      {to:ROUTES.REQUESTS,label:t("nav.myRequests"),icon:ClipboardCheck},
-      {to:ROUTES.SCHEDULE,label:t("nav.upcomingVisits"),icon:CalendarDays},
-      {to:ROUTES.DOCUMENTS,label:t("nav.projectDocuments"),icon:FileText},
-    ],
-    worker: [
-      {to:ROUTES.DASHBOARD,label:t("nav.myDashboard"),icon:LayoutDashboard},
-    ],
-  };
+  /* Show a link until we positively know the capability is revoked. Before the
+     permission list has arrived, hiding would make navigation flicker away and
+     back; the pages and endpoints behind each link remain the real boundary
+     either way. */
+  const can = (code?: string) => !code || !permissionsReady || hasCapability(code);
+
+  /* ── Portfolio navigation ──
+     One list, filtered by capability. It used to be four lists keyed on role
+     name, which is the shape a configurable role model cannot have: an office
+     that creates "Resident Engineer" has no entry in such a table and would
+     get whichever list happened to be the fallback. */
+  const globalNav: NavItem[] = [
+    {to:ROUTES.ADMIN_DASHBOARD,label:t("nav.platformDashboard"),icon:LayoutDashboard,permission:"platform.manage_users"},
+    {to:ROUTES.DASHBOARD,label:t("nav.portfolioDashboard"),icon:LayoutDashboard},
+    {to:ROUTES.OWNER_DASHBOARD,label:t("nav.ownerDashboard"),icon:LayoutDashboard,permission:"client_portal.view"},
+    {to:ROUTES.MY_ACTIONS,label:t("nav.myActions"),icon:ListChecks},
+    {to:ROUTES.PROJECTS,label:t("nav.myProjects"),icon:FolderKanban},
+    {to:ROUTES.SCHEDULE,label:t("nav.mySchedule"),icon:CalendarDays},
+    {to:ROUTES.TASKS,label:t("nav.tasksAcrossProjects"),icon:CheckSquare,permission:"task.view"},
+    {to:ROUTES.REQUESTS,label:t("nav.ownerRequests"),icon:ClipboardCheck},
+    {to:ROUTES.DOCUMENTS,label:t("nav.projectDocuments"),icon:FileText,permission:"document.view"},
+    {to:ROUTES.USERS,label:t("nav.peopleAndAccess"),icon:Users,permission:"platform.manage_users"},
+    {to:ROUTES.ADMIN_TEAMS,label:t("nav.projectTeams"),icon:Building2,permission:"platform.manage_users"},
+    {to:ROUTES.ADMIN_ACCESS_CONTROL,label:t("nav.accessControl"),icon:ShieldCheck,permission:"platform.manage_permissions"},
+    {to:ROUTES.ADMIN_OFFICE_ROLES,label:t("nav.officeRoles"),icon:ShieldCheck,permission:"org.manage_roles"},
+  ].filter((item) => can(item.permission));
 
   const commonGlobal:NavItem[] = [
     {to:ROUTES.MESSAGES,label:t("nav.messages"),icon:MessageSquare},
     {to:ROUTES.NOTIFICATIONS,label:t("common.notifications"),icon:Bell},
   ];
 
-  /* Every destination that existed before is still here, in the same order
-     within its group — the grouping adds hierarchy, it does not remove or
-     relocate any module. */
-  const managerModules:NavGroup[] = [
+  /* ── Project workspace navigation ──
+     One table for every participant, each entry naming the permission its
+     route is guarded by. What used to be three tables — manager, engineer,
+     owner — differed only in which of these entries they listed, so the
+     difference is now expressed once, as data the office controls. */
+  const projectModules:NavGroup[] = ([
     { label:t("nav.groupPlan"), items:[
-      {to:workspace.path("dashboard"),label:t("nav.projectOverview"),icon:LayoutDashboard},
-      {to:workspace.path("tasks"),label:t("nav.tasks"),icon:CheckSquare},
-      ...(canSeeSchedule?[{to:workspace.path("schedule"),label:t("nav.schedule"),icon:CalendarDays}]:[]),
+      {to:workspace.path("dashboard"),label:t("nav.projectOverview"),icon:LayoutDashboard,permission:"task.view"},
+      {to:workspace.path("my-work"),label:t("nav.myTasks"),icon:CheckSquare,permission:"task.view"},
+      {to:workspace.path("tasks"),label:t("nav.tasks"),icon:CheckSquare,permission:"task.view"},
+      {to:workspace.path("review-queue"),label:t("nav.pendingReviews"),icon:ClipboardCheck,permission:"task.review"},
+      {to:workspace.path("schedule"),label:t("nav.schedule"),icon:CalendarDays,permission:"schedule.view"},
     ]},
     { label:t("nav.groupControl"), items:[
-      {to:workspace.path("issues"),label:t("nav.issues"),icon:AlertTriangle},
-      {to:workspace.path("design-changes"),label:t("nav.designChanges"),icon:Pencil},
-      {to:workspace.path("requests"),label:t("nav.ownerRequests"),icon:ClipboardCheck},
+      {to:workspace.path("issues"),label:t("nav.issues"),icon:AlertTriangle,permission:"issue.view"},
+      {to:workspace.path("design-changes"),label:t("nav.designChanges"),icon:Pencil,permission:"design_change.view"},
+      {to:workspace.path("requests"),label:t("nav.ownerRequests"),icon:ClipboardCheck,permission:"task.view"},
     ]},
     { label:t("nav.groupField"), items:[
-      {to:workspace.path("voice-assistant"),label:t("nav.voiceAssistant"),icon:Mic2},
-      {to:workspace.path("site-reports"),label:t("nav.siteReports"),icon:FileText},
-      {to:workspace.path("site-visits"),label:t("nav.siteVisits"),icon:CalendarDays},
-      {to:workspace.path("evidence"),label:t("nav.projectInformation"),icon:Images},
+      {to:workspace.path("voice-assistant"),label:t("nav.voiceAssistant"),icon:Mic2,permission:"task.view"},
+      {to:workspace.path("voice-reports"),label:t("nav.voiceReports"),icon:Mic2,permission:"field_evidence.verify"},
+      {to:workspace.path("site-reports"),label:t("nav.siteReports"),icon:FileText,permission:"site_report.view"},
+      {to:workspace.path("site-visits"),label:t("nav.siteVisits"),icon:CalendarDays,permission:"task.view"},
+      {to:workspace.path("evidence"),label:t("nav.projectInformation"),icon:Images,permission:"task.view"},
     ]},
     { label:t("nav.groupReference"), items:[
-      {to:workspace.path("documents"),label:t("nav.documents"),icon:FileText},
-      {to:workspace.path("ifc"),label:t("nav.ifcBim"),icon:Boxes},
-      ...(canSeeAiIntelligence?[{to:workspace.path("ai-intelligence"),label:t("nav.aiInsights"),icon:BrainCircuit}]:[]),
+      {to:workspace.path("documents"),label:t("nav.documents"),icon:FileText,permission:"document.view"},
+      {to:workspace.path("ifc"),label:t("nav.ifcBim"),icon:Boxes,permission:"ifc.view"},
+      {to:workspace.path("ai-intelligence"),label:t("nav.aiInsights"),icon:BrainCircuit,permission:"ai.view_insights"},
     ]},
     { label:t("nav.groupTeam"), items:[
-      {to:workspace.path("collaboration"),label:t("nav.collaboration"),icon:ListChecks},
-      {to:workspace.path("messages"),label:t("nav.messages"),icon:MessageSquare},
-      {to:workspace.path("team"),label:t("nav.team"),icon:Users},
-      {to:workspace.path("activity"),label:t("nav.activity"),icon:Activity},
+      {to:workspace.path("collaboration"),label:t("nav.collaboration"),icon:ListChecks,permission:"task.view"},
+      {to:workspace.path("messages"),label:t("nav.messages"),icon:MessageSquare,permission:"task.view"},
+      {to:workspace.path("team"),label:t("nav.team"),icon:Users,permission:"project.manage_members"},
+      {to:workspace.path("parties"),label:t("nav.projectParties"),icon:Building2,permission:"project.manage_parties"},
+      {to:workspace.path("activity"),label:t("nav.activity"),icon:Activity,permission:"task.view"},
     ]},
-  ];
-
-  const engineerModules:NavGroup[] = [
-    { label:t("nav.groupPlan"), items:[
-      {to:workspace.path("dashboard"),label:t("nav.projectOverview"),icon:LayoutDashboard},
-      ...(isConsultantEngineer?[{to:workspace.path("reviews"),label:t("nav.pendingReviews"),icon:ClipboardCheck}]:[{to:workspace.path("tasks"),label:t("nav.myTasks"),icon:CheckSquare}]),
-    ]},
-    { label:t("nav.groupControl"), items:[
-      {to:workspace.path("issues"),label:t("nav.issues"),icon:AlertTriangle},
-      {to:workspace.path("requests"),label:t("nav.ownerRequests"),icon:ClipboardCheck},
-    ]},
-    { label:t("nav.groupField"), items:[
-      {to:workspace.path("site-reports"),label:t("nav.siteReports"),icon:FileText},
-      {to:workspace.path("site-visits"),label:t("nav.siteVisits"),icon:CalendarDays},
-      {to:workspace.path("evidence"),label:t("nav.projectInformation"),icon:Images},
-      ...(!isConsultantEngineer?[{to:workspace.path("voice-assistant"),label:t("nav.voiceAssistant"),icon:Mic2}]:[]),
-      ...(!isConsultantEngineer?[{to:workspace.path("voice-reports"),label:t("nav.voiceReports"),icon:Mic2}]:[]),
-    ]},
-    { label:t("nav.groupReference"), items:[
-      {to:workspace.path("documents"),label:t("nav.documents"),icon:FileText},
-      {to:workspace.path("ifc"),label:t("nav.ifcBim"),icon:Boxes},
-      ...(canSeeAiIntelligence?[{to:workspace.path("ai-intelligence"),label:t("nav.aiInsights"),icon:BrainCircuit}]:[]),
-    ]},
-    { label:t("nav.groupTeam"), items:[
-      {to:workspace.path("collaboration"),label:t("nav.collaboration"),icon:ListChecks},
-      {to:workspace.path("messages"),label:t("nav.messages"),icon:MessageSquare},
-      {to:workspace.path("activity"),label:t("nav.activity"),icon:Activity},
-    ]},
-  ];
-
-  const ownerModules:NavGroup[] = [
-    { label:t("nav.groupPlan"), items:[
-      {to:workspace.path("dashboard"),label:t("nav.projectOverview"),icon:LayoutDashboard},
-    ]},
-    { label:t("nav.groupControl"), items:[
-      {to:workspace.path("requests"),label:t("nav.myRequests"),icon:ClipboardCheck},
-      {to:workspace.path("design-changes"),label:t("nav.designChanges"),icon:Pencil},
-    ]},
-    { label:t("nav.groupField"), items:[
-      {to:workspace.path("site-visits"),label:t("nav.siteVisits"),icon:CalendarDays},
-      {to:workspace.path("site-reports"),label:t("nav.verifiedReports"),icon:FileText},
-      {to:workspace.path("evidence"),label:t("nav.photosAndInformation"),icon:Images},
-    ]},
-    { label:t("nav.groupReference"), items:[
-      {to:workspace.path("documents"),label:t("nav.documents"),icon:FileText},
-    ]},
-    { label:t("nav.groupTeam"), items:[
-      {to:workspace.path("messages"),label:t("nav.messages"),icon:MessageSquare},
-      {to:workspace.path("activity"),label:t("nav.activity"),icon:Activity},
-    ]},
-  ];
-
-  const projectModules = isProjectManager ? managerModules : role === "engineer" ? engineerModules : isOwner ? ownerModules : managerModules;
+  ] as NavGroup[])
+    .map((group) => ({ ...group, items: group.items.filter((item) => can(item.permission)) }))
+    .filter((group) => group.items.length > 0);
 
   return <aside className={`relative flex h-full w-[16.5rem] max-w-[85vw] shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar ${className}`}>
     {/* A whisper of sheet grid on the rail, so it reads as drawn rather than filled. */}
@@ -191,7 +134,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
           <span className="text-sidebar-mark">IQ</span>
         </p>
         <p className="mt-1 truncate text-[10px] leading-none text-sidebar-foreground/55">
-          {role?t(`roles.${role}`,{defaultValue:role.replaceAll("_"," ")}):""}
+          {orgRoleLabel}
         </p>
       </div>
     </div>
@@ -226,7 +169,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
         </div>)}
       </> : <>
         <SectionLabel>{isAdmin?t("nav.administration"):t("nav.portfolio")}</SectionLabel>
-        <LinkList items={globalByRole[role||""]||globalByRole.worker} onNavigate={onNavigate}/>
+        <LinkList items={globalNav} onNavigate={onNavigate}/>
         <SectionLabel>{t("nav.communication")}</SectionLabel>
         <LinkList items={commonGlobal} onNavigate={onNavigate}/>
       </>}

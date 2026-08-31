@@ -5,13 +5,16 @@ from typing import List, Optional
 import uuid
 
 from app.db.database import get_db
-from app.services.authorization import require
+from app.services.authorization import has_permission, require
 from app.models.user import User
 from app.models.document import Document
 from app.schemas.document import DocumentOut
 from app.core.deps import get_current_user
-from app.core.deps import user_has_project_access, accessible_project_ids, is_main_contractor_engineer, is_consultant_engineer
-from app.services.document_access import consultant_document_scope, owner_document_scope
+from app.core.deps import user_has_project_access, accessible_project_ids
+from app.services.document_access import (
+    assert_document_readable, readable_document_ids, readable_document_ids_across,
+    readable_documents_query,
+)
 from app.services.file_storage import save_upload, delete_upload
 from app.models.enums import UserRole, DocumentType, TaskStatus, NotificationType
 from app.models.project import Project
@@ -30,12 +33,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
-# These two now live in `app.services.document_access`, because RAG retrieval
-# must apply exactly the same rules — a second copy would drift, and the copy
-# that drifted would be the one nobody audits. Aliased rather than renamed at
-# every call site: the behaviour here is unchanged.
-_consultant_document_scope = consultant_document_scope
-_owner_document_scope = owner_document_scope
+# Every endpoint below narrows through `app.services.document_access`, which
+# RAG retrieval and the AI tool layer also use. The role branches that used to
+# be repeated here — Owner scope, consultant discipline scope — moved there
+# with the redesign, together with the new external-party scope. Keeping one
+# implementation is what stops the retrieval path (the one nobody audits) from
+# granting access the download endpoint would refuse.
 
 @router.get("", response_model=List[DocumentOut])
 def list_documents(
@@ -46,23 +49,20 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.ENGINEER:
-        if not (is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)):
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-        if not project_id:
-            raise HTTPException(status_code=400, detail="Engineer document queries require a selected project")
     if project_id and not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    query = db.query(Document)
-    if current_user.role != UserRole.ADMIN:
-        accessible_ids = accessible_project_ids(db, current_user) or []
-        query = query.filter(Document.project_id.in_(accessible_ids))
-    if current_user.role == UserRole.OWNER:
-        query = _owner_document_scope(query)
     if project_id:
-        query = query.filter(Document.project_id == project_id)
-        if is_consultant_engineer(current_user):
-            query = _consultant_document_scope(query, db, current_user, project_id)
+        query = readable_documents_query(db, current_user, project_id)
+    else:
+        # Across every project this person can reach. `accessible_project_ids`
+        # returns None for somebody who sees all projects, which for a document
+        # list means "resolve each one on its own terms" rather than "no
+        # filter" — a document's readability is a per-project question now.
+        accessible_ids = accessible_project_ids(db, current_user)
+        if accessible_ids is None:
+            accessible_ids = [row[0] for row in db.query(Project.id).all()]
+        readable_ids = readable_document_ids_across(db, current_user, accessible_ids)
+        query = db.query(Document).filter(Document.id.in_(readable_ids))
     if document_type:
         query = query.filter(Document.document_type == document_type)
     if task_id:
@@ -79,12 +79,7 @@ def get_documents_by_project(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    query = db.query(Document).filter(Document.project_id == project_id)
-    if current_user.role == UserRole.OWNER:
-        query = _owner_document_scope(query)
-    if is_consultant_engineer(current_user):
-        query = _consultant_document_scope(query, db, current_user, project_id)
-    return query.all()
+    return readable_documents_query(db, current_user, project_id).all()
 
 @router.get("/search", response_model=List[DocumentOut])
 def search_documents(
@@ -93,16 +88,23 @@ def search_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    q = db.query(Document).filter(Document.title.ilike(f"%{query}%") | Document.notes.ilike(f"%{query}%"))
-    if current_user.role != UserRole.ADMIN:
-        q = q.filter(Document.project_id.in_(accessible_project_ids(db, current_user) or []))
-    if current_user.role == UserRole.OWNER:
-        q = _owner_document_scope(q)
     if project_id:
-        q = q.filter(Document.project_id == project_id)
-        if is_consultant_engineer(current_user):
-            q = _consultant_document_scope(q, db, current_user, project_id)
-    return q.all()
+        if not user_has_project_access(db, current_user, project_id):
+            raise HTTPException(status_code=403, detail="You do not have access to this project")
+        readable_ids = readable_document_ids(db, current_user, project_id)
+    else:
+        accessible_ids = accessible_project_ids(db, current_user)
+        if accessible_ids is None:
+            accessible_ids = [row[0] for row in db.query(Project.id).all()]
+        readable_ids = readable_document_ids_across(db, current_user, accessible_ids)
+    return (
+        db.query(Document)
+        .filter(
+            Document.id.in_(readable_ids),
+            Document.title.ilike(f"%{query}%") | Document.notes.ilike(f"%{query}%"),
+        )
+        .all()
+    )
 
 @router.get("/{document_id}", response_model=DocumentOut)
 def get_document_by_id(
@@ -113,16 +115,7 @@ def get_document_by_id(
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if not user_has_project_access(db, current_user, doc.project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this document")
-    if current_user.role == UserRole.OWNER and not _owner_document_scope(
-        db.query(Document).filter(Document.id == doc.id)
-    ).first():
-        raise HTTPException(status_code=403, detail="Owners can view finalized and approved documents only")
-    if is_consultant_engineer(current_user) and doc.task_id:
-        scoped = _consultant_document_scope(db.query(Document), db, current_user, doc.project_id).filter(Document.id == doc.id).first()
-        if not scoped:
-            raise HTTPException(status_code=403, detail="This document is outside your discipline")
+    assert_document_readable(db, current_user, doc)
     return doc
 
 def _classify_upload(file_url: str, filename: str, declared: DocumentType) -> Classification | None:
@@ -164,16 +157,23 @@ async def upload_document(
         task_uuid = uuid.UUID(task_id) if task_id else None
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid projectId or taskId")
+    # `document.upload` is the whole decision. The affiliation check that used
+    # to sit here refused consultant-side engineers outright; in the new model
+    # the reviewing engineers are the office's own staff, and an office that
+    # does not want a particular role uploading project documents takes the
+    # permission away from that role instead.
     require(db, current_user, "document.upload", proj_uuid)
-    if current_user.role == UserRole.ENGINEER and not is_main_contractor_engineer(current_user):
-        raise HTTPException(status_code=403, detail="Consultant review files must be uploaded as review attachments")
-    
+
     if not user_has_project_access(db, current_user, proj_uuid):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     task = db.query(Task).filter(Task.id == task_uuid, Task.project_id == proj_uuid).first() if task_uuid else None
     if task_uuid and not task:
         raise HTTPException(status_code=400, detail="taskId must belong to the selected project")
-    if task and current_user.role == UserRole.ENGINEER and not any(
+    # Attaching to a task you are not on is still refused — but the rule is now
+    # "you do not manage this project", not "you are an Engineer". A project
+    # manager or administrator files against any task; everyone else files
+    # against their own work.
+    if task and not has_permission(db, current_user, "task.edit", proj_uuid) and not any(
         assignee.id == current_user.id for assignee in task.assignees
     ):
         raise HTTPException(status_code=403, detail="You can only attach documents to a task assigned to you")
@@ -236,17 +236,25 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     project = db.get(Project, doc.project_id)
-    if current_user.role != UserRole.ADMIN and current_user.id != doc.uploaded_by_id and (not project or project.project_manager_id != current_user.id):
+    # Your own upload, the project's manager, or anybody the office trusted
+    # with the project's documents. `document.share_external` is deliberately
+    # not the code here — that governs who may hand a file outside; deleting
+    # one is project setup, which `project.edit` names.
+    if not (
+        current_user.id == doc.uploaded_by_id
+        or (project and project.project_manager_id == current_user.id)
+        or has_permission(db, current_user, "project.edit", doc.project_id)
+    ):
         raise HTTPException(status_code=403, detail="You cannot delete this document")
-    if current_user.role == UserRole.ENGINEER:
-        if not is_main_contractor_engineer(current_user):
-            raise HTTPException(status_code=403, detail="Active Main Contractor Engineer access required")
-        if doc.task_id:
-            task = db.get(Task, doc.task_id)
-            if not task or not any(assignee.id == current_user.id for assignee in task.assignees):
-                raise HTTPException(status_code=403, detail="This document is outside your assigned work")
-            if task.status in {TaskStatus.UNDER_REVIEW, TaskStatus.DONE}:
-                raise HTTPException(status_code=403, detail="Submitted task evidence cannot be deleted")
+    # Evidence attached to work that has been submitted stays put, whoever
+    # uploaded it. Keyed on managing the project rather than on a role name, so
+    # the protection follows authority instead of job title.
+    if doc.task_id and not has_permission(db, current_user, "task.edit", doc.project_id):
+        task = db.get(Task, doc.task_id)
+        if not task or not any(assignee.id == current_user.id for assignee in task.assignees):
+            raise HTTPException(status_code=403, detail="This document is outside your assigned work")
+        if task.status in {TaskStatus.UNDER_REVIEW, TaskStatus.DONE}:
+            raise HTTPException(status_code=403, detail="Submitted task evidence cannot be deleted")
     record_audit(db, actor_id=current_user.id, action="document_deleted", entity_type="document",
                  entity_id=doc.id, project_id=doc.project_id)
     delete_upload(doc.file_url)
@@ -263,14 +271,8 @@ def download_document(
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if not user_has_project_access(db, current_user, doc.project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this document")
-    if current_user.role == UserRole.OWNER and not _owner_document_scope(
-        db.query(Document).filter(Document.id == doc.id)
-    ).first():
-        raise HTTPException(status_code=403, detail="Owners can download finalized and approved documents only")
-    if is_consultant_engineer(current_user) and doc.task_id:
-        scoped = _consultant_document_scope(db.query(Document), db, current_user, doc.project_id).filter(Document.id == doc.id).first()
-        if not scoped:
-            raise HTTPException(status_code=403, detail="This document is outside your discipline")
+    # Downloading is reading. Same rule, same helper — a download endpoint that
+    # checked less than the read endpoint would be the bypass, and this one
+    # used to carry its own copy of the scoping.
+    assert_document_readable(db, current_user, doc)
     return {"url": doc.file_url}

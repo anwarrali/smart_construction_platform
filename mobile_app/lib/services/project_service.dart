@@ -21,7 +21,6 @@ class ProjectService {
       'engineer' => ApiEndpoints.engineerDashboard(id),
       'consultant' => ApiEndpoints.consultantDashboard(id),
       'owner' => ApiEndpoints.ownerDashboard(id),
-      'worker' => '${ApiEndpoints.workerDashboard}?project_id=$id',
       _ => ApiEndpoints.projectDashboard(id),
     };
     return _api.get<Map<String, dynamic>>(path);

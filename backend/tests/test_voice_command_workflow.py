@@ -83,6 +83,8 @@ class VoiceRulesEngineTests(TestCase):
             role=role,
             status=UserStatus.ACTIVE,
             engineer_affiliation=None,
+            org_role_id=None,
+            is_internal=True,
         )
 
     def _command(self, actor):
@@ -92,7 +94,7 @@ class VoiceRulesEngineTests(TestCase):
             project_id=uuid4(),
         )
 
-    def test_worker_cannot_apply_official_progress(self):
+    def test_official_progress_needs_the_progress_permission(self):
         actor = self._actor(UserRole.WORKER)
         command = self._command(actor)
         draft = SimpleNamespace(
@@ -108,7 +110,7 @@ class VoiceRulesEngineTests(TestCase):
             # The permission catalogue reads the database; these cases are
             # about the engine's own gates and run on a Mock session.
             "app.services.voice_rules_engine.is_available",
-            return_value=True,
+            return_value=False,
         ):
             with self.assertRaises(HTTPException) as raised:
                 VoiceRulesEngine().validate(
@@ -164,7 +166,13 @@ class VoiceRulesEngineTests(TestCase):
                 )
         self.assertEqual(raised.exception.status_code, 409)
 
-    def test_owner_receives_no_new_voice_mutation_permission(self):
+    def test_voice_grants_no_mutation_permission_of_its_own(self):
+        """Speaking is not a way around the permission the screen needs.
+
+        Was written for the Owner role, whose successor is the client
+        representative; the property is about Voice, not about who the
+        speaker is, so the refusal is driven by the permission answer.
+        """
         actor = self._actor(UserRole.OWNER)
         command = self._command(actor)
         draft = SimpleNamespace(
@@ -180,7 +188,7 @@ class VoiceRulesEngineTests(TestCase):
             # The permission catalogue reads the database; these cases are
             # about the engine's own gates and run on a Mock session.
             "app.services.voice_rules_engine.is_available",
-            return_value=True,
+            return_value=False,
         ):
             with self.assertRaises(HTTPException) as raised:
                 VoiceRulesEngine().validate(

@@ -50,7 +50,7 @@ export type WebPushStatus =
 
 export const useWebPush = () => {
   const navigate = useNavigate();
-  const { role, isConsultantEngineer } = useRole();
+  const { hasCapability } = useRole();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const setUnreadCount = useNotificationStore((state) => state.setUnreadCount);
   const [status, setStatus] = useState<WebPushStatus>({ state: "idle" });
@@ -75,13 +75,12 @@ export const useWebPush = () => {
       const projectId = data.projectId;
       const entityType = data.entityType || (data.taskId ? "TASK" : undefined);
       const entityId = data.entityId || data.taskId;
-      const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
       if (!projectId) return ROUTES.NOTIFICATIONS;
       return entityType
-        ? projectEntityPath(projectId, entityType, entityId || "", role, affiliation)
-        : projectModulePath(projectId, "activity", role, affiliation);
+        ? projectEntityPath(projectId, entityType, entityId || "", hasCapability)
+        : projectModulePath(projectId, "activity", hasCapability);
     },
-    [role, isConsultantEngineer],
+    [hasCapability],
   );
 
   const refreshUnreadCount = useCallback(async () => {

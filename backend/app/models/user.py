@@ -52,11 +52,49 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("companies.id"), nullable=True
     )
 
+    # --- Configurable RBAC ---------------------------------------------------
+    # `role` above is the retired enum. It is still written and still read by
+    # the legacy authorization path, which the equivalence gate compares
+    # against, and it is dropped only in the final contract migration. Until
+    # then `org_role_id` is the authority whenever it is set.
+
+    #: The office role this person holds. NULL only before the backfill has
+    #: run, or for an external participant who has no office membership.
+    org_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("roles.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
+    #: Consulting-office staff, as opposed to somebody from a contractor,
+    #: subcontractor or the client. Replaces every read of
+    #: `engineer_affiliation`. Denormalized from organization membership
+    #: because it is checked on nearly every request.
+    is_internal: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true", index=True,
+    )
+
     telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     notify_by_email: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notify_by_telegram: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Relationships
+    #: Read-only companions to `org_role_id` / `user_disciplines`, so a
+    #: response schema can render the configured model without every endpoint
+    #: assembling it by hand. Neither is a write path: roles are assigned
+    #: through `rbac.assign_org_role` and disciplines through
+    #: `rbac.set_user_disciplines`, which keep `is_internal` and the
+    #: organization membership in step.
+    org_role: Mapped["Role | None"] = relationship(
+        "Role", foreign_keys=[org_role_id], lazy="joined", viewonly=True,
+    )
+    disciplines: Mapped[list["Discipline"]] = relationship(
+        "Discipline",
+        secondary="user_disciplines",
+        primaryjoin="User.id == UserDiscipline.user_id",
+        secondaryjoin="UserDiscipline.discipline_id == Discipline.id",
+        order_by="Discipline.rank",
+        viewonly=True,
+    )
+
     password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

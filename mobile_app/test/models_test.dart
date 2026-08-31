@@ -29,43 +29,69 @@ void main() {
     expect(task.hasIncompleteDependencies, isTrue);
   });
 
-  test('main contractor affiliation maps to site engineer experience', () {
+  test('the office role and disciplines are what the client reads', () {
+    // The configurable model, as the server sends it. `orgRole` is the
+    // office's own name for this person and `disciplines` is many-to-many —
+    // an office that combines Mechanical and Electrical assigns both to one
+    // engineer, which the retired single `discipline` could not express.
     final user = User.fromJson({
       'id': '1',
       'fullName': 'Field Engineer',
       'email': 'field@example.com',
       'role': 'engineer',
       'status': 'active',
-      'engineerAffiliation': 'main_contractor',
+      'orgRole': {
+        'id': 'role-1',
+        'code': 'site_engineer',
+        'nameEn': 'Site Engineer',
+        'isInternalOnly': true,
+      },
+      'disciplines': [
+        {'id': 'd1', 'code': 'mechanical', 'nameEn': 'Mechanical'},
+        {'id': 'd2', 'code': 'electrical', 'nameEn': 'Electrical'},
+      ],
+      'isInternal': true,
     });
-    expect(user.isSiteEngineer, isTrue);
-    expect(user.isConsultant, isFalse);
+    expect(user.orgRoleName, 'Site Engineer');
+    expect(user.roleLabel, 'Site Engineer');
+    expect(user.disciplines, ['mechanical', 'electrical']);
+    expect(user.isInternal, isTrue);
   });
 
-  test('consultant engineer is not an execution engineer', () {
+  test('an external participant is marked as one', () {
     final user = User.fromJson({
       'id': '2',
-      'fullName': 'Consultant',
-      'email': 'review@example.com',
+      'fullName': 'Contractor Rep',
+      'email': 'rep@example.com',
       'role': 'engineer',
       'status': 'active',
-      'engineerAffiliation': 'external_consultant',
+      'orgRole': {
+        'id': 'role-2',
+        'code': 'contractor_representative',
+        'nameEn': 'Main Contractor',
+        'isInternalOnly': false,
+      },
+      'isInternal': false,
     });
-    expect(user.isConsultant, isTrue);
-    expect(user.isSiteEngineer, isFalse);
+    expect(user.isInternal, isFalse);
+    expect(user.roleLabel, 'Main Contractor');
+    expect(user.disciplines, isEmpty);
   });
 
-  test('worker role remains distinct from engineer and consultant', () {
+  test('an account the backfill has not reached still renders', () {
+    // No `orgRole`, so the retired enum is all there is. It must parse and
+    // produce a label rather than throwing — the client cannot assume every
+    // account has been migrated.
     final user = User.fromJson({
-      'id': 'worker-1',
-      'fullName': 'Field Worker',
-      'email': 'worker@example.com',
-      'role': 'worker',
+      'id': '3',
+      'fullName': 'Legacy Account',
+      'email': 'legacy@example.com',
+      'role': 'project_manager',
       'status': 'active',
     });
-    expect(user.isWorker, isTrue);
-    expect(user.isSiteEngineer, isFalse);
-    expect(user.isConsultant, isFalse);
+    expect(user.orgRoleName, isNull);
+    expect(user.roleLabel, 'project_manager');
+    expect(user.isProjectManager, isTrue);
   });
 
   test('field submission preserves rejection and photo direction metadata', () {

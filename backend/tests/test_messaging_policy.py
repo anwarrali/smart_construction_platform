@@ -7,65 +7,39 @@ from app.services.messaging_policy import (
     context_is_supported,
     conversation_search_visible,
     participants_belong_to_project,
-    resolve_group_records,
     user_specific_unread,
-    worker_can_message,
 )
 
 
 class MessagingPolicyTests(unittest.TestCase):
     def setUp(self):
+        # Ids only: what a member *is* no longer lives in this module. Group
+        # resolution moved to `messaging_authorization.resolve_group_recipients`,
+        # which reads the project membership and `has_permission`, and is
+        # covered against a real database in test_messaging_authorization.py.
         self.members = [
-            {"id": "pm", "role": "project_manager", "active": True},
-            {"id": "civil", "role": "engineer", "affiliation": "main_contractor",
-             "discipline": "civil", "active": True},
-            {"id": "electrical", "role": "engineer", "affiliation": "main_contractor",
-             "discipline": "electrical", "active": True},
-            {"id": "consultant", "role": "engineer",
-             "affiliation": "external_consultant", "discipline": "electrical",
-             "active": True},
-            {"id": "worker", "role": "worker", "active": True},
-            {"id": "inactive", "role": "worker", "active": False},
+            {"id": "pm", "active": True},
+            {"id": "civil", "active": True},
+            {"id": "electrical", "active": True},
+            {"id": "consultant", "active": True},
+            {"id": "site_engineer", "active": True},
+            {"id": "inactive", "active": False},
         ]
 
     def test_01_authorized_project_member_can_be_selected(self):
         self.assertTrue(participants_belong_to_project(
-            {"civil"}, {"pm", "civil", "worker"}
+            {"civil"}, {"pm", "civil", "site_engineer"}
         ))
 
     def test_02_unrelated_member_cannot_be_injected(self):
         self.assertFalse(participants_belong_to_project(
-            {"civil", "outside"}, {"pm", "civil", "worker"}
+            {"civil", "outside"}, {"pm", "civil", "site_engineer"}
         ))
 
     def test_03_multi_recipient_selection_is_relational(self):
         self.assertTrue(participants_belong_to_project(
             {"civil", "electrical"}, {item["id"] for item in self.members}
         ))
-
-    def test_04_contractor_team_resolution(self):
-        self.assertEqual(
-            resolve_group_records("CONTRACTOR_TEAM", self.members),
-            {"pm", "civil", "electrical", "worker"},
-        )
-
-    def test_05_consultant_team_resolution(self):
-        self.assertEqual(
-            resolve_group_records("CONSULTANT_TEAM", self.members),
-            {"consultant"},
-        )
-
-    def test_06_all_engineers_resolution(self):
-        self.assertEqual(
-            resolve_group_records("ALL_ENGINEERS", self.members),
-            {"civil", "electrical", "consultant"},
-        )
-
-    def test_07_discipline_group_resolution(self):
-        self.assertEqual(
-            resolve_group_records("DISCIPLINE:ELECTRICAL", self.members),
-            {"electrical", "consultant"},
-        )
 
     def test_08_engineer_cannot_project_broadcast(self):
         self.assertFalse(can_project_broadcast("engineer"))
@@ -90,17 +64,22 @@ class MessagingPolicyTests(unittest.TestCase):
             is_participant=True,
         ))
 
-    def test_13_worker_communication_is_restricted(self):
-        self.assertTrue(worker_can_message(
-            target_is_project_manager=True, target_is_assigned_engineer=False
-        ))
-        self.assertFalse(worker_can_message(
-            target_is_project_manager=False, target_is_assigned_engineer=False
-        ))
+    def test_13_project_participation_is_what_gates_messaging(self):
+        # Was "worker communication is restricted", which asserted a rule that
+        # only existed to stop a labourer messaging the whole project. With
+        # workers gone the restriction has no subject, and the boundary that
+        # remains is the real one: you may message people on projects you are
+        # on. `can_message_user` enforces it against actual membership, so
+        # there is no pure function left to assert here — only that the retired
+        # one is gone.
+        import app.services.messaging_policy as policy
+
+        self.assertFalse(hasattr(policy, "worker_can_message"))
+        self.assertNotIn("WORKERS", policy.PROJECT_GROUPS)
 
     def test_14_group_creation_is_restricted(self):
         self.assertTrue(can_create_group("project_manager"))
-        self.assertFalse(can_create_group("worker"))
+        self.assertFalse(can_create_group("engineer"))
 
     def test_15_unread_counts_are_user_specific(self):
         now = datetime.now(timezone.utc)

@@ -128,8 +128,7 @@ export const ProjectManagerDashboard = () => {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage || i18n.language || "en";
   const navigate = useNavigate();
-  const { role, isConsultantEngineer } = useRole();
-  const affiliation = isConsultantEngineer ? ("external_consultant" as const) : undefined;
+  const { hasCapability } = useRole();
   // Recomputed when the language changes so the date reads in that language.
   const dayLabel = useMemo(() => {
     const now = new Date();
@@ -273,7 +272,7 @@ export const ProjectManagerDashboard = () => {
   /* ─── Navigation helpers ─── */
   const handleScheduleReview = () => {
     if (projects.length > 0) {
-      navigate(projectModulePath(projects[0].id, "schedule", role, affiliation));
+      navigate(projectModulePath(projects[0].id, "schedule", hasCapability));
     } else {
       navigate(ROUTES.PROJECTS);
     }
@@ -456,7 +455,7 @@ export const ProjectManagerDashboard = () => {
         </div>
         {projects.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">{t("pmDashboard.noProjectsAssigned")}</p> :
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{projects.map(project =>
-            <button key={project.id} onClick={() => navigate(projectModulePath(project.id, "dashboard", role, affiliation))} className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/30">
+            <button key={project.id} onClick={() => navigate(projectModulePath(project.id, "dashboard", hasCapability))} className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/30">
               <div className="flex items-center justify-between gap-2"><span className="font-medium">{project.name}</span><span className="text-xs text-muted-foreground">{t("project.status." + project.status, { defaultValue: project.status.replaceAll("_", " ") })}</span></div>
               <div className="mt-3 flex justify-between text-xs text-muted-foreground"><span>{t("pmDashboard.percentComplete", { value: project.completionPercentage })}</span><span>{t("pmDashboard.openIssueCount", { count: project.openIssueCount || 0 })}</span></div>
               <div className="mt-1 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{width:`${project.completionPercentage}%`}} /></div>

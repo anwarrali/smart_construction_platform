@@ -75,12 +75,12 @@ describe("usePermissionStore", () => {
     expect(usePermissionStore.getState().permissions).toBeNull();
 
     mine.mockResolvedValueOnce(["task.view"]);
-    await usePermissionStore.getState().fetch("worker-2");
+    await usePermissionStore.getState().fetch("engineer-2");
 
     const state = usePermissionStore.getState();
     expect(state.permissions).toEqual(["task.view"]);
     expect(state.permissions).not.toContain("platform.manage_users");
-    expect(state.loadedForUserId).toBe("worker-2");
+    expect(state.loadedForUserId).toBe("engineer-2");
   });
 
   it("clear removes every trace of the previous session's permissions (logout)", async () => {

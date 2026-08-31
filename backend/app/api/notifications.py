@@ -14,9 +14,10 @@ from app.schemas.device_token import (
     DeviceTokenUnregister,
 )
 from app.schemas.notification import NotificationOut, NotificationResponse
-from app.core.deps import get_current_user, user_has_project_access, is_main_contractor_engineer, is_consultant_engineer
+from app.core.deps import get_current_user, user_has_project_access
 from app.models.enums import NotificationStatus, NotificationType, UserRole
 from app.services import device_token_service, notification_service
+from app.services.authorization import has_permission
 from app.services.realtime import EventType, publish_event
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -36,11 +37,9 @@ def list_notifications(
 ):
     page = max(page, 1)
     limit = min(max(limit, 1), 100)
-    if current_user.role == UserRole.ENGINEER:
-        if not (is_main_contractor_engineer(current_user) or is_consultant_engineer(current_user)):
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-        if not project_id:
-            raise HTTPException(status_code=400, detail="Engineer notification queries require a selected project")
+    # Every row returned is already addressed to the caller, so there is
+    # nothing to authorize beyond being signed in. The retired refusal blocked
+    # the office's own engineers from reading their own notifications.
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
     if project_id:
         if not user_has_project_access(db, current_user, project_id):
@@ -153,8 +152,12 @@ def unregister_device(
 
 
 def _mark_all_read(project_id, db: Session, current_user: User):
-    if current_user.role == UserRole.ENGINEER and not project_id:
-        raise HTTPException(status_code=400, detail="Engineer notification actions require a selected project")
+    # Somebody whose work is narrowed to one project at a time is asked to
+    # pick one, so "mark everything read" cannot silently span projects they
+    # only half-see. `task.view_all` is that distinction; it used to be asked
+    # of one legacy role name and of nobody else.
+    if not project_id and not has_permission(db, current_user, "task.view_all"):
+        raise HTTPException(status_code=400, detail="Select a project first")
     if project_id and not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     updated = notification_service.mark_all_as_read(

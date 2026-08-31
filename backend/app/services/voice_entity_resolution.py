@@ -101,7 +101,9 @@ _ROLE_WORDS: dict[str, tuple[str, ...]] = {
     "owner": ("مالك", "صاحب المشروع", "صاحب المشرو", "owner", "client"),
     "project_manager": ("مدير", "manager", "pm"),
     "engineer": ("مهندس", "engineer"),
-    "worker": ("عامل", "عمال", "worker"),
+    # No "worker" entry. It matched `role in person.role` against the project's
+    # participants, and there are none — so it could only ever have shadowed a
+    # better match for an utterance that happened to contain "عامل".
     "consultant": ("استشار", "consultant", "reviewer"),
     "contractor": ("مقاول", "contractor"),
 }

@@ -2,7 +2,9 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.deps import accessible_project_ids, get_current_user, is_consultant_engineer, user_has_project_access
+from app.core.deps import accessible_project_ids, get_current_user, user_has_project_access
+from app.services import work_scope
+from app.services.authorization import require
 from app.db.database import get_db
 from app.models.enums import UserRole
 from app.models.project import Project, ProjectMember
@@ -30,29 +32,36 @@ def get_mobile_field_context(db: Session = Depends(get_db), current_user: User =
 def _validate_proposal(db: Session, user: User, proposal: ActionProposal) -> str | None:
     if not user_has_project_access(db, user, proposal.project_id):
         raise HTTPException(status_code=403, detail="The authenticated user is not assigned to this project")
-    # `user.role` is never literally CONSULTANT (a Consultant Engineer is
-    # persisted as ENGINEER with `engineer_affiliation="external_consultant"`,
-    # see app.schemas.user.UserCreateByAdmin), hence `is_consultant_engineer`.
-    if proposal.discipline and is_consultant_engineer(user) and user.engineer_profile:
-        if proposal.discipline != user.engineer_profile.discipline.value:
-            raise HTTPException(status_code=403, detail="Consultants cannot act outside their assigned discipline")
+    # Nobody acts outside the disciplines they were assigned. Somebody who is
+    # not narrowed (an administrator, a project manager, an office engineer with
+    # `project.view_all_disciplines`) is unaffected.
+    if proposal.discipline:
+        scoped = work_scope.scoped_discipline_codes(db, user, proposal.project_id)
+        if scoped is not None and proposal.discipline not in scoped:
+            raise HTTPException(
+                status_code=403, detail="You cannot act outside your assigned disciplines",
+            )
+    # Each proposal routes to the endpoint that will execute it, so the
+    # capability asked for here is the one that endpoint checks. Was three
+    # role-name comparisons, which meant an office that granted `issue.create`
+    # to a role it created still had the assistant refuse.
     if proposal.action_type == "ISSUE":
-        if user.role not in {UserRole.ENGINEER, UserRole.PROJECT_MANAGER}:
-            raise HTTPException(status_code=403, detail="Your role cannot create Issues")
+        require(db, user, "issue.create", proposal.project_id)
         return "/api/v1/issues"
     if proposal.action_type == "DESIGN_CHANGE":
-        if user.role not in {UserRole.ENGINEER, UserRole.PROJECT_MANAGER}:
-            raise HTTPException(status_code=403, detail="Your role cannot propose Design Changes")
+        require(db, user, "design_change.propose", proposal.project_id)
         return "/api/v1/design-changes"
     if proposal.action_type == "SITE_REPORT":
-        if user.role == UserRole.ENGINEER:
-            assignment = db.query(ProjectMember).filter(ProjectMember.project_id == proposal.project_id,
-                ProjectMember.user_id == user.id, ProjectMember.is_active == True,
-                ProjectMember.is_site_engineer == True).first()
-            if not assignment:
-                raise HTTPException(status_code=403, detail="A project-specific Site Engineer assignment is required")
-        elif user.role != UserRole.PROJECT_MANAGER:
-            raise HTTPException(status_code=403, detail="Your role cannot submit Site Reports")
+        require(db, user, "site_report.submit", proposal.project_id)
+        # And the same site-responsibility narrowing the endpoint applies, so
+        # the assistant cannot route somebody past it.
+        if not work_scope.sees_all_tasks(db, user, proposal.project_id) and not work_scope.is_site_engineer(
+            db, user, proposal.project_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Site responsibility on this project is required to file a report",
+            )
         return "/api/v1/site-reports/submit"
     if proposal.action_type == "PROJECT_STATUS_QUESTION":
         return None

@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.deps import is_main_contractor_engineer, user_has_project_access
+from app.core.deps import user_has_project_access
 from app.models.enums import NotificationType, TaskStatus, UserRole
 from app.models.notification import Notification
 from app.models.project import Project
@@ -116,11 +116,15 @@ def validate_progress_change(*, task: Task, progress: float, is_project_manager:
 
 def _is_project_manager(db: Session, user: User, project_id: UUID) -> bool:
     project = db.get(Project, project_id)
-    return bool(user.role == UserRole.PROJECT_MANAGER and project and project.project_manager_id == user.id)
+    # The id comparison already implies the role: `project_manager_id` is
+    # validated to be an active PROJECT_MANAGER wherever it is written.
+    return bool(project and project.project_manager_id == user.id)
 
 
 def _is_task_engineer(task: Task, user: User) -> bool:
-    return is_main_contractor_engineer(user) and any(assignee.id == user.id for assignee in task.assignees)
+    # Assignment is the whole of it. The affiliation half only ever excluded
+    # people who could not have been assigned the task in the first place.
+    return any(assignee.id == user.id for assignee in task.assignees)
 
 
 def _dependencies_complete(db: Session, task: Task) -> bool:

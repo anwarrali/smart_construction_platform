@@ -22,11 +22,13 @@ from app.models.permission import (
     UserPermissionOverride,
 )
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
+from app.models.rbac import Role
 from app.models.user import User
 from app.schemas.permission import (
     ConsultantScopeOut, ConsultantScopeUpdate, PermissionOut, RolePermissionState,
     RolePermissionUpdate, UserPermissionSummary, UserPermissionUpdate,
 )
+from app.services import rbac
 from app.services.audit_service import record_audit
 from app.services.step_up_service import require_step_up
 from app.services.authorization import effective_permissions, require
@@ -111,6 +113,26 @@ def set_role_permission(payload: RolePermissionUpdate, db: Session = Depends(get
     # anyway wastes their time and burns a send against their rate limit.
     require_step_up(db, current_user, "admin.change_permissions")
 
+    # Write through to the configurable roles.
+    #
+    # This endpoint's own table, `RolePermissionOverride`, is keyed on the
+    # retired `UserRole` enum, and `effective_permissions` stopped reading it at
+    # the contract step. Left as it was, this screen would still return 200 and
+    # change nothing — the worst kind of broken.
+    #
+    # So the change is applied to every configured role that provisions the
+    # legacy value being edited: "give Engineers `schedule.edit`" reaches
+    # Engineer, Site Engineer, Surveyor and any role the office copied from
+    # them. That is the same breadth the retired table had, since one override
+    # row governed everyone carrying that enum value.
+    #
+    # The row is still written, because `legacy_effective_permissions` reads it
+    # and that is what the equivalence gate compares against. It is evidence
+    # now, not configuration.
+    targets = db.query(Role).filter(Role.legacy_role == role.name, Role.is_active.is_(True)).all()
+    for target in targets:
+        rbac.set_role_permission(db, role=target, code=item.code, allowed=payload.allowed)
+
     row = db.query(RolePermissionOverride).filter(
         RolePermissionOverride.role == role,
         RolePermissionOverride.permission_code == item.code,
@@ -131,7 +153,8 @@ def set_role_permission(payload: RolePermissionUpdate, db: Session = Depends(get
 
     record_audit(db, actor_id=current_user.id, action="role_permission_changed",
                  entity_type="role_permission", entity_id=None, project_id=None,
-                 details={"role": role.value, "permission": item.code, "allowed": payload.allowed})
+                 details={"role": role.value, "permission": item.code, "allowed": payload.allowed,
+                          "configured_roles": sorted(target.code for target in targets)})
     db.commit()
 
     default_allowed = item.code in role_defaults(role)
@@ -175,6 +198,26 @@ def set_user_permission(user_id: uuid.UUID, payload: UserPermissionUpdate,
             raise HTTPException(status_code=400, detail="This permission is not project-scoped")
         if not db.get(Project, payload.project_id):
             raise HTTPException(status_code=404, detail="Project not found")
+
+    # The wall, enforced where the mistake would be made rather than only where
+    # it would take effect. `effective_permissions` strips these again at
+    # resolution, so refusing here is a second line — but it is the line that
+    # tells the administrator *why*, instead of silently accepting a grant that
+    # will never do anything.
+    if (
+        payload.allowed
+        and item.never_external
+        and rbac.is_external_participant(db, target, payload.project_id)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"'{item.label}' is the consulting office's own authority and cannot "
+                "be granted to somebody taking part for an outside party. Office work "
+                "such as raising tasks or maintaining the programme can be delegated; "
+                "approving work, verifying reports and granting access cannot."
+            ),
+        )
 
     if target.role == UserRole.ADMIN and item.admin_locked and payload.allowed is False:
         raise HTTPException(

@@ -19,7 +19,10 @@ from app.services.voice_rules_engine import VoiceRulesEngine
 
 
 def actor(role: UserRole, *, affiliation=None, status=UserStatus.ACTIVE):
-    return SimpleNamespace(id=uuid4(), role=role, status=status, engineer_affiliation=affiliation)
+    return SimpleNamespace(
+        id=uuid4(), role=role, status=status, engineer_affiliation=affiliation,
+        org_role_id=None, is_internal=True,
+    )
 
 
 def fake_task(progress=0, status=TaskStatus.IN_PROGRESS):
@@ -108,11 +111,20 @@ class VoiceActsForTheSpeaker(TestCase):
         self.assertIn("Project access", raised.exception.detail)
 
 
-class WorkerVoiceEntersVerification(TestCase):
+class VoiceRefusesWhatThePermissionRefuses(TestCase):
+    """Speaking never widens what somebody may do.
+
+    This class was written around the Worker role, which no longer exists. The
+    guarantee it protected is not about workers: it is that the rules engine
+    refuses any action the speaker does not hold the permission for, whatever
+    they can say. `is_available` is the single question it asks, so a refusal
+    is driven by that answer rather than by a job title.
+    """
+
     def _expect_forbidden(self, action_type, payload=None):
-        person = actor(UserRole.WORKER)
-        capable = True
+        person = actor(UserRole.ENGINEER)
         with patch("app.services.voice_rules_engine.user_has_project_access", return_value=True), \
+             patch("app.services.voice_rules_engine.is_available", return_value=False), \
              patch.object(VoiceRulesEngine, "_validated_task", return_value=None):
             with self.assertRaises(HTTPException) as raised:
                 VoiceRulesEngine().validate(
@@ -120,24 +132,29 @@ class WorkerVoiceEntersVerification(TestCase):
                 )
         self.assertEqual(raised.exception.status_code, 403)
 
-    def test_worker_cannot_verify_official_progress(self):
+    def test_progress_cannot_be_posted_without_the_permission(self):
         self._expect_forbidden("UPDATE_TASK_PROGRESS", {"progressPercentage": 100})
 
-    def test_worker_cannot_submit_a_task_for_review(self):
+    def test_a_task_cannot_be_submitted_for_review_without_the_permission(self):
         self._expect_forbidden("SUBMIT_TASK_FOR_REVIEW", {"completionNote": "done"})
 
-    def test_worker_cannot_create_a_design_change(self):
+    def test_a_design_change_cannot_be_raised_without_the_permission(self):
         self._expect_forbidden("CREATE_DESIGN_CHANGE_REPORT", {"title": "x", "description": "y"})
 
-    def test_worker_cannot_approve_a_consultant_review(self):
+    def test_a_review_decision_cannot_be_recorded_without_the_permission(self):
         self._expect_forbidden("PREPARE_CONSULTANT_REVIEW", {"decision": "APPROVE"})
 
-    def test_worker_voice_becomes_a_field_submission_that_still_needs_verification(self):
-        person = actor(UserRole.WORKER)
+    def test_field_evidence_still_enters_the_verification_workflow(self):
+        """The evidence path survives the removal of the role that used it.
+
+        A Site Engineer holding `field_evidence.submit` produces the same
+        record a Worker used to, and it still lands as evidence awaiting
+        confirmation rather than as official progress.
+        """
+        person = actor(UserRole.ENGINEER)
         task = fake_task()
-        capable = True
         with patch("app.services.voice_rules_engine.user_has_project_access", return_value=True), \
-             patch("app.services.voice_rules_engine.is_available", return_value=capable), \
+             patch("app.services.voice_rules_engine.is_available", return_value=True), \
              patch.object(VoiceRulesEngine, "_validated_task", return_value=task):
             result = VoiceRulesEngine().validate(
                 Mock(), command=command_for(person),
@@ -157,13 +174,19 @@ class RoleBoundariesAreNotWidenedByVoice(TestCase):
                 Mock(), command=command_for(person), draft=action_draft, actor=person,
             )
 
-    def test_only_the_project_manager_can_create_a_task_by_voice(self):
+    def test_creating_a_task_needs_authority_over_this_project(self):
+        """Holding `task.create` somewhere is not the same as running this job.
+
+        The refusal message names that distinction, because "you do not have
+        permission" would be misleading for somebody who does hold it — just
+        not here.
+        """
         with self.assertRaises(HTTPException) as raised:
             self._validate(actor(UserRole.ENGINEER), draft("CREATE_TASK", {
                 "title": "Inspect basement waterproofing", "sourceDiscipline": "civil",
-            }))
+            }), capable=False)
         self.assertEqual(raised.exception.status_code, 403)
-        self.assertIn("Project Manager", raised.exception.detail)
+        self.assertIn("run this project", raised.exception.detail)
 
     def test_project_manager_may_create_a_task_by_voice(self):
         result = self._validate(actor(UserRole.PROJECT_MANAGER), draft("CREATE_TASK", {
@@ -171,17 +194,27 @@ class RoleBoundariesAreNotWidenedByVoice(TestCase):
         }))
         self.assertEqual(result.type, SuggestedActionType.CREATE_TASK)
 
-    def test_a_consultant_engineer_keeps_the_review_scope_and_nothing_more(self):
-        consultant = actor(UserRole.ENGINEER, affiliation="external_consultant")
-        with patch("app.services.voice_rules_engine.is_consultant_engineer", return_value=True):
-            review_task = fake_task()
-            allowed = self._validate(consultant, draft("PREPARE_CONSULTANT_REVIEW", {
-                "decision": "APPROVE", "comments": "Reinforcement matches the drawing.",
-            }, target_id=review_task.id), task=review_task)
-            self.assertEqual(allowed.type, SuggestedActionType.PREPARE_CONSULTANT_REVIEW)
-            with self.assertRaises(HTTPException) as raised:
-                self._validate(consultant, draft("UPDATE_TASK_PROGRESS", {"progressPercentage": 50}))
-        # A consultant engineer supervises; they never post contractor progress.
+    def test_a_reviewer_gets_their_review_scope_and_nothing_beyond_it(self):
+        """Was framed as "a consultant engineer".
+
+        Consultant is no longer an identity — the redesign made reviewing
+        authority a permission the office's own staff hold. What the test
+        protected still holds and is now expressed the way the system decides
+        it: somebody whose permissions cover recording a review, and not
+        posting progress, can do the first and not the second.
+        """
+        reviewer = actor(UserRole.ENGINEER)
+        review_task = fake_task()
+        allowed = self._validate(reviewer, draft("PREPARE_CONSULTANT_REVIEW", {
+            "decision": "APPROVE", "comments": "Reinforcement matches the drawing.",
+        }, target_id=review_task.id), task=review_task, capable=True)
+        self.assertEqual(allowed.type, SuggestedActionType.PREPARE_CONSULTANT_REVIEW)
+
+        with self.assertRaises(HTTPException) as raised:
+            self._validate(
+                reviewer, draft("UPDATE_TASK_PROGRESS", {"progressPercentage": 50}),
+                capable=False,
+            )
         self.assertEqual(raised.exception.status_code, 403)
 
     def test_an_ambiguous_command_is_blocked_until_the_human_clarifies(self):

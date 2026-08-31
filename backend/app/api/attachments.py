@@ -11,10 +11,8 @@ from app.core.deps import (
     accessible_project_ids,
     get_current_user,
     user_has_project_access,
-    is_main_contractor_engineer,
-    is_consultant_engineer,
-    is_worker,
 )
+from app.services import work_scope
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.design_change import DesignChange
@@ -47,11 +45,6 @@ def _entity_or_404(
     current_user: User,
     for_write: bool = False,
 ):
-    if is_worker(current_user):
-        raise HTTPException(
-            status_code=403,
-            detail="Workers must upload photos through the field evidence workflow",
-        )
     model = ENTITY_MODELS.get(entity_type)
     if not model:
         raise HTTPException(status_code=400, detail="Unsupported attachment entityType")
@@ -60,25 +53,37 @@ def _entity_or_404(
     entity_project_id = related_task.project_id if related_task else (entity.project_id if entity else None)
     if not entity or entity_project_id != project_id:
         raise HTTPException(status_code=404, detail="Related project entity not found")
-    if related_task and current_user.role == UserRole.ENGINEER:
-        if is_main_contractor_engineer(current_user):
-            if not any(assignee.id == current_user.id for assignee in related_task.assignees):
-                raise HTTPException(status_code=403, detail="This task is not assigned to you")
-            if entity_type == "TASK_REVIEW":
-                raise HTTPException(status_code=403, detail="Contractor Engineers cannot alter Consultant review attachments")
-            if for_write and related_task.status in {TaskStatus.UNDER_REVIEW, TaskStatus.DONE, TaskStatus.CANCELLED}:
-                raise HTTPException(status_code=409, detail="Task evidence is locked in the current workflow state")
-        elif is_consultant_engineer(current_user):
-            from app.api.tasks import _can_consult_task
-            if not _can_consult_task(db, current_user, related_task):
-                raise HTTPException(status_code=403, detail="You cannot review this task discipline")
-            if for_write and entity_type != "TASK_REVIEW":
-                raise HTTPException(status_code=403, detail="Consultants cannot replace contractor evidence")
-            if entity_type == "TASK_REVIEW" and entity.status not in {"pending", "in_review", "clarification_requested"}:
+    if related_task and not work_scope.sees_all_tasks(db, current_user, project_id):
+        # Two rules, and they are about what you are doing with the task rather
+        # than which side of a retired triangle you were on:
+        #   * evidence on your own work is yours to add, and locks once the work
+        #     is submitted;
+        #   * review attachments belong to the person reviewing.
+        from app.services.consultant_approval_service import can_consultant_review_task
+        from app.services.authorization import has_permission as _holds
+
+        is_assignee = any(assignee.id == current_user.id for assignee in related_task.assignees)
+        reviews_it = _holds(db, current_user, "task.review", project_id) and (
+            can_consultant_review_task(db, current_user, related_task)
+        )
+        if not is_assignee and not reviews_it:
+            raise HTTPException(
+                status_code=403,
+                detail="This task is neither assigned to you nor yours to review",
+            )
+        if entity_type == "TASK_REVIEW":
+            if not reviews_it:
+                raise HTTPException(status_code=403, detail="Review attachments belong to the reviewer")
+            if entity.status not in {"pending", "in_review", "clarification_requested"}:
                 raise HTTPException(status_code=409, detail="Finalized review attachments are locked")
         else:
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-    elif current_user.role == UserRole.ENGINEER and is_consultant_engineer(current_user):
+            if for_write and reviews_it and not is_assignee:
+                raise HTTPException(status_code=403, detail="A reviewer cannot replace submitted evidence")
+            if for_write and is_assignee and related_task.status in {
+                TaskStatus.UNDER_REVIEW, TaskStatus.DONE, TaskStatus.CANCELLED,
+            }:
+                raise HTTPException(status_code=409, detail="Task evidence is locked in the current workflow state")
+    elif not work_scope.sees_all_tasks(db, current_user, project_id):
         if entity_type == "ISSUE":
             if entity.task_id:
                 task = db.get(Task, entity.task_id)
@@ -112,46 +117,38 @@ def list_attachments(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Attachment)
-    if current_user.role != UserRole.ADMIN:
-        query = query.filter(Attachment.project_id.in_(accessible_project_ids(db, current_user) or []))
-    if current_user.role == UserRole.ENGINEER:
+    accessible_ids = accessible_project_ids(db, current_user)
+    if accessible_ids is not None:
+        query = query.filter(Attachment.project_id.in_(accessible_ids))
+    if not work_scope.sees_all_tasks(db, current_user, project_id):
         if not project_id:
-            raise HTTPException(status_code=400, detail="Engineer attachment queries require a selected project")
-        if is_main_contractor_engineer(current_user):
-            assigned_task_ids = db.query(Task.id).filter(Task.assignees.any(User.id == current_user.id))
-            query = query.filter(or_(Attachment.entity_type.notin_(["TASK", "TASK_REVIEW"]),
-                                     and_(Attachment.entity_type == "TASK", Attachment.entity_id.in_(assigned_task_ids))))
-        elif is_consultant_engineer(current_user):
-            from app.api.tasks import _can_consult_task
-            candidate_tasks = db.query(Task).filter(
-                Task.project_id == project_id, Task.review_required == True,
-                Task.id.in_(db.query(TaskReview.task_id)),
-            ).all()
-            reviewable_task_ids = [
-                task.id for task in candidate_tasks if _can_consult_task(db, current_user, task)
-            ]
-            review_ids = db.query(TaskReview.id).filter(TaskReview.task_id.in_(reviewable_task_ids))
-            issue_ids = db.query(Issue.id).filter(
-                Issue.project_id == project_id,
-                or_(Issue.task_id.is_(None), Issue.task_id.in_(reviewable_task_ids)),
-            )
-            report_ids = db.query(SiteReport.id).filter(
-                SiteReport.project_id == project_id,
-                or_(SiteReport.task_id.is_(None), SiteReport.task_id.in_(reviewable_task_ids)),
-            )
-            query = query.filter(or_(
-                and_(Attachment.entity_type == "TASK", Attachment.entity_id.in_(reviewable_task_ids)),
-                and_(Attachment.entity_type == "TASK_REVIEW", Attachment.entity_id.in_(review_ids)),
-                and_(Attachment.entity_type == "ISSUE", Attachment.entity_id.in_(issue_ids)),
-                and_(Attachment.entity_type == "SITE_REPORT", Attachment.entity_id.in_(report_ids)),
-            ))
-        else:
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-    elif is_worker(current_user):
-        query = query.filter(
-            Attachment.entity_type == "FIELD_SUBMISSION",
-            Attachment.uploaded_by_id == current_user.id,
+            raise HTTPException(status_code=400, detail="Select a project to list attachments")
+        # A union, not a branch. The retired code asked which side of the
+        # owner/contractor/consultant triangle the caller was on and applied one
+        # of two filters; somebody who both holds work and reviews other work
+        # could not be expressed. Here each half contributes what it entitles
+        # the caller to see, and the halves are OR-ed.
+        assigned_task_ids = db.query(Task.id).filter(
+            Task.project_id == project_id,
+            Task.assignees.any(User.id == current_user.id),
+        ).scalar_subquery()
+        reviewable_task_ids = list(
+            work_scope.reviewable_task_ids(db, current_user, project_id)
         )
+        review_ids = db.query(TaskReview.id).filter(
+            TaskReview.task_id.in_(reviewable_task_ids)
+        ).scalar_subquery()
+        # Project-level issues and reports (no task) stay visible to anyone on
+        # the project; task-linked ones follow the task.
+        visible_task_ids = or_(
+            Attachment.entity_id.in_(assigned_task_ids),
+            Attachment.entity_id.in_(reviewable_task_ids),
+        )
+        query = query.filter(or_(
+            Attachment.entity_type.notin_(["TASK", "TASK_REVIEW"]),
+            and_(Attachment.entity_type == "TASK", visible_task_ids),
+            and_(Attachment.entity_type == "TASK_REVIEW", Attachment.entity_id.in_(review_ids)),
+        ))
     if project_id:
         query = query.filter(Attachment.project_id == project_id)
     if entity_type:
@@ -223,10 +220,14 @@ def delete_attachment(
         attachment.project_id,
         current_user,
     )
-    if current_user.role.value not in {"admin", "project_manager"} and attachment.uploaded_by_id != current_user.id:
+    # Your own upload, or somebody the office trusted with the project's
+    # setup. Two role names became one configurable capability.
+    if attachment.uploaded_by_id != current_user.id and not has_permission(
+        db, current_user, "project.edit", attachment.project_id
+    ):
         raise HTTPException(status_code=403, detail="You cannot delete this attachment")
     if (
-        current_user.role == UserRole.ENGINEER
+        not has_permission(db, current_user, "task.review", attachment.project_id)
         and attachment.entity_type in {"TASK", "TASK_REVIEW"}
         and (
             (attachment.entity_type == "TASK" and entity.status in {TaskStatus.UNDER_REVIEW, TaskStatus.DONE})

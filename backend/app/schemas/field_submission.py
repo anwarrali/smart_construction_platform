@@ -34,7 +34,11 @@ class FieldSubmissionOut(CamelModel):
     id: UUID
     project_id: UUID
     task_id: UUID
-    worker_id: UUID
+    #: The author. Named `worker_id` while workers were platform users; the
+    #: column and this field were renamed together, because the person filing
+    #: field evidence is now whoever holds `field_evidence.submit` — normally a
+    #: Site Engineer.
+    submitted_by_id: UUID
     description: Optional[str] = None
     voice_metadata: Optional[str] = None
     status: FieldSubmissionStatus
@@ -42,7 +46,7 @@ class FieldSubmissionOut(CamelModel):
     reviewed_by_id: Optional[UUID] = None
     review_comment: Optional[str] = None
     resubmission_of_id: Optional[UUID] = None
-    worker: UserOut
+    submitted_by: UserOut
     reviewed_by: Optional[UserOut] = None
     photos: list[FieldSubmissionPhotoOut] = Field(default_factory=list)
     created_at: datetime
@@ -85,8 +89,8 @@ class EvidencePhotoArchiveItem(CamelModel):
     task_code: str
     task_title: str
     discipline: Optional[str] = None
-    worker_id: UUID
-    worker_name: str
+    submitted_by_id: UUID
+    submitted_by_name: str
     uploader_id: UUID
     uploader_name: str
     submission_status: FieldSubmissionStatus

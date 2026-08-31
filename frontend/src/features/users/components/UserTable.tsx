@@ -55,26 +55,44 @@ export const UserTable = ({
     },
     {
       key: "role",
-      header: "Role",
-      render: (user) => <Badge variant="info">{getRoleLabel(user.role)}</Badge>,
-    },
-    {
-      key: "specialization",
-      header: "Specialization",
+      /* The office's own name for the role, falling back to the retired label
+         only for an account the backfill has not reached. */
+      header: "Office role",
       render: (user) => (
-        <span className="capitalize text-sm text-muted-foreground">
-          {["engineer", "consultant"].includes(user.role)
-            ? user.engineerProfile?.discipline || user.specialization || "-"
-            : "-"}
-        </span>
+        <Badge variant="info">{user.orgRole?.nameEn || getRoleLabel(user.role)}</Badge>
       ),
     },
     {
-      key: "engineerAffiliation",
-      header: "Affiliation",
-      render: (user) => ["engineer", "consultant"].includes(user.role)
-        ? <Badge variant={user.engineerAffiliation === "external_consultant" ? "warning" : "neutral"}>{user.engineerAffiliation === "external_consultant" ? "External Consultant" : user.engineerAffiliation === "main_contractor" ? "Main Contractor" : "Internal Engineer"}</Badge>
-        : <span className="text-muted-foreground">-</span>,
+      key: "disciplines",
+      header: "Disciplines",
+      render: (user) => {
+        const names = (user.disciplines || []).map((item) => item.nameEn);
+        return (
+          <span className="capitalize text-sm text-muted-foreground">
+            {names.length
+              ? names.join(", ")
+              : user.engineerProfile?.discipline || user.specialization || "-"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "isInternal",
+      /* Replaces the "Affiliation" column, which read the retired
+         `engineerAffiliation` string. What matters now is the one axis that
+         governs authority: office staff, or somebody taking part from
+         outside. */
+      header: "Party",
+      render: (user) => {
+        const external = user.orgRole
+          ? !user.orgRole.isInternalOnly
+          : user.isInternal === false;
+        return (
+          <Badge variant={external ? "warning" : "neutral"}>
+            {external ? "External" : "Office staff"}
+          </Badge>
+        );
+      },
     },
     {
       key: "status",

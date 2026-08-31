@@ -12,7 +12,7 @@ from app.services.collaboration_policy import (
 def test_discipline_routing_selects_only_active_exact_engineer():
     candidates = [
         {"id": "z", "role": "engineer", "discipline": "electrical", "active": True},
-        {"id": "a", "role": "worker", "discipline": "electrical", "active": True},
+        {"id": "a", "role": "owner", "discipline": "electrical", "active": True},
         {"id": "b", "role": "engineer", "discipline": "electrical", "active": False},
         {"id": "c", "role": "engineer", "discipline": "mechanical", "active": True},
     ]

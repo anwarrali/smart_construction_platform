@@ -1,7 +1,15 @@
-"""Project-scoped Consultant review authorization.
+"""Project-scoped review authority.
 
-Controllers should ask this service for review authority instead of comparing a
-Consultant Engineer's account specialty with a task discipline.
+Controllers ask this service whether somebody may review a task, instead of
+comparing an account's specialty with a task's discipline.
+
+Reviewing used to be an *identity*: `is_consultant_engineer(user)`, which meant
+`role == ENGINEER and engineer_affiliation == "external_consultant"`. In a
+consulting office that reading no longer makes sense — the office is the
+reviewer — so review authority is now the `task.review` permission, held by
+whatever role an office decides. Everything else about this service is
+unchanged: the project's approval mode, the reviewer's discipline assignment
+and the per-engineer remit still decide *which* work a reviewer covers.
 """
 from __future__ import annotations
 
@@ -9,8 +17,8 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.core.deps import is_consultant_engineer
-from app.models.enums import ConsultantApprovalMode, UserRole
+from app.models.enums import ConsultantApprovalMode, UserStatus
+from app.services.authorization import has_permission
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
 from app.models.task import Task
 from app.models.user import User
@@ -22,19 +30,25 @@ from app.services.consultant_approval_policy import (
 )
 
 
-def _active_consultant_member(db: Session, user_id: uuid.UUID, project_id: uuid.UUID) -> bool:
+def _active_member(db: Session, user_id: uuid.UUID, project_id: uuid.UUID) -> bool:
+    """On the project, whatever position they hold on it.
+
+    Was "an active member whose role on the project is CONSULTANT". The project
+    role is configurable now, so the membership check asks the question it
+    always meant — are they on this job — and `task.review` answers whether
+    they may review.
+    """
     return db.query(ProjectMember.id).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.user_id == user_id,
-        ProjectMember.role_on_project == UserRole.CONSULTANT,
         ProjectMember.is_active == True,
     ).first() is not None
 
 
 def can_consultant_review_task(db: Session, user: User, task: Task) -> bool:
-    if not is_consultant_engineer(user):
+    if not has_permission(db, user, "task.review", task.project_id):
         return False
-    if not _active_consultant_member(db, user.id, task.project_id):
+    if not _active_member(db, user.id, task.project_id):
         return False
     project = db.get(Project, task.project_id)
     if not project:
@@ -69,16 +83,19 @@ def authorized_consultant_ids(
     project = db.get(Project, project_id)
     if not project:
         return set()
+    # Reviewers are the people an administrator named on this project, who are
+    # still active members of it. The retired version additionally required
+    # `role_on_project == CONSULTANT` and an `external_consultant` affiliation;
+    # both were restatements of "this person reviews", which the assignment
+    # itself already says and `task.review` now governs.
     query = db.query(ProjectConsultantReviewer.user_id).join(
         ProjectMember,
         (ProjectMember.project_id == ProjectConsultantReviewer.project_id)
         & (ProjectMember.user_id == ProjectConsultantReviewer.user_id),
     ).join(User, User.id == ProjectConsultantReviewer.user_id).filter(
         ProjectConsultantReviewer.project_id == project_id,
-        ProjectMember.role_on_project == UserRole.CONSULTANT,
         ProjectMember.is_active == True,
-        User.role == UserRole.ENGINEER,
-        User.engineer_affiliation == "external_consultant",
+        User.status == UserStatus.ACTIVE,
     )
     if project.consultant_approval_mode == ConsultantApprovalMode.CENTRALIZED_REVIEW:
         query = query.filter(ProjectConsultantReviewer.discipline.is_(None))

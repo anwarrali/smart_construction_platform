@@ -44,6 +44,10 @@ class SiteReportBase(CamelModel):
     reviewed_by_id: Optional[UUID] = None
     reviewed_at: Optional[datetime] = None
     voice_recording_id: Optional[UUID] = None
+    #: The discipline this visit covered, when one could be determined. A
+    #: project with several site engineers needs it to tell their reports
+    #: apart; a general walk of the whole site legitimately has none.
+    discipline_id: Optional[UUID] = None
 
 class SiteReportCreate(CamelModel):
     project_id: UUID

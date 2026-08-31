@@ -32,7 +32,8 @@ from app.schemas.collaboration import (
     SiteVisitOut, SiteVisitUpdate,
 )
 from app.services.audit_service import record_audit
-from app.services.authorization import require
+from app.services import rbac
+from app.services.authorization import has_permission, require
 from app.services.collaboration_policy import (
     assert_human_authority, can_transition_owner_request, choose_discipline_assignee,
 )
@@ -141,7 +142,7 @@ def _route_owner_request(db: Session, item: OwnerRequest) -> uuid.UUID | None:
 def create_owner_request(payload: OwnerRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = _project(db, current_user, payload.project_id)
     require(db, current_user, "owner_request.create", payload.project_id)
-    if current_user.role == UserRole.OWNER and project.owner_id != current_user.id:
+    if rbac.is_client_participant(db, current_user, project.id) and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Owners can submit requests only for their own project")
     item = OwnerRequest(
         project_id=payload.project_id, created_by_id=current_user.id,
@@ -191,7 +192,13 @@ def get_owner_request(request_id: uuid.UUID, db: Session = Depends(get_db), curr
 def update_owner_request(request_id: uuid.UUID, payload: OwnerRequestAction,
                          db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     item = _request(db, current_user, request_id); project = db.get(Project, item.project_id)
-    is_manager = current_user.role == UserRole.ADMIN or project.project_manager_id == current_user.id
+    # Answering a client request is `owner_request.review`; the assigned
+    # manager keeps it by virtue of the assignment. Was "is an administrator
+    # or the assigned manager", which no office could widen.
+    is_manager = (
+        project.project_manager_id == current_user.id
+        or has_permission(db, current_user, "owner_request.review", item.project_id)
+    )
     is_assignee = item.assigned_to_id == current_user.id
     is_requester = item.created_by_id == current_user.id
     if payload.assigned_to_id is not None:
@@ -229,8 +236,14 @@ def convert_owner_request(request_id: uuid.UUID, payload: ConvertRequestToDesign
     item = _request(db, current_user, request_id); project = db.get(Project, item.project_id)
     if not assert_human_authority("HUMAN"):
         raise HTTPException(status_code=403, detail="AI cannot create an official design decision")
-    if current_user.role == UserRole.WORKER or not (current_user.role == UserRole.ADMIN or project.project_manager_id == current_user.id or item.assigned_to_id == current_user.id):
-        raise HTTPException(status_code=403, detail="Assigned engineering or project management authority is required")
+    # Turning a request into a design change is `design_change.propose`, plus
+    # the two people accountable for this particular request.
+    if not (
+        project.project_manager_id == current_user.id
+        or item.assigned_to_id == current_user.id
+        or has_permission(db, current_user, "design_change.propose", item.project_id)
+    ):
+        raise HTTPException(status_code=403, detail="Authority to propose a design change is required")
     if item.status not in {"UNDER_REVIEW", "ACCEPTED"}:
         raise HTTPException(status_code=409, detail="Request must be under review or accepted before conversion")
     if item.converted_design_change_id:
@@ -296,8 +309,13 @@ def create_site_visit(payload: SiteVisitCreate, db: Session = Depends(get_db), c
     project = _project(db, current_user, payload.project_id)
     require(db, current_user, "site_visit.schedule", payload.project_id)
     engineer_id = payload.engineer_id or current_user.id
-    if current_user.role == UserRole.ENGINEER and engineer_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Engineers can schedule only their own visits")
+    # Booking a visit for somebody else is running the project's schedule, not
+    # your own. `task.view_all` marks the people who are not narrowed to their
+    # own work; everybody else books for themselves.
+    if engineer_id != current_user.id and not has_permission(
+        db, current_user, "task.view_all", payload.project_id
+    ):
+        raise HTTPException(status_code=403, detail="You can schedule only your own visits")
     if engineer_id not in active_project_participant_ids(db, payload.project_id):
         raise HTTPException(status_code=400, detail="Engineer must be an active project participant")
     conflicts = _visit_conflicts(db, engineer_id, payload.scheduled_start, payload.scheduled_end)
@@ -340,7 +358,12 @@ def update_site_visit(visit_id: uuid.UUID, payload: SiteVisitUpdate,
     item = db.get(SiteVisit, visit_id)
     if not item: raise HTTPException(status_code=404, detail="Site visit not found")
     project = _project(db, current_user, item.project_id)
-    if not (current_user.role == UserRole.ADMIN or current_user.id in {item.engineer_id, project.project_manager_id}):
+    # The visit's own engineer and the project's manager, or anybody the
+    # office gave `site_visit.schedule` on this project.
+    if not (
+        current_user.id in {item.engineer_id, project.project_manager_id}
+        or has_permission(db, current_user, "site_visit.schedule", item.project_id)
+    ):
         raise HTTPException(status_code=403, detail="You cannot change this visit")
     old_start, old_end, old_status = item.scheduled_start, item.scheduled_end, item.status
     start, end = payload.scheduled_start or item.scheduled_start, payload.scheduled_end or item.scheduled_end
@@ -423,8 +446,12 @@ def upsert_reminder_rule(project_id: uuid.UUID, payload: ReminderRuleUpsert,
 def run_reminders(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Manual sweep. The scheduler runs the same evaluation automatically."""
     project = _project(db, current_user, project_id)
-    if not (current_user.role == UserRole.ADMIN or project.project_manager_id == current_user.id):
-        raise HTTPException(status_code=403, detail="Only project management can run reminders")
+    # Running the sweep by hand is the same authority that configures it.
+    if not (
+        project.project_manager_id == current_user.id
+        or has_permission(db, current_user, "project.manage_reminders", project_id)
+    ):
+        raise HTTPException(status_code=403, detail="Authority to configure reminders is required")
     result = evaluate_project_reminders(db, project_id, actor_id=current_user.id)
     db.commit()
     return result
@@ -432,8 +459,9 @@ def run_reminders(project_id: uuid.UUID, db: Session = Depends(get_db), current_
 
 @router.get("/reminders/scheduler-status")
 def reminder_scheduler_status(current_user: User = Depends(get_current_user)):
-    if current_user.role not in {UserRole.ADMIN, UserRole.PROJECT_MANAGER}:
-        raise HTTPException(status_code=403, detail="Only project management can inspect the scheduler")
+    # Reminder scheduling is project configuration, so inspecting the sweep
+    # follows the permission that configures it rather than two enum values.
+    require(db, current_user, "project.manage_reminders")
     return scheduler_status()
 
 

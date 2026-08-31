@@ -51,13 +51,11 @@ from app.core.deps import (
     get_current_user,
     user_has_project_access,
     accessible_project_ids,
-    is_main_contractor_engineer,
-    is_consultant_engineer,
-    is_worker,
 )
+from app.services import work_scope
 from app.core.schedule_dates import inclusive_duration_days
 from app.services.audit_service import record_audit
-from app.services.authorization import require
+from app.services.authorization import has_permission, require
 from app.services.consultant_approval_service import (
     authorized_consultant_ids,
     can_consultant_review_task,
@@ -68,8 +66,11 @@ from app.services.file_storage import delete_upload
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 ENGINEER_ROLES = {UserRole.ENGINEER}
+#: Who may hold a task. Workers are gone from the platform, so the set is the
+#: office's own people plus whoever an office has put on the project; the
+#: real check is project membership, which `_validated_assignees` applies.
 TASK_ASSIGNEE_ROLES = {
-    UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.PROJECT_MANAGER, UserRole.WORKER
+    UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.PROJECT_MANAGER
 }
 
 def _notify(db: Session, user_id, title: str, message: str, task: Task, notification_type: NotificationType) -> None:
@@ -137,19 +138,16 @@ def _get_task_or_403(task_id: uuid.UUID, db: Session, current_user: User) -> Tas
         raise HTTPException(status_code=404, detail="Task not found")
     if not user_has_project_access(db, current_user, task.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this task")
-    if current_user.role == UserRole.ENGINEER:
-        if is_main_contractor_engineer(current_user):
-            if not any(assignee.id == current_user.id for assignee in task.assignees):
-                raise HTTPException(status_code=403, detail="This task is not assigned to you")
-        elif is_consultant_engineer(current_user):
-            has_submission = db.query(TaskReview.id).filter(TaskReview.task_id == task.id).first() is not None
-            if not task.review_required or not has_submission or not _can_consult_task(db, current_user, task):
-                raise HTTPException(status_code=403, detail="You are not authorized to review this task")
-        else:
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-    elif is_worker(current_user):
-        if not any(assignee.id == current_user.id for assignee in task.assignees):
-            raise HTTPException(status_code=403, detail="This task is not assigned to you")
+    # Was: branch on which side of the old triangle the Engineer was on, and
+    # refuse outright if they were neither. `can_see_task` asks the question
+    # that mattered — is this your work, or work you review — and answers it
+    # from task assignment and reviewer assignment rather than from an
+    # affiliation string.
+    if not work_scope.can_see_task(db, current_user, task):
+        raise HTTPException(
+            status_code=403,
+            detail="This task is neither assigned to you nor yours to review",
+        )
     return task
 
 
@@ -164,11 +162,14 @@ def _has_project_role(db: Session, user: User, project_id: uuid.UUID, role: User
 
 def _is_project_manager(db: Session, user: User, project_id: uuid.UUID) -> bool:
     project = db.get(Project, project_id)
-    return bool(user.role == UserRole.PROJECT_MANAGER and project and project.project_manager_id == user.id)
+    # The id comparison already implies the role: `project_manager_id` is
+    # validated to be an active PROJECT_MANAGER wherever it is written.
+    return bool(project and project.project_manager_id == user.id)
 
 
 def _is_consultant(db: Session, user: User, project_id: uuid.UUID) -> bool:
-    return is_consultant_engineer(user) and _has_project_role(db, user, project_id, UserRole.CONSULTANT)
+    """Whether this person reviews work on this project."""
+    return has_permission(db, user, "task.review", project_id)
 
 def _can_consult_task(db: Session, user: User, task: Task) -> bool:
     return can_consultant_review_task(db, user, task)
@@ -215,7 +216,7 @@ def _validate_task_assignees(
     if set(by_id) != set(assignee_ids):
         raise HTTPException(
             status_code=400,
-            detail="Every assignee must be an active Engineer, Worker, Consultant, or assigned Project Manager on this project",
+            detail="Every assignee must be an active member of this project",
         )
     project = db.get(Project, project_id)
     effective_discipline = _normalized_discipline(discipline)
@@ -225,7 +226,7 @@ def _validate_task_assignees(
             if not project or project.project_manager_id != assignee_id:
                 raise HTTPException(status_code=400, detail="Only this project's assigned Project Manager is eligible")
         if assignee.role == UserRole.ENGINEER:
-            if assignee.engineer_affiliation != "main_contractor":
+            if not has_permission(db, assignee, "task.update_progress", task.project_id):
                 raise HTTPException(status_code=400, detail="Execution tasks may only be assigned to Main Contractor Engineers")
             profile_discipline = _normalized_discipline(
                 assignee.engineer_profile.discipline.value if assignee.engineer_profile else None
@@ -242,7 +243,13 @@ def _validate_task_assignees(
 
 
 def _is_task_engineer(task: Task, user: User) -> bool:
-    return is_main_contractor_engineer(user) and any(assignee.id == user.id for assignee in task.assignees)
+    """Whether this person is doing this task.
+
+    Assignment is the whole of it now. The affiliation half of the old check
+    only ever excluded people who could not have been assigned in the first
+    place.
+    """
+    return any(assignee.id == user.id for assignee in task.assignees)
 
 
 def _notify_assignees(
@@ -369,24 +376,20 @@ def list_tasks(
     accessible_project_ids = _accessible_project_ids(db, current_user)
     if accessible_project_ids is not None:
         query = query.filter(Task.project_id.in_(accessible_project_ids))
-    if current_user.role == UserRole.ENGINEER:
-        if not project_id:
-            raise HTTPException(status_code=400, detail="Engineer task queries require a selected project")
-        if is_main_contractor_engineer(current_user):
-            query = query.filter(Task.assignees.any(User.id == current_user.id))
-        elif is_consultant_engineer(current_user):
-            query = query.filter(
-                Task.review_required == True,
-                Task.id.in_(db.query(TaskReview.task_id)),
-            )
-        else:
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-    elif is_worker(current_user):
-        query = query.filter(Task.assignees.any(User.id == current_user.id))
-    elif current_user.role == UserRole.CONSULTANT and current_user.engineer_profile:
-        discipline = current_user.engineer_profile.discipline.value
-        accepted = [discipline, "architectural"] if discipline == "architect" else [discipline]
-        query = query.filter(Task.discipline.in_(accepted))
+    if not work_scope.sees_all_tasks(db, current_user, project_id) and not project_id:
+        # Narrowing needs a project: "the work I hold" is a per-project answer,
+        # and resolving it across a portfolio would be a query per project.
+        raise HTTPException(status_code=400, detail="Select a project to list your work")
+    if project_id:
+        query = work_scope.narrow_to_own_work(query, db, current_user, project_id)
+    # A discipline narrowing for `UserRole.CONSULTANT` stood here and has been
+    # removed as dead code. That value is unreachable on `User.role` —
+    # `UserCreateByAdmin` has always rewritten a request for it into ENGINEER —
+    # so the branch could never run. It also read the single-valued
+    # `EngineerProfile.discipline`, which cannot express an engineer covering
+    # Mechanical *and* Electrical. Discipline narrowing for tasks lives in
+    # `work_scope.narrow_to_disciplines`, which reads the configurable
+    # many-to-many assignment and is applied by the callers that need it.
     if project_id:
         if not user_has_project_access(db, current_user, project_id):
             raise HTTPException(status_code=403, detail="You do not have access to this project")
@@ -408,10 +411,7 @@ def list_tasks(
         )
     if is_critical_path is not None:
         query = query.filter(Task.is_critical_path == is_critical_path)
-    tasks = query.order_by(Task.sort_order, Task.created_at).all()
-    if is_consultant_engineer(current_user):
-        tasks = [task for task in tasks if _can_consult_task(db, current_user, task)]
-    return tasks
+    return query.order_by(Task.sort_order, Task.created_at).all()
 
 
 @router.get("/my-tasks", response_model=List[TaskOut])
@@ -421,10 +421,11 @@ def get_my_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == UserRole.ENGINEER and not is_main_contractor_engineer(current_user):
-        raise HTTPException(status_code=403, detail="Only Main Contractor Engineers have execution tasks")
-    if current_user.role in {UserRole.ENGINEER, UserRole.WORKER} and not project_id:
-        raise HTTPException(status_code=400, detail="Field task queries require a selected project")
+    # "My tasks" is filtered to the caller's own assignments below, so there is
+    # nothing here to gate: somebody with no assignments gets an empty list,
+    # which is the honest answer rather than a 403.
+    if not project_id and not work_scope.sees_all_tasks(db, current_user, None):
+        raise HTTPException(status_code=400, detail="Select a project to list your work")
     query = db.query(Task).filter(Task.assignees.any(User.id == current_user.id))
     if project_id:
         if not user_has_project_access(db, current_user, project_id):
@@ -443,23 +444,10 @@ def get_tasks_by_project(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    query = db.query(Task).filter(Task.project_id == project_id)
-    if current_user.role == UserRole.ENGINEER:
-        if is_main_contractor_engineer(current_user):
-            query = query.filter(Task.assignees.any(User.id == current_user.id))
-        elif is_consultant_engineer(current_user):
-            query = query.filter(
-                Task.review_required == True,
-                Task.id.in_(db.query(TaskReview.task_id)),
-            )
-        else:
-            raise HTTPException(status_code=403, detail="Active Engineer organization side is required")
-    elif is_worker(current_user):
-        query = query.filter(Task.assignees.any(User.id == current_user.id))
-    tasks = query.order_by(Task.task_code).all()
-    if is_consultant_engineer(current_user):
-        tasks = [task for task in tasks if _can_consult_task(db, current_user, task)]
-    return tasks
+    query = work_scope.narrow_to_own_work(
+        db.query(Task).filter(Task.project_id == project_id), db, current_user, project_id,
+    )
+    return query.order_by(Task.task_code).all()
 
 
 @router.get("/analytics/project/{project_id}", response_model=TaskAnalytics)
@@ -468,15 +456,14 @@ def get_task_analytics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if is_worker(current_user):
-        raise HTTPException(status_code=403, detail="Workers cannot access task analytics")
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    task_query = db.query(Task).filter(Task.project_id == project_id)
-    if current_user.role == UserRole.ENGINEER:
-        if not is_main_contractor_engineer(current_user):
-            raise HTTPException(status_code=403, detail="Use the Consultant Engineer dashboard for review metrics")
-        task_query = task_query.filter(Task.assignees.any(User.id == current_user.id))
+    # Analytics over the work you can see. Narrowing rather than refusing: a
+    # reviewer asking for project metrics should get metrics about the work
+    # they review, not a 403 pointing them at a different screen.
+    task_query = work_scope.narrow_to_own_work(
+        db.query(Task).filter(Task.project_id == project_id), db, current_user, project_id,
+    )
     tasks = task_query.all()
     total = len(tasks)
 
@@ -1179,8 +1166,6 @@ def get_task_review_authority(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if is_worker(current_user):
-        raise HTTPException(status_code=403, detail="Workers cannot access Consultant review authority")
     task = db.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -1576,8 +1561,6 @@ def add_task_comment(
 
 @router.get("/{task_id}/reviews", response_model=List[TaskReviewOut])
 def get_task_reviews(task_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if is_worker(current_user):
-        raise HTTPException(status_code=403, detail="Workers cannot access Consultant review history")
     _get_task_or_403(task_id, db, current_user)
     return db.query(TaskReview).filter(TaskReview.task_id == task_id).order_by(TaskReview.created_at.desc()).all()
 

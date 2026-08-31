@@ -27,14 +27,15 @@ import '../features/tasks/task_detail_screen.dart';
 import '../features/tasks/tasks_screen.dart';
 import '../features/voice_command/voice_screen.dart';
 import '../features/voice_command/ai_diagnostics_screen.dart';
-import '../features/field_evidence/worker_field_submission_screen.dart';
-import '../features/field_evidence/worker_submissions_screen.dart';
+import '../features/field_evidence/field_submission_form_screen.dart';
+import '../features/field_evidence/field_submissions_screen.dart';
 import '../features/ifc/ifc_models_screen.dart';
 import '../features/collaboration/collaboration_screen.dart';
 import '../core/constants/api_endpoints.dart';
 import '../models/notification_item.dart';
 import '../models/chat_message.dart';
 import '../models/user.dart';
+import '../core/auth/capabilities.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = _RouterRefresh(ref);
@@ -76,10 +77,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final user = ref.read(sessionProvider).user;
           return MobileShell(
             location: state.uri.path,
-            destinations: _destinationsFor(user),
+            destinations: _destinationsFor(user, capabilitiesFrom(ref)),
             // Voice is for every normal system user, not for two field roles
             // — see `canUseVoice`.
-            showVoiceAction: canUseVoice(user),
+            showVoiceAction: canUseVoice(capabilitiesFrom(ref)),
             child: child,
           );
         },
@@ -92,7 +93,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/reports',
             builder: (context, __) {
-              final user = ref.read(sessionProvider).user;
               return _projectCollection(
                 ref,
                 context,
@@ -101,9 +101,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                 context.l10n.siteReportsEmpty,
                 Icons.description_outlined,
                 entityType: 'SITE_REPORT',
-                createRoute:
-                    user?.isSiteEngineer == true ||
-                        user?.isProjectManager == true
+                // `site_report.submit` is what the endpoint checks.
+                createRoute: capabilitiesFrom(ref).has('site_report.submit')
                     ? '/reports/new'
                     : null,
               );
@@ -170,7 +169,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
           GoRoute(
             path: '/evidence',
-            builder: (_, __) => const WorkerSubmissionsScreen(),
+            builder: (_, __) => const FieldSubmissionsScreen(),
           ),
           GoRoute(path: '/ifc', builder: (_, __) => const IfcModelsScreen()),
         ],
@@ -182,7 +181,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/tasks/:id/evidence/new',
-        builder: (_, state) => WorkerFieldSubmissionScreen(
+        builder: (_, state) => FieldSubmissionFormScreen(
           taskId: state.pathParameters['id']!,
           resubmissionOfId: state.uri.queryParameters['resubmission'],
         ),
@@ -247,7 +246,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// on a slab — moved to the dashboard header. What is left is the question
 /// "what does this person do on site all day", answered per role:
 /// their work, their exceptions, and the people they need to reach.
-List<ShellDestination> _destinationsFor(User? user) {
+List<ShellDestination> _destinationsFor(User? user, Capabilities capabilities) {
   ShellDestination home() => ShellDestination(
     path: '/home',
     icon: Icons.home_outlined,
@@ -261,7 +260,10 @@ List<ShellDestination> _destinationsFor(User? user) {
     label: (context) => context.l10n.navMessages,
   );
 
-  if (user?.isConsultant == true) {
+  // The review queue is somebody's home tab when reviewing is what they do.
+  // `task.review` is the capability, and it is `never_external`, so no
+  // outside participant lands here however their role is configured.
+  if (capabilities.has('task.review')) {
     return [
       home(),
       ShellDestination(
@@ -275,24 +277,6 @@ List<ShellDestination> _destinationsFor(User? user) {
         icon: Icons.folder_outlined,
         selectedIcon: Icons.folder_rounded,
         label: (context) => context.l10n.navDocuments,
-      ),
-      messages(),
-    ];
-  }
-  if (user?.isWorker == true) {
-    return [
-      home(),
-      ShellDestination(
-        path: '/tasks',
-        icon: Icons.task_outlined,
-        selectedIcon: Icons.task_rounded,
-        label: (context) => context.l10n.navMyTasks,
-      ),
-      ShellDestination(
-        path: '/evidence',
-        icon: Icons.photo_camera_back_outlined,
-        selectedIcon: Icons.photo_camera_back_rounded,
-        label: (context) => context.l10n.navEvidence,
       ),
       messages(),
     ];

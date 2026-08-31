@@ -1,60 +1,91 @@
-import type { UserRole } from "../types/auth";
-
-export type EngineerAffiliation = "internal_engineer" | "main_contractor" | "external_consultant" | undefined;
-
-/** Route prefix that owns the project workspace for a given role. */
-export const portfolioProjectsPath = (role?: UserRole, affiliation?: EngineerAffiliation) => {
-  if (role === "project_manager") return "/project-manager/projects";
-  if (role === "engineer") return affiliation === "external_consultant" ? "/consultant-engineer/projects" : "/engineer/projects";
-  return "/projects";
-};
-
-export const projectWorkspaceBase = (projectId: string, role?: UserRole, affiliation?: EngineerAffiliation) =>
-  `${portfolioProjectsPath(role, affiliation)}/${encodeURIComponent(projectId)}`;
-
 /**
- * Modules each role can actually reach, mirroring the guards registered in
- * `app/router/index.tsx`. Linking to a module a role cannot open produces a
- * redirect to the dashboard selector, which silently drops project context —
- * so unreachable modules degrade to a module the role always has instead.
+ * Links into the project workspace.
+ *
+ * There is one workspace URL now — `/projects/:projectId/…` — so this module
+ * no longer decides *which* address somebody gets. It decides two things that
+ * are still real questions:
+ *
+ *  * which modules exist, and which of them this person can actually open, so
+ *    a link never lands on a page that immediately redirects away;
+ *  * how a backend entity reference (a notification's `relatedEntityType`, an
+ *    audit-log row, an AI insight's source) becomes a deep link to that exact
+ *    record.
+ *
+ * The retired version answered the first question from a table keyed on role
+ * name and `engineerAffiliation`. That table could only ever describe the six
+ * roles that existed when it was written, which is the specific thing a
+ * configurable role model makes impossible — an office that creates "Resident
+ * Engineer" has no row in it. Module access is therefore derived from the
+ * permission each route is guarded by, which is the same answer the router and
+ * the endpoint give.
  */
-const COMMON_MODULES = [
-  "dashboard", "evidence", "ifc", "ai-intelligence", "messages",
-  "requests", "site-visits", "activity", "collaboration",
-] as const;
 
-const MODULE_ACCESS: Record<string, readonly string[]> = {
-  admin: [...COMMON_MODULES, "tasks", "team", "documents", "site-reports", "issues", "design-changes", "schedule", "milestones"],
-  owner: [...COMMON_MODULES, "documents", "site-reports", "issues", "design-changes"],
-  project_manager: [...COMMON_MODULES, "tasks", "documents", "site-reports", "issues", "design-changes", "team", "schedule", "milestones", "notifications"],
-  engineer: [...COMMON_MODULES, "tasks", "site-reports", "issues", "documents", "notifications", "voice-reports"],
-  consultant_engineer: [...COMMON_MODULES, "reviews", "history", "documents", "site-reports", "issues", "design-changes", "notifications"],
-  consultant: [...COMMON_MODULES, "schedule"],
-  worker: ["dashboard", "activity", "messages"],
+/** Every module the shared workspace registers, and what it costs to open. */
+const MODULE_PERMISSIONS: Record<string, string> = {
+  dashboard: "task.view",
+  "my-work": "task.view",
+  tasks: "task.view",
+  messages: "task.view",
+  notifications: "task.view",
+  evidence: "task.view",
+  collaboration: "task.view",
+  requests: "task.view",
+  "site-visits": "task.view",
+  activity: "task.view",
+  "voice-assistant": "task.view",
+  documents: "document.view",
+  "site-reports": "site_report.view",
+  issues: "issue.view",
+  "design-changes": "design_change.view",
+  schedule: "schedule.view",
+  milestones: "schedule.view",
+  ifc: "ifc.view",
+  "ai-intelligence": "ai.view_insights",
+  "review-queue": "task.review",
+  reviews: "task.review",
+  history: "task.review",
+  "voice-reports": "field_evidence.verify",
+  team: "project.manage_members",
+  parties: "project.manage_parties",
 };
 
-const accessKey = (role?: UserRole, affiliation?: EngineerAffiliation) =>
-  role === "engineer" && affiliation === "external_consultant" ? "consultant_engineer" : role || "worker";
+/** The one portfolio address. Kept as a function so callers need not change. */
+export const portfolioProjectsPath = () => "/projects";
 
-/** Module a role can always open, used when a requested module is out of reach. */
+export const projectWorkspaceBase = (projectId: string) =>
+  `/projects/${encodeURIComponent(projectId)}`;
+
+/** Module everybody with project access can open, used as a fallback. */
 const FALLBACK_MODULE = "dashboard";
 
-export const canOpenProjectModule = (module: string, role?: UserRole, affiliation?: EngineerAffiliation) => {
-  const allowed = MODULE_ACCESS[accessKey(role, affiliation)];
-  if (!allowed) return false;
+/**
+ * Whether this person can open a module.
+ *
+ * `hasPermission` is `useRole().hasCapability` — the backend's effective
+ * permission list. Callers that have not loaded permissions yet pass nothing
+ * and get `true`: a link that turns out to be unreachable redirects, which is
+ * a better failure than hiding navigation from somebody who does hold the
+ * permission but whose answer had not arrived.
+ */
+export const canOpenProjectModule = (
+  module: string,
+  hasPermission?: (code: string) => boolean,
+) => {
   const root = module.replace(/^\/+/, "").split(/[/?]/)[0];
-  return allowed.includes(root);
+  const required = MODULE_PERMISSIONS[root];
+  if (!required) return false;
+  if (!hasPermission) return true;
+  return hasPermission(required);
 };
 
 export const projectModulePath = (
   projectId: string,
   module = FALLBACK_MODULE,
-  role?: UserRole,
-  affiliation?: EngineerAffiliation,
+  hasPermission?: (code: string) => boolean,
 ) => {
   const requested = module.replace(/^\/+/, "") || FALLBACK_MODULE;
-  const effective = canOpenProjectModule(requested, role, affiliation) ? requested : FALLBACK_MODULE;
-  return `${projectWorkspaceBase(projectId, role, affiliation)}/${effective}`;
+  const effective = canOpenProjectModule(requested, hasPermission) ? requested : FALLBACK_MODULE;
+  return `${projectWorkspaceBase(projectId)}/${effective}`;
 };
 
 /**
@@ -92,29 +123,36 @@ export const projectEntityPath = (
   projectId: string,
   entityType: string,
   entityId: string,
-  role?: UserRole,
-  affiliation?: EngineerAffiliation,
+  hasPermission?: (code: string) => boolean,
 ) => {
   const target = ENTITY_TARGETS[String(entityType || "").toUpperCase()];
   // An unmapped entity still belongs to the project: the activity feed is the
   // honest destination, never a portfolio-level page that loses the project.
-  if (!target) return projectModulePath(projectId, "activity", role, affiliation);
-  if (!canOpenProjectModule(target.module, role, affiliation)) {
-    return projectModulePath(projectId, "activity", role, affiliation);
+  if (!target) return projectModulePath(projectId, "activity", hasPermission);
+  if (!canOpenProjectModule(target.module, hasPermission)) {
+    return projectModulePath(projectId, "activity", hasPermission);
   }
   const id = encodeURIComponent(entityId);
-  const base = projectModulePath(projectId, target.module, role, affiliation);
+  const base = projectModulePath(projectId, target.module, hasPermission);
   if (!entityId) return base;
   // An empty query name means the record is addressed by a path segment.
   return target.query ? `${base}?${target.query}=${id}` : `${base}/${id}`;
 };
 
-/** Swap the project in the current pathname while keeping the module in view. */
+/**
+ * Swap the project in the current pathname while keeping the module in view.
+ *
+ * The three retired prefixes are still matched. A person can arrive on one of
+ * them from a notification sent before the collapse, and although the router
+ * redirects, this may run against the pre-redirect pathname — switching
+ * projects from such a URL has to keep working rather than silently produce a
+ * path with two project ids in it.
+ */
 export const replaceProjectInPath = (pathname: string, nextProjectId: string) => {
   const encoded = encodeURIComponent(nextProjectId);
   return pathname
-    .replace(/^\/project-manager\/projects\/[^/]+/, `/project-manager/projects/${encoded}`)
-    .replace(/^\/engineer\/projects\/[^/]+/, `/engineer/projects/${encoded}`)
-    .replace(/^\/consultant-engineer\/projects\/[^/]+/, `/consultant-engineer/projects/${encoded}`)
+    .replace(/^\/project-manager\/projects\/[^/]+/, `/projects/${encoded}`)
+    .replace(/^\/engineer\/projects\/[^/]+/, `/projects/${encoded}`)
+    .replace(/^\/consultant-engineer\/projects\/[^/]+/, `/projects/${encoded}`)
     .replace(/^\/projects\/[^/]+/, `/projects/${encoded}`);
 };

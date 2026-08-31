@@ -55,16 +55,16 @@ def world(db):
 
     manager = user("AgentPm", UserRole.PROJECT_MANAGER)
     outsider = user("AgentOutsider", UserRole.PROJECT_MANAGER)
-    worker = user("AgentWorker", UserRole.WORKER)
+    site_engineer = user("AgentSiteEngineer", UserRole.ENGINEER)
     owner = user("AgentOwner", UserRole.OWNER)
-    db.add_all([manager, outsider, worker, owner])
+    db.add_all([manager, outsider, site_engineer, owner])
     db.flush()
 
     project = Project(name=f"Agents {suffix}", status=ProjectStatus.ACTIVE,
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    for person, role in ((manager, UserRole.PROJECT_MANAGER), (worker, UserRole.WORKER)):
+    for person, role in ((manager, UserRole.PROJECT_MANAGER), (site_engineer, UserRole.ENGINEER)):
         db.add(ProjectMember(project_id=project.id, user_id=person.id,
                              role_on_project=role, is_active=True))
 
@@ -113,9 +113,9 @@ def world(db):
     db.commit()
     try:
         yield {"project": project, "manager": manager, "outsider": outsider,
-               "worker": worker, "overdue": overdue, "blocked": blocked, "change": change}
+               "site_engineer": site_engineer, "overdue": overdue, "blocked": blocked, "change": change}
     finally:
-        _purge(db, project.id, [manager.id, outsider.id, worker.id, owner.id])
+        _purge(db, project.id, [manager.id, outsider.id, site_engineer.id, owner.id])
 
 
 def _purge(db, project_id, user_ids):
@@ -273,10 +273,10 @@ def test_an_unknown_agent_is_refused(db, world):
 def test_the_agent_list_reflects_the_callers_permissions(db, world):
     manager = {item["name"] for item in available_agents(
         db, user=world["manager"], project_id=world["project"].id)}
-    worker = {item["name"] for item in available_agents(
-        db, user=world["worker"], project_id=world["project"].id)}
+    site_engineer = {item["name"] for item in available_agents(
+        db, user=world["site_engineer"], project_id=world["project"].id)}
     assert manager
-    assert worker <= manager
+    assert site_engineer <= manager
 
 
 def test_an_outsider_is_offered_no_agents(db, world):
