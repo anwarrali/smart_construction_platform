@@ -21,6 +21,7 @@ import toast from "react-hot-toast";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
 import { useRole } from "../../../hooks/useRole";
 import { useSearchParams } from "react-router-dom";
+import { ProjectFilesPanel } from "../../ingestion/components/ProjectFilesPanel";
 
 export const DocumentsPage = () => {
   const { t } = useTranslation();
@@ -140,6 +141,14 @@ export const DocumentsPage = () => {
           onAskAI={setAssistantDocument}
         />
       </Card>
+
+      {/* The unified ingestion pipeline, alongside the document library rather
+          than replacing it. The two answer different questions: the library
+          lists documents somebody titled and classified, this lists the files
+          that actually arrived — including the members of a design package,
+          which have no library entry of their own. Project-scoped, so it only
+          appears once a project is selected. */}
+      {activeProjectId && <ProjectFilesPanel projectId={activeProjectId} />}
 
       <DocumentAssistant
         document={assistantDocument}

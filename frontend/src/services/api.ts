@@ -43,6 +43,11 @@ import type {
 } from "../types/user";
 import { parseQueryParams } from "../utils/helpers";
 import type { Attachment, AttachmentEntityType } from "../types/attachment";
+import type {
+  McpToken,
+  McpTokenCreateRequest,
+  McpTokenCreated,
+} from "../types/mcp";
 import type { Milestone, MilestoneInput } from "../types/milestone";
 import type {
   Conversation,
@@ -54,6 +59,13 @@ import type {
   SharedEntityType,
 } from "../types/message";
 import type { StepUpChallenge, StepUpVerifyResult } from "../types/stepUp";
+import type {
+  IngestedFile,
+  IngestedFileFilters,
+  IngestedFilePage,
+  IngestionRetryResult,
+  IngestionUploadConstraints,
+} from "../types/ingestion";
 import type { ConsultantDashboardData, ConsultantReviewDetail, ConsultantReviewSummary } from "../types/consultant";
 import type {
   VoiceCommand,
@@ -67,7 +79,7 @@ import type {
   EvidencePhotoFilters,
   PhotoCategory,
 } from "../types/photoArchive";
-import type { IFCComparison, IFCElement, IFCFinding, IFCModelGroup, IFCSpatialDetails, IFCSpatialNode, IFCSuggestion, IFCUploadConstraints, IFCVersion } from "../types/ifc";
+import type { IFCComparison, IFCElement, IFCFinding, IFCFindingIssue, IFCFindingReviewResult, IFCFindingReviewStatus, IFCModelGroup, IFCPage, IFCSpatialDetails, IFCSpatialNode, IFCSuggestion, IFCUploadConstraints, IFCVersion } from "../types/ifc";
 import type { AIActionPage, AIActionVersion } from "../types/aiAction";
 import type { DocumentIndexStatus, RagQueryResponse } from "../types/rag";
 import type { AIInsight, AIInsightSource, AIIntelligenceOverview } from "../types/aiInsight";
@@ -866,6 +878,32 @@ const api = {
     versions: (projectId: string, modelId: string) => axiosInstance.get<IFCVersion[]>(ENDPOINTS.IFC.VERSIONS(projectId, modelId)).then((res) => res.data),
     version: (projectId: string, versionId: string) => axiosInstance.get<IFCVersion>(ENDPOINTS.IFC.VERSION(projectId, versionId)).then((res) => res.data),
     retryVersion: (projectId: string, versionId: string) => axiosInstance.post<IFCVersion>(`${ENDPOINTS.IFC.VERSION(projectId, versionId)}/retry`).then((res) => res.data),
+    /* Revision lifecycle. Both routes require `ifc.manage_version` and refuse a
+       revision that has not finished processing; both clear the designation
+       from every other revision in the same model group, which is why callers
+       update the whole list and not only the row that came back. */
+    activateVersion: (projectId: string, versionId: string) =>
+      axiosInstance.post<IFCVersion>(`${ENDPOINTS.IFC.VERSION(projectId, versionId)}/activate`).then((res) => res.data),
+    baselineVersion: (projectId: string, versionId: string) =>
+      axiosInstance.post<IFCVersion>(`${ENDPOINTS.IFC.VERSION(projectId, versionId)}/baseline`).then((res) => res.data),
+    /**
+     * The original IFC, as bytes.
+     *
+     * Returned rather than navigated to: the file lives in private storage
+     * behind `ifc.download`, so it has to travel over the authenticated client
+     * like every other request. The server names the file in
+     * `Content-Disposition`; that name is preferred when the browser exposes
+     * the header, and the version's own `originalFilename` is the fallback.
+     */
+    downloadVersion: (projectId: string, versionId: string) =>
+      axiosInstance
+        .get<Blob>(`${ENDPOINTS.IFC.VERSION(projectId, versionId)}/download`, { responseType: "blob" })
+        .then((res) => ({
+          blob: res.data,
+          filename: /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(
+            String(res.headers["content-disposition"] || ""),
+          )?.[1],
+        })),
     uploadVersion: (projectId: string, modelId: string, file: File, data: { title: string; revisionCode?: string; versionType: string; discipline?: string }, onProgress?: (percentage: number) => void) => {
       const form = new FormData(); form.append("file", file); form.append("title", data.title);
       if (data.revisionCode) form.append("revision_code", data.revisionCode);
@@ -888,7 +926,26 @@ const api = {
     comparisonChanges: (projectId: string, comparisonId: string, filters: Record<string, unknown> = {}) => axiosInstance.get<any[]>(`${ENDPOINTS.IFC.COMPARISONS(projectId)}/${comparisonId}/changes?${parseQueryParams(filters)}`).then((res) => res.data),
     suggestions: (projectId: string, versionId?: string) => axiosInstance.get<IFCSuggestion[]>(`${ENDPOINTS.IFC.SUGGESTIONS(projectId)}?${parseQueryParams(versionId ? { versionId } : {})}`).then((res) => res.data),
     reviewSuggestion: (projectId: string, id: string, status: "ACCEPTED" | "REJECTED", editedPayload?: Record<string, unknown>) => axiosInstance.patch(`${ENDPOINTS.IFC.SUGGESTIONS(projectId)}/${id}`, { status, editedPayload }).then((res) => res.data),
-    findings: (projectId: string) => axiosInstance.get<IFCFinding[]>(ENDPOINTS.IFC.FINDINGS(projectId)).then((res) => res.data),
+    /* Paged, and filtered server-side. `versionId` is what bounds the query —
+       findings accumulate per revision — and severity/discipline are matched
+       on the server because filtering a page in the browser would filter only
+       that page. */
+    findings: (projectId: string, filters: Record<string, unknown> = {}) =>
+      axiosInstance.get<IFCPage<IFCFinding>>(`${ENDPOINTS.IFC.FINDINGS(projectId)}?${parseQueryParams(filters)}`).then((res) => res.data),
+    /* The four review actions `app/api/ifc.py` already exposes. `ignore` and
+       `markFalsePositive` are the server's own shortcut routes for the same
+       PATCH, kept as separate methods so a caller states the decision it is
+       making rather than assembling a status string. All four require
+       `ifc.review_finding`; `createIssue` additionally requires `issue.create`
+       and is refused with 409 unless the finding is still PENDING. */
+    reviewFinding: (projectId: string, findingId: string, status: IFCFindingReviewStatus, note?: string) =>
+      axiosInstance.patch<IFCFindingReviewResult>(ENDPOINTS.IFC.FINDING(projectId, findingId), { status, note }).then((res) => res.data),
+    ignoreFinding: (projectId: string, findingId: string) =>
+      axiosInstance.post<IFCFindingReviewResult>(`${ENDPOINTS.IFC.FINDING(projectId, findingId)}/ignore`).then((res) => res.data),
+    markFindingFalsePositive: (projectId: string, findingId: string) =>
+      axiosInstance.post<IFCFindingReviewResult>(`${ENDPOINTS.IFC.FINDING(projectId, findingId)}/mark-false-positive`).then((res) => res.data),
+    createIssueFromFinding: (projectId: string, findingId: string) =>
+      axiosInstance.post<IFCFindingIssue>(`${ENDPOINTS.IFC.FINDING(projectId, findingId)}/create-issue`).then((res) => res.data),
   },
   aiIntelligence: {
     overview: (projectId:string) => axiosInstance.get<AIIntelligenceOverview>(ENDPOINTS.AI_INTELLIGENCE.OVERVIEW(projectId)).then(res=>res.data),
@@ -910,6 +967,84 @@ const api = {
     revertLast: (projectId:string,requestId:string,reason:string) => axiosInstance
       .post<{action:AIActionVersion;message:string}>(ENDPOINTS.AI_ACTIONS.REVERT_LAST,{requestId,reason},{params:{project_id:projectId}})
       .then(res=>res.data),
+  },
+
+  /**
+   * The unified file ingestion pipeline.
+   *
+   * Separate from `api.documents`, which it does not replace: a document is a
+   * library entry with a title and a type somebody chose, while this is the
+   * file itself — including the members of a design package, which have no
+   * library entry of their own.
+   */
+  ingestion: {
+    constraints: (projectId: string) =>
+      axiosInstance
+        .get<IngestionUploadConstraints>(
+          ENDPOINTS.INGESTION.UPLOAD_CONSTRAINTS(projectId),
+        )
+        .then((res) => res.data),
+    list: (projectId: string, filters?: IngestedFileFilters) =>
+      axiosInstance
+        .get<IngestedFilePage>(
+          `${ENDPOINTS.INGESTION.BASE(projectId)}?${parseQueryParams(filters || {})}`,
+        )
+        .then((res) => res.data),
+    getById: (projectId: string, fileId: string) =>
+      axiosInstance
+        .get<IngestedFile>(ENDPOINTS.INGESTION.FILE(projectId, fileId))
+        .then((res) => res.data),
+    upload: (projectId: string, file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return axiosInstance
+        .post<IngestedFile>(ENDPOINTS.INGESTION.BASE(projectId), formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+        .then((res) => res.data);
+    },
+    retry: (projectId: string, fileId: string) =>
+      axiosInstance
+        .post<IngestionRetryResult>(ENDPOINTS.INGESTION.RETRY(projectId, fileId))
+        .then((res) => res.data),
+    // A blob, not a URL: the server streams the object and never publishes
+    // where it is stored.
+    download: (projectId: string, fileId: string) =>
+      axiosInstance
+        .get<Blob>(ENDPOINTS.INGESTION.DOWNLOAD(projectId, fileId), {
+          responseType: "blob",
+        })
+        .then((res) => res.data),
+  },
+
+  /**
+   * MCP client tokens.
+   *
+   * Authenticated with the session like every other call in this file, which
+   * is the point: an MCP token is understood only by the MCP endpoint, so it
+   * cannot reach these routes and cannot mint itself a replacement.
+   *
+   * There is no `getById`. A token is only ever read as part of the list, and
+   * the one thing a single-token endpoint could add — the secret — does not
+   * exist on the server after the moment it was created.
+   */
+  mcpTokens: {
+    list: (includeRevoked = false) =>
+      axiosInstance
+        .get<McpToken[]>(ENDPOINTS.MCP.TOKENS, {
+          params: { include_revoked: includeRevoked },
+        })
+        .then((res) => res.data),
+    // The only response in the application that carries a credential. Never
+    // logged, never stored: the page shows it once and forgets it.
+    create: (data: McpTokenCreateRequest) =>
+      axiosInstance
+        .post<McpTokenCreated>(ENDPOINTS.MCP.TOKENS, data)
+        .then((res) => res.data),
+    revoke: (tokenId: string) =>
+      axiosInstance
+        .delete<void>(ENDPOINTS.MCP.TOKEN(tokenId))
+        .then((res) => res.data),
   },
 
   upload: {

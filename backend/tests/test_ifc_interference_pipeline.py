@@ -263,7 +263,18 @@ def test_metadata_quality_findings_keep_full_confidence(db, processed):
 # --- What a reviewer is handed ---------------------------------------------
 
 def _listed(db, processed):
-    return list_findings(processed["project"].id, db=db, current_user=processed["manager"])
+    """The reviewer's findings, unwrapped from the page around them.
+
+    `list_findings` is paged now, and its `page`/`page_size` defaults are
+    `Query(...)` markers that only the request pipeline resolves — so calling
+    the handler directly means passing them. One large page keeps these
+    assertions about grouping, ordering and evidence; paging has its own tests
+    in `test_ifc_findings_pagination.py`.
+    """
+    return list_findings(
+        processed["project"].id, page=1, page_size=200,
+        db=db, current_user=processed["manager"],
+    )["items"]
 
 
 def test_the_findings_list_carries_confidence_and_location(db, processed):

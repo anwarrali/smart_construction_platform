@@ -30,7 +30,7 @@ and an answer that cannot be traced is not given at all.
   │ pdf_text     PDF on disk ──► text, one page at a time           │
   │ chunking     page text   ──► token-bounded, page-tagged chunks  │
   │ embeddings   text        ──► vectors (OpenAI, client injectable)│
-  │ store        vectors     ──► JSONB + cosine, behind VectorStore │
+  │ store        vectors     ──► pgvector + cosine, behind VectorStore│
   │ ingestion    orchestrates the above, owns the state machine     │
   └─────────────────────────────────────────────────────────────────┘
                                         │
@@ -47,7 +47,8 @@ and an answer that cannot be traced is not given at all.
 ```
 
 Each layer is replaceable without disturbing the others. **`store.py` is the
-only module that knows a vector is stored as JSONB** — see §9.
+only module that knows how a vector is stored** — which is what made the move
+from JSONB to pgvector one new class and one factory line. See §9.
 
 ## 2b. Routing — deciding whether to retrieve at all
 
@@ -147,7 +148,58 @@ in the project, which would be answering a question nobody asked.
 10. `VectorStore.add_chunks` **replaces** any previous chunks, then the
     document becomes `READY` with `indexed_at` and `page_count`.
 
+## 3b. Indexing a file from the unified ingestion pipeline
+
+The same state machine, a different way of getting the text, and one extra
+gate at the front.
+
+```
+IngestedFile
+     │
+     ├─ metadata_json.extraction == "TEXT"?  ──no──►  NotIndexable
+     │                                                (status unchanged,
+     │                                                 no error recorded)
+     ▼
+  claim (INDEXING)  ──►  read text  ──►  chunk  ──►  embed  ──►  store
+                                                                   │
+                                              DocumentChunk(ingested_file_id=…)
+                                                                   │
+                                                                 READY
+```
+
+1. A file is uploaded through `POST /projects/{id}/files`, which classifies it
+   and records what it extracted. Nothing is indexed automatically.
+2. `POST /rag/files/{id}/index` is called explicitly. It returns **202**: the
+   work is queued, not done.
+3. Permission — project access, then `document.view`, the same codes the
+   unified file endpoints enforce. A file outside every project the caller can
+   reach is a **404**, because confirming an id exists is itself information.
+4. **The gate is the pipeline's own verdict.** `metadata_json.extraction` was
+   written when the file was processed, so a scan, a drawing or a spreadsheet
+   is refused *without the file being opened*. That refusal happens before the
+   row is claimed, so an unindexable file keeps `NOT_INDEXED` and gets no
+   error — a permanent property must not look like a retryable failure.
+5. The work runs on `services/processing_pool.py`, the **same bounded pool**
+   IFC parsing and file processing already share. `IFC_MAX_CONCURRENT_PROCESSING`
+   therefore remains one ceiling over all heavy work rather than one of several.
+6. Text is read back through `services/rag/text_source.py`, which **delegates
+   to the ingestion processors** rather than reimplementing extraction. A PDF
+   yields real pages; a Word or text file yields a single page 1, which is
+   truthful — that is where a reader opening it would find the passage.
+7. From there it is identical to the document path: chunk, embed, replace,
+   `READY`.
+
+Why the text is read again at all, when the pipeline already extracted it: the
+pipeline stores a ~4 KB *sample*, because `metadata_json` is a metadata column
+and not a text store. The *decision* is free and is never re-derived; the
+*content* is not.
+
 ## 4. Retrieval flow
+
+> **Both sources are retrievable.** A passage may come from a library
+> `Document` or from an `IngestedFile`, and `VectorStore.search` takes a
+> separate, mandatory readable-id set for each. An empty set means *zero
+> readable sources of that type*; it never means "all". See §12.
 
 1. `POST /rag/query` with a `projectId`, a `query`, and optionally a
    `documentId`.
@@ -187,19 +239,50 @@ mechanisms push toward it:
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `document_id` | UUID | FK → `documents.id` ON DELETE CASCADE |
+| `document_id` | UUID **nullable** | FK → `documents.id` ON DELETE CASCADE |
+| `ingested_file_id` | UUID **nullable** | FK → `ingested_files.id` ON DELETE CASCADE |
 | `project_id` | UUID | FK → `projects.id`. Denormalised on purpose — see below |
 | `page_number` | int | 1-based. **NOT NULL** |
 | `chunk_index` | int | order within the document |
 | `content` | text | |
 | `token_count` | int | |
-| `embedding` | JSONB | float array. **Never returned by the API** |
+| `embedding` | `vector(1536)` | pgvector. **Never returned by the API** |
 | `embedding_model` | varchar(100) | so a model change is detected |
 | `embedding_dim` | int | vectors of another length are skipped, not compared |
 | `created_at` | timestamptz | |
 
 Indexes: `(document_id, chunk_index)`, `(document_id, page_number)`,
-`project_id`, `document_id`.
+`(ingested_file_id, chunk_index)`, `project_id`, `document_id`,
+`ingested_file_id`.
+
+Constraint `ck_document_chunks_exactly_one_source`:
+`num_nonnulls(document_id, ingested_file_id) = 1`.
+
+Vector index `ix_document_chunks_embedding_hnsw`:
+`USING hnsw (embedding vector_cosine_ops)`. The operator class matters — an
+index built for the default L2 distance would never be chosen by the `<=>`
+(cosine) queries the store issues, and the only symptom would be a slow
+search returning correct answers.
+
+*The dimension is part of the schema.* `vector(1536)` rejects a vector of any
+other width, so changing the embedding model to one of a different width is a
+migration, not a configuration change. That turns a silent degradation —
+vectors from two incompatible spaces compared against each other — into a
+write that fails immediately. See `RAG_EMBEDDING_DIMENSIONS`.
+
+*A chunk has exactly one source.* Its text came either from a library
+`Document` or from an `IngestedFile` produced by the unified ingestion pipeline
+(see [FILE_INGESTION.md](FILE_INGESTION.md)). Both columns are nullable and the
+CHECK requires precisely one, so "a chunk with no source" and "a chunk claiming
+two" are unrepresentable rather than merely discouraged. A polymorphic
+`source_type`/`source_id` pair was rejected: it carries no foreign key, so
+nothing would stop a chunk pointing at a deleted parent, and the cascade that
+keeps indexed text from outliving its source would have to be reimplemented in
+application code.
+
+`document_id` is **not** deprecated. Every pre-existing chunk uses it, retrieval
+still resolves citations through it, and the Document path is untouched. This is
+a compatibility phase, not a migration.
 
 *`project_id` is denormalised* so every retrieval query filters on the project
 column directly. A join that must be remembered is a join that will eventually
@@ -211,6 +294,14 @@ a page boundary.
 
 **`documents`** gains `index_status`, `indexed_at`, `index_error`,
 `page_count`.
+
+**`ingested_files`** gains `index_status`, `indexed_at`, `index_error` — the
+same three columns holding the same four values, driven by the same state
+machine. Deliberately not a second vocabulary: the point of putting indexing on
+that record is that there is eventually *one* answer to "is this file
+queryable", and two enums is how that becomes two answers. It has no
+`page_count` column because the ingestion pipeline already records the page
+count in `metadata_json`.
 
 **Indexing state machine**
 
@@ -261,6 +352,13 @@ Also enforced:
 |---|---|---|
 | `RAG_ENABLED` | `false` | Master switch. With it off, RAG routes return **503** and the rest of the application is unaffected |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536 dimensions |
+| `RAG_EMBEDDING_DIMENSIONS` | `1536` | The width of the `embedding` column. **A schema change, not a setting** — a migration must move with it |
+| `RAG_HNSW_ITERATIVE_SCAN` | `strict_order` | Keeps HNSW scanning until it has `k` rows that pass the filter. Empty disables it, for pgvector < 0.8 |
+| `RAG_INDEX_STALE_MINUTES` | `30` | How long a row may sit in `INDEXING` before the reaper takes it back |
+| `RAG_REAPER_ENABLED` | `true` | The periodic stale-run sweep. Off degrades to recovery-by-`force` only |
+| `RAG_REAPER_INTERVAL_MINUTES` | `10` | How often that sweep runs |
+| `RAG_REINDEX_MAX_ATTEMPTS` | `3` | Bounded retry for a project run |
+| `RAG_REINDEX_MAX_SOURCES` | `500` | Ceiling on one run's size |
 | `OPENAI_RAG_MODEL` | `gpt-4.1-mini` | The answering model |
 | `RAG_CHUNK_TOKENS` | `500` | Target chunk size |
 | `RAG_CHUNK_OVERLAP` | `75` | Tokens carried between neighbouring chunks |
@@ -280,43 +378,83 @@ INFO:     RAG disabled; document question answering endpoints return 503
 `OPENAI_API_KEY` is read from the environment only — never passed as a
 parameter, never logged, never sent to a client.
 
-## 9. Limitations of JSONB vector storage
+## 9. Vector storage
 
-This MVP stores vectors as JSONB and computes cosine similarity in Python with
-numpy. That is a deliberate trade, and these are its real costs:
+Embeddings live in a pgvector `vector(1536)` column. Cosine distance is
+computed by PostgreSQL, the ordering and the `LIMIT` happen in SQL, and an
+HNSW index serves the ordering.
 
-- **Retrieval is a linear scan.** Every candidate chunk is loaded and scored on
-  every question. For one document (tens to hundreds of chunks) this is
-  sub-millisecond. At tens of thousands of chunks it becomes the slowest part
-  of the request.
-- **Storage is inefficient.** A 1536-float vector is roughly 30 KB as JSON
-  text, versus about 6 KB as a native `vector`. A 500-chunk document costs
-  ~15 MB.
-- **Every candidate is transferred** from PostgreSQL to the application on
-  every query, rather than the ranking happening in the database.
-- **No approximate-nearest-neighbour index** is possible, so there is no way to
-  trade a little accuracy for a lot of speed.
+**This replaced JSONB.** The MVP stored each vector as a JSON array and scored
+every candidate in numpy — no database extension needed, at the cost of a full
+scan per query. `docs/RAG.md` §10 described the way out; migration
+`c63fa2b5e819` is that migration, and the change reached exactly two files
+outside the schema: `store.py` and the model.
 
-What it buys: the stock `postgres:15` image with no extension, no change to
-your database infrastructure, and no operational risk today.
+### What the index does and does not do
 
-## 10. Migrating to pgvector later
+Every query this store issues filters by project **and** by the source ids the
+caller may read. Plain HNSW fetches its candidate set first and applies the
+filter afterwards, so a selective filter can return fewer than the `k` rows
+asked for — silently, and more often as the corpus grows.
 
-The migration is contained because **nothing outside `store.py` knows vectors
-are in JSONB**. Nothing else reads `embedding`, computes a similarity, or names
-JSONB.
+`hnsw.iterative_scan` (pgvector ≥ 0.8) fixes that: the scan continues until it
+has `k` matches. It is set per transaction with `SET LOCAL`, so it cannot leak
+onto the next request sharing a pooled connection, and it is configurable —
+`RAG_HNSW_ITERATIVE_SCAN=""` disables it for an older pgvector, where the only
+consequence is possibly fewer results, never wrong or wider ones.
 
-1. Change the database image to `pgvector/pgvector:pg15` (same PostgreSQL major
-   version, so the existing volume works unchanged).
-2. `CREATE EXTENSION vector;` in a migration; add a `vector(1536)` column,
-   backfill from the JSONB, drop the old column, and create an HNSW or IVFFlat
-   index.
-3. Write `PgVectorStore` implementing the same three methods, with the ordering
-   done in SQL (`ORDER BY embedding <=> :query LIMIT :k`).
-4. Change the one line in `store.py` that builds `_default_store`.
+The default is `strict_order`, which guarantees results come back in true
+distance order. That is what `ScoredChunk.score` implies to every caller, and
+at `RAG_TOP_K=5` the cost over `relaxed_order` is not measurable.
 
-No service, API, schema, or test outside the store needs to change. Chunks
-would need re-embedding only if the embedding *model* changes, not the storage.
+### Remaining limits
+
+* **Recall is approximate.** HNSW is an approximate index; a chunk that is
+  genuinely in the top-k can be missed. `hnsw.ef_search` trades recall for
+  latency and is left at pgvector's default.
+* **One embedding model at a time.** The column holds one width, so a corpus
+  cannot mix models. Changing models means a migration and a re-index of every
+  document and file.
+* **No hybrid search.** There is no lexical (BM25/`tsvector`) arm, so an exact
+  term a passage uses verbatim ranks only as well as its embedding does.
+
+## 10. The pgvector migration, as it was done
+
+Kept as a record because the sequence is what makes it safe to repeat on
+another environment.
+
+1. **The database image.** `docker-compose.yml` moved from `postgres:15` to
+   `pgvector/pgvector:pg15` — the same PostgreSQL major version with the
+   extension compiled in, so the existing `postgres_data` volume is picked up
+   unchanged. It is a binary swap, not a data migration.
+
+   The pgvector image is built on a different Debian release, so PostgreSQL
+   reports a **collation version mismatch** on first connect. The remedy is
+   `REINDEX DATABASE` followed by
+   `ALTER DATABASE … REFRESH COLLATION VERSION`; skipping it leaves text
+   indexes built under collation rules the new library disagrees with.
+
+2. **The dependency.** `pgvector==0.3.6` in `requirements.txt`, for the
+   SQLAlchemy `Vector` type. It is a hard dependency, not an optional one like
+   `pypdf`: `models/document_chunk.py` imports it, so the model must load
+   whether or not RAG is enabled.
+
+3. **The migration** (`c63fa2b5e819`): `CREATE EXTENSION vector`, add
+   `embedding_vector vector(1536)`, backfill with `embedding::text::vector`,
+   drop the JSONB column, rename into place, add the HNSW cosine index.
+
+   Chunks whose JSONB array was not 1536 long are **deleted**, with the count
+   raised as a notice. They had no representation in the new column, retrieval
+   already refused them for having the wrong width, and they are regenerable
+   by re-indexing. Admitting them as NULL would have cost the NOT NULL
+   invariant permanently.
+
+4. **The store.** `PgVectorStore` replaced `JsonbVectorStore` and
+   `_default_store` changed. Nothing else did.
+
+The downgrade rebuilds the JSONB column from the vectors and loses nothing:
+`vector::text` is a JSON array of the same numbers, verified to round-trip
+exactly with a real 1536-dimensional chunk.
 
 ## 11. Running and using it
 
@@ -368,7 +506,155 @@ curl -X POST "http://localhost:8000/api/v1/rag/query" -H "Authorization: Bearer 
 Omit `documentId` to search every readable, indexed document in the project;
 include it to restrict the search to one.
 
-## 12. Testing
+## 12. Unified retrieval across both sources
+
+A chunk's text comes from a `Document` or an `IngestedFile`, and one query
+searches both.
+
+```
+question
+   ↓
+readable_document_ids(db, user, project)        ── documents' four-layer rule
+readable_ingested_file_ids(db, user, project)   ── the same rule, derived
+   ↓
+VectorStore.search(project_id, documents, files, …)
+   ↓
+ScoredChunk(source=ChunkSource(…))
+   ↓
+Citation → RagCitation(sourceType, documentId | ingestedFileId, title, page)
+```
+
+**The invariant.** Both id sets are mandatory keyword arguments with no
+defaults. Passing `[]` means zero readable sources of that type, and with both
+empty the store returns before building a query — so no code path scans a
+project without an explicit, caller-resolved list of what may be read. The
+document parameter was *renamed* from `document_ids` to `readable_document_ids`
+so a caller that predates this fails with a `TypeError` rather than silently
+searching one source type.
+
+**Ingested-file authorization is derived from the document rule, layer by
+layer, and is never weaker.** A file has no share table and no task, so the
+party and discipline scopes cannot be applied mechanically: the party scope
+reduces to *own uploads only* (the shared set is empty — deny-by-default), and
+the discipline scope grants all files (a file has no task, i.e. is
+project-level, which that predicate already grants for documents). A naive
+"project access plus `document.view`" would have been strictly weaker: an
+external contractor reads only shared documents but would have read every file
+on the project. See `services/document_access.py`.
+
+**Titles.** A document cites by `title`, a file by `original_filename`. The
+title query selects those two columns specifically — a `select(IngestedFile)`
+would pull `storage_key` into memory one refactor from being serialised.
+
+**Compatibility.** `RagCitation.documentId` is populated exactly as before for
+a document citation; `sourceType` and `ingestedFileId` are additive.
+
+## 13. Re-embedding and index maintenance
+
+Two problems that only appear once a corpus has existed for a while: the
+embedding model changes, and a worker dies mid-index.
+
+### Detecting what needs re-embedding
+
+A chunk records `embedding_model` and `embedding_dim`. A source is stale when
+any of its chunks disagrees with the configured model — **derived, never
+stored**. A flag would be wrong the moment configuration changed without it
+being updated, which is exactly the moment it matters.
+
+`GET /rag/projects/{id}/reindex` reports this without starting anything:
+
+```json
+{"embeddingSummary": {"configuredModel": "text-embedding-3-small",
+                      "totalChunks": 412, "staleChunks": 88,
+                      "needsReembedding": true,
+                      "models": [{"model": "text-embedding-ada-002",
+                                  "chunks": 88, "current": false}]}}
+```
+
+Configuration changing never re-embeds anything on its own. It makes the fact
+*visible*; spending the credits stays a decision somebody makes.
+
+### Re-indexing a project
+
+```
+POST /rag/projects/{id}/reindex   {"scope": "STALE"}   → 202
+```
+
+```
+project
+   ↓  eligible_sources(project_id, scope)   ← the data boundary
+sources (Document | IngestedFile)
+   ↓  reindex_source → ingestion.index_document / index_ingested_file
+chunks  (add_chunks replaces, so re-running cannot duplicate)
+   ↓
+vector(1536)
+```
+
+Three scopes: `STALE` (default — only outdated vectors, the cheapest),
+`FAILED` (retry what failed), `ALL` (every indexed-or-attempted source). A
+`NOT_INDEXED` source is in none of them: re-indexing means indexing *again*,
+and doing it implicitly would spend credits on every file that ever landed.
+
+The endpoint returns as soon as the job row exists. The work runs on
+`services/processing_pool.py` — the *same* bounded pool IFC parsing, file
+processing and single-file indexing use, so `IFC_MAX_CONCURRENT_PROCESSING`
+remains one ceiling over all heavy work.
+
+**No transaction spans the run.** Each source is committed as it finishes, so
+a crash at source 73 leaves 1–72 genuinely indexed. The job's counters are
+committed alongside, so its progress is real rather than a guess made at the
+end. A run with both successes and failures settles as `PARTIAL`.
+
+### Duplicate runs
+
+`ix_rag_index_jobs_one_active_per_project` is a **partial unique index** over
+`project_id` where the status is QUEUED or RUNNING. Two simultaneous requests
+both insert; one violates the index and gets a 409. A check-then-insert would
+be a race whose loser starts a second full re-embedding pass.
+
+### Recovering a stranded run
+
+A worker that dies mid-index leaves `index_status = INDEXING` forever — the
+concurrency guard cannot tell a dead run from a live one, so every later
+attempt is refused. Before this, the only way out was somebody noticing and
+passing `force=true`.
+
+```
+INDEXING  ──(index_started_at older than RAG_INDEX_STALE_MINUTES)──►  FAILED
+                                                                       │
+                                                        explicit retry ┘
+```
+
+`index_started_at` exists because neither existing timestamp can answer the
+question: `indexed_at` is written only on success, and `updated_at` moves for
+any edit. A NULL start on an INDEXING row counts as stale — those are rows
+claimed before the column existed.
+
+Two things it deliberately does **not** do:
+
+* **It does not delete chunks.** The run may have died after writing every
+  chunk and before writing the status; deleting would turn a recoverable
+  interruption into data loss. A retry replaces them wholesale anyway.
+* **It does not retry automatically.** The row moves to FAILED with a readable
+  reason, which makes it eligible for an explicit retry or a `FAILED`-scoped
+  run. An automatic retry here would be an unbounded loop over a source that
+  fails deterministically.
+
+A stranded *project job* is re-queued rather than failed, bounded by
+`attempt` — after `RAG_REINDEX_MAX_ATTEMPTS` it is given up on.
+
+The sweep runs on the existing scheduler (`services/scheduler.py`), on the
+same asyncio loop as the reminder sweep but under its **own** advisory lock,
+so a slow reminder pass on one worker cannot stop the reaper on another.
+
+### HNSW is not rebuilt
+
+pgvector maintains the index on ordinary INSERT and DELETE. A `REINDEX` per
+run would rebuild the whole structure to replace a handful of rows. If index
+maintenance is ever genuinely needed it is a database operation on a schedule,
+kept separate from anything the application does on a user's behalf.
+
+## 14. Testing
 
 ```bash
 docker compose exec backend python -m pytest tests/test_rag_pipeline.py tests/test_rag_api.py -q
@@ -384,20 +670,34 @@ Test PDFs are built in pure Python (`tests/pdf_fixture.py`) rather than with
 reportlab, so the suite gains no dependency for a fixture — and they are real
 PDFs, so extraction is genuinely exercised.
 
-## 13. Known limitations of this MVP
+## 15. Known limitations
 
-- **PDF only.** No ZIP or design-package ingestion.
+- **Approximate recall.** HNSW is an approximate index; a chunk genuinely in
+  the top-k can be missed. `hnsw.ef_search` trades recall for latency and is
+  left at pgvector's default.
+- **One embedding model at a time.** `vector(1536)` holds one width, so a
+  corpus cannot mix models. Changing model means a migration and a re-index.
+- **No hybrid search.** No lexical (BM25/`tsvector`) arm, so a term a passage
+  uses verbatim ranks only as well as its embedding does.
 - **No OCR.** A scanned PDF with no text layer is refused with a message
   saying so.
-- **No drawing or image understanding.** Text only.
-- **No conversational memory.** Each question is independent; there is no
-  follow-up context.
-- **Indexing is synchronous.** A large PDF holds the request open for the
-  duration. A background job would be the next step.
-- **A process that dies mid-index** leaves the document in `INDEXING`. The
-  status endpoint shows it; `?force=true` re-claims it. There is no reaper.
-- **No re-index on document replacement.** Uploading a new version does not
-  re-index automatically — indexing is explicit by design.
-- **Retention of stale vectors.** If `OPENAI_EMBEDDING_MODEL` changes, existing
-  chunks are skipped at query time (their dimension no longer matches) rather
-  than silently compared across incompatible spaces. Re-index to restore them.
+- **No drawing or image understanding.** DWG/DXF and images are stored and
+  classified, never read. Spreadsheet cell values are not read either.
+- **No conversational memory.** Each question is independent.
+- **Document indexing is synchronous**; `POST /rag/documents/{id}/index` holds
+  the request open for the duration. Ingested-file indexing is not — it runs on
+  the shared bounded pool.
+- **A process that dies mid-index** leaves the row in `INDEXING` until the
+  reaper takes it back — within `RAG_INDEX_STALE_MINUTES`, or immediately with
+  `?force=true`. See §13.
+- **No re-index on replacement.** Uploading a new version does not re-index
+  automatically; indexing is explicit by design, so nobody spends embedding
+  credits on every file that lands in a project.
+- **A re-index is per project.** There is no cross-project or platform-wide
+  sweep, so a model change has to be actioned project by project.
+- **A run is not resumable mid-source.** An interrupted run keeps every source
+  it finished and re-does the one it was on; there is no chunk-level
+  checkpoint, which for a single document is seconds of work.
+- **No file-level sharing for external parties.** A contractor can only reach
+  ingested files they uploaded themselves, because no share mechanism exists
+  for them yet.

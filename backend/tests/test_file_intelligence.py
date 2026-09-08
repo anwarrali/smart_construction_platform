@@ -73,7 +73,17 @@ PAYLOADS = {
     "html": b"<html><body>hi</body></html>",
     "frame_sync_mp3": b"\xff\xfb\x90\x00" + b"\x00" * 32,
 }
-EXTENSIONS = sorted(SIGNATURE_VERIFIED_EXTENSIONS | {".txt", ".mp4", ".webm", ".mpeg", ".mpga", ".zip", ""})
+#: Extensions the unified ingestion pipeline *added* to the gate. The
+#: characterization below asserts that a refactor changed nothing, and these
+#: are a deliberate widening rather than a refactor — so they are excluded from
+#: it and covered by their own assertions underneath. Anything else appearing
+#: here would mean an accepted type had quietly changed behaviour.
+DELIBERATELY_WIDENED = {".zip", ".dxf"}
+
+EXTENSIONS = sorted(
+    (SIGNATURE_VERIFIED_EXTENSIONS | {".txt", ".mp4", ".webm", ".mpeg", ".mpga", ".zip", ""})
+    - DELIBERATELY_WIDENED
+)
 
 
 @pytest.mark.parametrize("extension", EXTENSIONS)
@@ -81,6 +91,29 @@ EXTENSIONS = sorted(SIGNATURE_VERIFIED_EXTENSIONS | {".txt", ".mp4", ".webm", ".
 def test_the_signature_gate_answers_exactly_as_it_did_before(extension, name):
     content = PAYLOADS[name]
     assert _matches_signature(extension, content) == _original_matches_signature(extension, content)
+
+
+def test_the_two_newly_accepted_extensions_are_still_signature_checked():
+    """Widening the gate did not mean trusting a name.
+
+    `.zip` and `.dxf` were added for design-package ingestion. Both go through
+    the same magic-byte check as everything else: a ZIP must actually be one,
+    and a `.dxf` must be either the binary sentinel or readable text, which is
+    what an ASCII DXF is.
+    """
+    assert _matches_signature(".zip", ZIP)
+    assert not _matches_signature(".zip", PDF)
+    assert not _matches_signature(".zip", PAYLOADS["junk"])
+
+    assert _matches_signature(".dxf", b"0\nSECTION\n2\nHEADER\n")
+    assert _matches_signature(".dxf", b"AutoCAD Binary DXF\r\n\x1a\x00")
+    assert not _matches_signature(".dxf", PNG)
+
+
+def test_a_plain_zip_is_never_resolved_to_an_office_format():
+    """Otherwise a package upload could smuggle in a file the archive walker
+    would then decline to open."""
+    assert identify_format(ZIP, ".zip") == "ZIP_CONTAINER"
 
 
 def test_the_signature_gate_still_rejects_a_disguised_file():
@@ -163,9 +196,32 @@ def test_dwg_is_declared_as_stored_but_not_extracted():
 
 
 def test_a_spreadsheet_is_honest_about_not_being_parsed():
+    """Sheet names are read now; the numbers still are not, and it says so.
+
+    Updated when the ingestion pipeline gave XLSX a real (if shallow) reader:
+    the workbook part is opened for its sheet names, so a destination exists.
+    The assertion that matters is unchanged — a BOQ is identified, not parsed.
+    """
     xlsx = capability_for("XLSX")
-    assert xlsx.destination is None
+    assert xlsx.destination == "ingested_files.metadata_json"
+    assert xlsx.indexable is False
     assert "BOQ" in xlsx.limitation
+    assert "Cell values are not read" in xlsx.limitation
+
+
+def test_a_word_document_now_declares_the_text_it_can_actually_give_up():
+    docx = capability_for("DOCX")
+    assert docx.text_extractable is True
+    # Readable is not retrievable. Nothing indexes this text yet, and claiming
+    # otherwise would promise an answer the RAG layer cannot give.
+    assert docx.indexable is False
+    assert "not indexed for retrieval" in docx.limitation
+
+
+def test_a_design_package_declares_where_its_members_go():
+    package = capability_for("ZIP_CONTAINER")
+    assert "ingested_files" in package.destination
+    assert "nested" in package.limitation
 
 
 def test_an_unregistered_format_reports_no_capability_rather_than_failing():

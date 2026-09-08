@@ -18,3 +18,8 @@ ifcopenshell==0.8.5
 # them; RAG reports itself unavailable instead of erroring.
 pypdf==5.1.0
 tiktoken==0.8.0
+# The SQLAlchemy column type for pgvector's `vector`, and the adapter that
+# sends a Python list as one. Required at import time by
+# `models/document_chunk.py`, so it is a hard dependency rather than an
+# optional one like pypdf: the model must load whether or not RAG is enabled.
+pgvector==0.3.6

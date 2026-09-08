@@ -89,6 +89,7 @@ const VoiceAssistantPage = lazy(() => import("../../features/voice/pages/VoiceAs
 const IFCWorkspacePage = lazy(() => import("../../features/ifc/pages/IFCWorkspacePage").then((m) => ({ default: m.IFCWorkspacePage })));
 const AIIntelligencePage = lazy(() => import("../../features/ai-intelligence/pages/AIIntelligencePage").then((m) => ({ default: m.AIIntelligencePage })));
 const CollaborationPage = lazy(() => import("../../features/collaboration/pages/CollaborationPage").then((m) => ({ default: m.CollaborationPage })));
+const McpClientsPage = lazy(() => import("../../features/settings/pages/McpClientsPage").then((m) => ({ default: m.McpClientsPage })));
 
 export const Router = () => {
   return (
@@ -277,6 +278,13 @@ export const Router = () => {
             <Route path={ROUTES.REQUESTS}        element={<CollaborationPage initialTab="requests" />} />
             <Route path={ROUTES.SCHEDULE}        element={<CollaborationPage initialTab="schedule" />} />
             <Route path={ROUTES.SETTINGS}        element={<ProfilePage />} />
+            {/* Deliberately ungated. An MCP client token is one of "their own
+                tokens" in the same sense as a device registration: it carries
+                its holder's authority and no more, the endpoints return only
+                the caller's own rows, and the page explains itself when the
+                surface is switched off. A permission here would decide, in the
+                client, a question the server already answers. */}
+            <Route path={ROUTES.MCP_CLIENTS}     element={<McpClientsPage />} />
             <Route path={ROUTES.CHANGE_PASSWORD} element={<ProfilePage />} />
           </Route>
         </Route>

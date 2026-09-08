@@ -284,6 +284,7 @@ def get_projects_summary(
 @router.get("/{project_id}", response_model=ProjectOut)
 def get_project_by_id(
     project: Project = Depends(get_project_or_403),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     # Commercial figures are for whoever the office lets see them. `get_project_or_403`

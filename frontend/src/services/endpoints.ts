@@ -249,6 +249,7 @@ export const ENDPOINTS = {
     COMPARISONS: (projectId: string) => `/projects/${projectId}/ifc/comparisons`,
     SUGGESTIONS: (projectId: string) => `/projects/${projectId}/ifc/suggestions`,
     FINDINGS: (projectId: string) => `/projects/${projectId}/ifc/findings`,
+    FINDING: (projectId: string, findingId: string) => `/projects/${projectId}/ifc/findings/${findingId}`,
   },
   AI_INTELLIGENCE: {
     BASE: (projectId:string) => `/projects/${projectId}/ai-intelligence`,
@@ -262,6 +263,30 @@ export const ENDPOINTS = {
     ACTION: (id:string) => `/ai/actions/${id}`,
     REVERT: (id:string) => `/ai/actions/${id}/revert`,
     REVERT_LAST: "/ai/actions/revert-last",
+  },
+
+  // The unified file ingestion pipeline. Project-scoped in the path, which is
+  // what makes project isolation structural rather than remembered.
+  INGESTION: {
+    BASE: (projectId: string) => `/projects/${projectId}/files`,
+    UPLOAD_CONSTRAINTS: (projectId: string) =>
+      `/projects/${projectId}/files/upload-constraints`,
+    FILE: (projectId: string, fileId: string) =>
+      `/projects/${projectId}/files/${fileId}`,
+    DOWNLOAD: (projectId: string, fileId: string) =>
+      `/projects/${projectId}/files/${fileId}/download`,
+    RETRY: (projectId: string, fileId: string) =>
+      `/projects/${projectId}/files/${fileId}/retry`,
+  },
+
+  // MCP client tokens. The management routes are ordinary REST authenticated
+  // with the session — which is what stops a leaked MCP token minting its own
+  // replacement. SERVER is the address a client is configured with, not
+  // something this app calls.
+  MCP: {
+    TOKENS: "/mcp/tokens",
+    TOKEN: (tokenId: string) => `/mcp/tokens/${tokenId}`,
+    SERVER: (projectId: string) => `/mcp/projects/${projectId}`,
   },
 
   UPLOAD: {

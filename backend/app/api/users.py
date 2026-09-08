@@ -19,6 +19,8 @@ from app.models.cost_validation import CostValidation
 from app.models.voice_recording import VoiceRecording
 from app.models.field_submission import FieldSubmission
 from app.models.ifc import IFCComparison, IFCModelGroup, IFCModelVersion
+from app.models.ingestion import IngestedFile
+from app.models.rag_job import RagIndexJob
 from app.models.collaboration import OwnerRequest, SiteVisit
 from app.models.voice_analysis import VoiceAnalysis
 from app.models.voice_action import VoiceExecutionLog
@@ -582,6 +584,15 @@ def permanently_delete_user(
         "voice analyses": db.query(VoiceAnalysis.id).filter(VoiceAnalysis.user_id == user.id).first(),
         "voice execution logs": db.query(VoiceExecutionLog.id).filter(VoiceExecutionLog.actor_user_id == user.id).first(),
         "AI action history": db.query(AIActionVersion.id).filter(AIActionVersion.actor_user_id == user.id).first(),
+        # `ingested_files.uploaded_by_id` is RESTRICT for the same reason every
+        # other uploader column is: a file with no author is evidence nobody
+        # can account for. Note this covers package *members* too — they carry
+        # the uploader of the package they came out of.
+        "ingested files": db.query(IngestedFile.id).filter(IngestedFile.uploaded_by_id == user.id).first(),
+        # `rag_index_jobs.requested_by_id` is RESTRICT for the same reason every
+        # other actor column is: a re-index run with no requester is a record
+        # nobody can account for.
+        "RAG re-index runs": db.query(RagIndexJob.id).filter(RagIndexJob.requested_by_id == user.id).first(),
     }
     active_blockers = [label for label, found in blockers.items() if found]
     if active_blockers:

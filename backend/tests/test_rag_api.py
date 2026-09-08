@@ -38,6 +38,7 @@ from app.models.task import Task
 from app.models.user import User, EngineerProfile
 from app.services.rag import ingestion
 from app.services.rag.answering import NOT_FOUND_MESSAGE, NOT_FOUND_TOKEN
+from tests.embedding_stub import STUB_MODEL, StubEmbeddingClient
 from tests.pdf_fixture import build_pdf
 
 pytest.importorskip("pypdf", reason="pypdf is required for the RAG pipeline")
@@ -52,26 +53,10 @@ PAGE_THREE = "Every worker on site shall wear a safety helmet at all times."
 # --- stubs ------------------------------------------------------------------
 
 
-class _StubEmbeddingClient:
-    VOCAB = [
-        "retention", "payment", "concrete", "curing", "safety", "helmet",
-        "penalty", "delay", "warranty", "defect",
-    ]
-
-    def __init__(self):
-        self.embeddings = self
-
-    def create(self, model, input):  # noqa: A002
-        data = []
-        for index, item in enumerate(input):
-            lowered = item.lower()
-            data.append(
-                type("Item", (), {
-                    "index": index,
-                    "embedding": [float(lowered.count(w)) for w in self.VOCAB] + [1.0],
-                })()
-            )
-        return type("Response", (), {"data": data, "usage": type("U", (), {"prompt_tokens": 10})()})()
+# The embedding stub lives in `tests/embedding_stub.py`. It has to produce
+# vectors the width of the `embedding` column — `vector(N)` rejects anything
+# else — and one shared definition is one place to keep that agreement.
+_StubEmbeddingClient = StubEmbeddingClient
 
 
 class _FailingEmbeddingClient:
@@ -109,7 +94,7 @@ def stub_openai(monkeypatch):
     original_embedding_init = embeddings_module.EmbeddingService.__init__
 
     def embedding_init(self, client=None, model=None):
-        original_embedding_init(self, client=client or _StubEmbeddingClient(), model=model or "stub")
+        original_embedding_init(self, client=client or _StubEmbeddingClient(), model=model or STUB_MODEL)
 
     original_answer_init = answering_module.AnswerService.__init__
 
@@ -309,9 +294,14 @@ def _index(client, headers, document_id, **params):
 
 
 def test_every_rag_route_refuses_an_anonymous_caller(client, world):
+    # Every route on the router, including the two that index files from the
+    # unified ingestion pipeline. A new RAG route reaching production without
+    # authentication is the failure this enumerates against.
     for method, path, body in (
         ("post", f"/api/v1/rag/documents/{world['doc_a'].id}/index", None),
         ("get", f"/api/v1/rag/documents/{world['doc_a'].id}/status", None),
+        ("post", f"/api/v1/rag/files/{uuid.uuid4()}/index", None),
+        ("get", f"/api/v1/rag/files/{uuid.uuid4()}/status", None),
         ("post", "/api/v1/rag/query", {"projectId": str(world["project_a"].id), "query": "hello"}),
     ):
         response = getattr(client, method)(path, json=body) if body else getattr(client, method)(path)

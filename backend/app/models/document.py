@@ -53,6 +53,14 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     #: Set only on success, cleared when a re-index begins.
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When the current run claimed this row. `indexed_at` is set only on
+    #: success and `updated_at` moves for any edit, so neither can answer "has
+    #: this been INDEXING for an hour" — which is the question the stale-job
+    #: reaper asks. Set by `_claim`, cleared when the run settles.
+    #: See `services/rag/maintenance.py`.
+    index_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     #: Why the last attempt failed, in words a user can act on. NULL when READY.
     index_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)

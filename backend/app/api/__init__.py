@@ -33,6 +33,9 @@ from app.api.rag import router as rag_router
 from app.api.knowledge import router as knowledge_router
 from app.api.agents import router as agents_router
 from app.api.events import router as events_router
+from app.api.ingestion import router as ingestion_router
+from app.api.mcp import router as mcp_router
+from app.api.mcp_tokens import router as mcp_tokens_router
 
 api_router = APIRouter()
 
@@ -83,3 +86,15 @@ api_router.include_router(agents_router)
 # Server-Sent Events. Keeps an open application synchronized; distinct from
 # push, which reaches a user who is not looking at it.
 api_router.include_router(events_router)
+# The unified file ingestion pipeline. Project-scoped, and reusing the
+# `document.upload` / `document.view` permission codes rather than inventing a
+# second authorization vocabulary — see app/api/ingestion.py.
+api_router.include_router(ingestion_router)
+# The Model Context Protocol surface over the existing AI tool layer.
+# Gated on MCP_ENABLED, project-scoped in its path, and adding no
+# authorization decision of its own — see app/api/mcp.py.
+api_router.include_router(mcp_router)
+# Credentials for that surface. Separate router because these are not MCP —
+# they are ordinary REST, authenticated with a session token, which is what
+# stops a leaked MCP token from minting its replacement. See app/api/mcp_tokens.py.
+api_router.include_router(mcp_tokens_router)

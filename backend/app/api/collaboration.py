@@ -458,7 +458,8 @@ def run_reminders(project_id: uuid.UUID, db: Session = Depends(get_db), current_
 
 
 @router.get("/reminders/scheduler-status")
-def reminder_scheduler_status(current_user: User = Depends(get_current_user)):
+def reminder_scheduler_status(db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)):
     # Reminder scheduling is project configuration, so inspecting the sweep
     # follows the permission that configures it rather than two enum values.
     require(db, current_user, "project.manage_reminders")

@@ -13,6 +13,7 @@ from app.core.deps import (
     user_has_project_access,
 )
 from app.services import work_scope
+from app.services.authorization import has_permission
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.design_change import DesignChange
@@ -60,10 +61,8 @@ def _entity_or_404(
         #     is submitted;
         #   * review attachments belong to the person reviewing.
         from app.services.consultant_approval_service import can_consultant_review_task
-        from app.services.authorization import has_permission as _holds
-
         is_assignee = any(assignee.id == current_user.id for assignee in related_task.assignees)
-        reviews_it = _holds(db, current_user, "task.review", project_id) and (
+        reviews_it = has_permission(db, current_user, "task.review", project_id) and (
             can_consultant_review_task(db, current_user, related_task)
         )
         if not is_assignee and not reviews_it:

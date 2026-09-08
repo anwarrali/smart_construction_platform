@@ -238,9 +238,29 @@ def test_a_second_worker_skips_the_sweep_while_the_lock_is_held():
 
 
 def test_scheduler_status_reports_its_configuration():
+    """The exact key set, so adding one is a conscious act rather than drift.
+
+    `ragReaper` joined it when the RAG stale-index sweep was added to this same
+    loop — one loop, two cadences, two advisory locks. See
+    `services/rag/maintenance.py`.
+    """
     state = scheduler.status()
-    assert set(state) == {"enabled", "intervalSeconds", "running", "lastRun"}
+    assert set(state) == {"enabled", "intervalSeconds", "running", "lastRun", "ragReaper"}
     assert state["intervalSeconds"] >= 1
+
+    reaper = state["ragReaper"]
+    assert set(reaper) == {"enabled", "intervalMinutes", "staleAfterMinutes", "lastRun"}
+    assert reaper["intervalMinutes"] >= 1
+    # The stale threshold must comfortably exceed a legitimate index, or the
+    # reaper starts seizing live runs — which is worse than leaving a stranded
+    # one a while longer.
+    assert reaper["staleAfterMinutes"] >= 5
+
+
+def test_the_reaper_holds_a_different_lock_from_the_reminder_sweep():
+    """Sharing a lock would let a slow reminder sweep on one worker stop the
+    reaper running on another."""
+    assert scheduler.RAG_REAPER_LOCK_KEY != scheduler.REMINDER_LOCK_KEY
 
 
 def test_evaluate_all_projects_skips_completed_and_cancelled_projects(db, scenario):

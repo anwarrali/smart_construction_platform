@@ -95,7 +95,23 @@ def test_the_migration_chain_has_exactly_one_head():
     # `issue.view`, `design_change.view` and `client_portal.view` onto the roles
     # that already reach those pages, so naming the navigation decision changes
     # nobody's access.
-    assert heads == ["f59d2c8e4a13"], f"expected exactly one head, found: {heads}"
+    # Bumped by `aa41c7d2e908`, the unified file ingestion foundation: two new
+    # tables (`ingested_files`, `ingestion_jobs`) and no change to any existing
+    # one, so the chain lengthens and nothing else about the schema moves.
+    # Bumped by `b52e9a1c4d70`, which puts the RAG indexing lifecycle on
+    # `ingested_files` and gives `document_chunks` a second, mutually exclusive
+    # source. Every existing chunk keeps its `document_id` untouched.
+    # Bumped by `c63fa2b5e819`, which moves `document_chunks.embedding` from
+    # JSONB to a pgvector `vector(1536)` with an HNSW cosine index. Needs the
+    # `vector` extension, which is why the compose database image changed.
+    # Bumped by `d74ab3c6f92a`, which adds `rag_index_jobs` and the
+    # `index_started_at` timestamp the stale-index reaper needs. Additive: no
+    # existing column is altered.
+    # Bumped by `e71d5a3c9b42`, which adds `mcp_client_tokens` — long-lived,
+    # project-scoped credentials for desktop MCP clients. A row rather than a
+    # long-lived JWT precisely so that revoking one is an UPDATE that takes
+    # effect on the next request. Additive.
+    assert heads == ["e71d5a3c9b42"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.
@@ -180,6 +196,13 @@ def test_no_foreign_key_referencing_users_cascades_over_audit_or_work_records(db
         ("otp_challenges", "user_id"),
         ("step_up_grants", "user_id"),
         ("password_reset_tokens", "user_id"),
+        # An MCP client token is the same category again, and the argument is
+        # sharper here than for a reset token: it is a *live* credential that
+        # authenticates as its owner. A surviving row would be a bearer token
+        # for a deleted account, which is the one outcome this table exists to
+        # make impossible. Nothing it holds is a record of work — every call it
+        # made is already in the audit trail under the actor's own id.
+        ("mcp_client_tokens", "user_id"),
         # A push registration is one of "their own tokens" in the sense this
         # docstring means: it is a delivery address for a session, not a record
         # of work. It *must* cascade — a surviving row would keep pushing

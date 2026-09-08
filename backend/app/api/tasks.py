@@ -226,8 +226,14 @@ def _validate_task_assignees(
             if not project or project.project_manager_id != assignee_id:
                 raise HTTPException(status_code=400, detail="Only this project's assigned Project Manager is eligible")
         if assignee.role == UserRole.ENGINEER:
-            if not has_permission(db, assignee, "task.update_progress", task.project_id):
-                raise HTTPException(status_code=400, detail="Execution tasks may only be assigned to Main Contractor Engineers")
+            # `project_id` is the parameter this function receives; `task` was a
+            # name that never existed here, so this raised NameError for any
+            # assignee whose legacy role is ENGINEER rather than refusing them.
+            if not has_permission(db, assignee, "task.update_progress", project_id):
+                raise HTTPException(
+                    status_code=400,
+                    detail="This person cannot be assigned execution work on this project",
+                )
             profile_discipline = _normalized_discipline(
                 assignee.engineer_profile.discipline.value if assignee.engineer_profile else None
             )

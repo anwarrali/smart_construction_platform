@@ -1,4 +1,4 @@
-"""Who may read which document.
+"""Who may read which document, and which ingested file.
 
 One implementation, several callers: the documents API, RAG retrieval, and the
 AI tool layer all narrow through here. That matters most for retrieval, because
@@ -31,6 +31,19 @@ the client portal already had: official project files, plus evidence of work
 that has been completed and approved. Sharing can add to that; nothing takes it
 away.
 
+## Ingested files
+
+`readable_ingested_file_ids` lives in this module rather than beside the
+ingestion pipeline, and that is deliberate: the two rules must be readable side
+by side or they will drift, and the one that drifts is the one nobody audits.
+
+An `IngestedFile` has no party-share table and no task, so the four layers
+above cannot be applied mechanically. Each is *derived* instead, and the
+derivation is written out in `readable_ingested_files_query`. The property that
+matters is that no layer comes out weaker than its document equivalent — a
+contractor who may read three shared documents must not thereby be able to read
+every file on the project.
+
 ## Migration note
 
 Contractor-side engineers used to read every document on their projects, and
@@ -51,6 +64,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import user_has_project_access
 from app.models.document import Document
 from app.models.enums import DocumentType, TaskStatus
+from app.models.ingestion import IngestedFile
 from app.models.rbac import DocumentPartyShare
 from app.models.task import Task
 from app.models.user import User
@@ -230,3 +244,112 @@ def assert_document_readable(db: Session, current_user: User, document: Document
             detail="This document has not been shared with your organization",
         )
     raise HTTPException(status_code=403, detail="This document is outside your discipline")
+
+
+# --- Ingested files ---------------------------------------------------------
+#
+# The unified ingestion pipeline's files, under the *same* four-layer rule as
+# documents, derived rather than copied. See the module docstring.
+
+
+def readable_ingested_files_query(db: Session, current_user: User, project_id: uuid.UUID):
+    """An `IngestedFile` query narrowed to what this user may read here.
+
+    Layer by layer, with the derivation stated because the reasoning is the
+    whole safety argument:
+
+    **Party scope.** `party_document_scope` grants what was explicitly shared
+    with the party, plus the person's own uploads. There is no share table for
+    ingested files, so the shared set is empty and the rule reduces to *own
+    uploads only*. That is deny-by-default, exactly as intended — not an
+    oversight to be fixed by widening it. When file sharing is built, it plugs
+    in here as another `or_` arm.
+
+    **Client scope.** `client_document_scope` grants official project files
+    (contracts, permits), evidence of approved completed work, and shares. An
+    ingested file has no `document_type` and no task, so none of the first two
+    can be evaluated for it and no share exists. Reduces to own uploads only.
+
+    **On the project with no party, not office staff.** Identical to the
+    document rule: their own uploads.
+
+    **`project.view_all_disciplines`.** Identical: everything in the project.
+
+    **Discipline scope.** `discipline_document_scope` grants documents with no
+    task (project-level) plus those on tasks in the person's disciplines. Every
+    ingested file has no task — it is project-level by construction — so this
+    grants all of them. Not a widening: it is what the same predicate already
+    says about a document with no task.
+
+    Assumes project access has been checked, matching
+    `readable_documents_query`.
+    """
+    query = db.query(IngestedFile).filter(IngestedFile.project_id == project_id)
+
+    context = rbac.membership_context(db, current_user.id, project_id)
+    if context.is_external:
+        # Both party kinds reduce to the same thing today. Kept as one branch
+        # rather than two identical ones so that adding file sharing later has
+        # one place to change, not two that must be changed together.
+        return query.filter(IngestedFile.uploaded_by_id == current_user.id)
+
+    if not current_user.is_internal:
+        return query.filter(IngestedFile.uploaded_by_id == current_user.id)
+
+    # Office staff, with or without `project.view_all_disciplines`: an ingested
+    # file is project-level, which both branches of the document rule grant.
+    return query
+
+
+def readable_ingested_file_ids(
+    db: Session, current_user: User, project_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Ids of the ingested files this user may read in this project.
+
+    Returns `[]` — meaning *zero readable files* — rather than raising, when
+    the caller has no project access or lacks `document.view`. Both checks are
+    here and not left to the caller: a retrieval path that forgot one would
+    widen silently, and this is the function every such path goes through.
+
+    An empty list is never interpreted as "all" anywhere downstream; see
+    `VectorStore.search`.
+    """
+    if not user_has_project_access(db, current_user, project_id):
+        return []
+    # The same code the unified file endpoints check before showing a file
+    # list. Reading a file's text through retrieval is a read of that file.
+    if not has_permission(db, current_user, "document.view", project_id):
+        return []
+    return [
+        row[0] for row in
+        readable_ingested_files_query(db, current_user, project_id)
+        .with_entities(IngestedFile.id).all()
+    ]
+
+
+def assert_ingested_file_readable(
+    db: Session, current_user: User, file: IngestedFile
+) -> None:
+    """Raise unless this user may read this specific ingested file.
+
+    Reuses the query above rather than re-deriving the rules, for the same
+    reason `assert_document_readable` does: if the single-file check and the
+    retrieval filter ever disagreed, the retrieval path is the one nobody
+    would think to audit.
+    """
+    if not user_has_project_access(db, current_user, file.project_id):
+        raise HTTPException(status_code=404, detail="File not found")
+    if not has_permission(db, current_user, "document.view", file.project_id):
+        raise HTTPException(
+            status_code=403, detail="You cannot open this project's files"
+        )
+    permitted = (
+        readable_ingested_files_query(db, current_user, file.project_id)
+        .filter(IngestedFile.id == file.id)
+        .first()
+    )
+    if permitted is None:
+        raise HTTPException(
+            status_code=403,
+            detail="This file has not been shared with you",
+        )

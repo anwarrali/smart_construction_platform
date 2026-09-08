@@ -132,3 +132,27 @@ and inventing one would be indistinguishable from having actually looked.
 - Classification samples two pages. A document that only announces itself on
   page 40 is classified from its filename instead.
 - Nothing is re-classified retroactively. Only new uploads carry it.
+
+---
+
+## Where this is used now
+
+The unified file ingestion pipeline builds on this module rather than
+duplicating it: `services/ingestion/categories.py` calls `identify_format` for
+the format and `classify_document` for the document kind, then adds the
+normalized `FileCategory` the pipeline dispatches on. See
+[FILE_INGESTION.md](FILE_INGESTION.md).
+
+Two `REGISTRY` entries changed when that pipeline gave them real readers, and
+both are narrower than they sound:
+
+* **DOCX** is now `text_extractable`. Body text is read from
+  `word/document.xml` with the standard library. Headers, footers, footnotes,
+  tracked changes and table structure are still not read, and the text is not
+  indexed for retrieval.
+* **XLSX** now names a destination. Sheet names are read from
+  `xl/workbook.xml`. Cell values are not, so a BOQ is identified rather than
+  parsed.
+
+`ZIP_CONTAINER` left `AUXILIARY_FORMATS` for the same reason: a design package
+now has an extraction path — one registered file per member.

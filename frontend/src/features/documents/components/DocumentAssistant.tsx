@@ -265,7 +265,7 @@ export const DocumentAssistant = ({ document, isOpen, onClose }: DocumentAssista
                 </p>
                 {result.citations.map((citation, index) => (
                   <button
-                    key={`${citation.documentId}-${citation.page}-${index}`}
+                    key={`${citation.documentId ?? citation.ingestedFileId}-${citation.page}-${index}`}
                     type="button"
                     onClick={() => openCitation(citation.page)}
                     className="block w-full rounded-lg border p-2 text-start text-xs hover:bg-muted/50"

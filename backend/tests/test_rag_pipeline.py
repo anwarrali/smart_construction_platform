@@ -15,7 +15,6 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-import numpy as np
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -38,8 +37,9 @@ from app.services.rag.pdf_text import (
 from app.services.rag.retrieval import RetrievedChunk, retrieve
 from tests.pdf_fixture import build_pdf
 from app.services.rag.store import (
-    JsonbVectorStore, PreparedChunk, ScoredChunk, cosine_similarity,
+    ChunkSource, PgVectorStore, PreparedChunk, ScoredChunk, VectorDimensionMismatch,
 )
+from tests.embedding_stub import StubEmbeddingClient
 
 pytest.importorskip("pypdf", reason="pypdf is required for the RAG pipeline")
 
@@ -47,51 +47,11 @@ pytest.importorskip("pypdf", reason="pypdf is required for the RAG pipeline")
 # --- stubs ------------------------------------------------------------------
 
 
-class _StubEmbeddingClient:
-    """Deterministic embeddings, no network.
-
-    Vectors are derived from word overlap against a fixed vocabulary, so a
-    question about "retention" genuinely scores higher against the passage
-    that mentions retention. That makes the retrieval tests meaningful rather
-    than tautological.
-    """
-
-    VOCAB = [
-        "retention", "payment", "concrete", "curing", "safety", "helmet",
-        "penalty", "delay", "warranty", "defect", "insurance", "scaffold",
-    ]
-
-    def __init__(self):
-        self.embeddings = self
-        self.calls = 0
-
-    def create(self, model, input):  # noqa: A002 - the OpenAI kwarg is named `input`
-        self.calls += 1
-        data = []
-        for index, item in enumerate(input):
-            lowered = item.lower()
-            vector = [float(lowered.count(word)) for word in self.VOCAB]
-            # A non-zero tail so an item sharing no vocabulary is still a
-            # valid unit vector rather than an all-zero one.
-            vector.append(1.0)
-            data.append(_StubEmbeddingItem(index, vector))
-        return _StubEmbeddingResponse(data)
-
-
-class _StubEmbeddingItem:
-    def __init__(self, index, embedding):
-        self.index = index
-        self.embedding = embedding
-
-
-class _StubEmbeddingResponse:
-    def __init__(self, data):
-        self.data = data
-        self.usage = _StubUsage()
-
-
-class _StubUsage:
-    prompt_tokens = 42
+# The embedding stub lives in `tests/embedding_stub.py`: the `embedding`
+# column is `vector(N)`, so every stub has to agree with
+# `RAG_EMBEDDING_DIMENSIONS`, and three copies of that agreement was three
+# places to forget it.
+_StubEmbeddingClient = StubEmbeddingClient
 
 
 class _StubAnswerClient:
@@ -315,31 +275,11 @@ def test_embedding_nothing_calls_no_provider():
     assert result.vectors == [] and client.calls == 0
 
 
-# --- cosine similarity ------------------------------------------------------
-
-
-def test_cosine_similarity_ranks_the_closest_vector_first():
-    matrix = np.array([[1.0, 0.0], [0.0, 1.0], [0.9, 0.1]], dtype=np.float32)
-    scores = cosine_similarity(np.array([1.0, 0.0], dtype=np.float32), matrix)
-    assert int(np.argmax(scores)) == 0
-    assert scores[2] > scores[1]
-
-
-def test_cosine_similarity_of_identical_vectors_is_one():
-    vector = np.array([0.3, 0.4, 0.5], dtype=np.float32)
-    assert cosine_similarity(vector, vector.reshape(1, -1))[0] == pytest.approx(1.0, abs=1e-5)
-
-
-def test_cosine_similarity_handles_zero_vectors_without_nan():
-    """A zero row must score 0, not NaN — NaN sorts unpredictably."""
-    matrix = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32)
-    scores = cosine_similarity(np.array([1.0, 1.0], dtype=np.float32), matrix)
-    assert not np.isnan(scores).any()
-    assert scores[0] == 0.0
-
-
-def test_cosine_similarity_of_an_empty_matrix_is_empty():
-    assert cosine_similarity(np.array([1.0]), np.empty((0, 1), dtype=np.float32)).size == 0
+# The `cosine_similarity` tests stood here. The function is gone: pgvector
+# computes the distance and PostgreSQL does the ordering, so a Python
+# implementation would be dead code and a test of it would be a test of
+# nothing the application runs. `test_the_store_returns_the_most_relevant_
+# chunk_first` below covers the behaviour that mattered.
 
 
 # --- vector store -----------------------------------------------------------
@@ -402,7 +342,7 @@ def _store_chunks(db, store, document, texts, service=None):
     ]
     return store.add_chunks(
         db,
-        document_id=document.id,
+        source=ChunkSource.from_document(document.id),
         project_id=document.project_id,
         chunks=prepared,
         embedding_model=embedded.model,
@@ -411,7 +351,7 @@ def _store_chunks(db, store, document, texts, service=None):
 
 
 def test_the_store_returns_the_most_relevant_chunk_first(db, world):
-    store = JsonbVectorStore()
+    store = PgVectorStore()
     _store_chunks(db, store, world["doc_a"], [
         "Concrete curing shall continue for seven days.",
         "Retention is five per cent of each interim payment.",
@@ -421,7 +361,8 @@ def test_the_store_returns_the_most_relevant_chunk_first(db, world):
     results = store.search(
         db,
         project_id=world["project_a"].id,
-        document_ids=[world["doc_a"].id],
+        readable_document_ids=[world["doc_a"].id],
+        readable_ingested_file_ids=[],
         query_embedding=service.embed_one("what is the retention percentage"),
         k=3,
     )
@@ -432,14 +373,15 @@ def test_the_store_returns_the_most_relevant_chunk_first(db, world):
 
 def test_the_store_never_crosses_a_project_boundary(db, world):
     """The outer boundary: a valid document id in the wrong project finds nothing."""
-    store = JsonbVectorStore()
+    store = PgVectorStore()
     _store_chunks(db, store, world["doc_b"], ["Retention is ten per cent in project Beta."])
     service = _embedding_service()
 
     leaked = store.search(
         db,
-        project_id=world["project_a"].id,      # project A ...
-        document_ids=[world["doc_b"].id],      # ... but project B's document
+        project_id=world["project_a"].id,          # project A ...
+        readable_document_ids=[world["doc_b"].id],  # ... but project B's document
+        readable_ingested_file_ids=[],
         query_embedding=service.embed_one("retention"),
         k=5,
     )
@@ -448,18 +390,19 @@ def test_the_store_never_crosses_a_project_boundary(db, world):
 
 def test_an_empty_readable_set_retrieves_nothing(db, world):
     """A user permitted to read no documents must not fall through to all."""
-    store = JsonbVectorStore()
+    store = PgVectorStore()
     _store_chunks(db, store, world["doc_a"], ["Retention is five per cent."])
     service = _embedding_service()
     assert store.search(
-        db, project_id=world["project_a"].id, document_ids=[],
+        db, project_id=world["project_a"].id, readable_document_ids=[],
+        readable_ingested_file_ids=[],
         query_embedding=service.embed_one("retention"), k=5,
     ) == []
 
 
 def test_storing_again_replaces_rather_than_appends(db, world):
     """Re-indexing must not leave the previous run's text retrievable."""
-    store = JsonbVectorStore()
+    store = PgVectorStore()
     _store_chunks(db, store, world["doc_a"], ["First version of the clause."])
     _store_chunks(db, store, world["doc_a"], ["Second version.", "Another chunk."])
     db.flush()
@@ -471,28 +414,50 @@ def test_storing_again_replaces_rather_than_appends(db, world):
     assert all("First version" not in chunk.content for chunk in remaining)
 
 
-def test_vectors_from_a_superseded_model_are_skipped(db, world):
-    """Comparing across embedding spaces yields confident nonsense."""
-    store = JsonbVectorStore()
+def test_a_vector_of_the_wrong_width_cannot_be_stored_at_all(db, world):
+    """What used to be a read-time skip is now a write-time refusal.
+
+    The JSONB column accepted any length and `search` skipped rows whose width
+    differed from the query's, because comparing across two embedding spaces
+    produces confident nonsense. `vector(1536)` makes those rows
+    unrepresentable, which is strictly stronger: the bad state cannot be
+    reached rather than being tolerated and filtered.
+    """
+    store = PgVectorStore()
+    with pytest.raises(VectorDimensionMismatch) as refusal:
+        store.add_chunks(
+            db,
+            source=ChunkSource.from_document(world["doc_a"].id),
+            project_id=world["project_a"].id,
+            chunks=[PreparedChunk(page_number=1, chunk_index=0, content="x",
+                                  token_count=1, embedding=[0.1, 0.2])],
+            embedding_model="some-other-model",
+            embedding_dim=2,
+        )
+    assert "requires a schema migration" in str(refusal.value)
+    db.rollback()
+
+
+def test_a_query_of_the_wrong_width_retrieves_nothing_rather_than_erroring(db, world):
+    """A search endpoint must not 500 because the corpus was embedded by a
+    different model. Refusing returns no answer, which is the truth."""
+    store = PgVectorStore()
     _store_chunks(db, store, world["doc_a"], ["Retention is five per cent."])
     db.flush()
-    db.query(DocumentChunk).filter(
-        DocumentChunk.document_id == world["doc_a"].id
-    ).update({DocumentChunk.embedding: [0.1, 0.2]}, synchronize_session=False)
-    db.flush()
-
-    service = _embedding_service()
     assert store.search(
-        db, project_id=world["project_a"].id, document_ids=[world["doc_a"].id],
-        query_embedding=service.embed_one("retention"), k=5,
+        db, project_id=world["project_a"].id,
+        readable_document_ids=[world["doc_a"].id], readable_ingested_file_ids=[],
+        query_embedding=[0.1, 0.2], k=5,
     ) == []
 
 
-def test_delete_document_removes_every_chunk(db, world):
-    store = JsonbVectorStore()
+def test_delete_source_removes_every_chunk(db, world):
+    store = PgVectorStore()
     _store_chunks(db, store, world["doc_a"], ["one", "two", "three"])
     db.flush()
-    assert store.delete_document(db, document_id=world["doc_a"].id) == 3
+    assert store.delete_source(
+        db, source=ChunkSource.from_document(world["doc_a"].id)
+    ) == 3
     assert ingestion.chunk_count(db, world["doc_a"].id) == 0
 
 
@@ -500,7 +465,7 @@ def test_delete_document_removes_every_chunk(db, world):
 
 
 def test_retrieval_attaches_the_document_title_for_citations(db, world):
-    store = JsonbVectorStore()
+    store = PgVectorStore()
     _store_chunks(db, store, world["doc_a"], ["Retention is five per cent of each payment."])
     db.flush()
 
@@ -508,17 +473,20 @@ def test_retrieval_attaches_the_document_title_for_citations(db, world):
         db,
         project_id=world["project_a"].id,
         readable_document_ids=[world["doc_a"].id],
+        readable_ingested_file_ids=[],
         query="retention percentage",
         embedding_service=_embedding_service(),
         store=store,
     )
-    assert results and results[0].document_title == "Alpha Contract"
+    assert results and results[0].source_title == "Alpha Contract"
+    assert results[0].source_type == "DOCUMENT"
 
 
 def test_retrieval_with_no_readable_documents_returns_nothing(db, world):
     assert retrieve(
         db, project_id=world["project_a"].id, readable_document_ids=[],
-        query="anything", embedding_service=_embedding_service(), store=JsonbVectorStore(),
+        readable_ingested_file_ids=[],
+        query="anything", embedding_service=_embedding_service(), store=PgVectorStore(),
     ) == []
 
 
@@ -528,10 +496,10 @@ def test_retrieval_with_no_readable_documents_returns_nothing(db, world):
 def _retrieved(document_id, title="Alpha Contract", page=14, content="Retention is 5%."):
     return RetrievedChunk(
         chunk=ScoredChunk(
-            chunk_id=uuid.uuid4(), document_id=document_id, page_number=page,
-            chunk_index=0, content=content, score=0.9,
+            chunk_id=uuid.uuid4(), source=ChunkSource.from_document(document_id),
+            page_number=page, chunk_index=0, content=content, score=0.9,
         ),
-        document_title=title,
+        source_title=title,
     )
 
 

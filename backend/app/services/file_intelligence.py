@@ -44,6 +44,10 @@ FORMAT_SIGNATURES: dict[str, tuple[tuple[int, bytes], ...]] = {
     "MP4_CONTAINER": ((4, b"ftyp"),),
     "WEBM": ((0, b"\x1a\x45\xdf\xa3"),),
     "DWG": ((0, b"AC10"),),
+    # Binary DXF announces itself. An *ASCII* DXF has no signature at all —
+    # it is a text file — and is identified as TEXT, which is why
+    # `file_storage.EXTENSION_FORMATS` accepts both for a `.dxf`.
+    "DXF": ((0, b"AutoCAD Binary DXF"),),
 }
 
 #: Extensions whose real format cannot be told apart by magic bytes alone.
@@ -147,14 +151,41 @@ REGISTRY: dict[str, FormatCapability] = {
         ),
     ),
     "DOCX": FormatCapability(
-        "DOCX", "Word document", text_extractable=False, indexable=False,
-        destination=None, handler=None,
-        limitation="No Word text extractor is installed; the file is stored and downloadable only.",
+        "DOCX", "Word document", text_extractable=True, indexable=False,
+        destination="ingested_files.metadata_json",
+        handler="services.ingestion.processors.office",
+        limitation=(
+            "Body text only, read from word/document.xml with the standard library. "
+            "Tables are flattened to their cell text; headers, footers, footnotes and "
+            "tracked changes are not read, and the text is not indexed for retrieval."
+        ),
     ),
     "XLSX": FormatCapability(
         "XLSX", "Excel workbook", text_extractable=False, indexable=False,
+        destination="ingested_files.metadata_json",
+        handler="services.ingestion.processors.office",
+        limitation=(
+            "Sheet names only. Cell values are not read, so a BOQ or schedule is "
+            "identified and stored, not parsed. That needs a spreadsheet library."
+        ),
+    ),
+    "DXF": FormatCapability(
+        "DXF", "AutoCAD exchange drawing", text_extractable=False, indexable=False,
         destination=None, handler=None,
-        limitation="No spreadsheet reader is installed. A BOQ or schedule is stored, not parsed.",
+        limitation=(
+            "Stored and downloadable. DXF is readable in principle — it is text — "
+            "but reading it usefully means interpreting entities and layers, which "
+            "is a drawing engine rather than a parser."
+        ),
+    ),
+    "ZIP_CONTAINER": FormatCapability(
+        "ZIP_CONTAINER", "Design package", text_extractable=False, indexable=False,
+        destination="ingested_files (one row per member)",
+        handler="services.ingestion.processors.zip_package",
+        limitation=(
+            "Members are registered and classified individually. Archives nested "
+            "deeper than INGESTION_ZIP_MAX_DEPTH are stored, not expanded."
+        ),
     ),
     "TEXT": FormatCapability(
         "TEXT", "Plain text", text_extractable=True, indexable=False,
@@ -170,8 +201,11 @@ REGISTRY: dict[str, FormatCapability] = {
 }
 
 #: Formats accepted somewhere in the platform but carrying no project content.
+#: ZIP_CONTAINER left this set when the ingestion pipeline gave it a real
+#: destination: a design package is now expanded into one registered file per
+#: member, which is exactly the "extraction path" whose absence put it here.
 AUXILIARY_FORMATS = {"WAV", "OGG", "MP3", "M4A", "MP4", "WEBM", "DOC", "XLS",
-                     "ZIP_CONTAINER", "OLE2_CONTAINER", "MP4_CONTAINER"}
+                     "OLE2_CONTAINER", "MP4_CONTAINER"}
 
 
 def capability_for(format_id: str) -> FormatCapability:
@@ -211,7 +245,7 @@ TYPE_TERMS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 #: Formats that are a document kind by their nature, whatever they are named.
-FORMAT_IMPLIES_TYPE = {"DWG": "DRAWING", "IFC": "DRAWING"}
+FORMAT_IMPLIES_TYPE = {"DWG": "DRAWING", "DXF": "DRAWING", "IFC": "DRAWING"}
 
 CONFIDENCE_BY_SOURCE = {"CONTENT": 0.9, "FILENAME": 0.7, "FORMAT": 0.8}
 

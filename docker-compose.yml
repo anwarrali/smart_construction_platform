@@ -1,6 +1,15 @@
 services:
   db:
-    image: postgres:15
+    # The stock `postgres:15` plus the pgvector extension, from pgvector's own
+    # image. Same PostgreSQL major version and the same on-disk layout, so an
+    # existing `postgres_data` volume is picked up unchanged — swapping the
+    # image is a binary swap, not a data migration.
+    #
+    # RAG stores embeddings in a `vector(1536)` column and orders by cosine
+    # distance in SQL; both need this extension. Nothing else in the platform
+    # depends on it, and the application starts normally against a database
+    # that has it even with RAG_ENABLED=false.
+    image: pgvector/pgvector:pg15
     container_name: Construction_db
     restart: always
     environment:
@@ -73,6 +82,17 @@ services:
       REALTIME_TICKET_TTL_SECONDS: ${REALTIME_TICKET_TTL_SECONDS:-60}
       REALTIME_AUTH_TTL_SECONDS: ${REALTIME_AUTH_TTL_SECONDS:-30}
       REALTIME_HEARTBEAT_SECONDS: ${REALTIME_HEARTBEAT_SECONDS:-25}
+      # The MCP tool surface. Off by default — a new externally-reachable
+      # protocol is an operator's decision, the same rule RAG_ENABLED follows.
+      # The throttle below is per credential and per tool call, and the token
+      # settings bound the long-lived credentials a desktop MCP client uses.
+      # See docs/MCP.md.
+      MCP_ENABLED: ${MCP_ENABLED:-false}
+      MCP_RATE_LIMIT_CALLS: ${MCP_RATE_LIMIT_CALLS:-120}
+      MCP_RATE_LIMIT_WINDOW_SECONDS: ${MCP_RATE_LIMIT_WINDOW_SECONDS:-60}
+      MCP_TOKEN_DEFAULT_LIFETIME_DAYS: ${MCP_TOKEN_DEFAULT_LIFETIME_DAYS:-30}
+      MCP_TOKEN_MAX_LIFETIME_DAYS: ${MCP_TOKEN_MAX_LIFETIME_DAYS:-90}
+      MCP_TOKENS_PER_USER_MAX: ${MCP_TOKENS_PER_USER_MAX:-10}
       PYTHONUNBUFFERED: 1
     networks:
       - app-network

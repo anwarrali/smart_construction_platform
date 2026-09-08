@@ -28,6 +28,7 @@ from app.core.deps import get_current_user, user_has_project_access
 from app.db.database import get_db
 from app.models.document import Document
 from app.models.ifc import IFCModelVersion
+from app.models.ingestion import IngestedFile
 from app.models.site_report import SiteReport
 from app.models.user import User
 from app.schemas.knowledge import (
@@ -37,7 +38,9 @@ from app.schemas.knowledge import (
 )
 from app.schemas.voice_analysis import DetectedQuery
 from app.services import rag
-from app.services.document_access import readable_document_ids
+from app.services.document_access import (
+    readable_document_ids, readable_ingested_file_ids,
+)
 from app.services.ifc_knowledge import answer_ifc_question
 from app.services.ifc_policy import can_ifc
 from app.services.knowledge_router import KnowledgeSource, SourceAvailability, route_question
@@ -150,13 +153,27 @@ def _answer_ifc(db, project_id, user, payload, routing) -> KnowledgeQueryRespons
 
 
 def _answer_documents(db, project_id, user, payload, routing) -> KnowledgeQueryResponse:
+    """Both indexed sources, each scoped by its own authorization rule.
+
+    `KnowledgeCitation` was already polymorphic — `source_type` plus
+    `source_id` — so an ingested file needed no schema change here. Leaving
+    this route documents-only would have meant the same question answered
+    through `/knowledge/query` and `/rag/query` giving two different answers.
+    """
     readable = readable_document_ids(db, user, project_id)
     allowed = [
         row[0] for row in db.query(Document.id).filter(
             Document.id.in_(readable), Document.index_status == rag.STATUS_READY,
         ).all()
     ] if readable else []
-    if not allowed:
+    readable_files = readable_ingested_file_ids(db, user, project_id)
+    allowed_files = [
+        row[0] for row in db.query(IngestedFile.id).filter(
+            IngestedFile.id.in_(readable_files),
+            IngestedFile.index_status == rag.STATUS_READY,
+        ).all()
+    ] if readable_files else []
+    if not allowed and not allowed_files:
         return _response(
             routing, found=False,
             answer="No indexed documents are available to you in this project.",
@@ -164,6 +181,7 @@ def _answer_documents(db, project_id, user, payload, routing) -> KnowledgeQueryR
     try:
         retrieved = rag.retrieve(
             db, project_id=project_id, readable_document_ids=allowed,
+            readable_ingested_file_ids=allowed_files,
             query=payload.query, embedding_service=EmbeddingService(),
         )
         answer = AnswerService().answer(payload.query, retrieved)
@@ -172,7 +190,8 @@ def _answer_documents(db, project_id, user, payload, routing) -> KnowledgeQueryR
     return _response(
         routing, answer=answer.answer, found=answer.found,
         citations=[KnowledgeCitation(
-            source_type="DOCUMENT", source_id=str(citation.document_id),
+            source_type=citation.source_type,
+            source_id=str(citation.document_id or citation.ingested_file_id),
             title=citation.title, snippet=citation.snippet, page=citation.page,
         ) for citation in answer.citations],
     )

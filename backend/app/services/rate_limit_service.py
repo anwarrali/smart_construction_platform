@@ -54,6 +54,36 @@ def seconds_since_last(db: Session, *, scope: str, key: str,
     return (now - stamp).total_seconds()
 
 
+def seconds_until_slot_frees(db: Session, *, scope: str, key: str,
+                            window_seconds: int, limit: int,
+                            now: datetime | None = None) -> float:
+    """How long until this key is under `limit` again, in seconds.
+
+    A sliding window frees a slot when its *oldest* counted hit leaves the
+    window, so the answer is the age of the `limit`-th most recent hit
+    subtracted from the window — not the age of the newest, which is what
+    `seconds_since_last` reports and would tell a throttled caller to retry
+    immediately.
+
+    Returns 0.0 when nothing is blocking. Used for `Retry-After`, so a client
+    is told when to come back instead of being left to guess.
+    """
+    now = now or datetime.now(timezone.utc)
+    if limit <= 0:
+        return float(window_seconds)
+    row = db.query(RateLimitHit.created_at).filter(
+        RateLimitHit.scope == scope,
+        RateLimitHit.key == key,
+        RateLimitHit.created_at >= _cutoff(window_seconds, now),
+    ).order_by(RateLimitHit.created_at.desc()).offset(limit - 1).limit(1).first()
+    if row is None:
+        return 0.0
+    stamp = row[0]
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return max(0.0, window_seconds - (now - stamp).total_seconds())
+
+
 def record_hit(db: Session, *, scope: str, key: str, now: datetime | None = None) -> None:
     """Record one attempt. The caller owns the transaction."""
     now = now or datetime.now(timezone.utc)

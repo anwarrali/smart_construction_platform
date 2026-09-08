@@ -58,6 +58,10 @@ export const ROUTES = {
   NOTIFICATION_DETAIL: "/notifications/:id",
   USERS: "/users",
   SETTINGS: "/settings",
+  // Connected AI clients — the credentials an MCP client authenticates with.
+  // Under /settings because a token belongs to a person rather than to a
+  // project, even though each one is bound to a single project.
+  MCP_CLIENTS: "/settings/mcp-clients",
   OWNER_DASHBOARD: "/owner-dashboard",
   EXECUTIVE_OVERVIEW: "/executive-overview",
   ADMIN_DASHBOARD: "/admin",

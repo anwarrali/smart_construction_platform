@@ -11,6 +11,37 @@ export interface IFCGeoreferencing {
   latitude?: number; longitude?: number; easting?: number; northing?: number; elevation?: number;
   orthogonalHeight?: number; mapConversion?: Record<string, unknown>; source?: IFCDataSource;
 }
+/**
+ * Why the interference rule declined to run.
+ *
+ * Exactly the values `app/services/ifc_interference.py` and
+ * `run_interference_analysis` can store. Each one means the model was *not*
+ * checked, which is a different answer from "checked and clean" — the reason
+ * the report carries them at all.
+ */
+export type IFCAnalysisSkipReason =
+  | "UNKNOWN_LENGTH_UNIT"
+  | "NO_ELEMENT_GEOMETRY_AVAILABLE"
+  | "NO_STRUCTURAL_AND_SERVICE_PAIR_AVAILABLE"
+  | "DISABLED_OR_MISSING_VERSION";
+
+/** What the interference rule reports about its own run. */
+export interface IFCInterferenceReport {
+  method?: string;
+  /** False when the rule declined to run; `skippedReason` then says why. */
+  analysed?: boolean;
+  skippedReason?: IFCAnalysisSkipReason | string | null;
+  structuralElements?: number;
+  serviceElements?: number;
+  elementsWithoutGeometry?: number;
+  comparisons?: number;
+  lengthUnit?: string | null;
+  truncated?: boolean;
+  findingCount?: number;
+  stored?: number;
+  reviewedPairsPreserved?: number;
+}
+
 export interface IFCSummary {
   schema?: string; sites?: number; buildings?: number; storeys?: number; spaces?: number; zones?: number; elements?: number;
   projectOverview?: Record<string, unknown> & { sources?: Record<string, IFCDataSource> };
@@ -21,6 +52,8 @@ export interface IFCSummary {
   processingStages?: Array<{ key: string; label: string; percentage: number }>;
   assetType?: { value?: string; confidence?: number; evidence?: string[] };
   spaceCategories?: Record<string, number>;
+  /** Absent when interference analysis was never recorded for this revision. */
+  interference?: IFCInterferenceReport;
   intelligenceSummary?: { text?: string; strengths?: string[]; missingInformation?: string[]; coordinationRisks?: string[]; recommendedNextSteps?: string[]; source?: string; reviewNotice?: string };
 }
 
@@ -99,6 +132,39 @@ export interface IFCFinding {
     penetrationMetres?: number; overlapBox?: { min: number[]; max: number[] };
   };
 }
+
+/**
+ * One page of a paged IFC collection.
+ *
+ * Mirrors the `IFCPaged` schema the backend already returns from
+ * `/versions/{id}/elements` and `/versions/{id}/search`, which is this
+ * project's pagination shape.
+ */
+export interface IFCPage<T> { items: T[]; total: number; page: number; pageSize: number }
+
+/**
+ * The review decisions `PATCH /projects/{id}/ifc/findings/{id}` accepts.
+ *
+ * Exactly the set `review_finding` in `app/api/ifc.py` allows; anything else
+ * is rejected with 400. `ISSUE_CREATED` is deliberately absent — the server
+ * sets that itself when a finding becomes an issue, and it is not a decision
+ * a client may post.
+ */
+export type IFCFindingReviewStatus = "ACKNOWLEDGED" | "IGNORED" | "FALSE_POSITIVE";
+
+/**
+ * What a review call gives back.
+ *
+ * The three review routes return the ORM row directly — they declare no
+ * `response_model` — so the payload is snake_case and not the camelCase shape
+ * `GET /findings` assembles. Only the field the UI reads is declared, and it
+ * is optional: the caller already knows which status it asked for and treats
+ * this as confirmation rather than as the source of truth.
+ */
+export interface IFCFindingReviewResult { status?: string }
+
+/** The issue `POST /findings/{id}/create-issue` opens, as that route returns it. */
+export interface IFCFindingIssue { id: string; title: string; status: string }
 
 export interface IFCSuggestion {
   id: string; versionId: string; suggestionType: string; payloadJson: Record<string, unknown>;

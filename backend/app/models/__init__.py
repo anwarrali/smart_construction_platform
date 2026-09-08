@@ -71,7 +71,11 @@ from app.models.issue import Issue
 # Documents + media
 from app.models.document import Document, MediaAsset
 from app.models.document_chunk import DocumentChunk
+from app.models.rag_job import RagIndexJob
 from app.models.attachment import Attachment
+# The unified ingestion pipeline. Beside Document/Attachment/IFCModelVersion
+# rather than replacing any of them — see app/models/ingestion.py.
+from app.models.ingestion import IngestedFile, IngestionJob
 from app.models.field_submission import (
     FieldSubmission,
     FieldSubmissionPhoto,
@@ -92,6 +96,7 @@ from app.models.device_token import DeviceToken
 from app.models.audit_log import AuditLog
 from app.models.revoked_token import RevokedToken
 from app.models.rate_limit import RateLimitHit
+from app.models.mcp_token import McpClientToken
 from app.models.step_up import OtpChallenge, StepUpGrant
 from app.models.ifc import (
     IFCModelGroup,

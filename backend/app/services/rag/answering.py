@@ -29,6 +29,7 @@ from typing import Any, Sequence
 
 from app.core.config import settings
 from app.services.rag.retrieval import RetrievedChunk
+from app.services.rag.store import ChunkSource
 
 logger = logging.getLogger("uvicorn.error").getChild("rag.answering")
 
@@ -40,7 +41,7 @@ NOT_FOUND_MESSAGE = (
     "That information was not found in the indexed documents."
 )
 
-SYSTEM_PROMPT = """You answer questions about construction project documents.
+SYSTEM_PROMPT = """You answer questions about construction project documents and files.
 
 Rules, in order of importance:
 
@@ -60,10 +61,31 @@ Rules, in order of importance:
 
 @dataclass(frozen=True)
 class Citation:
-    document_id: uuid.UUID
+    """What a passage came from, precise enough to open and check.
+
+    The source is a `ChunkSource`, so a citation that names nothing — or that
+    names both a document and a file — cannot be built. `document_id` and
+    `ingested_file_id` stay readable as properties, so every existing consumer
+    keeps working and a Document citation is byte-for-byte what it was.
+    """
+
+    source: ChunkSource
     title: str
     page: int
     snippet: str
+
+    @property
+    def document_id(self) -> uuid.UUID | None:
+        return self.source.document_id
+
+    @property
+    def ingested_file_id(self) -> uuid.UUID | None:
+        return self.source.ingested_file_id
+
+    @property
+    def source_type(self) -> str:
+        """"DOCUMENT" or "INGESTED_FILE"."""
+        return self.source.kind
 
 
 @dataclass(frozen=True)
@@ -81,13 +103,17 @@ class AnswerError(Exception):
 def build_context(chunks: Sequence[RetrievedChunk]) -> str:
     """The numbered passages the model may use, and nothing else.
 
-    Each block names its document and page so the model can cite precisely,
-    and so a human reading the prompt in a log can verify the answer's basis.
+    Each block names its source and page so the model can cite precisely, and
+    so a human reading the prompt in a log can verify the answer's basis.
+
+    "Source" rather than "Document": half of these may be ingested files now,
+    and a prompt that mislabels a spreadsheet as a document invites the model
+    to repeat that mistake in its answer.
     """
     blocks = []
     for position, item in enumerate(chunks, start=1):
         blocks.append(
-            f"[{position}] Document: {item.document_title} — page {item.chunk.page_number}\n"
+            f"[{position}] Source: {item.source_title} — page {item.chunk.page_number}\n"
             f"{item.chunk.content}"
         )
     return "\n\n".join(blocks)
@@ -109,8 +135,8 @@ def _citations_from(chunks: Sequence[RetrievedChunk]) -> list[Citation]:
     """
     return [
         Citation(
-            document_id=item.chunk.document_id,
-            title=item.document_title,
+            source=item.chunk.source,
+            title=item.source_title,
             page=item.chunk.page_number,
             snippet=_snippet(item.chunk.content),
         )

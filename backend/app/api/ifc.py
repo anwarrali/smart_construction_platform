@@ -1,13 +1,13 @@
 """Project-scoped IFC intelligence, versioning, linking and review APIs."""
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, datetime, timezone
 from collections import Counter
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -36,6 +36,7 @@ from app.schemas.ifc import (
     IFCBulkReview, IFCModelCreate, IFCModelOut, IFCModelUpdate, IFCPaged, IFCReviewRequest,
     IFCSpatialNodeOut, IFCVersionOut, IFCVersionPatch,
 )
+from app.api.downloads import attachment_headers, stored_file_response
 from app.services.audit_service import record_audit
 from app.services.file_storage import save_private_upload
 from app.services.private_storage import private_storage
@@ -44,8 +45,18 @@ from app.services.ifc_policy import can_ifc, friendly_ifc_error
 from app.services.ifc_processing_service import INTERFERENCE_FINDING_TYPE, compare_versions, process_version, run_interference_analysis
 from app.services.ifc_geometry_service import generate_geometry
 from app.services.authorization import require
+from app.services.ingestion import ifc_bridge
+# The bounded processing pool moved to `app.services.processing_pool` when the
+# unified ingestion pipeline needed the same ceiling. Imported rather than
+# re-created, because two pools would silently double the memory bound the one
+# exists to enforce; re-exported under the names this module has always used,
+# so callers and tests are unaffected. The full reasoning is in that module.
+from app.services.processing_pool import processing_pool, reset_processing_pool
+from app.services.processing_pool import submit as _submit
 
 router = APIRouter(prefix="/projects/{project_id}/ifc", tags=["IFC Intelligence"])
+
+logger = logging.getLogger(__name__)
 
 
 def _require(db: Session, user: User, project_id: uuid.UUID, permission: str) -> None:
@@ -66,9 +77,7 @@ def _version(db: Session, project_id: uuid.UUID, version_id: uuid.UUID) -> IFCMo
         raise HTTPException(status_code=404, detail="IFC version not found")
     return item
 
-#test 
-
-def _background_process(version_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+def _process_job(version_id: uuid.UUID, actor_id: uuid.UUID) -> None:
     db = SessionLocal()
     try:
         process_version(db, version_id, actor_id)
@@ -76,7 +85,7 @@ def _background_process(version_id: uuid.UUID, actor_id: uuid.UUID) -> None:
         db.close()
 
 
-def _background_geometry(version_id: uuid.UUID) -> None:
+def _geometry_job(version_id: uuid.UUID) -> None:
     db = SessionLocal()
     try:
         generate_geometry(db, version_id)
@@ -86,6 +95,24 @@ def _background_geometry(version_id: uuid.UUID) -> None:
         run_interference_analysis(db, version_id)
     finally:
         db.close()
+
+
+def _background_process(version_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+    """Queue metadata extraction. Kept as the entry point the routes name."""
+    _submit(_process_job, version_id, actor_id)
+
+
+def _background_geometry(version_id: uuid.UUID) -> None:
+    """Queue tessellation and the interference pass that depends on it."""
+    _submit(_geometry_job, version_id)
+
+
+# `Content-Disposition` composition and object streaming moved to
+# `app.api.downloads` so the unified file endpoint shares one implementation.
+# Aliased here under the names this module already used: two copies of header
+# escaping is how one of them eventually stops escaping.
+_attachment_headers = attachment_headers
+_stored_file_response = stored_file_response
 
 
 @router.get("/upload-constraints")
@@ -201,6 +228,12 @@ async def upload_version(
         parent_version_id=parent_version_id, processing_status="UPLOADED",
     )
     db.add(item); db.flush()
+    # Make the model visible to the unified file view. This writes one
+    # bookkeeping row and changes nothing about IFC processing: the version
+    # remains the authority on its own state, and the ingestion layer derives
+    # the file's status from it rather than keeping a second copy. See
+    # `services/ingestion/ifc_bridge.py` for why it cannot raise.
+    ifc_bridge.register_version(db, item)
     record_audit(db, actor_id=current_user.id, action="ifc_version_uploaded", entity_type="ifc_model_version", entity_id=item.id, project_id=project_id, details={"hash": digest, "size": size, "version": next_number})
     db.commit(); db.refresh(item)
     if settings.IFC_BACKGROUND_PROCESSING_ENABLED:
@@ -267,8 +300,9 @@ def download_version(project_id: uuid.UUID, version_id: uuid.UUID, db: Session =
     _require(db, current_user, project_id, "DOWNLOAD"); item = _version(db, project_id, version_id)
     if not private_storage.exists(item.storage_key): raise HTTPException(status_code=404, detail="Stored IFC file is unavailable")
     record_audit(db, actor_id=current_user.id, action="ifc_version_downloaded", entity_type="ifc_model_version", entity_id=item.id, project_id=project_id); db.commit()
-    with private_storage.local_path(item.storage_key) as path:
-        return FileResponse(path, filename=item.original_filename, media_type="application/x-step")
+    return _stored_file_response(
+        item.storage_key, filename=item.original_filename, media_type="application/x-step",
+    )
 
 
 @router.get("/versions/{version_id}/hierarchy", response_model=list[IFCSpatialNodeOut])
@@ -307,8 +341,10 @@ def geometry_asset(project_id: uuid.UUID, version_id: uuid.UUID, db: Session = D
         raise HTTPException(status_code=409, detail={"status": item.geometry_status, "message": item.geometry_error or "Viewer geometry is not ready."})
     if not private_storage.exists(item.geometry_storage_key):
         raise HTTPException(status_code=404, detail={"status": "VIEWER_ASSET_MISSING", "message": "The generated viewer asset is missing."})
-    with private_storage.local_path(item.geometry_storage_key) as path:
-        return FileResponse(path, filename=f"{item.id}.bimgeom", media_type="application/vnd.construction.bim-geometry")
+    return _stored_file_response(
+        item.geometry_storage_key, filename=f"{item.id}.bimgeom",
+        media_type="application/vnd.construction.bim-geometry",
+    )
 
 
 @router.get("/versions/{version_id}/geometry/mapping")
@@ -746,8 +782,13 @@ def _finding_payload(item: IFCCoordinationFinding, evidence: dict) -> dict:
     }
 
 
-@router.get("/findings")
-def list_findings(project_id: uuid.UUID, status: str | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/findings", response_model=IFCPaged)
+def list_findings(
+    project_id: uuid.UUID, version_id: uuid.UUID | None = None, status: str | None = None,
+    severity: str | None = None, discipline: str | None = None,
+    page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
     """Model-quality findings aggregated per rule; interference kept per pair.
 
     The two families need different shapes. "Materials are missing" is one
@@ -756,8 +797,29 @@ def list_findings(project_id: uuid.UUID, status: str | None = None, db: Session 
     *two specific elements*, and merging several into one card would leave a
     reviewer unable to accept one and dismiss another — which is exactly how
     this rule is meant to be corrected.
+
+    ## Why the page is cut after grouping and not in SQL
+
+    A row is not a result here. The metadata rules collapse many rows into one
+    card, so a SQL `LIMIT` would slice the rows a card is *built from* and hand
+    back half a finding. The rows are therefore still read, grouped and ordered
+    before the page is taken.
+
+    What bounds the work is `version_id`, which is the filter that actually
+    matters: findings accumulate per revision, so a project with ten revisions
+    was returning ten revisions' worth on every request — and the client then
+    discarded all but one. Narrowing to a revision leaves at most the
+    interference cap (`MAX_FINDINGS`, 500) plus one card per metadata rule,
+    which is a bounded set; paging that set is what keeps the *response* small
+    once a reviewer is looking at it.
+
+    `severity` and `discipline` are matched after grouping for the same reason:
+    a group's severity and its merged discipline list only exist once the group
+    does. They moved server-side because filtering a page in the browser would
+    filter only that page.
     """
     _require(db, current_user, project_id, "VIEW"); query = db.query(IFCCoordinationFinding).filter(IFCCoordinationFinding.project_id == project_id)
+    if version_id: query = query.filter(IFCCoordinationFinding.version_id == version_id)
     if status: query = query.filter(IFCCoordinationFinding.status == status.upper())
     rows = query.order_by(IFCCoordinationFinding.created_at.desc()).all()
     grouped: dict[tuple, dict] = {}
@@ -792,12 +854,20 @@ def list_findings(project_id: uuid.UUID, status: str | None = None, db: Session 
     for value in individual:
         value["affectedElementCount"] = len(value["affectedElementIds"])
         result.append(value)
+    if severity:
+        wanted = severity.upper()
+        result = [value for value in result if value["severity"] == wanted]
+    if discipline:
+        wanted = discipline.upper()
+        result = [value for value in result if wanted in (value.get("disciplines") or [])]
     # Worst and most certain first, then newest, so a reviewer opening the tab
-    # sees what actually needs deciding.
+    # sees what actually needs deciding. Ordering happens before the page is
+    # taken, so page 1 is the most serious findings and not an arbitrary slice.
     result.sort(key=lambda value: (
         SEVERITY_ORDER.get(value["severity"], 9), -(value.get("confidence") or 0), value["createdAt"],
     ), reverse=False)
-    return result
+    start = (page - 1) * page_size
+    return {"items": result[start:start + page_size], "total": len(result), "page": page, "pageSize": page_size}
 
 
 @router.get("/findings/{finding_id}")

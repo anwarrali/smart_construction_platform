@@ -10,6 +10,11 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 SIGNATURE_VERIFIED_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx", ".xls", ".xlsx",
     ".webp", ".wav", ".ogg", ".m4a", ".mp3", ".dwg", ".ifc",
+    # Added with the unified ingestion pipeline. Both are signature-checked
+    # below: `.zip` must start with the ZIP local-file-header magic, and `.dxf`
+    # must be either the binary DXF sentinel or readable text, which is what an
+    # ASCII DXF is. Neither is accepted on its extension alone.
+    ".zip", ".dxf",
 }
 
 UPLOAD_RULES = {
@@ -50,6 +55,33 @@ UPLOAD_RULES = {
     "ifc": {
         ".ifc": {"application/x-step", "application/step", "text/plain", "application/octet-stream"},
     },
+    # The unified ingestion pipeline. It is the union of what the platform
+    # already accepts across `documents` and `ifc`, plus the two things a
+    # design delivery actually arrives as and no existing category allowed:
+    # a ZIP package and a DXF drawing. Deliberately a separate entry rather
+    # than a widening of `documents` — nothing that uploads a document today
+    # should start accepting archives because ingestion needed to.
+    #
+    # `application/octet-stream` appears throughout because browsers and
+    # site-office clients send it for anything they do not recognise. It is
+    # never accepted on its own: every extension listed here is in
+    # SIGNATURE_VERIFIED_EXTENSIONS, so the magic bytes still have to agree.
+    "ingest": {
+        ".pdf": {"application/pdf", "application/octet-stream"},
+        ".doc": {"application/msword", "application/octet-stream"},
+        ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  "application/zip", "application/octet-stream"},
+        ".xls": {"application/vnd.ms-excel", "application/octet-stream"},
+        ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                  "application/zip", "application/octet-stream"},
+        ".txt": {"text/plain"},
+        ".jpg": {"image/jpeg"}, ".jpeg": {"image/jpeg"}, ".png": {"image/png"},
+        ".webp": {"image/webp"},
+        ".dwg": {"application/acad", "application/dwg", "image/vnd.dwg", "application/octet-stream"},
+        ".dxf": {"application/dxf", "image/vnd.dxf", "text/plain", "application/octet-stream"},
+        ".ifc": {"application/x-step", "application/step", "text/plain", "application/octet-stream"},
+        ".zip": {"application/zip", "application/x-zip-compressed", "application/octet-stream"},
+    },
 }
 
 
@@ -65,6 +97,15 @@ EXTENSION_FORMATS: dict[str, set[str]] = {
     ".m4a": {"M4A", "MP4_CONTAINER"}, ".mp4": {"MP4", "MP4_CONTAINER"},
     ".webm": {"WEBM"}, ".mpeg": {"MP3"}, ".mpga": {"MP3"}, ".mp3": {"MP3"},
     ".dwg": {"DWG"}, ".ifc": {"IFC"},
+    # A plain `.zip` must be a ZIP container and nothing else. It is
+    # deliberately *not* allowed to be DOCX or XLSX: those have their own
+    # extensions, and letting a `.zip` resolve to an Office format would let a
+    # package upload smuggle in a file the archive walker would then not open.
+    ".zip": {"ZIP_CONTAINER"},
+    # A DXF is either the binary form, which has a sentinel, or an ASCII text
+    # file, which by definition has no signature. TEXT is therefore accepted
+    # here for the same reason `.txt` is accepted on its name.
+    ".dxf": {"DXF", "TEXT"},
 }
 
 
@@ -125,6 +166,20 @@ async def save_upload(file: UploadFile, category: str) -> tuple[str, int]:
     return f"{settings.BACKEND_URL.rstrip('/')}/uploads/{relative.as_posix()}", size
 
 
+def _private_size_limit(category: str) -> int:
+    """The byte ceiling for one private-storage category.
+
+    A table rather than the inline conditional it replaces, because there are
+    now three answers instead of two and a third `if` on that line would be the
+    point at which nobody can see what the limits are.
+    """
+    if category == "ifc":
+        return settings.IFC_MAX_FILE_MB * 1024 * 1024
+    if category == "ingest":
+        return settings.INGESTION_MAX_FILE_MB * 1024 * 1024
+    return MAX_UPLOAD_BYTES
+
+
 async def save_private_upload(file: UploadFile, category: str) -> tuple[str, int]:
     safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", Path(file.filename or "file").name)
     extension = Path(safe_name).suffix.lower()
@@ -154,7 +209,7 @@ async def save_private_upload(file: UploadFile, category: str) -> tuple[str, int
             chunk = first_chunk
             while chunk:
                 size += len(chunk)
-                limit = settings.IFC_MAX_FILE_MB * 1024 * 1024 if category == "ifc" else MAX_UPLOAD_BYTES
+                limit = _private_size_limit(category)
                 if size > limit:
                     raise HTTPException(status_code=413, detail=f"File exceeds the {limit // (1024 * 1024)} MB limit")
                 output.write(chunk)

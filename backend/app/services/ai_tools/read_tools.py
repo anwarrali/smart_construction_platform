@@ -12,6 +12,7 @@ from __future__ import annotations
 from app.models.design_change import DesignChange
 from app.models.document import Document
 from app.models.ifc import AIInsight, IFCCoordinationFinding, IFCModelVersion
+from app.models.ingestion import IngestedFile
 from app.models.issue import Issue
 from app.models.project import Project, ProjectMember
 from app.models.site_report import SiteReport
@@ -20,7 +21,9 @@ from app.models.user import User
 from app.schemas.voice_analysis import DetectedQuery, VoiceQueryTopic
 from app.services import rag
 from app.services.ai_tools.contracts import ToolError
-from app.services.document_access import readable_document_ids
+from app.services.document_access import (
+    readable_document_ids, readable_ingested_file_ids,
+)
 from app.services.ifc_knowledge import answer_ifc_question
 from app.services.ifc_policy import can_ifc
 from app.services.knowledge_router import SourceAvailability, route_question
@@ -224,19 +227,30 @@ def query_project_knowledge(db, actor: User, project_id, args) -> dict:
     if routing.source.value == "IFC_MODEL":
         return payload | query_ifc(db, actor, project_id, args)
 
+    # Both indexed sources, each narrowed by its own rule. The tool layer must
+    # not be a looser path to the same text than the API is.
     readable = readable_document_ids(db, actor, project_id)
     allowed = [row[0] for row in db.query(Document.id).filter(
         Document.id.in_(readable), Document.index_status == rag.STATUS_READY,
     ).all()] if readable else []
-    if not allowed:
+    readable_files = readable_ingested_file_ids(db, actor, project_id)
+    allowed_files = [row[0] for row in db.query(IngestedFile.id).filter(
+        IngestedFile.id.in_(readable_files),
+        IngestedFile.index_status == rag.STATUS_READY,
+    ).all()] if readable_files else []
+    if not allowed and not allowed_files:
         payload.update({"answer": "No indexed documents are available to this caller.", "found": False})
         return payload
-    retrieved = rag.retrieve(db, project_id=project_id, readable_document_ids=allowed, query=args.question)
+    retrieved = rag.retrieve(
+        db, project_id=project_id, readable_document_ids=allowed,
+        readable_ingested_file_ids=allowed_files, query=args.question,
+    )
     answer = rag.AnswerService().answer(args.question, retrieved)
     payload.update({
         "answer": answer.answer, "found": answer.found,
         "citations": [
-            {"sourceType": "DOCUMENT", "sourceId": str(c.document_id), "title": c.title,
+            {"sourceType": c.source_type,
+             "sourceId": str(c.document_id or c.ingested_file_id), "title": c.title,
              "page": c.page, "snippet": c.snippet}
             for c in answer.citations
         ],

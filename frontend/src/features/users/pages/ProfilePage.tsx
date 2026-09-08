@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import toast from "react-hot-toast";
-import { Camera, KeyRound, Mail, Save, Shield, UserRound } from "lucide-react";
+import { Camera, ChevronRight, KeyRound, Mail, Plug, Save, Shield, UserRound } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { Input } from "../../../components/ui/Input";
@@ -17,6 +18,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import type { EngineerDiscipline } from "../../../types/auth";
 import type { UserProfile } from "../../../types/user";
 import { useStepUp } from "../../../hooks/useStepUp";
+import { ROUTES } from "../../../utils/constants";
 
 const SPECIALIZATION_OPTIONS = [
   { value: "civil", label: "Civil" },
@@ -333,6 +335,30 @@ export const ProfilePage = () => {
                 </Button>
               </div>
             </form>
+          </Card>
+
+          {/* The way into MCP client tokens. A link rather than the management
+              UI inlined here: this page is about the account, and a credential
+              list with its own create dialog and revoke confirmation is a
+              screen, not a section. Shown to everybody — the page itself
+              explains when the surface is switched off, which is better than
+              this card guessing at a server setting it cannot see. */}
+          <Card>
+            <Link
+              to={ROUTES.MCP_CLIENTS}
+              className="flex items-center justify-between gap-4 rounded-md transition hover:opacity-80"
+            >
+              <span className="flex items-start gap-3">
+                <Plug size={18} className="mt-0.5 shrink-0 text-primary" />
+                <span>
+                  <span className="block font-semibold">{t("mcpClients.title")}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {t("mcpClients.profileCardHint")}
+                  </span>
+                </span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-muted-foreground rtl:rotate-180" />
+            </Link>
           </Card>
         </div>
       </div>

@@ -116,7 +116,24 @@ separately governed.
 
 - No execution. A confirmed proposal is executed by the existing voice command
   lifecycle; wiring agents into that lifecycle is Phase 6/7 work.
-- No tool-level rate limiting or budget.
+- No tool-level rate limiting or budget **in this layer**. `call_tool` will
+  run as often as it is called; the MCP surface throttles its own callers
+  above it (`services/mcp/limits.py`), which does nothing for the agent
+  runtime, and the throttle counts calls rather than what they cost.
 - No streaming or partial results.
 - `send_message` cannot pre-check the recipient, because the messaging service
   makes that decision at send time. It proposes only.
+
+---
+
+## Reaching this layer from outside
+
+`services/mcp` exposes exactly these tools over the Model Context Protocol, one
+server per project, behind the same `available_tools` / `call_tool` runtime —
+no second authorization path, and no tool that is not in the table above.
+
+What that surface adds is *around* this layer rather than inside it: a
+credential that can only subtract (one project, and `mcp:propose` withheld
+hides every PROPOSE tool and refuses it if called anyway), and a per-credential
+throttle on `tools/call`. Neither changes what a tool does or who may call it.
+See [MCP.md](MCP.md).

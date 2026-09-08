@@ -61,7 +61,20 @@ export const IFCViewer = ({ projectId, version, nodes = [], focus, onElementSele
   const applyFilter = (value:string)=>{setFilter(value);if(!value){showAll();return;}const [kind,...parts]=value.split(":");const expected=parts.join(":");const ids=new Set<number>();for(const [key,item] of Object.entries(mappingRef.current)){const actual=kind==="storey"?item.storeyNodeId:kind==="discipline"?item.discipline:kind==="system"?item.systemName:item.category;if(actual===expected)ids.add(Number(key));}if(ids.size)selectExpressIds(ids,true);};
   const filterLabel = (value:string)=>{const [kind,...parts]=value.split(":");const raw=parts.join(":");const name=kind==="storey"?nodes.find(item=>item.id===raw)?.name||raw:labelize(raw);return `${labelize(kind)} · ${name}`;};
 
-  useEffect(()=>{ if(!focus||!Object.keys(mappingRef.current).length)return; const ids=new Set<number>();let hasDirectSpatialGeometry=false; for(const [key,item] of Object.entries(mappingRef.current)){if(item.kind==="SPATIAL"&&item.id===focus.nodeId)hasDirectSpatialGeometry=true;if(focus.elementIds?.includes(item.id)||focus.nodeId&&[item.buildingNodeId,item.storeyNodeId,item.spaceNodeId].includes(focus.nodeId))ids.add(Number(key));} const node=nodes.find(item=>item.id===focus.nodeId);setFocusNotice(node?.nodeType==="SPACE"&&!hasDirectSpatialGeometry?"Direct room volume geometry is unavailable in this IFC. Showing elements associated with this space instead.":"");if(ids.size)selectExpressIds(ids,true); },[focus,nodes,selectExpressIds]);
+  useEffect(()=>{ if(!focus||!Object.keys(mappingRef.current).length)return; const ids=new Set<number>();let hasDirectSpatialGeometry=false; for(const [key,item] of Object.entries(mappingRef.current)){if(item.kind==="SPATIAL"&&item.id===focus.nodeId)hasDirectSpatialGeometry=true;if(focus.elementIds?.includes(item.id)||focus.nodeId&&[item.buildingNodeId,item.storeyNodeId,item.spaceNodeId].includes(focus.nodeId))ids.add(Number(key));} const node=nodes.find(item=>item.id===focus.nodeId);
+    /* A focus request that matched nothing renderable has to say so. Staying
+       silent looks identical to "nothing is wrong there", when the truth is
+       that those elements were never tessellated — the same distinction the
+       coordination rules are careful to draw about what they could not check. */
+    setFocusNotice(!ids.size&&focus.elementIds?.length?t("ifcViewer.focused_elements_have_no_geometry"):node?.nodeType==="SPACE"&&!hasDirectSpatialGeometry?"Direct room volume geometry is unavailable in this IFC. Showing elements associated with this space instead.":"");
+    if(ids.size)selectExpressIds(ids,true);
+    /* `loading` is in the dependencies because `mappingRef` is a ref and cannot
+       trigger this effect itself. A focus arriving from another tab — a finding's
+       "Show in 3D", a hierarchy node, a deep link — reaches a viewer that has not
+       loaded its mapping yet, and the early return above would drop it for good
+       since `focus` never changes again. `loading` flips false exactly when the
+       mapping is populated, so the request is honoured on the second pass. */
+  },[focus,loading,nodes,selectExpressIds,t]);
 
   useEffect(()=>{ if(!selected){setProjectLinks([]);setSpatialDetail(undefined);return;} if(selected.kind==="SPATIAL"){setDetail(undefined);void Promise.all([api.ifc.spatialDetails(projectId,selected.id),api.ifc.spatialProjectData(projectId,selected.id)]).then(([spatial,links])=>{setSpatialDetail(spatial);setProjectLinks(links.projectData);}).catch(()=>{setSpatialDetail(undefined);setProjectLinks([]);});}else{setSpatialDetail(undefined);void Promise.all([api.ifc.element(projectId,version.id,selected.id),api.ifc.elementProjectData(projectId,selected.id)]).then(([element,links])=>{setDetail(element);setProjectLinks(links.projectData);}).catch(()=>{setDetail(undefined);setProjectLinks([]);});}onElementSelected?.(selected); },[onElementSelected,projectId,selected,version.id]);
 
