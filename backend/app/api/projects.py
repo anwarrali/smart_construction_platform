@@ -39,10 +39,8 @@ from app.core.deps import (
     CONSULTANT_AFFILIATION,
     get_current_user,
     get_project_or_403,
-    get_manageable_project_or_403,
     user_has_project_access,
 )
-from app.core.permissions import is_admin
 from app.services import rbac
 from app.services.user_service import create_provisioned_user, add_user_to_project
 from app.services.audit_service import record_audit
@@ -441,12 +439,11 @@ def delete_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    if not is_admin(current_user.role):
-        raise HTTPException(status_code=403, detail="Not authorized to delete this project")
+    # Was `is_admin(current_user.role)`. `project.delete` is a new code rather
+    # than a reuse of an existing one: this cascades across 39 tables, and no
+    # permission already in the catalogue says so. It defaults to the
+    # administrator alone, which is the same set `is_admin` admitted.
+    project = manageable_project(db, current_user, project_id, "project.delete")
 
     db.delete(project)
     db.commit()
@@ -592,7 +589,12 @@ def get_available_engineers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_manageable_project_or_403(project_id, db, current_user)
+    # This list exists only to feed member assignment, so it is gated by the
+    # capability that assignment itself requires. Was "administrator, or the
+    # manager this project is assigned to" — a rule read off the retired enum,
+    # which resolves identically for every account here but could not express an
+    # office role the administrator had granted the same authority.
+    manageable_project(db, current_user, project_id, "project.manage_members")
     assigned_ids = db.query(ProjectMember.user_id).filter(
         ProjectMember.project_id == project_id, ProjectMember.is_active == True
     )
@@ -615,7 +617,8 @@ def get_available_team_members(
     current_user: User = Depends(get_current_user),
 ):
     """Backend-filtered active Engineers and Consultants eligible for a project."""
-    get_manageable_project_or_403(project_id, db, current_user)
+    # Same staffing picker, same gate as `available-engineers` above.
+    manageable_project(db, current_user, project_id, "project.manage_members")
     if role is not None and role not in {UserRole.ENGINEER, UserRole.CONSULTANT}:
         raise HTTPException(status_code=400, detail="Eligible team roles are Engineer and Consultant")
     assigned_ids = db.query(ProjectMember.user_id).filter(
@@ -910,14 +913,27 @@ def transfer_project_member(
     current_user: User = Depends(get_current_user),
 ):
     # Moving somebody between projects touches both teams, so it needs the
-    # team-management capability — checked against each project below by
-    # `get_manageable_project_or_403`.
+    # team-management capability on each of them.
+    #
+    # The target project was the gap. Both projects went through
+    # `get_manageable_project_or_403`, which asked "administrator, or the manager
+    # this project is assigned to" — so `project.manage_members` governed the
+    # source (via the `require` below) and had no say at all over the
+    # destination. An office role granted team management on both projects
+    # passed the first check and was refused by the second; the permission model
+    # simply did not reach the target. Both now resolve through the same code.
+    #
+    # The `require` is kept ahead of the same-project check so an unauthorised
+    # caller still gets 403 rather than learning, via a 400, that the two ids
+    # they guessed happen to match.
     require(db, current_user, "project.manage_members", project_id)
     if data.target_project_id == project_id:
         raise HTTPException(status_code=400, detail="Source and target projects must be different")
 
-    source_project = get_manageable_project_or_403(project_id, db, current_user)
-    target_project = get_manageable_project_or_403(data.target_project_id, db, current_user)
+    source_project = manageable_project(db, current_user, project_id, "project.manage_members")
+    target_project = manageable_project(
+        db, current_user, data.target_project_id, "project.manage_members"
+    )
     source_member = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.user_id == user_id,

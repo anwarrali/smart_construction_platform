@@ -320,6 +320,11 @@ NEVER_EXTERNAL_AUTHORITY = (
     "ai.review_insight", "ai.promote_insight",
     "project.manage_members", "project.manage_parties",
     "document.share_external", "project.edit", "project.invite_external",
+    # Deleting a project destroys every record the office and its external
+    # participants hold against it. Adding it here is what makes
+    # `test_7_...` prove that no override, on any project, can hand it to a
+    # contractor, a subcontractor or the client.
+    "project.delete",
 )
 
 #: Office *work*. An external role never inherits it, but an administrator can

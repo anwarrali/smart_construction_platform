@@ -133,6 +133,27 @@ CATALOGUE: tuple[Permission, ...] = (
        "Change project information, dates and settings.", {ADMIN}, office_only=True, never_external=True),
     _p("project.manage_reminders", "project", "Configure reminders",
        "Set reminder intervals, quiet hours and escalation.", {ADMIN, PM}),
+    # Deletion is its own code because it is its own act. `delete_project` was
+    # gated on `is_admin(user.role)`, and the tempting migration was to reuse a
+    # code that happened to resolve identically — `project.edit` measures 0
+    # differences against it on this database. But `project.edit` means "change
+    # project information, dates and settings", and an office that granted a
+    # role the ability to correct a start date would have silently granted it
+    # the ability to destroy the project: 42 tables carry a foreign key to
+    # `projects.id` and 39 of them cascade, so this removes every task,
+    # document, attachment, model revision, site report and finding along with
+    # the row. A permission whose label does not say that is a trap.
+    #
+    # `project_scoped=True` adds something `is_admin` never had: `has_permission`
+    # also requires project access for a project-scoped code, so the grant
+    # cannot reach a project the holder is not on.
+    #
+    # Not `admin_locked`: an office should be able to withhold deletion from
+    # itself. Defaulting to {ADMIN} alone keeps today's answer — see
+    # `role_templates`, where `technical_director` explicitly declines it.
+    _p("project.delete", "project", "Delete a project",
+       "Permanently delete a project and everything recorded against it.",
+       {ADMIN}, office_only=True, never_external=True),
 
     # --- Tasks and scheduling ----------------------------------------------
     # Descriptive entry: `list_tasks` / `get_tasks_by_project` in app.api.tasks

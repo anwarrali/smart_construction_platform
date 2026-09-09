@@ -165,8 +165,18 @@ TEMPLATES: tuple[RoleTemplate, ...] = (
     _t("office_director", "General Manager", "المدير العام", SCOPE_BOTH, True,
        UserRole.ADMIN, rank=20,
        description="Office-level authority across every project."),
+    # `project.delete` is declined explicitly. This template inherits the
+    # administrator's catalogue defaults but provisions accounts whose retired
+    # role is PROJECT_MANAGER, so `is_admin(user.role)` has always answered
+    # False for it and a technical director has never been able to delete a
+    # project. Adding an {ADMIN}-default code would have handed them that
+    # silently — and no account currently holds this template, so the
+    # equivalence gate would have reported zero differences and proved nothing.
+    # Whether a technical director *should* be able to delete a project is a
+    # product question; this preserves the current answer until it is asked.
     _t("technical_director", "Technical Director", "المدير الفني", SCOPE_BOTH, True,
-       UserRole.ADMIN, without=("platform.manage_users", "platform.manage_permissions"),
+       UserRole.ADMIN,
+       without=("platform.manage_users", "platform.manage_permissions", "project.delete"),
        rank=30,
        description="Technical authority across projects, without account administration."),
 
