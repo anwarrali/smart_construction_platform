@@ -32,7 +32,8 @@ export interface Document {
   uploadedById: string;
   title: string;
   documentType: DocumentType;
-  fileUrl: string;
+  /** Authenticated route that streams the bytes; see `useAuthedFile`. */
+  downloadUrl: string;
   fileSizeBytes?: number;
   mimeType?: string;
   version: number;

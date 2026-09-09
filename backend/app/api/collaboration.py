@@ -27,9 +27,9 @@ from app.models.task import Task
 from app.models.site_report import SiteReport
 from app.models.user import User
 from app.schemas.collaboration import (
-    ConvertRequestToDesignChange, MessageAccountabilityAction, OwnerRequestAction,
-    OwnerRequestCreate, OwnerRequestOut, ReminderRuleUpsert, SiteVisitCreate,
-    SiteVisitOut, SiteVisitUpdate,
+    ConvertRequestToDesignChange, MessageAccountabilityAction, MyActionCenterOut,
+    OwnerRequestAction, OwnerRequestCreate, OwnerRequestOut, ReminderRuleUpsert,
+    SiteVisitCreate, SiteVisitOut, SiteVisitUpdate,
 )
 from app.services.audit_service import record_audit
 from app.services import rbac
@@ -466,7 +466,7 @@ def reminder_scheduler_status(db: Session = Depends(get_db),
     return scheduler_status()
 
 
-@router.get("/my-action-center")
+@router.get("/my-action-center", response_model=MyActionCenterOut)
 def my_action_center(project_id: uuid.UUID | None = None, priority: str | None = None,
                      db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     accessible = accessible_project_ids(db, current_user); ids = accessible

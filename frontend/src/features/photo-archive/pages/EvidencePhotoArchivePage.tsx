@@ -19,6 +19,7 @@ import type {
   PhotoCategory,
 } from "../../../types/photoArchive";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
+import { AuthedImage } from "../../../components/shared/AuthedImage";
 
 const directions = ["FRONT", "BACK", "LEFT", "RIGHT", "TOP", "DETAIL", "OTHER"];
 const statuses = ["SUBMITTED", "VERIFIED", "REJECTED"];
@@ -142,7 +143,7 @@ export const EvidencePhotoArchivePage = () => {
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {items.map((photo) => <button key={photo.id} type="button" onClick={() => setSelected(photo)}
         className="overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-        <img src={photo.attachment.fileUrl} alt={photo.attachment.originalFilename} loading="lazy"
+        <AuthedImage url={photo.attachment.downloadUrl} alt={photo.attachment.originalFilename}
           className="aspect-[4/3] w-full bg-muted object-cover" />
         <div className="space-y-2 p-3">
           <div className="flex items-start justify-between gap-2">
@@ -171,9 +172,9 @@ export const EvidencePhotoArchivePage = () => {
 
     <Modal isOpen={Boolean(selected)} onClose={() => setSelected(null)} title={t("photoArchive.evidence_photo_provenance")} size="full">
       {selected && <div className="grid gap-5 md:grid-cols-2">
-        <a href={selected.attachment.fileUrl} target="_blank" rel="noreferrer">
-          <img src={selected.attachment.fileUrl} alt={selected.attachment.originalFilename} className="max-h-[65vh] w-full rounded-lg bg-muted object-contain" />
-        </a>
+        <div>
+          <AuthedImage url={selected.attachment.downloadUrl} alt={selected.attachment.originalFilename} className="max-h-[65vh] w-full rounded-lg bg-muted object-contain" containerClassName="h-[40vh] w-full rounded-lg" />
+        </div>
         <dl className="grid content-start grid-cols-[130px_1fr] gap-2 text-sm">
           <dt className="text-muted-foreground">{t("photoArchive.task")}</dt><dd>{selected.taskCode} — {selected.taskTitle}</dd>
           <dt className="text-muted-foreground">{t("photoArchive.discipline")}</dt><dd>{selected.discipline || t("photoArchive.general")}</dd>

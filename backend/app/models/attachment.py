@@ -29,3 +29,14 @@ class Attachment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     uploaded_by: Mapped["User"] = relationship(foreign_keys=[uploaded_by_id])
     project: Mapped["Project"] = relationship()
+
+    @property
+    def download_url(self) -> str:
+        """The authenticated route that serves this attachment's bytes.
+
+        Every attachment-backed surface goes through this one route — generic
+        attachments, site-report photos and field evidence are all `Attachment`
+        rows — so there is exactly one place where the read rule is applied and
+        exactly one place it could be got wrong.
+        """
+        return f"/api/v1/attachments/{self.id}/download"

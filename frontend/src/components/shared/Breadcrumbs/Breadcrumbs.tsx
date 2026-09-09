@@ -20,9 +20,26 @@ export const Breadcrumbs = () => {
   const location = useLocation();
   const workspace = useProjectWorkspace();
   if (!workspace.isProjectWorkspace) return null;
-  const base = workspace.path("").replace(/\/$/, "");
-  const relative = location.pathname.slice(base.length).replace(/^\//, "");
-  const segments = relative ? relative.split("/") : [];
+  /*
+   * The module is found by locating the project id in the path, not by
+   * slicing off a base computed from `path("")`.
+   *
+   * `path("")` cannot return a bare base and is not meant to: every link it
+   * builds has to land on a real page, so an empty module resolves to the
+   * `dashboard` fallback. That made `base` ten characters too long, and the
+   * slice ate the module name — `/site-visits` displayed as "ts", while every
+   * module whose name is shorter than "/dashboard" sliced away to nothing and
+   * fell through to `"dashboard"`, so the Tasks page announced itself as
+   * Project overview.
+   *
+   * Splitting on the id has no arithmetic to get wrong, and it also survives
+   * the retired `/project-manager/projects/:id/…` prefixes: this provider runs
+   * once on the pre-redirect pathname, where a fixed base would not match at
+   * all.
+   */
+  const parts = location.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  const projectAt = workspace.projectId ? parts.indexOf(workspace.projectId) : -1;
+  const segments = projectAt >= 0 ? parts.slice(projectAt + 1) : [];
   const moduleName = segments[0] || "dashboard";
   const moduleKey = MODULE_KEYS[moduleName];
   return <nav aria-label={t("nav.projectWorkspace")} className="mb-4 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">

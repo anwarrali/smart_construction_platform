@@ -30,7 +30,9 @@ type Member = { userId: string; fullName?: string; roleOnProject?: string; isAct
 /** A clashing visit, described well enough to judge without loading it. */
 type VisitConflict = { id: string; title: string; projectId: string; projectName?: string; scheduledStart: string; scheduledEnd: string; visitType: string; status: string };
 
-const humanize = (value: string) => value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase());
+/* Tolerates a missing value: one absent enum on one row used to take the
+   whole page down with "Cannot read properties of undefined". */
+const humanize = (value?: string | null) => (value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase());
 /* Formatted in the language the user picked, not the browser's: an Arabic
    reader on an English machine was shown "Aug 14, 2026" mid-sentence. */
 const dateTime = (value: string) => formatDateTime(value);
@@ -390,14 +392,14 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
                   <input type="checkbox" className="h-4 w-4 shrink-0" checked={checked}
                     onChange={(e) => editVisit({ participantIds: e.target.checked ? [...visitForm.participantIds, id] : visitForm.participantIds.filter((x) => x !== id) })} />
                   <span className="truncate">{memberName(id)}</span>
-                  {m.roleOnProject && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{vocabulary.projectRole(m.roleOnProject)}</span>}
+                  {m.roleOnProject && <span className="ms-auto shrink-0 text-xs text-muted-foreground">{vocabulary.projectRole(m.roleOnProject)}</span>}
                 </label>;
               })}
             </div>}
         </div>
         {visitConflicts.length > 0 && <div className="md:col-span-2 rounded-lg border border-state-review/30 bg-wash-review/60 p-3 text-sm">
           <p className="flex items-center gap-2 font-semibold text-state-review"><AlertTriangle size={16} /> {t("siteVisit.conflictTitle")}</p>
-          <ul className="mt-2 list-disc pl-5 text-state-review">{visitConflicts.map((item) => <li key={item.id}>{conflictLine(item)}</li>)}</ul>
+          <ul className="mt-2 list-disc ps-5 text-state-review">{visitConflicts.map((item) => <li key={item.id}>{conflictLine(item)}</li>)}</ul>
           <p className="mt-2 text-state-review">{t("siteVisit.conflictHint")}</p>
         </div>}
         {visitError && !visitConflicts.length && <p role="alert" className="md:col-span-2 rounded-lg border border-state-overdue/30 bg-wash-overdue/60 p-3 text-sm text-state-overdue">{visitError}</p>}
@@ -420,10 +422,10 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
           {canSchedule && visit.status !== "COMPLETED" && visit.status !== "CANCELLED" &&
             <Button size="sm" variant="outline" disabled={busy === visit.id} onClick={() => run(visit.id, () => axios.patch(`/site-visits/${visit.id}`, { status: "COMPLETED" }), t("siteVisit.completedToast"))}>{t("siteVisit.markCompleted")}</Button>}
         </div>
-      </div>)}{!visibleVisits.length && <div className="empty-state md:col-span-2"><p className="empty-state-title">No {calendarView === "past" ? "past" : "scheduled"} site visits</p><p className="text-sm text-muted-foreground">{t("empty.noVisitsHint")}</p></div>}</div>
+      </div>)}{!visibleVisits.length && <div className="empty-state md:col-span-2"><p className="empty-state-title">{calendarView === "past" ? t("empty.noPastVisits") : t("empty.noVisits")}</p><p className="text-sm text-muted-foreground">{t("empty.noVisitsHint")}</p></div>}</div>
     </Card>}
 
-    {!loading && tab === "activity" && <Card className="p-5"><h2 className="text-xl font-semibold">{t("collaboration.activityFeed")}</h2><p className="text-sm text-muted-foreground">{t("collaboration.activityHint")}</p><div className="mt-5 space-y-1">{activity.map((item) => <div key={item.id} className="flex gap-4 border-l-2 border-primary/30 py-3 pl-4"><Clock3 size={16} className="mt-1 shrink-0 text-primary" /><div>{projectId && item.entityId
+    {!loading && tab === "activity" && <Card className="p-5"><h2 className="text-xl font-semibold">{t("collaboration.activityFeed")}</h2><p className="text-sm text-muted-foreground">{t("collaboration.activityHint")}</p><div className="mt-5 space-y-1">{activity.map((item) => <div key={item.id} className="flex gap-4 border-s-2 border-primary/30 py-3 ps-4"><Clock3 size={16} className="mt-1 shrink-0 text-primary" /><div>{projectId && item.entityId
       ? <Link to={projectEntityPath(projectId, item.entityType, item.entityId, hasCapability)} className="font-medium hover:text-primary hover:underline">{t("activity.action." + item.action, { defaultValue: humanize(item.action) })}</Link>
       : <p className="font-medium">{t("activity.action." + item.action, { defaultValue: humanize(item.action) })}</p>}<p className="text-sm text-muted-foreground">{t("activity.entity." + item.entityType, { defaultValue: humanize(item.entityType) })} · {dateTime(item.occurredAt)}</p></div></div>)}{!projectId && <p className="text-sm text-muted-foreground">{t("empty.selectProject")}</p>}{projectId && !activity.length && <div className="empty-state"><CheckCircle2 className="mx-auto mb-2" /><p className="empty-state-title">{t("empty.noActivity")}</p><p className="text-sm text-muted-foreground">{t("empty.noActivityHint")}</p></div>}</div></Card>}
   </div>;

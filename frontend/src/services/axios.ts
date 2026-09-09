@@ -74,6 +74,14 @@ axiosInstance.interceptors.request.use(
     if (tokens?.accessToken && config.headers) {
       config.headers.Authorization = `Bearer ${tokens.accessToken}`;
     }
+    /* This instance defaults to application/json, and axios answers a JSON
+       content type on a FormData body by serialising the form to JSON --
+       which drops the file part entirely and makes the server reject the
+       request as malformed. Clearing the header lets the browser set
+       multipart/form-data with its boundary, which is what an upload needs. */
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+      config.headers?.delete("Content-Type");
+    }
     return config;
   },
   (error) => {

@@ -346,7 +346,11 @@ def review_detail(
         "submissionEvidence": _evidence(review),
         "currentTaskEvidence": [
             {
-                "id": str(item.id), "filename": item.original_filename, "fileUrl": item.file_url,
+                # Hand-built rather than serialized through `AttachmentOut`,
+                # which is why withdrawing `fileUrl` from that schema did not
+                # reach here. Same rule, stated again: a route, never a location.
+                "id": str(item.id), "filename": item.original_filename,
+                "downloadUrl": item.download_url,
                 "mimeType": item.mime_type, "fileSizeBytes": item.file_size_bytes,
                 "uploadedBy": _person(item.uploaded_by), "uploadedAt": item.created_at.isoformat(),
             }
@@ -382,7 +386,7 @@ def review_detail(
         "documents": [
             {
                 "id": str(item.id), "title": item.title, "type": item.document_type.value,
-                "fileUrl": item.file_url, "version": item.version, "notes": item.notes,
+                "downloadUrl": item.download_url, "version": item.version, "notes": item.notes,
             }
             for item in documents
         ],

@@ -1,4 +1,5 @@
 import api from "../../../services/api";
+import { downloadAuthedFile } from "../../../hooks/useAuthedFile";
 import type {
   Document,
   DocumentsResponse,
@@ -25,9 +26,17 @@ export const documentsService = {
     return api.documents.delete(id);
   },
 
-  getDownloadUrl: async (id: string): Promise<string> => {
-    const { url } = await api.documents.downloadUrl(id);
-    return url;
+  /**
+   * Save a document to disk through the authenticated route.
+   *
+   * This used to ask the server for a URL and hand it to `window.open`. The
+   * server answered with a public `/uploads/...` location, so the permission
+   * check it had just performed protected only the *address* — anyone with the
+   * URL could fetch the bytes. There is no URL to open any more: the file is
+   * streamed over the credentialed client and saved from a blob.
+   */
+  download: async (doc: { id: string; title: string }): Promise<void> => {
+    await downloadAuthedFile(`/documents/${doc.id}/download`, doc.title);
   },
 
   getByProject: async (

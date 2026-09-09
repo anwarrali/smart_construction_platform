@@ -345,7 +345,7 @@ const api = {
       axiosInstance.get<FieldSubmission[]>(ENDPOINTS.FIELD_SUBMISSIONS.BY_TASK(taskId)).then((res) => res.data),
     pending: (projectId: string) =>
       axiosInstance.get<FieldSubmission[]>(ENDPOINTS.FIELD_SUBMISSIONS.PENDING, {
-        params: { projectId },
+        params: { project_id: projectId },
       }).then((res) => res.data),
     getById: (id: string) =>
       axiosInstance.get<FieldSubmission>(ENDPOINTS.FIELD_SUBMISSIONS.BY_ID(id)).then((res) => res.data),
@@ -476,7 +476,7 @@ const api = {
       ).then((res) => res.data),
     categories: (projectId: string, includeInactive = false) =>
       axiosInstance.get<PhotoCategory[]>(ENDPOINTS.PHOTO_ARCHIVE.CATEGORIES(projectId), {
-        params: { includeInactive },
+        params: { include_inactive: includeInactive },
       }).then((res) => res.data),
     createCategory: (projectId: string, name: string) =>
       axiosInstance.post<PhotoCategory>(

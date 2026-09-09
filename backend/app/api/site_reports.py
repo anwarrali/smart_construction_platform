@@ -16,7 +16,8 @@ from app.core.deps import (
     accessible_project_ids,
 )
 from app.services import rbac, work_scope
-from app.services.file_storage import save_upload, delete_upload
+from app.services.file_storage import delete_upload
+from app.services.private_storage import private_storage
 from app.models.enums import VoiceProcessingStatus
 from app.models.enums import UserRole, NotificationType
 from app.services.authorization import has_permission, require, manageable_project
@@ -259,14 +260,14 @@ async def submit_site_report(
     
     # Store photos through the generic contextual attachment system.
     for index, photo in enumerate(photos):
-        file_url, file_size = await save_upload(photo, "site-reports")
+        storage_key, file_size = await private_storage.save(photo, "site-reports")
         asset = Attachment(
             original_filename=photo.filename or f"site-report-{index + 1}.jpg",
-            storage_key=file_url.split("/uploads/", 1)[-1],
+            storage_key=storage_key,
             mime_type=photo.content_type or "application/octet-stream",
             project_id=proj_uuid,
             uploaded_by_id=current_user.id,
-            file_url=file_url,
+            file_url=f"private://{storage_key}",
             file_size_bytes=file_size,
             entity_type="SITE_REPORT",
             entity_id=new_report.id,
@@ -413,7 +414,12 @@ def delete_site_report(report_id: uuid.UUID, db: Session = Depends(get_db), curr
     if not can_delete:
         raise HTTPException(status_code=403, detail="You cannot delete this site report")
     for asset in db.query(Attachment).filter(Attachment.entity_type == "SITE_REPORT", Attachment.entity_id == report.id).all():
-        delete_upload(asset.file_url)
+        # Same split as `delete_attachment`: private for anything stored since
+        # the move, the old public tree for rows the backfill has not reached.
+        if asset.file_url.startswith("private://") or private_storage.exists(asset.storage_key):
+            private_storage.delete(asset.storage_key)
+        else:
+            delete_upload(asset.file_url)
         db.delete(asset)
     db.delete(report)
     db.commit()
@@ -435,14 +441,14 @@ async def upload_voice_recording(
     if not user_has_project_access(db, current_user, proj_uuid):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     
-    audio_url, _ = await save_upload(audio, "audio")
+    audio_key, _ = await private_storage.save(audio, "audio")
     
     # Create voice recording
     vr = VoiceRecording(
         project_id=proj_uuid,
         recorded_by_id=current_user.id,
         linked_task_id=task_uuid,
-        audio_file_url=audio_url,
+        audio_file_url=f"private://{audio_key}",
         duration_seconds=None,
         transcript_text=None,
         transcript_language=None,

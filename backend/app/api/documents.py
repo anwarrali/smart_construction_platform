@@ -15,7 +15,9 @@ from app.services.document_access import (
     assert_document_readable, readable_document_ids, readable_document_ids_across,
     readable_documents_query,
 )
-from app.services.file_storage import save_upload, delete_upload
+from app.api.downloads import stored_file_response
+from app.services.file_storage import delete_upload
+from app.services.private_storage import private_storage
 from app.models.enums import UserRole, DocumentType, TaskStatus, NotificationType
 from app.models.project import Project
 from app.models.task import Task
@@ -24,7 +26,7 @@ from app.services.audit_service import record_audit
 from app.services.file_intelligence import (
     Classification, classify_document, identify_format, text_sample,
 )
-from app.services.rag.pdf_text import resolve_upload_path
+from pathlib import Path
 
 import logging
 
@@ -118,16 +120,19 @@ def get_document_by_id(
     assert_document_readable(db, current_user, doc)
     return doc
 
-def _classify_upload(file_url: str, filename: str, declared: DocumentType) -> Classification | None:
+def _classify_upload(path: "Path", filename: str, declared: DocumentType) -> Classification | None:
     """Identify and classify a stored upload, or give up quietly.
 
     Never allowed to fail the upload. The file is already saved and the
     document row is about to be written; a classifier that could not read a
     PDF is a missing second opinion, not a reason to reject work a person has
     successfully submitted.
+
+    Takes the path rather than the stored URL since documents moved to private
+    storage: the caller already holds an open `private_storage.local_path`, and
+    re-deriving a location from a URL is what tied this to the public tree.
     """
     try:
-        path = resolve_upload_path(file_url)
         with path.open("rb") as handle:
             head = handle.read(1024 * 1024)
         detected = identify_format(head, path.suffix.lower())
@@ -137,7 +142,7 @@ def _classify_upload(file_url: str, filename: str, declared: DocumentType) -> Cl
             declared_type=declared.name,
         )
     except Exception:
-        logger.exception("[FileIntelligence] classification failed for %s", file_url)
+        logger.exception("[FileIntelligence] classification failed for %s", path)
         return None
 
 
@@ -177,14 +182,15 @@ async def upload_document(
         assignee.id == current_user.id for assignee in task.assignees
     ):
         raise HTTPException(status_code=403, detail="You can only attach documents to a task assigned to you")
-    file_url, file_size = await save_upload(file, "documents")
+    storage_key, file_size = await private_storage.save(file, "documents")
     try:
         doc_type = DocumentType((document_type or "other").lower())
     except ValueError:
-        delete_upload(file_url)
+        private_storage.delete(storage_key)
         raise HTTPException(status_code=400, detail="Unsupported documentType")
-    
-    classification = _classify_upload(file_url, file.filename or title, doc_type)
+
+    with private_storage.local_path(storage_key) as stored_path:
+        classification = _classify_upload(stored_path, file.filename or title, doc_type)
 
     new_doc = Document(
         project_id=proj_uuid,
@@ -192,7 +198,10 @@ async def upload_document(
         uploaded_by_id=current_user.id,
         title=title,
         document_type=doc_type,
-        file_url=file_url,
+        storage_key=storage_key,
+        # Retained as an audit trail of where the row came from. It is no longer
+        # a reachable location: `/uploads` no longer serves this category.
+        file_url=f"private://{storage_key}",
         file_size_bytes=file_size,
         mime_type=file.content_type,
         version=1,
@@ -222,6 +231,26 @@ async def upload_document(
     record_audit(db, actor_id=current_user.id, action="document_uploaded", entity_type="task" if task_uuid else "document",
                  entity_id=task_uuid or new_doc.id, project_id=proj_uuid,
                  details={"document_id": new_doc.id, "title": title})
+    # The Document Consistency Agent subscribes to this and had nothing to
+    # listen to: the event type was declared but never emitted anywhere, so the
+    # agent could only ever be run by hand.
+    #
+    # Emitted after the file is stored and classified, so a subscriber that
+    # reads `indexStatus` or the classification is not racing the upload that
+    # produced them.
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(
+        db, project_id=proj_uuid, event_type="DOCUMENT_UPLOADED",
+        entity_type="DOCUMENT", entity_id=new_doc.id, actor_user_id=current_user.id,
+        payload={
+            "title": new_doc.title,
+            "documentType": new_doc.document_type.value,
+            "detectedFormat": new_doc.detected_format,
+            "taskId": str(task_uuid) if task_uuid else None,
+        },
+        correlation_id=f"document:{new_doc.id}",
+        idempotency_key=f"DOCUMENT_UPLOADED:{new_doc.id}",
+    )
     db.commit()
     db.refresh(new_doc)
     return new_doc
@@ -257,7 +286,14 @@ def delete_document(
             raise HTTPException(status_code=403, detail="Submitted task evidence cannot be deleted")
     record_audit(db, actor_id=current_user.id, action="document_deleted", entity_type="document",
                  entity_id=doc.id, project_id=doc.project_id)
-    delete_upload(doc.file_url)
+    # Documents uploaded since the move live in private storage; rows that
+    # predate it still point into the old public tree. Delete whichever one
+    # this row actually has, so retiring the public path does not start
+    # leaving orphaned bytes behind.
+    if doc.storage_key:
+        private_storage.delete(doc.storage_key)
+    else:
+        delete_upload(doc.file_url)
     db.delete(doc)
     db.commit()
     return {"message": "Document deleted successfully"}
@@ -275,4 +311,20 @@ def download_document(
     # checked less than the read endpoint would be the bypass, and this one
     # used to carry its own copy of the scoping.
     assert_document_readable(db, current_user, doc)
-    return {"url": doc.file_url}
+    # This used to return `{"url": doc.file_url}` — a public `/uploads/...`
+    # location served by an unauthenticated static mount. The check above ran
+    # and then handed back a URL that did not need it, so the whole document
+    # scope was advisory to anyone who had once seen the response. The bytes
+    # are now streamed through the same authorization that reached this line.
+    if not doc.storage_key:
+        raise HTTPException(
+            status_code=409,
+            detail="This document predates secure storage and has not been migrated yet",
+        )
+    if not private_storage.exists(doc.storage_key):
+        raise HTTPException(status_code=404, detail="Stored file is unavailable")
+    return stored_file_response(
+        doc.storage_key,
+        filename=doc.title or "document",
+        media_type=doc.mime_type or "application/octet-stream",
+    )

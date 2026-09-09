@@ -201,6 +201,22 @@ def create_issue(
         entity_id=new_issue.id,
     )
     record_audit(db, actor_id=current_user.id, action="created", entity_type="issue", entity_id=new_issue.id, project_id=new_issue.project_id)
+    # No agent subscribes to this today; it is emitted because the event log is
+    # also the project's activity record, and an issue appearing is exactly the
+    # kind of thing a later subscriber will want. Emitted after notification and
+    # audit, so an event is never written for an issue that failed to be raised.
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(
+        db, project_id=new_issue.project_id, event_type="ISSUE_CREATED",
+        entity_type="ISSUE", entity_id=new_issue.id, actor_user_id=current_user.id,
+        payload={
+            "title": new_issue.title,
+            "severity": new_issue.severity.value if new_issue.severity else None,
+            "category": new_issue.category,
+        },
+        correlation_id=f"issue:{new_issue.id}",
+        idempotency_key=f"ISSUE_CREATED:{new_issue.id}",
+    )
     # Project-scoped: an issue list shows every issue in the project, so
     # anyone viewing one needs the hint. Ids only — the refetch supplies the
     # detail, through the same endpoint that already filters by role.

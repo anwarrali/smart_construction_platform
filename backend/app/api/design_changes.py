@@ -195,6 +195,24 @@ def create_design_change(
     record_audit(db, actor_id=current_user.id, action="created", entity_type="design_change",
                  entity_id=new_change.id, project_id=new_change.project_id,
                  details={"disciplines": sorted(relevant_disciplines)})
+    # A design change is this platform's RFI, which is why two agents want it:
+    # the RFI Agent tracks it for unanswered requests, and the Revision Impact
+    # Agent treats it as a revision whose consequences are worth tracing.
+    # Emitted after every validation has passed and the row is populated, so an
+    # event never describes a change that was rejected.
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(
+        db, project_id=new_change.project_id, event_type="DESIGN_CHANGE_CREATED",
+        entity_type="DESIGN_CHANGE", entity_id=new_change.id, actor_user_id=current_user.id,
+        payload={
+            "title": new_change.title,
+            "disciplines": sorted(relevant_disciplines),
+        },
+        correlation_id=f"design_change:{new_change.id}",
+        # One creation per row, ever: a stable key, so a retried request cannot
+        # announce the same new design change twice.
+        idempotency_key=f"DESIGN_CHANGE_CREATED:{new_change.id}",
+    )
     db.commit()
     db.refresh(new_change)
     return new_change

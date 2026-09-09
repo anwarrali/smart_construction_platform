@@ -12,6 +12,7 @@ import type { FieldSubmission } from "../../../types/fieldSubmission";
 import type { Task } from "../../../types/task";
 import type { VoiceCommand } from "../../../types/voice";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
+import { AuthedImage } from "../../../components/shared/AuthedImage";
 
 interface ReportRow {
   submission: FieldSubmission;
@@ -205,9 +206,9 @@ export const VoiceReportsPage = () => {
 
         {submission.photos.length > 0 && <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
           {submission.photos.map((photo) =>
-            <a key={photo.id} href={photo.attachment.fileUrl} target="_blank" rel="noreferrer">
-              <img className="aspect-square w-full rounded border object-cover" src={photo.attachment.fileUrl} alt={photo.attachment.originalFilename} />
-            </a>
+            <div key={photo.id}>
+              <AuthedImage url={photo.attachment.downloadUrl} alt={photo.attachment.originalFilename} className="aspect-square w-full rounded border object-cover" containerClassName="aspect-square w-full rounded border" />
+            </div>
           )}
         </div>}
 

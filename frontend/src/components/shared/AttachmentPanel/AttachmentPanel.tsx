@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { Paperclip, Trash2, Upload } from "lucide-react";
 import api from "../../../services/api";
+import { downloadAuthedFile } from "../../../hooks/useAuthedFile";
 import type { Attachment, AttachmentEntityType } from "../../../types/attachment";
 import toast from "react-hot-toast";
 
@@ -41,7 +42,7 @@ export const AttachmentPanel = ({ projectId, entityType, entityId, initialCount 
     </button>
     {open && <div className="mt-3 space-y-2 rounded-lg bg-muted/20 p-3">
       {items.map((item) => <div key={item.id} className="flex items-center gap-2 text-xs">
-        <a href={item.fileUrl} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-primary hover:underline">{item.originalFilename}</a>
+        <button type="button" onClick={async () => { try { await downloadAuthedFile(item.downloadUrl, item.originalFilename); } catch (err: any) { toast.error(errorMessage(err, t("files.download_failed", { defaultValue: "The file could not be downloaded." }))); } }} className="min-w-0 flex-1 truncate text-left text-primary hover:underline">{item.originalFilename}</button>
         <span className="text-muted-foreground">{Math.ceil(item.fileSizeBytes / 1024)} KB</span>
         {!readOnly && <button aria-label={t("attachmentPanel.delete_attachment")} onClick={async () => { try { await api.attachments.delete(item.id); await load(); toast.success("Attachment deleted."); } catch (err: any) { toast.error(errorMessage(err, "Attachment could not be deleted.")); } }}><Trash2 size={13} /></button>}
       </div>)}

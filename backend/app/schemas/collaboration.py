@@ -95,3 +95,27 @@ class MessageAccountabilityAction(CamelModel):
 class ActivityItem(CamelModel):
     id: UUID; occurred_at: datetime; action: str; entity_type: str
     entity_id: UUID | None = None; actor_id: UUID | None = None; details: dict = Field(default_factory=dict)
+
+
+class MessageAccountabilityItem(CamelModel):
+    message_id: UUID; status: str; reminder_count: int = 0
+
+
+class ActionCenterNotification(CamelModel):
+    """Only the part of a notification the action centre actually shows."""
+    id: UUID; title: str; message: str; category: str = "SYSTEM"; priority: str = "NORMAL"
+    project_id: UUID | None = None; related_entity_type: str | None = None
+    related_entity_id: UUID | None = None; action_url: str | None = None; created_at: datetime
+
+
+class MyActionCenterOut(CamelModel):
+    """The action centre answered with the same camelCase contract as every
+    other endpoint. Without a response model the ORM rows and the site-visit
+    payload were serialised with their snake_case attribute names, so the web
+    client read `visitType`/`projectId` as undefined and the page crashed."""
+    generated_at: datetime
+    counts: dict[str, int] = Field(default_factory=dict)
+    owner_requests: list[OwnerRequestOut] = Field(default_factory=list)
+    message_accountability: list[MessageAccountabilityItem] = Field(default_factory=list)
+    upcoming_site_visits: list[SiteVisitOut] = Field(default_factory=list)
+    notifications: list[ActionCenterNotification] = Field(default_factory=list)

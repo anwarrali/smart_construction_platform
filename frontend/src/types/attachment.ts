@@ -3,8 +3,8 @@ export type AttachmentEntityType = "TASK" | "TASK_REVIEW" | "ISSUE" | "SITE_REPO
 export interface Attachment {
   id: string;
   originalFilename: string;
-  storageKey: string;
-  fileUrl: string;
+  /** Authenticated route that streams the bytes; see `useAuthedFile`. */
+  downloadUrl: string;
   mimeType: string;
   fileSizeBytes: number;
   uploadedById: string;

@@ -24,3 +24,29 @@ def _deterministic_voice_replies():
     settings.VOICE_NATURAL_RESPONSES_ENABLED = False
     yield
     settings.VOICE_NATURAL_RESPONSES_ENABLED = previous
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_outbound_push():
+    """Same reasoning as the fixture above, for the other outbound channel.
+
+    `notify()` fans out to push after the caller's transaction commits, and a
+    developer machine usually *does* have `PUSH_ENABLED=true` with real Firebase
+    credentials mounted — so every test that commits a notification was making
+    live FCM calls to device tokens that no longer exist, and waiting for each
+    to time out.
+
+    That was measurable rather than theoretical: one test which raises an issue
+    for four recipients took 182 seconds, effectively all of it spent in the
+    push dispatcher. Turning it off here made the same test take under a second.
+
+    `queue_push` returns immediately when this is false, so nothing about the
+    notification *record* changes — the database row, its dedupe key and the
+    realtime event are all still written and still asserted on.
+    `test_push_notifications.py` re-enables the flag for the cases that are
+    genuinely about push, so coverage of the dispatcher itself is unaffected.
+    """
+    previous = settings.PUSH_ENABLED
+    settings.PUSH_ENABLED = False
+    yield
+    settings.PUSH_ENABLED = previous

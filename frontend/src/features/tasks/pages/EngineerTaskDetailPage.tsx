@@ -19,11 +19,13 @@ import type { FieldSubmission } from "../../../types/fieldSubmission";
 import type { PhotoCategory } from "../../../types/photoArchive";
 import { ContextDiscussion } from "../../messages/components/ContextDiscussion";
 import { CommunicationActions } from "../../../components/shared/CommunicationActions";
+import { AuthedImage } from "../../../components/shared/AuthedImage";
+import { downloadAuthedFile } from "../../../hooks/useAuthedFile";
 
 interface Comment { id: string; content: string; createdAt: string; author?: { fullName: string } }
 interface Review { id: string; status: string; comments?: string; rejectionReason?: string; requiredCorrections?: string; clarificationQuestion?: string; clarificationResponse?: string; submissionNumber?: number; createdAt: string; submittedBy?: { fullName: string }; reviewedBy?: { fullName: string } }
 interface Activity { id: string; action: string; actorName: string; timestamp: string; details?: Record<string, unknown> }
-interface DocumentItem { id: string; title: string; fileUrl: string; documentType: string; createdAt: string }
+interface DocumentItem { id: string; title: string; downloadUrl: string; documentType: string; createdAt: string }
 
 const blockerCategories = [
   "material_unavailable", "previous_task_incomplete", "drawing_unavailable",
@@ -177,7 +179,7 @@ export const EngineerTaskDetailPage = () => {
         {blockerOpen && !executionLocked && <form className="space-y-3 rounded-lg border border-state-overdue/30 bg-wash-overdue p-4" onSubmit={async (event) => { event.preventDefault(); const ok = await run(() => api.tasks.reportBlocker(task.id, { category: blockerCategory, description: blockerDescription, severity: blockerSeverity }), "Blocker reported to the Project Manager."); if (ok) { setBlockerOpen(false); setBlockerDescription(""); } }}><h2 className="font-semibold text-state-overdue">{t("engineerTask.report_task_blocker")}</h2><div className="grid gap-3 sm:grid-cols-2"><Select label={t("engineerTask.category")} value={blockerCategory} onChange={(event) => setBlockerCategory(event.target.value)} options={blockerCategories.map((value) => ({ value, label: value.replaceAll("_", " ") }))} /><Select label={t("engineerTask.severity")} value={blockerSeverity} onChange={(event) => setBlockerSeverity(event.target.value)} options={["low", "medium", "high", "critical"].map((value) => ({ value, label: value }))} /></div><label className="block text-sm font-medium">{t("engineerTask.description")}<textarea className="mt-1 min-h-24 w-full rounded-md border bg-background p-3 text-sm" value={blockerDescription} onChange={(event) => setBlockerDescription(event.target.value)} required /></label><div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setBlockerOpen(false)}>{t("engineerTask.cancel")}</Button><Button type="submit" disabled={busy || !blockerDescription.trim()}>{t("engineerTask.report_blocker")}</Button></div></form>}
       </Card>
 
-      <div className="space-y-6"><Card><h2 className="font-semibold">{t("engineerTask.task_evidence")}</h2><p className="mt-1 text-sm text-muted-foreground">Upload JPG, PNG, PDF, or supported technical files. Submitted evidence is preserved during review.</p><AttachmentPanel projectId={task.projectId} entityType="TASK" entityId={task.id} /></Card><Card><h2 className="font-semibold">{t("engineerTask.related_documents")}</h2><div className="mt-3 space-y-2">{documents.map((item) => <a key={item.id} href={item.fileUrl} target="_blank" rel="noreferrer" className="block rounded border p-2 text-sm text-primary hover:bg-muted/30">{item.title}</a>)}{!documents.length && <p className="text-sm text-muted-foreground">{t("engineerTask.no_linked_technical_documents")}</p>}</div></Card><Card><h2 className="font-semibold">{t("engineerTask.related_issues_blockers")}</h2><div className="mt-3 space-y-2">{issues.map((item) => <div key={item.id} className="rounded border p-2 text-sm"><div className="flex justify-between gap-2"><span className="font-medium">{item.title}</span><Badge size="sm" variant={item.status === "open" ? "warning" : "neutral"}>{item.status}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{item.description}</p></div>)}{!issues.length && <p className="text-sm text-muted-foreground">{t("engineerTask.no_related_issues")}</p>}</div></Card></div>
+      <div className="space-y-6"><Card><h2 className="font-semibold">{t("engineerTask.task_evidence")}</h2><p className="mt-1 text-sm text-muted-foreground">Upload JPG, PNG, PDF, or supported technical files. Submitted evidence is preserved during review.</p><AttachmentPanel projectId={task.projectId} entityType="TASK" entityId={task.id} /></Card><Card><h2 className="font-semibold">{t("engineerTask.related_documents")}</h2><div className="mt-3 space-y-2">{documents.map((item) => <button key={item.id} type="button" onClick={() => { void downloadAuthedFile(item.downloadUrl, item.title); }} className="block w-full rounded border p-2 text-left text-sm text-primary hover:bg-muted/30">{item.title}</button>)}{!documents.length && <p className="text-sm text-muted-foreground">{t("engineerTask.no_linked_technical_documents")}</p>}</div></Card><Card><h2 className="font-semibold">{t("engineerTask.related_issues_blockers")}</h2><div className="mt-3 space-y-2">{issues.map((item) => <div key={item.id} className="rounded border p-2 text-sm"><div className="flex justify-between gap-2"><span className="font-medium">{item.title}</span><Badge size="sm" variant={item.status === "open" ? "warning" : "neutral"}>{item.status}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{item.description}</p></div>)}{!issues.length && <p className="text-sm text-muted-foreground">{t("engineerTask.no_related_issues")}</p>}</div></Card></div>
     </div>
 
     <Card>
@@ -194,9 +196,9 @@ export const EngineerTaskDetailPage = () => {
           {submission.description && <p className="mt-3 whitespace-pre-line text-sm">{submission.description}</p>}
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {submission.photos.map((photo) => <div key={photo.id} className="overflow-hidden rounded-lg border bg-muted/20">
-              <a href={photo.attachment.fileUrl} target="_blank" rel="noreferrer">
-                <img src={photo.attachment.fileUrl} alt={photo.attachment.originalFilename} className="aspect-square w-full object-cover" />
-              </a>
+              <div>
+                <AuthedImage url={photo.attachment.downloadUrl} alt={photo.attachment.originalFilename} className="aspect-square w-full object-cover" containerClassName="aspect-square w-full" />
+              </div>
               <p className="truncate px-2 pt-2 text-xs">{photo.direction?.toLowerCase() || "Unlabelled view"}</p>
               <div className="flex flex-wrap gap-1 p-2">
                 {photoCategories.filter((item) => item.active).map((category) => {

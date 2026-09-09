@@ -32,6 +32,16 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         server_default=DocumentType.OTHER.name,
         index=True,
     )
+    #: Where the bytes actually live, as a `private_storage` key. This is the
+    #: authoritative location; `file_url` is the legacy public URL kept only so
+    #: rows uploaded before the download endpoint existed can still be found and
+    #: migrated. Nothing serves `file_url` any more — see `api/documents.py`.
+    #:
+    #: Nullable because a row written before this column existed has no key
+    #: until `scripts/migrate_public_uploads.py` backfills it; the download
+    #: endpoint reports such a document as unavailable rather than falling back
+    #: to the public path, which is the behaviour that closes the hole.
+    storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)
     file_url: Mapped[str] = mapped_column(String(500), nullable=False)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -88,6 +98,17 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     chunks: Mapped[list["DocumentChunk"]] = relationship(
         back_populates="document", cascade="all, delete-orphan", passive_deletes=True
     )
+
+    @property
+    def download_url(self) -> str:
+        """The authenticated route that serves this document's bytes.
+
+        A route, not a location. The client cannot reach the object without
+        presenting credentials, and the storage layout never leaves the server —
+        which is what lets the S3/R2 backend land later without touching a
+        single client.
+        """
+        return f"/api/v1/documents/{self.id}/download"
 
     def __repr__(self) -> str:
         return f"<Document id={self.id} title={self.title} type={self.document_type}>"

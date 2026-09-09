@@ -8,7 +8,12 @@ from app.schemas.user import CamelModel, UserOut
 class DocumentBase(CamelModel):
     title: str
     document_type: DocumentType = DocumentType.OTHER
-    file_url: str
+    #: The authenticated route that streams the bytes. `file_url` is deliberately
+    #: **not** exposed: it was a public `/uploads/...` URL, so publishing it on
+    #: every list response handed out an unauthenticated copy of a document the
+    #: caller had just been authorized for. Clients fetch this path with their
+    #: normal credentials instead.
+    download_url: str
     file_size_bytes: Optional[int] = None
     mime_type: Optional[str] = None
     version: int = 1

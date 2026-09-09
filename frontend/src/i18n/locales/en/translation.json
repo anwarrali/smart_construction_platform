@@ -84,7 +84,8 @@
     "noActionsNeeded": "Nothing needs your response",
     "noActionsNeededHint": "Requests and messages assigned to you will appear here.",
     "noInsights": "No findings match these filters",
-    "selectProject": "Select a project to continue"
+    "selectProject": "Select a project to continue",
+    "noPastVisits": "No past site visits"
   },
   "nav": {
     "home": "Home",
@@ -3121,5 +3122,9 @@
     "copied": "Copied",
     "copyFailed": "Your browser would not let the page copy. Select the text and copy it yourself.",
     "secretWarning": "This is the only time the token is shown. Store it in your MCP client's configuration now — the server keeps only a hash and cannot show it again."
+  },
+  "files": {
+    "unavailable": "Image unavailable",
+    "download_failed": "The file could not be downloaded."
   }
 }

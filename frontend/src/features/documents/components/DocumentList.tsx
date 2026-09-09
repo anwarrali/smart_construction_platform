@@ -18,9 +18,16 @@ interface DocumentListProps {
 }
 
 /** Only PDFs can be indexed, so the action is only offered on PDFs.
- *  Showing it on a .docx would offer something guaranteed to fail. */
+ *  Showing it on a .docx would offer something guaranteed to fail.
+ *
+ *  This used to sniff the extension out of the public `fileUrl`, which no
+ *  longer exists — documents are reached through an authenticated route that
+ *  carries no filename. `detectedFormat` is a better answer anyway: it is what
+ *  the server found in the bytes, not what the name claimed. */
 const isPdf = (doc: Document) =>
-  doc.mimeType === "application/pdf" || /\.pdf($|\?)/i.test(doc.fileUrl || "");
+  doc.mimeType === "application/pdf" ||
+  doc.detectedFormat === "PDF" ||
+  /\.pdf$/i.test(doc.title || "");
 
 const typeIcons: Record<string, string> = {
   drawing: "📐",

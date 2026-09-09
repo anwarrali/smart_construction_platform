@@ -83,8 +83,11 @@ export const DocumentsPage = () => {
   };
 
   const handleDownload = async (doc: Document) => {
-    const url = await documentsService.getDownloadUrl(doc.id);
-    window.open(url, "_blank");
+    try {
+      await documentsService.download(doc);
+    } catch (err) {
+      toast.error(errorMessage(err, t("files.download_failed", { defaultValue: "The file could not be downloaded." })));
+    }
   };
 
   const handleDelete = async (doc: Document) => {

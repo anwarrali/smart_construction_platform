@@ -55,6 +55,7 @@ from app.core.deps import (
 from app.services import work_scope
 from app.core.schedule_dates import inclusive_duration_days
 from app.services.audit_service import record_audit
+from app.services.private_storage import private_storage
 from app.services.authorization import has_permission, require
 from app.services.consultant_approval_service import (
     authorized_consultant_ids,
@@ -364,6 +365,35 @@ def _ensure_dependencies_complete(db: Session, task: Task) -> None:
     ).filter(TaskDependency.task_id == task.id, Task.status != TaskStatus.DONE).first()
     if incomplete:
         raise HTTPException(status_code=400, detail="Task cannot start until all dependencies are Done")
+
+
+def _emit_task_completed(db: Session, task: Task, actor: User, *, route: str, review_id=None) -> None:
+    """Announce that a task reached DONE, from whichever path took it there.
+
+    Exactly two paths can complete a task — direct execution completion, and a
+    consultant approving the final review — and both call this rather than
+    writing the event themselves, so the two cannot drift into describing the
+    same transition differently.
+
+    The key is stable on the task, not on the route: completing a task twice by
+    two different routes is not two completions, and a subscriber must not be
+    told it is. A task legitimately reopened and completed again is rare enough,
+    and quiet enough a failure, to be worth less than the duplicate suppression.
+    """
+    from app.services.domain_event_dispatcher import emit_domain_event
+
+    emit_domain_event(
+        db, project_id=task.project_id, event_type="TASK_COMPLETED",
+        entity_type="TASK", entity_id=task.id, actor_user_id=actor.id,
+        payload={
+            "taskCode": task.task_code,
+            "route": route,
+            "reviewId": str(review_id) if review_id else None,
+            "actualEndDate": task.actual_end_date.isoformat() if task.actual_end_date else None,
+        },
+        correlation_id=f"task:{task.id}",
+        idempotency_key=f"TASK_COMPLETED:{task.id}",
+    )
 
 
 @router.get("", response_model=List[TaskOut])
@@ -732,6 +762,24 @@ def update_task(
                     "assignee_ids": [str(value) for value in task.assignee_ids] if assignments_changed else None,
                     "previous_dependency_ids": [str(value) for value in previous_dependency_ids] if dependencies_changed else None,
                     "dependency_ids": [str(value.id) for value in predecessors] if dependencies_changed else None})
+    # The Schedule Risk Agent subscribes to this. Note deliberately *no* stable
+    # idempotency key: a task is updated many times over its life and each
+    # update is a real occurrence, unlike `TASK_CREATED`, which happens once.
+    # The dispatcher's default key is unique per call, so nothing is collapsed.
+    # Bursts are handled where they should be — the orchestrator's cooldown —
+    # rather than by silently dropping events here.
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(
+        db, project_id=task.project_id, event_type="TASK_UPDATED",
+        entity_type="TASK", entity_id=task.id, actor_user_id=current_user.id,
+        payload={
+            "taskCode": task.task_code,
+            "status": task.status.value,
+            "assignmentsChanged": assignments_changed,
+            "dependenciesChanged": dependencies_changed,
+        },
+        correlation_id=f"task:{task.id}",
+    )
     _publish_task_event(db, task, EventType.TASK_UPDATED)
     db.commit()
     db.refresh(task)
@@ -769,7 +817,12 @@ def delete_task(
         )
     linked_attachments = db.query(Attachment).filter(or_(*attachment_filters)).all()
     for attachment in linked_attachments:
-        delete_upload(attachment.file_url)
+        # Private for anything stored since the move; the old public tree for
+        # rows the backfill has not reached yet.
+        if attachment.file_url.startswith("private://") or private_storage.exists(attachment.storage_key):
+            private_storage.delete(attachment.storage_key)
+        else:
+            delete_upload(attachment.file_url)
         db.delete(attachment)
     if review_ids:
         db.query(TaskReview).filter(
@@ -1132,7 +1185,11 @@ def submit_task_for_review(
                 "filename": item.original_filename,
                 "mime_type": item.mime_type,
                 "file_size_bytes": item.file_size_bytes,
-                "file_url": item.file_url,
+                # The snapshot is an immutable record of what was submitted,
+                # read back into a review UI. It records the route, not the
+                # storage location: a stored public URL would outlive the
+                # withdrawal of the public mount and mislead every reader.
+                "download_url": item.download_url,
                 "uploaded_at": item.created_at.isoformat(),
             }
             for item in evidence
@@ -1216,6 +1273,7 @@ def complete_execution_without_review(
     _notify_project_manager(db, task, "Task completed", f'{current_user.full_name} completed {task.task_code}.')
     record_audit(db, actor_id=current_user.id, action="execution_completed", entity_type="task",
                  entity_id=task.id, project_id=task.project_id, details={"review_required": False})
+    _emit_task_completed(db, task, current_user, route="EXECUTION_COMPLETED")
     db.commit()
     db.refresh(task)
     return task
@@ -1303,6 +1361,11 @@ def approve_task(
         payload={"taskId": str(task.id), "decision": "APPROVED", "submissionNumber": review.submission_number},
         correlation_id=f"review:{review.id}", idempotency_key=f"CONSULTANT_REVIEW_APPROVED:{review.id}",
     )
+    # The task reached DONE here too, so the completion event belongs on this
+    # path as well. `update_task` cannot produce a completion — it refuses to
+    # set DONE and directs the caller to the review workflow — so these two
+    # sites are the whole of it, and neither can fire for the same transition.
+    _emit_task_completed(db, task, current_user, route="REVIEW_APPROVED", review_id=review.id)
     from app.services.ai_traceability_service import invalidate_insights_for_source
     invalidate_insights_for_source(db, project_id=task.project_id, source_type="TASK", source_id=task.id,
                                    reason="Task was completed and verified by an authorized reviewer")

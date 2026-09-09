@@ -25,7 +25,7 @@ export interface FieldSubmission {
     attachment: {
       id: string;
       originalFilename: string;
-      fileUrl: string;
+      downloadUrl: string;
       mimeType: string;
       createdAt: string;
     };

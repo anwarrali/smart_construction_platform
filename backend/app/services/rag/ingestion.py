@@ -60,6 +60,7 @@ from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.ingestion import IngestedFile
 from app.services import processing_pool
+from app.services.private_storage import private_storage
 from app.services.rag import pdf_text, text_source
 from app.services.rag.chunking import chunk_pages
 from app.services.rag.embeddings import EmbeddingError, EmbeddingService
@@ -262,9 +263,20 @@ def index_document(
     result. It now shares its state machine with `index_ingested_file`.
     """
     target = _Target.for_document(document)
+    storage_key = document.storage_key
     file_url = document.file_url
 
     def read_pages() -> list[PageText]:
+        # Documents moved into private storage when the public `/uploads` mount
+        # was withdrawn. `storage_key` is the location for everything uploaded
+        # since; `file_url` is read only for rows that predate the move and have
+        # not yet been backfilled, and it resolves against the same upload root
+        # it always did. Two locations, one of which is being retired — not two
+        # storage systems.
+        if storage_key:
+            with private_storage.local_path(storage_key) as path:
+                pdf_text.assert_indexable(path)
+                return pdf_text.extract_pages(path)
         path = pdf_text.resolve_upload_path(file_url)
         pdf_text.assert_indexable(path)
         return pdf_text.extract_pages(path)

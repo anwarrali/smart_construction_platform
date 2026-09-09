@@ -84,9 +84,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-upload_dir = Path(settings.UPLOAD_DIR).resolve()
-upload_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
+# The public mount, narrowed to exactly one category.
+#
+# `/uploads` used to serve the whole upload tree with no authentication at all.
+# Every documents, attachments, site-report and field-evidence endpoint checked
+# permissions carefully and then published a URL under this mount, so the checks
+# decided who learned a file's address and nothing decided who could fetch it.
+# Those four categories now live in private storage and are streamed by
+# `api/downloads.stored_file_response` behind the same authorization that
+# reaches the row.
+#
+# Avatars stay public and are mounted on their own path, so the directory this
+# serves contains nothing else. That is a deliberate, narrow exception: a
+# profile picture is shown to every project member anyway, and routing it
+# through an authenticated fetch would mean blob-loading an avatar in half a
+# dozen components for no confidentiality gain. Nothing sensitive can be added
+# to it by accident, because a new category would have to be mounted here
+# explicitly.
+avatar_dir = Path(settings.UPLOAD_DIR).resolve() / "avatars"
+avatar_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads/avatars", StaticFiles(directory=avatar_dir), name="avatars")
 
 
 

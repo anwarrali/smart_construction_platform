@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from pathlib import PurePosixPath
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -43,7 +42,7 @@ from app.services.field_submission_authorization import (
     can_view_field_submission,
     verification_required,
 )
-from app.services.file_storage import delete_upload, save_upload
+from app.services.private_storage import private_storage
 from app.services.field_submission_policy import AUDIT_ACTIONS, initial_status
 from app.services.photo_archive_policy import category_belongs_to_project
 from app.services.task_progress_service import update_task_progress
@@ -144,11 +143,11 @@ async def _add_photo(
     direction: EvidencePhotoDirection | None,
     categories: list[PhotoCategory] | None = None,
 ) -> tuple[FieldSubmissionPhoto, str]:
-    file_url, file_size = await save_upload(file, "field-evidence")
+    storage_key, file_size = await private_storage.save(file, "field-evidence")
     attachment = Attachment(
         original_filename=file.filename or "field-photo",
-        storage_key=PurePosixPath(file_url.split("/uploads/", 1)[-1]).as_posix(),
-        file_url=file_url,
+        storage_key=storage_key,
+        file_url=f"private://{storage_key}",
         mime_type=file.content_type or "application/octet-stream",
         file_size_bytes=file_size,
         uploaded_by_id=author.id,
@@ -172,7 +171,35 @@ async def _add_photo(
             assigned_by_id=author.id,
             source="HUMAN",
         ))
-    return photo, file_url
+    return photo, storage_key
+
+
+def _emit_field_submission_event(db, submission, actor, event_type: str) -> None:
+    """Announce a field-submission transition, from whichever route caused it.
+
+    Both verification routes — plain verify, and verify-and-apply, which also
+    writes task progress — end in the same state and emit the same event, so the
+    Site Report Agent does not have to know which button was pressed.
+
+    `FIELD_SUBMISSION_CREATED` was previously emitted only from
+    `voice_action_service`, so evidence filed through the REST API — the normal
+    path — announced nothing at all, and the Site Report Agent appeared to work
+    only for voice-filed evidence.
+    """
+    from app.services.domain_event_dispatcher import emit_domain_event
+
+    emit_domain_event(
+        db, project_id=submission.project_id, event_type=event_type,
+        entity_type="FIELD_SUBMISSION", entity_id=submission.id, actor_user_id=actor.id,
+        payload={
+            "taskId": str(submission.task_id),
+            "status": submission.status.value,
+        },
+        correlation_id=f"field_submission:{submission.id}",
+        # One creation and one verification per submission: a submission cannot
+        # return to SUBMITTED once verified, so a stable key is exactly right.
+        idempotency_key=f"{event_type}:{submission.id}",
+    )
 
 
 @router.post("", response_model=FieldSubmissionOut, status_code=201)
@@ -234,15 +261,15 @@ async def create_field_submission(
     )
     db.add(submission)
     db.flush()
-    stored_urls: list[str] = []
+    stored_keys: list[str] = []
     try:
         for file, direction, categories in zip(
             uploads, parsed_directions, parsed_categories
         ):
-            _, file_url = await _add_photo(
+            _, storage_key = await _add_photo(
                 db, submission, current_user, file, direction, categories
             )
-            stored_urls.append(file_url)
+            stored_keys.append(storage_key)
         reviewer_ids = authorized_reviewer_ids(db, task)
         project = db.get(Project, project_uuid)
         if not reviewer_ids and project and project.project_manager_id:
@@ -258,11 +285,15 @@ async def create_field_submission(
             details={"task_id": task.id, "photo_count": len(uploads),
                      "resubmission_of_id": submission.resubmission_of_id},
         )
+        # Inside the try, before the commit, so a submission that fails to
+        # persist never announces itself. The event and the rows it describes
+        # succeed or fail together.
+        _emit_field_submission_event(db, submission, current_user, "FIELD_SUBMISSION_CREATED")
         db.commit()
     except Exception:
         db.rollback()
-        for file_url in stored_urls:
-            delete_upload(file_url)
+        for key in stored_keys:
+            private_storage.delete(key)
         raise
     db.refresh(submission)
     return submission
@@ -284,12 +315,12 @@ async def add_field_submission_photo(
         or not can_submit_field_evidence(db, current_user, submission.task)
     ):
         raise HTTPException(status_code=403, detail="You cannot add photos to this submission")
-    file_url = None
+    storage_key = None
     try:
         categories = _photo_categories(
             db, f"[{category_ids}]" if category_ids else None, 1, submission.project_id
         )[0]
-        photo, file_url = await _add_photo(
+        photo, storage_key = await _add_photo(
             db, submission, current_user, file, direction, categories
         )
         db.commit()
@@ -297,8 +328,8 @@ async def add_field_submission_photo(
         return photo
     except Exception:
         db.rollback()
-        if file_url:
-            delete_upload(file_url)
+        if storage_key:
+            private_storage.delete(storage_key)
         raise
 
 
@@ -435,6 +466,7 @@ def verify_field_submission(
         entity_type="field_submission", entity_id=submission.id,
         project_id=submission.project_id, details={"task_id": submission.task_id},
     )
+    _emit_field_submission_event(db, submission, current_user, "FIELD_SUBMISSION_VERIFIED")
     db.commit()
     db.refresh(submission)
     return submission
@@ -508,6 +540,7 @@ def verify_and_apply_field_submission(
             "progress": data.progress_percentage,
         },
     )
+    _emit_field_submission_event(db, submission, current_user, "FIELD_SUBMISSION_VERIFIED")
     db.commit()
     db.refresh(submission)
     return submission

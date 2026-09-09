@@ -8,9 +8,9 @@ import { Loader } from "../../../components/ui/Loader";
 import { Modal } from "../../../components/ui/Modal";
 import api from "../../../services/api";
 import { errorMessage } from "../../../utils/errorMessage";
-import { documentsService } from "../services/documents.service";
 import type { Document } from "../../../types/document";
 import type { DocumentIndexStatus, RagQueryResponse } from "../../../types/rag";
+import { openAuthedFile } from "../../../hooks/useAuthedFile";
 
 interface DocumentAssistantProps {
   document: Document | null;
@@ -123,10 +123,11 @@ export const DocumentAssistant = ({ document, isOpen, onClose }: DocumentAssista
   const openCitation = async (page: number) => {
     if (!documentId) return;
     try {
-      const url = await documentsService.getDownloadUrl(documentId);
       // Browsers honour #page=N for PDFs, which is what turns a citation from
-      // a claim into something the reader can check in one click.
-      window.open(`${url}#page=${page}`, "_blank", "noopener");
+      // a claim into something the reader can check in one click. The file now
+      // arrives over the authenticated route as a blob, and the fragment works
+      // on a blob URL just the same.
+      await openAuthedFile(`/documents/${documentId}/download`, `#page=${page}`);
     } catch (err) {
       toast.error(errorMessage(err, t("documentAssistant.open_failed")));
     }

@@ -111,7 +111,11 @@ def test_the_migration_chain_has_exactly_one_head():
     # project-scoped credentials for desktop MCP clients. A row rather than a
     # long-lived JWT precisely so that revoking one is an UPDATE that takes
     # effect on the next request. Additive.
-    assert heads == ["e71d5a3c9b42"], f"expected exactly one head, found: {heads}"
+    # Bumped by `f81c3a5d9e64`, which gives `documents` the `storage_key` it was
+    # the only file-bearing table to lack. Additive and nullable: the bytes move
+    # out of the public tree in `scripts/migrate_public_uploads.py`, which is a
+    # file operation and therefore cannot live in a migration.
+    assert heads == ["f81c3a5d9e64"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.

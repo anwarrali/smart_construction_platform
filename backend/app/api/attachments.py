@@ -1,5 +1,4 @@
 from datetime import datetime
-from pathlib import PurePosixPath
 from typing import List, Optional
 import uuid
 
@@ -13,10 +12,12 @@ from app.core.deps import (
     user_has_project_access,
 )
 from app.services import work_scope
+from app.services.field_submission_authorization import can_view_field_submission
 from app.services.authorization import has_permission
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.design_change import DesignChange
+from app.models.field_submission import FieldSubmission
 from app.models.issue import Issue
 from app.models.site_report import SiteReport
 from app.models.task import Task, TaskReview
@@ -24,8 +25,10 @@ from app.models.user import User
 from app.models.enums import UserRole, TaskStatus
 from app.models.collaboration import OwnerRequest
 from app.schemas.attachment import AttachmentOut
+from app.api.downloads import stored_file_response
 from app.services.audit_service import record_audit
-from app.services.file_storage import delete_upload, save_upload
+from app.services.file_storage import delete_upload
+from app.services.private_storage import private_storage
 
 router = APIRouter(prefix="/attachments", tags=["Attachments"])
 ENTITY_MODELS = {
@@ -180,11 +183,14 @@ async def upload_attachment(
     if not user_has_project_access(db, current_user, project_uuid):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     _entity_or_404(db, normalized_type, entity_uuid, project_uuid, current_user, for_write=True)
-    file_url, file_size = await save_upload(file, "attachments")
+    storage_key, file_size = await private_storage.save(file, "attachments")
     attachment = Attachment(
         original_filename=file.filename or "file",
-        storage_key=PurePosixPath(file_url.split("/uploads/", 1)[-1]).as_posix(),
-        file_url=file_url,
+        storage_key=storage_key,
+        # Kept as provenance only. Attachments are no longer reachable at a
+        # public path, so this is a record of where the row came from rather
+        # than a location anything resolves.
+        file_url=f"private://{storage_key}",
         mime_type=file.content_type or "application/octet-stream",
         file_size_bytes=file_size,
         uploaded_by_id=current_user.id,
@@ -199,6 +205,61 @@ async def upload_attachment(
     db.commit()
     db.refresh(attachment)
     return attachment
+
+
+@router.get("/{attachment_id}/download")
+def download_attachment(
+    attachment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stream one attachment to a caller entitled to read it.
+
+    Every attachment-backed surface arrives here — a task's evidence, a
+    site-report photo, a field-evidence photo, an owner request's file — because
+    all four are `Attachment` rows. One route means one read rule.
+
+    That rule is not written here. `_entity_or_404` is the same function
+    `delete_attachment` already calls, and it carries the task-assignment,
+    review and discipline scoping this module enforces everywhere else; calling
+    it with `for_write=False` asks exactly "may this person see the thing the
+    file is attached to?". Writing a second predicate for downloads is how the
+    download path ends up looser than the list path, which is the bug this
+    endpoint exists to close.
+    """
+    attachment = db.get(Attachment, attachment_id)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if not user_has_project_access(db, current_user, attachment.project_id):
+        raise HTTPException(status_code=403, detail="You do not have access to this attachment")
+    if attachment.entity_type == "FIELD_SUBMISSION":
+        # Field evidence is the one attachment kind `ENTITY_MODELS` does not
+        # carry, because evidence is never uploaded through this module — it
+        # arrives via `api/field_submissions.py`. Its read rule already exists
+        # and is the one the photo archive applies, so it is called rather than
+        # restated: an evidence package is visible to its author, to whoever may
+        # review it, to the project's staff, and to an external participant only
+        # once it has been verified.
+        submission = db.get(FieldSubmission, attachment.entity_id)
+        if not submission or submission.project_id != attachment.project_id:
+            raise HTTPException(status_code=404, detail="Related project entity not found")
+        if not can_view_field_submission(db, current_user, submission):
+            raise HTTPException(status_code=403, detail="This evidence is not visible to you")
+    else:
+        _entity_or_404(
+            db,
+            attachment.entity_type,
+            attachment.entity_id,
+            attachment.project_id,
+            current_user,
+        )
+    if not private_storage.exists(attachment.storage_key):
+        raise HTTPException(status_code=404, detail="Stored file is unavailable")
+    return stored_file_response(
+        attachment.storage_key,
+        filename=attachment.original_filename,
+        media_type=attachment.mime_type or "application/octet-stream",
+    )
 
 
 @router.delete("/{attachment_id}")
@@ -236,7 +297,12 @@ def delete_attachment(
         raise HTTPException(status_code=403, detail="Submitted task evidence cannot be deleted")
     record_audit(db, actor_id=current_user.id, action="attachment_deleted", entity_type=attachment.entity_type.lower(),
                  entity_id=attachment.entity_id, project_id=attachment.project_id, details={"attachment_id": attachment.id})
-    delete_upload(attachment.file_url)
+    # Rows written since the move live in private storage; older ones still
+    # point into the public tree until the backfill script has run.
+    if attachment.file_url.startswith("private://") or private_storage.exists(attachment.storage_key):
+        private_storage.delete(attachment.storage_key)
+    else:
+        delete_upload(attachment.file_url)
     db.delete(attachment)
     db.commit()
     return {"message": "Attachment deleted"}
