@@ -101,10 +101,29 @@ class Role(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     #: something there; recording it on the role keeps that decision explicit
     #: instead of deriving it from whatever permissions an office configured.
     #: Both columns are dropped by the same migration that drops `users.role`.
-    #: NULL means "no account may be created under this role" — which is the
-    #: archived field-staff template, and nothing else.
+    #:
+    #: It used to carry a second meaning by accident: NULL meant "no account may
+    #: be created under this role, and nobody on it may be staffed onto a
+    #: project". That is `is_archived` below now — a translation column and a
+    #: policy flag were doing one another's jobs, and only one of them is going
+    #: away with `users.role`.
     legacy_role: Mapped[str | None] = mapped_column(String(30), nullable=True)
     legacy_affiliation: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+    #: This role exists to preserve historical attribution, not to be worked
+    #: under: no account may be created on it, and nobody holding it may be
+    #: staffed onto a project.
+    #:
+    #: Stated explicitly because it used to be inferred from
+    #: `legacy_role IS NULL`. That worked, but it tied a policy question to a
+    #: migration-window translation column — so the rule would have vanished
+    #: silently the day `legacy_role` was dropped, and an office creating a role
+    #: of its own could express "archived" only by leaving a column blank whose
+    #: name says nothing about archiving. Today exactly one role sets it: the
+    #: template retired worker accounts were moved onto.
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false",
+    )
 
     permissions: Mapped[list["RolePermission"]] = relationship(
         back_populates="role", cascade="all, delete-orphan",

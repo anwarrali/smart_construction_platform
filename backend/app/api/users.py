@@ -38,7 +38,7 @@ from app.core.deps import get_current_user
 from app.models.rbac import Discipline, Role
 from app.services import rbac
 from app.services.authorization import has_permission, require, require_permission
-from app.core.permissions import can_create_team_role, is_engineer
+from app.core.permissions import is_engineer
 from app.core.security import hash_password, verify_password
 from app.services.user_service import create_provisioned_user, generate_temporary_password
 from app.services.file_storage import save_upload
@@ -170,25 +170,30 @@ def create_user(
 ):
     """Create an active account under one of the office's configured roles.
 
-    Two paths, and the difference is what the request names. With
-    `orgRoleId`, the account is created under a role the office maintains and
-    the gate is `platform.manage_users` — the permission an office can actually
-    administer, and the one that already guards every other endpoint on this
-    router. Without it, the retired `role` enum path still works and is still
-    gated by `can_create_team_role`, so a client that has not been updated
-    behaves exactly as before.
+    Two paths, and the difference is what the request names. With `orgRoleId`,
+    the account is created under a role the office maintains. Without it, the
+    retired `role` enum path still works for a client that has not been updated.
+
+    **Both are now gated by the same permission.** The legacy path used to ask
+    `can_create_team_role(current_user.role, user_data.role)`, which resolved
+    from the retired enum and admitted nobody but an ADMIN — so the two branches
+    of one endpoint answered to two different authorities, and an office that
+    granted `platform.manage_users` to a role of its own found it worked on one
+    and not the other. The check is hoisted above the branch to make that
+    single answer visible rather than repeated.
+
+    What the retired function *also* did — refuse `WORKER` by omitting it from a
+    set — is not an authorization question and did not move here. It is an
+    invariant in `create_provisioned_user`, which is where it cannot be granted
+    around.
     """
+    require(db, current_user, "platform.manage_users")
+
     org_role = None
     discipline_ids: list[uuid.UUID] = []
     if user_data.org_role_id is not None:
-        require(db, current_user, "platform.manage_users")
         org_role = _requested_org_role(db, user_data.org_role_id)
         discipline_ids = _requested_disciplines(db, user_data.discipline_ids)
-    elif not can_create_team_role(current_user.role, user_data.role):
-        raise HTTPException(
-            status_code=403,
-            detail=f"You are not authorized to create users with role '{user_data.role.value}'",
-        )
 
     discipline = None
     employee_id = None

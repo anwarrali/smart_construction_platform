@@ -121,7 +121,11 @@ def test_the_migration_chain_has_exactly_one_head():
     # live resolver answers from `role_permissions` rows and the seeder that
     # writes them is a manual script, so without this the administrator who
     # could delete a project yesterday could not delete one today.
-    assert heads == ["a92d4e1f70b3"], f"expected exactly one head, found: {heads}"
+    # Bumped by `b73f5c8a2e91`, which gives `roles` an `is_archived` column and
+    # backfills it from `legacy_role IS NULL` — separating the archived-role
+    # policy from the migration-window translation column that was carrying it
+    # by coincidence.
+    assert heads == ["b73f5c8a2e91"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.

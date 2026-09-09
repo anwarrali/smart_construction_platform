@@ -263,13 +263,15 @@ def is_client_participant(db: Session, user: User, project_id: uuid.UUID | None)
     return False
 
 
-#: Roles that exist to hold history rather than to be worked under. A role with
-#: no `legacy_role` is one the platform refuses to create accounts under
-#: (`user_service.legacy_role_for`), and that is the same predicate as "nobody
-#: may be staffed onto a project under it" — today that is exactly the archived
-#: field-staff role retired worker accounts sit on.
+#: Roles that exist to hold history rather than to be worked under.
+#:
+#: This used to read `legacy_role IS NULL`. The predicate was correct but the
+#: column was the wrong one to ask: `legacy_role` is a migration-window
+#: translation for `users.role`, and dropping it — which is the point of the
+#: migration — would have deleted this rule silently along with it. `is_archived`
+#: says the same thing about the same rows and outlives the bridge.
 def _archived_role_ids(db: Session):
-    return db.query(Role.id).filter(Role.legacy_role.is_(None)).scalar_subquery()
+    return db.query(Role.id).filter(Role.is_archived.is_(True)).scalar_subquery()
 
 
 def staffable_filter(db: Session):
@@ -292,11 +294,18 @@ def staffable_filter(db: Session):
 
 
 def is_staffable(db: Session, user: User) -> bool:
-    """The row-level form of `staffable_filter`, for an account already loaded."""
+    """The row-level form of `staffable_filter`, for an account already loaded.
+
+    Was `bool(role.legacy_role)` — the row-level spelling of the same
+    `legacy_role IS NULL` predicate `_archived_role_ids` used, and moved for the
+    same reason. An account with no role at all is still not staffable: the
+    backstop gives every new row one, so `None` here means something is wrong
+    rather than something is permitted.
+    """
     if user.status != UserStatus.ACTIVE:
         return False
     role = get_role(db, user.org_role_id)
-    return bool(role is not None and role.legacy_role)
+    return bool(role is not None and not role.is_archived)
 
 
 def resolved_permissions(
@@ -504,6 +513,7 @@ def seed_roles(
                 rank=template.rank,
                 legacy_role=template.legacy_role,
                 legacy_affiliation=template.legacy_affiliation,
+                is_archived=template.is_archived,
             )
             db.add(role)
             db.flush()

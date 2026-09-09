@@ -19,13 +19,14 @@ from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.core.permissions import ROLE_LABELS, can_create_team_role
+from app.core.permissions import ROLE_LABELS
 from app.models.enums import EngineerDiscipline, UserRole, UserStatus
 from app.models.project import ProjectMember
 from app.models.rbac import Role
 from app.models.user import EngineerProfile, User
 from app.core.security import hash_password
 from app.services import rbac
+from app.services.authorization import require
 from app.services.email_service import send_invitation_email
 
 
@@ -53,9 +54,14 @@ def legacy_role_for(org_role: Role) -> UserRole:
 
     Read from the role, never inferred from its permissions: an office that
     re-permissions a role must not thereby change what kind of account it
-    creates. A role with no value recorded cannot provision anybody — that is
-    the archived field-staff template, and refusing here is what stops a worker
-    account being minted again through the new path.
+    creates.
+
+    **Translation only.** This used to double as the archived-role provisioning
+    guard, because the one template with no `legacy_role` was also the one
+    nobody may be created under. That coincidence has been separated:
+    `create_provisioned_user` refuses `Role.is_archived` before reaching here.
+    The raise below remains as a defence for a role that is untranslatable for
+    some other reason — it is no longer the rule, it is the backstop.
     """
     if not org_role.legacy_role:
         raise ValueError(
@@ -94,17 +100,41 @@ def create_provisioned_user(
     path the administrator UI uses. `role` alone is the legacy path, kept
     working until the contract migration.
     """
+    # Provisioning authority is one question with one answer on both paths.
+    # The legacy path used to ask `can_create_team_role(creator.role, role)`,
+    # which read the retired enum on both sides and admitted nobody but an
+    # ADMIN — so an office that granted `platform.manage_users` to a role of its
+    # own still could not create accounts through it. Both paths now require the
+    # permission the office can actually administer, which is what the
+    # `org_role_id` path already required at the endpoint.
+    require(db, creator, "platform.manage_users")
+
     if org_role is not None:
         # The configured role decides everything the legacy arguments used to.
+        if org_role.is_archived:
+            # The policy, stated against the flag that means it. This used to
+            # fall out of `legacy_role_for` failing to translate a role with no
+            # `legacy_role`, which was correct only for as long as that column
+            # exists. Checked before translation so the refusal is about what
+            # the role *is*, not about what could not be derived from it.
+            raise ValueError(
+                f"Role '{org_role.code}' cannot be used to create accounts"
+            )
         role = legacy_role_for(org_role)
         engineer_affiliation = org_role.legacy_affiliation
     elif role is None:
         raise ValueError("An office role is required to create an account")
-    elif not can_create_team_role(creator.role, role):
-        # Only the legacy path is gated this way. Creating under a configured
-        # role is gated by `platform.manage_users` at the endpoint, which is
-        # the permission the office can actually administer.
-        raise ValueError(f"Role '{role.value}' cannot be created by {creator.role.value}")
+    elif role == UserRole.WORKER:
+        # The other half of what `can_create_team_role` did. It refused WORKER
+        # by leaving it out of a set, which is a rule nobody can see and which
+        # disappears the moment the function does. Workers stopped being
+        # platform users in the redesign; existing accounts were moved onto the
+        # archived role above and no new one may be minted.
+        #
+        # Deliberately not a permission: an office must not be able to make this
+        # provisionable by granting something, so it is an invariant rather than
+        # a capability.
+        raise ValueError("Worker accounts can no longer be created")
 
     if role == UserRole.CONSULTANT:
         role = UserRole.ENGINEER

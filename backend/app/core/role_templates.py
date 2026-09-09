@@ -90,6 +90,11 @@ class RoleTemplate:
     #: Refused by the delete endpoint. Only the office administrator role,
     #: because deleting it would leave nobody able to administer.
     undeletable: bool = False
+    #: Exists to preserve historical attribution: no account may be created
+    #: under it and nobody on it may be staffed onto a project. Previously
+    #: inferred from `legacy_role is None`; stated here so the rule survives
+    #: `legacy_role` being dropped.
+    is_archived: bool = False
     description: str = ""
 
     @property
@@ -143,10 +148,11 @@ class RoleTemplate:
 
 
 def _t(code, name_en, name_ar, scope, internal, inherits, *, extra=(), without=(),
-       rank=100, undeletable=False, description=""):
+       rank=100, undeletable=False, is_archived=False, description=""):
     return RoleTemplate(
         code, name_en, name_ar, scope, internal, inherits,
-        frozenset(extra), frozenset(without), rank, undeletable, description,
+        frozenset(extra), frozenset(without), rank, undeletable, is_archived,
+        description,
     )
 
 
@@ -241,7 +247,7 @@ TEMPLATES: tuple[RoleTemplate, ...] = (
     # account survives so its field evidence stays attributable, and it can
     # do nothing. See docs/CONSULTING_OFFICE_REDESIGN.md §7.
     _t("archived_field_staff", "Field Staff (archived)", "عامل ميداني (مؤرشف)",
-       SCOPE_ORG, True, None, rank=900,
+       SCOPE_ORG, True, None, rank=900, is_archived=True,
        description="Retained for historical evidence only. Holds no permissions."),
 )
 
