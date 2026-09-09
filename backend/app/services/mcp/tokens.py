@@ -161,11 +161,13 @@ def visible_tokens(db: Session, *, viewer: User, include_revoked: bool = False,
     is not something that can wait for its owner to be reachable. They never see
     a secret — nobody does; the column does not exist.
     """
-    from app.core.permissions import can_manage_all_users
+    # Imported here rather than at module scope: `authorization` reaches back
+    # into the model layer, and this module is imported from it.
+    from app.services.authorization import has_permission
 
     now = now or datetime.now(timezone.utc)
     query = db.query(McpClientToken)
-    if not can_manage_all_users(viewer.role):
+    if not has_permission(db, viewer, "platform.manage_users"):
         query = query.filter(McpClientToken.user_id == viewer.id)
     if not include_revoked:
         query = query.filter(
@@ -194,10 +196,12 @@ def find_for_revocation(db: Session, *, viewer: User, token_id: uuid.UUID):
     Deliberately answers None for both "no such token" and "not yours": the two
     are the same fact to anybody who should not be told the token exists.
     """
-    from app.core.permissions import can_manage_all_users
+    # Imported here rather than at module scope: `authorization` reaches back
+    # into the model layer, and this module is imported from it.
+    from app.services.authorization import has_permission
 
     query = db.query(McpClientToken).filter(McpClientToken.id == token_id)
-    if not can_manage_all_users(viewer.role):
+    if not has_permission(db, viewer, "platform.manage_users"):
         query = query.filter(McpClientToken.user_id == viewer.id)
     return query.first()
 

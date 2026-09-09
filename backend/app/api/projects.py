@@ -40,7 +40,6 @@ from app.core.deps import (
     get_current_user,
     get_project_or_403,
     get_manageable_project_or_403,
-    require_project_creation,
     user_has_project_access,
 )
 from app.core.permissions import is_admin

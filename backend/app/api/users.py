@@ -34,11 +34,11 @@ from app.schemas.user import (
     UserCreateByAdmin,
     UserCreateResponse,
 )
-from app.core.deps import get_current_user, require_can_create_user
+from app.core.deps import get_current_user
 from app.models.rbac import Discipline, Role
 from app.services import rbac
 from app.services.authorization import has_permission, require, require_permission
-from app.core.permissions import can_create_team_role, can_manage_all_users, is_engineer
+from app.core.permissions import can_create_team_role, is_engineer
 from app.core.security import hash_password, verify_password
 from app.services.user_service import create_provisioned_user, generate_temporary_password
 from app.services.file_storage import save_upload
@@ -349,7 +349,10 @@ def get_user_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not can_manage_all_users(current_user.role) and current_user.id != user_id:
+    # Was `can_manage_all_users(current_user.role)`. `platform.manage_users`
+    # is the catalogue code for administering other people's accounts, and
+    # resolves identically for every account in the database.
+    if not has_permission(db, current_user, "platform.manage_users") and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to view this user")
 
     user = db.query(User).filter(User.id == user_id).first()

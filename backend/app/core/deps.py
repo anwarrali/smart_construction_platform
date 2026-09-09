@@ -8,16 +8,10 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from app.core.permissions import (
-    can_create_project,
-    can_create_team_role,
-    can_manage_all_users,
-    can_manage_project_members,
-    is_admin,
-)
+from app.core.permissions import is_admin
 from app.core.security import decode_token
 from app.db.database import get_db
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.models.revoked_token import RevokedToken
@@ -97,13 +91,12 @@ def get_current_user(
 # had no callers. Endpoints use `require_permission(code)` / `require(...)`.
 
 
-def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if not can_manage_all_users(current_user.role):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Company administrator access required",
-        )
-    return current_user
+# `require_admin` stood here and is gone. Its only callers were the two
+# `/company/settings` endpoints, which now depend on
+# `require_permission("org.manage_settings")` — the catalogue code that already
+# described that surface. It became unused as a result of that swap rather than
+# having been dead beforehand, and is removed here so the last role-derived
+# dependency in this module does not sit waiting for a new caller.
 
 
 def require_active_user(current_user: User = Depends(get_current_user)) -> User:
@@ -126,16 +119,13 @@ def require_active_user(current_user: User = Depends(get_current_user)) -> User:
 # imported by `app.api.projects`, which never used them.
 
 
-def require_can_create_user(
-    target_role: UserRole,
-    current_user: User = Depends(get_current_user),
-) -> User:
-    if not can_create_team_role(current_user.role, target_role):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"You are not authorized to create users with role '{target_role.value}'",
-        )
-    return current_user
+# `require_can_create_user` stood here and is gone, for the same reason as the
+# four above it: it asked `can_create_team_role(current_user.role, target_role)`
+# — a decision made from the retired enum on both sides — and nothing used it.
+# `app.api.users` imported the name without ever declaring it as a dependency,
+# so the account-creation rule it appeared to enforce was never actually
+# reached through this path. Creating a user is gated at the endpoint by
+# `platform.manage_users`, which is the permission an office can administer.
 
 
 def user_has_project_access(
@@ -272,19 +262,20 @@ def get_manageable_project_or_403(
     )
 
 
-def require_project_creation(current_user: User = Depends(get_current_user)) -> User:
-    if not can_create_project(current_user.role):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to create projects",
-        )
-    return current_user
-
-
-def require_project_member_management(current_user: User = Depends(get_current_user)) -> User:
-    if not can_manage_project_members(current_user.role):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to manage project members",
-        )
-    return current_user
+# `require_project_creation` and `require_project_member_management` stood here
+# and are gone. Both resolved from `User.role`, and neither was ever declared as
+# a dependency: `app.api.projects` imported the first without using it, and the
+# second had no reference anywhere at all.
+#
+# The second is worth recording, because it was not merely unused — it was
+# *wrong*. `can_manage_project_members(role)` answers True for any project
+# manager on every project in the platform, while the permission that replaced
+# it, `project.manage_members`, is project-scoped. Measured across the accounts
+# in this database, the two disagreed on 21 (user, project) pairs, every one of
+# them a project manager who would have been admitted to a project they have no
+# part in. Nothing called it, so nothing was exposed; it is deleted rather than
+# migrated so that the discrepancy cannot be reintroduced by a future caller
+# reaching for a conveniently-named helper.
+#
+# Project creation is gated by `platform.create_project`, and membership
+# management by `project.manage_members`, both through `require(...)`.
