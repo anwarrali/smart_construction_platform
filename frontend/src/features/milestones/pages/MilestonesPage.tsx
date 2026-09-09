@@ -14,6 +14,7 @@ import api from "../../../services/api";
 import type { Milestone } from "../../../types/milestone";
 import type { Task } from "../../../types/task";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
+import { useRole } from "../../../hooks/useRole";
 
 
 export const MilestonesPage = () => {
@@ -21,6 +22,12 @@ export const MilestonesPage = () => {
   const vocabulary = useVocabulary();
   const { projectId, id } = useParams<{ projectId?: string; id?: string }>();
   const workspace = useProjectWorkspace();
+  // Writing a milestone is a schedule change, which is what the server now
+  // requires. The page is reachable on `schedule.view`, so without this the
+  // Add/Edit/Delete controls render for a consultant or the client and fail
+  // with a 403 when pressed.
+  const { hasCapability } = useRole();
+  const canEditSchedule = hasCapability("schedule.edit");
   const activeProjectId = projectId || id || workspace.projectId;
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -82,7 +89,7 @@ export const MilestonesPage = () => {
   return <div className="page-container space-y-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h1 className="text-2xl font-bold">{t("milestonesPage.project_milestones")}</h1><p className="text-sm text-muted-foreground">{t("milestonesPage.link_scheduled_work_to_measurable")}</p></div>
-      <Button onClick={() => openForm()}>+ Add Milestone</Button>
+      {canEditSchedule && <Button onClick={() => openForm()}>+ Add Milestone</Button>}
     </div>
     {error && <Card><p className="text-sm text-destructive">{error}</p></Card>}
     {loading ? <p className="text-sm text-muted-foreground">{t("milestonesPage.loading_milestones")}</p> : <div className="grid gap-4 lg:grid-cols-2">
@@ -91,7 +98,7 @@ export const MilestonesPage = () => {
         {milestone.description && <p className="text-sm text-muted-foreground">{milestone.description}</p>}
         <div><div className="mb-1 flex justify-between text-xs"><span>{milestone.completedTaskCount}/{milestone.taskCount} tasks completed</span><span>{milestone.progressPercentage}%</span></div><div className="h-2 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{ width: `${milestone.progressPercentage}%` }} /></div></div>
         <div className="flex flex-wrap gap-1">{milestone.taskIds.map((taskId) => <span key={taskId} className="rounded bg-muted px-2 py-1 text-xs">{linkedNames.get(taskId) || "Linked task"}</span>)}{!milestone.taskIds.length && <span className="text-xs text-muted-foreground">{t("milestonesPage.no_tasks_linked_yet")}</span>}</div>
-        <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openForm(milestone)}>{t("milestonesPage.edit")}</Button><Button size="sm" variant="destructive" onClick={async () => { if (!window.confirm(`Delete ${milestone.milestoneCode}? Linked tasks will be preserved.`)) return; await api.milestones.delete(milestone.id); toast.success("Milestone deleted."); load(); }}>{t("milestonesPage.delete")}</Button></div>
+        {canEditSchedule && <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openForm(milestone)}>{t("milestonesPage.edit")}</Button><Button size="sm" variant="destructive" onClick={async () => { if (!window.confirm(`Delete ${milestone.milestoneCode}? Linked tasks will be preserved.`)) return; await api.milestones.delete(milestone.id); toast.success("Milestone deleted."); load(); }}>{t("milestonesPage.delete")}</Button></div>}
       </Card>)}
       {!milestones.length && <Card><p className="text-sm text-muted-foreground">{t("milestonesPage.no_milestones_have_been_created_for_this")}</p></Card>}
     </div>}

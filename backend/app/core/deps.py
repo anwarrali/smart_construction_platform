@@ -8,7 +8,6 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from app.core.permissions import is_admin
 from app.core.security import decode_token
 from app.db.database import get_db
 from app.models.enums import UserStatus
@@ -239,27 +238,21 @@ def get_project_or_403(
     return project
 
 
-def get_manageable_project_or_403(
-    project_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> Project:
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-
-    if is_admin(current_user.role):
-        return project
-
-    # The id comparison already implies the role: `project_manager_id` is
-    # validated to be an active PROJECT_MANAGER wherever it is written.
-    if current_user.id == project.project_manager_id:
-        return project
-
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Only the assigned project manager or company administrator can manage this project",
-    )
+# `get_manageable_project_or_403` stood here and is gone. It asked
+# `is_admin(user.role) or user.id == project.project_manager_id` — the last
+# authorization decision in this module read off the retired enum.
+#
+# Its replacement is `app.services.authorization.manageable_project(db, user,
+# project_id, code)`: the same shape, returning the project or raising, but
+# parameterised by the permission the caller actually needs. That is what let
+# each of its callers state its own meaning — the project-team surfaces resolve
+# `project.manage_members`, milestone writes resolve `schedule.edit` — instead
+# of sharing one rule that fitted none of them exactly.
+#
+# The rule it enforced could not be configured: an office that created a role
+# with full project authority still could not manage a project with it, because
+# the check asked which of six retired words the account carried. `require`
+# already demands project access, so nobody reaches a project they are not on.
 
 
 # `require_project_creation` and `require_project_member_management` stood here

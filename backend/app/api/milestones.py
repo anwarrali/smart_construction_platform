@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
-from app.core.deps import get_current_user, get_manageable_project_or_403, user_has_project_access
+from app.core.deps import get_current_user, user_has_project_access
 from app.db.database import get_db
 from app.models.enums import NotificationType, TaskStatus
 from app.models.milestone import Milestone
@@ -15,6 +15,7 @@ from app.models.task import Task
 from app.models.user import User
 from app.schemas.milestone import MilestoneCreate, MilestoneOut, MilestoneUpdate
 from app.services.audit_service import record_audit
+from app.services.authorization import manageable_project
 
 
 router = APIRouter(prefix="/milestones", tags=["Milestones"])
@@ -107,7 +108,7 @@ def create_milestone(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_manageable_project_or_403(data.project_id, db, current_user)
+    manageable_project(db, current_user, data.project_id, "schedule.edit")
     tasks = _validate_tasks(db, data.project_id, data.task_ids)
     milestone = Milestone(
         project_id=data.project_id,
@@ -143,7 +144,7 @@ def update_milestone(
     current_user: User = Depends(get_current_user),
 ):
     milestone = _get_milestone_or_404(db, milestone_id)
-    get_manageable_project_or_403(milestone.project_id, db, current_user)
+    manageable_project(db, current_user, milestone.project_id, "schedule.edit")
     if data.name is not None:
         milestone.name = data.name.strip()
     if "description" in data.model_fields_set:
@@ -169,7 +170,7 @@ def delete_milestone(
     current_user: User = Depends(get_current_user),
 ):
     milestone = _get_milestone_or_404(db, milestone_id)
-    get_manageable_project_or_403(milestone.project_id, db, current_user)
+    manageable_project(db, current_user, milestone.project_id, "schedule.edit")
     project_id = milestone.project_id
     db.query(Task).filter(Task.milestone_id == milestone.id).update({Task.milestone_id: None}, synchronize_session=False)
     record_audit(db, actor_id=current_user.id, action="deleted", entity_type="milestone",
