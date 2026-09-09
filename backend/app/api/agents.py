@@ -13,6 +13,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.deps import get_current_user, user_has_project_access
 from app.db.database import get_db
 from app.models.user import User
@@ -127,17 +128,28 @@ def list_subscriptions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Which domain events would wake which agents.
+    """Which domain events would wake which agents, and whether they will.
 
-    Declared and resolvable today; nothing is wired to the dispatcher, so no
-    agent runs on its own. Phase 8 turns this on.
+    The docstring here used to say nothing was wired to the dispatcher. That
+    stopped being true: `domain_event_dispatcher.process_event` calls
+    `agents.event_subscriber.safe_handle_event`, and every declared event type
+    now has an emission site. What remains between "declared" and "running" is
+    one operator switch, so that is what this reports — a client showing the
+    subscription map needs to be able to say whether it describes what happens
+    or only what would happen.
     """
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    enabled = settings.AGENT_AUTO_ANALYSIS_ENABLED
     return {
         "subscriptions": event_subscription_map(),
+        "automaticAnalysisEnabled": enabled,
         "note": (
-            "Declared subscriptions. No agent is triggered automatically in this "
-            "release; runs happen when requested."
+            "These events trigger analysis automatically on this server."
+            if enabled
+            else (
+                "Declared subscriptions. Automatic analysis is switched off "
+                "(AGENT_AUTO_ANALYSIS_ENABLED), so agents run only when requested."
+            )
         ),
     }

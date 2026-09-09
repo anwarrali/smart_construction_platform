@@ -41,6 +41,12 @@ const MODULE_PERMISSIONS: Record<string, string> = {
   milestones: "schedule.view",
   ifc: "ifc.view",
   "ai-intelligence": "ai.view_insights",
+  // The agents page shows the whole catalogue and marks which of the five
+  // this person may run, so it is gated on the broadest of their five
+  // permissions rather than on any one agent's. A module missing from this
+  // map resolves to `false` and silently redirects to the fallback, so the
+  // sidebar link would point at the wrong page without this line.
+  agents: "task.view",
   "review-queue": "task.review",
   reviews: "task.review",
   history: "task.review",

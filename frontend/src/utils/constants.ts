@@ -30,6 +30,7 @@ export const ROUTES = {
   PROJECT_EVIDENCE: "/projects/:projectId/evidence",
   PROJECT_IFC: "/projects/:projectId/ifc",
   PROJECT_AI_INTELLIGENCE: "/projects/:projectId/ai-intelligence",
+  PROJECT_AGENTS: "/projects/:projectId/agents",
   PROJECT_DETAIL: "/projects/:id",
   PROJECT_SCHEDULE: "/projects/:projectId/schedule",
   PROJECT_MILESTONES: "/projects/:projectId/milestones",

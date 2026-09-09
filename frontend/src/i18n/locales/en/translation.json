@@ -145,7 +145,8 @@
     "accessControl": "Permissions",
     "voiceAssistant": "Voice Assistant",
     "officeRoles": "Roles & disciplines",
-    "projectParties": "Project parties"
+    "projectParties": "Project parties",
+    "agents": "Agents"
   },
   "roles": {
     "admin": "Administrator",
@@ -3126,5 +3127,58 @@
   "files": {
     "unavailable": "Image unavailable",
     "download_failed": "The file could not be downloaded."
+  },
+  "agents": {
+    "title": "Project agents",
+    "subtitle": "Five bounded analysts over data this project already holds. Each reads through the tool layer with your permissions, reasons deterministically, and files what it finds for review. None of them changes project data.",
+    "loading": "Loading agents…",
+    "loadFailed": "The agents could not be loaded.",
+    "refresh": "Refresh",
+    "run": "Run",
+    "running": "Running…",
+    "runAll": "Run all ({{count}})",
+    "runFinished": "{{agent}} finished — {{count}} finding(s).",
+    "runFailed": "The agent could not complete.",
+    "passFinished": "{{ran}} ran, {{skipped}} skipped, {{failed}} failed — {{count}} finding(s).",
+    "passFailed": "The analysis pass could not complete.",
+    "notPermitted": "Not permitted",
+    "requiresPermission": "Needs {{permission}}",
+    "governedBy": "Governed by {{permission}}",
+    "toolsItHolds": "Tools it may call ({{count}})",
+    "lastRunFound": "Last run: {{count}} finding(s) in {{ms}} ms.",
+    "lastRunFailed": "Last run failed: {{reason}}",
+    "noneRunnable": "You do not hold the permission for any agent on this project. The catalogue below is shown for reference.",
+    "findingsStored": "{{count}} finding(s) filed to the review queue.",
+    "openReviewQueue": "Open review queue",
+    "runHistory": "Run history",
+    "noRunsYet": "No agent has run on this project yet",
+    "noRunsYetHint": "Run one above. Every run is recorded here with the tools it called.",
+    "findingsAndDuration": "{{count}} finding(s) · {{ms}} ms",
+    "toolCallsMade": "{{count}} tool call(s), {{refused}} refused",
+    "callOk": "ok",
+    "automaticOn": "Automatic analysis on",
+    "automaticOff": "Automatic analysis off",
+    "status": {
+      "SUCCEEDED": "Succeeded",
+      "FAILED": "Failed"
+    },
+    "trigger": {
+      "MANUAL": "Requested",
+      "EVENT": "Automatic"
+    },
+    "name": {
+      "site_report_agent": "Site Report Agent",
+      "document_consistency_agent": "Document Consistency Agent",
+      "revision_impact_agent": "Revision Impact Agent",
+      "rfi_agent": "RFI Agent",
+      "schedule_risk_agent": "Schedule Risk Agent"
+    },
+    "responsibility": {
+      "site_report_agent": "Analyses filed site reports and field information for delays, recurring problems, missing detail and progress that conflicts with the task record.",
+      "document_consistency_agent": "Establishes which project documents are actually related, then checks those for inconsistency, misfiling and content that cannot be verified.",
+      "revision_impact_agent": "When a model revision or design change appears, identifies what it may affect — always with the evidence that links the two.",
+      "rfi_agent": "Tracks requests for information — which this platform records as design changes — for unanswered and overdue requests and recurring clarification areas.",
+      "schedule_risk_agent": "Identifies schedule risk on top of existing scheduling data: overdue, stalled, blocked and undated work. It does not recompute the critical path."
+    }
   }
 }

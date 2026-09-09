@@ -82,6 +82,10 @@ import type {
 import type { IFCComparison, IFCElement, IFCFinding, IFCFindingIssue, IFCFindingReviewResult, IFCFindingReviewStatus, IFCModelGroup, IFCPage, IFCSpatialDetails, IFCSpatialNode, IFCSuggestion, IFCUploadConstraints, IFCVersion } from "../types/ifc";
 import type { AIActionPage, AIActionVersion } from "../types/aiAction";
 import type { DocumentIndexStatus, RagQueryResponse } from "../types/rag";
+import type {
+  AgentCatalogue, AgentRunRecord, AgentRunResult, AgentSubscriptions,
+  OrchestrationReport,
+} from "../types/agent";
 import type { AIInsight, AIInsightSource, AIIntelligenceOverview } from "../types/aiInsight";
 
 const api = {
@@ -955,6 +959,38 @@ const api = {
     review: (projectId:string,id:string,status:string,note?:string) => axiosInstance.patch<AIInsight>(ENDPOINTS.AI_INTELLIGENCE.INSIGHT(projectId,id),{status,note}).then(res=>res.data),
     createIssue: (projectId:string,id:string) => axiosInstance.post(`${ENDPOINTS.AI_INTELLIGENCE.INSIGHT(projectId,id)}/create-issue`).then(res=>res.data),
     createTask: (projectId:string,id:string,data:Record<string,unknown>={}) => axiosInstance.post(`${ENDPOINTS.AI_INTELLIGENCE.INSIGHT(projectId,id)}/create-task`,data).then(res=>res.data),
+  },
+  /**
+   * The five project agents.
+   *
+   * Thin on purpose: these six endpoints already existed and were fully
+   * tested, and had no client at all. Nothing is reshaped on the way through —
+   * a finding's `certainty`, the tool calls a run made and the reason a skip
+   * happened are all carried to the UI as the server stated them, because the
+   * point of the run log is that it can be checked.
+   */
+  agents: {
+    list: (projectId: string) =>
+      axiosInstance.get<AgentCatalogue>(ENDPOINTS.AGENTS.BASE(projectId)).then((res) => res.data),
+    runOne: (projectId: string, agentName: string) =>
+      axiosInstance
+        .post<AgentRunResult>(ENDPOINTS.AGENTS.RUN_ONE(projectId, agentName))
+        .then((res) => res.data),
+    /** One governed pass over every agent this caller may run. */
+    orchestrate: (projectId: string) =>
+      axiosInstance
+        .post<OrchestrationReport>(ENDPOINTS.AGENTS.ORCHESTRATE(projectId))
+        .then((res) => res.data),
+    runs: (projectId: string, agentName?: string, limit = 50) =>
+      axiosInstance
+        .get<{ runs: AgentRunRecord[] }>(ENDPOINTS.AGENTS.RUNS(projectId), {
+          params: { agent_name: agentName, limit },
+        })
+        .then((res) => res.data.runs),
+    subscriptions: (projectId: string) =>
+      axiosInstance
+        .get<AgentSubscriptions>(ENDPOINTS.AGENTS.SUBSCRIPTIONS(projectId))
+        .then((res) => res.data),
   },
   aiActions: {
     list: (projectId:string,page=1,pageSize=25) => axiosInstance

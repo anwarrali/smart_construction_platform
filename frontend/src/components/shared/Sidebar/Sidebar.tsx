@@ -1,9 +1,28 @@
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Activity, AlertTriangle, ArrowLeft, Bell, Boxes, BrainCircuit, Building2,
-  CalendarDays, CheckSquare, ClipboardCheck, FileText, FolderKanban, Images,
-  LayoutDashboard, ListChecks, MessageSquare, Mic2, Pencil, Settings, ShieldCheck, Users,
+  Activity,
+  AlertTriangle,
+  ArrowLeft,
+  Bell,
+  Bot,
+  Boxes,
+  BrainCircuit,
+  Building2,
+  CalendarDays,
+  CheckSquare,
+  ClipboardCheck,
+  FileText,
+  FolderKanban,
+  Images,
+  LayoutDashboard,
+  ListChecks,
+  MessageSquare,
+  Mic2,
+  Pencil,
+  Settings,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
 
 import { useRole } from "../../../hooks/useRole";
@@ -109,6 +128,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
       {to:workspace.path("documents"),label:t("nav.documents"),icon:FileText,permission:"document.view"},
       {to:workspace.path("ifc"),label:t("nav.ifcBim"),icon:Boxes,permission:"ifc.view"},
       {to:workspace.path("ai-intelligence"),label:t("nav.aiInsights"),icon:BrainCircuit,permission:"ai.view_insights"},
+      {to:workspace.path("agents"),label:t("nav.agents"),icon:Bot,permission:"task.view"},
     ]},
     { label:t("nav.groupTeam"), items:[
       {to:workspace.path("collaboration"),label:t("nav.collaboration"),icon:ListChecks,permission:"task.view"},

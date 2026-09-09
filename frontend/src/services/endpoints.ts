@@ -258,6 +258,17 @@ export const ENDPOINTS = {
     INSIGHTS: (projectId:string) => `/projects/${projectId}/ai-intelligence/insights`,
     INSIGHT: (projectId:string,id:string) => `/projects/${projectId}/ai-intelligence/insights/${id}`,
   },
+  // The five project agents. Every route is project-scoped in the path, the
+  // same shape the backend router uses — an agent run is always about one
+  // project, and there is no cross-project form of it to express.
+  AGENTS: {
+    BASE: (projectId: string) => `/projects/${projectId}/agents`,
+    RUN_ONE: (projectId: string, agentName: string) =>
+      `/projects/${projectId}/agents/${agentName}/run`,
+    ORCHESTRATE: (projectId: string) => `/projects/${projectId}/agents/orchestrate`,
+    RUNS: (projectId: string) => `/projects/${projectId}/agents/runs`,
+    SUBSCRIPTIONS: (projectId: string) => `/projects/${projectId}/agents/subscriptions`,
+  },
   AI_ACTIONS: {
     BASE: "/ai/actions",
     ACTION: (id:string) => `/ai/actions/${id}`,

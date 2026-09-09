@@ -88,6 +88,7 @@ const VoiceReportsPage = lazy(() => import("../../features/voice/pages/VoiceRepo
 const VoiceAssistantPage = lazy(() => import("../../features/voice/pages/VoiceAssistantPage").then((m) => ({ default: m.VoiceAssistantPage })));
 const IFCWorkspacePage = lazy(() => import("../../features/ifc/pages/IFCWorkspacePage").then((m) => ({ default: m.IFCWorkspacePage })));
 const AIIntelligencePage = lazy(() => import("../../features/ai-intelligence/pages/AIIntelligencePage").then((m) => ({ default: m.AIIntelligencePage })));
+const AgentsPage = lazy(() => import("../../features/agents/pages/AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const CollaborationPage = lazy(() => import("../../features/collaboration/pages/CollaborationPage").then((m) => ({ default: m.CollaborationPage })));
 const McpClientsPage = lazy(() => import("../../features/settings/pages/McpClientsPage").then((m) => ({ default: m.McpClientsPage })));
 
@@ -203,6 +204,16 @@ export const Router = () => {
             </Route>
             <Route element={<PermissionGuard permissions={["ai.view_insights"]} />}>
               <Route path={ROUTES.PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
+            </Route>
+            {/* The agents page is guarded on `task.view`, the broadest of the
+                five per-agent permissions, because the page's job is to show
+                the whole catalogue and say which of them this person may run.
+                Guarding it on any one agent's permission would hide the others
+                from somebody entitled to know they exist; the run buttons are
+                what the narrower permissions gate, and the server refuses a run
+                regardless of what the button offered. */}
+            <Route element={<PermissionGuard permissions={["task.view"]} />}>
+              <Route path={ROUTES.PROJECT_AGENTS} element={<AgentsPage />} />
             </Route>
 
             {/* The review queue. `task.review` is office-only, so an external
