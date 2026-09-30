@@ -329,13 +329,57 @@ LEGACY_CONSULTANT_TEMPLATE = _t(
 )
 
 
+#: The affiliation strings this map is written in terms of. Derived from the
+#: map itself rather than restated, so the two cannot disagree, and identical
+#: to the closed set `UserCreateByAdmin` validates against in
+#: `app/schemas/user.py` — that validator is the only place a new affiliation
+#: can enter through the API, and this is the only place one is interpreted.
+SUPPORTED_AFFILIATIONS: frozenset[str] = frozenset(
+    affiliation for _role, affiliation in LEGACY_ROLE_MAP if affiliation is not None
+)
+
+
+class UnknownAffiliation(ValueError):
+    """An `engineer_affiliation` that is not one the platform recognises.
+
+    A `ValueError` because that is what the account-creation path already
+    translates into a 400 (`app/api/users.py`), and because the value really is
+    a bad argument rather than a failure of the system. Narrow rather than
+    generic so a caller can tell this apart from the other reasons provisioning
+    refuses.
+    """
+
+
 def template_for_legacy(role: UserRole, affiliation: str | None) -> RoleTemplate:
-    """The template an existing account or membership migrates onto."""
+    """The template an existing account or membership migrates onto.
+
+    Raises `UnknownAffiliation` if `affiliation` is supplied but is not one of
+    `SUPPORTED_AFFILIATIONS`. It must not fall through to the role-only
+    mapping, and the reason is specific rather than defensive: an ENGINEER's
+    affiliation is what separates office staff from an outside party, so
+    `main_contracter` falling through to `(ENGINEER, None)` produced the
+    `engineer` template — `is_internal_only=True` — and silently turned an
+    external contractor into internal office staff. That is the same failure
+    the `is_internal` note in `app/db/user_role_backstop.py` records having
+    already been made once, arrived at from the other direction.
+
+    `None` is not a typo and keeps its meaning: the roles that never carried an
+    affiliation resolve through the `(role, None)` entry as before.
+    """
+    if affiliation is not None and affiliation not in SUPPORTED_AFFILIATIONS:
+        raise UnknownAffiliation(
+            f"Unrecognised engineer_affiliation {affiliation!r} for role "
+            f"{getattr(role, 'value', role)}. Supported values are "
+            f"{sorted(SUPPORTED_AFFILIATIONS)}."
+        )
     if role == UserRole.CONSULTANT:
         return LEGACY_CONSULTANT_TEMPLATE
     code = LEGACY_ROLE_MAP.get((role, affiliation)) or LEGACY_ROLE_MAP.get((role, None))
     if code is None:
-        # An unknown legacy value must not silently become a powerful role.
+        # An unknown legacy *role* must not silently become a powerful one.
+        # Unreachable while every `UserRole` has a `(role, None)` entry; kept
+        # because the thing it guards against is a value added to the enum
+        # without one, and that is exactly the change nobody notices.
         return BY_CODE_TEMPLATE["archived_field_staff"]
     return BY_CODE_TEMPLATE[code]
 
