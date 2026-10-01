@@ -37,8 +37,7 @@ void main() {
     final user = User.fromJson({
       'id': '1',
       'fullName': 'Field Engineer',
-      'email': 'field@example.com',
-      'role': 'engineer',
+      'email': 'field@example.com',
       'status': 'active',
       'orgRole': {
         'id': 'role-1',
@@ -62,8 +61,7 @@ void main() {
     final user = User.fromJson({
       'id': '2',
       'fullName': 'Contractor Rep',
-      'email': 'rep@example.com',
-      'role': 'engineer',
+      'email': 'rep@example.com',
       'status': 'active',
       'orgRole': {
         'id': 'role-2',
@@ -78,20 +76,17 @@ void main() {
     expect(user.disciplines, isEmpty);
   });
 
-  test('an account the backfill has not reached still renders', () {
-    // No `orgRole`, so the retired enum is all there is. It must parse and
-    // produce a label rather than throwing — the client cannot assume every
-    // account has been migrated.
+  test('a user payload without an office role still parses', () {
+    // Every account holds an office role, but a nested user in some payloads
+    // carries only a name. It must parse, with an empty role label.
     final user = User.fromJson({
       'id': '3',
-      'fullName': 'Legacy Account',
-      'email': 'legacy@example.com',
-      'role': 'project_manager',
+      'fullName': 'Nested Sender',
+      'email': 'sender@example.com',
       'status': 'active',
     });
     expect(user.orgRoleName, isNull);
-    expect(user.roleLabel, 'project_manager');
-    expect(user.isProjectManager, isTrue);
+    expect(user.roleLabel, isEmpty);
   });
 
   test('field submission preserves rejection and photo direction metadata', () {
@@ -163,8 +158,7 @@ void main() {
       'sender': {
         'id': 'user-1',
         'fullName': 'Site Engineer',
-        'email': 'site@example.com',
-        'role': 'engineer',
+        'email': 'site@example.com',
         'status': 'active',
       },
     });
@@ -187,8 +181,7 @@ void main() {
           'user': {
             'id': 'user-1',
             'fullName': 'Site Engineer',
-            'email': 'site@example.com',
-            'role': 'engineer',
+            'email': 'site@example.com',
             'status': 'active',
           },
         },

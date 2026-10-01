@@ -121,7 +121,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/issues',
             builder: (context, __) {
-              final user = ref.read(sessionProvider).user;
               return _projectCollection(
                 ref,
                 context,
@@ -130,8 +129,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 context.l10n.issuesEmpty,
                 Icons.report_problem_outlined,
                 entityType: 'ISSUE',
-                createRoute:
-                    user?.role == 'engineer' || user?.isProjectManager == true
+                createRoute: capabilitiesFrom(ref).has('issue.create')
                     ? '/issues/new'
                     : null,
               );
@@ -235,7 +233,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// The bottom-navigation destinations for a role.
+/// The bottom-navigation destinations, chosen by capability.
 ///
 /// Presentation only. Every destination leads to a screen that fetches from
 /// an authorized endpoint, so a role that should not see a section is stopped
@@ -244,7 +242,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// **Four destinations, not five.** The fifth slot is the raised voice action
 /// in the middle of the bar, and Profile — which nobody opens while standing
 /// on a slab — moved to the dashboard header. What is left is the question
-/// "what does this person do on site all day", answered per role:
+/// "what does this person do on site all day", answered by what they may do:
 /// their work, their exceptions, and the people they need to reach.
 List<ShellDestination> _destinationsFor(User? user, Capabilities capabilities) {
   ShellDestination home() => ShellDestination(
@@ -281,7 +279,8 @@ List<ShellDestination> _destinationsFor(User? user, Capabilities capabilities) {
       messages(),
     ];
   }
-  if (user?.isOwner == true) {
+  // The client portal: somebody outside the office who holds its capability.
+  if (user?.isInternal == false && capabilities.has('client_portal.view')) {
     return [
       home(),
       ShellDestination(
@@ -301,7 +300,8 @@ List<ShellDestination> _destinationsFor(User? user, Capabilities capabilities) {
       messages(),
     ];
   }
-  if (user?.isProjectManager == true) {
+  // Running projects: staffing them is what marks the people who do.
+  if (capabilities.has('project.manage_members')) {
     return [
       home(),
       ShellDestination(

@@ -207,18 +207,6 @@ extension L10nLabels on AppL10n {
     };
   }
 
-  String roleLabel(String? value) => switch (value?.toLowerCase().trim()) {
-    'admin' => roleAdmin,
-    'owner' => roleOwner,
-    'project_manager' => roleProjectManager,
-    'engineer' => roleEngineer,
-    'consultant' => roleConsultant,
-    // No 'worker' arm: Worker is not a role this app knows. A historical
-    // account still carrying the retired value falls through to _humanise,
-    // which renders it as plain text rather than as a role the product has.
-    _ => _humanise(value),
-  };
-
   /// The five entity types Task 2.1 can share into a conversation.
   String entityLabel(String? value) => switch (value?.toUpperCase().trim()) {
     'ISSUE' => entityIssue,
