@@ -31,7 +31,7 @@ from app.schemas.permission import (
 from app.services import rbac
 from app.services.audit_service import record_audit
 from app.services.step_up_service import require_step_up
-from app.services.authorization import effective_permissions, require
+from app.services.authorization import effective_permissions, has_permission, require
 
 router = APIRouter(prefix="/access-control", tags=["Access Control"])
 
@@ -219,7 +219,10 @@ def set_user_permission(user_id: uuid.UUID, payload: UserPermissionUpdate,
             ),
         )
 
-    if target.role == UserRole.ADMIN and item.admin_locked and payload.allowed is False:
+    # The office administrator is whoever holds the undeletable office role —
+    # the same test `effective_permissions` uses to restore these codes, so
+    # refusing here only tells the administrator what would happen anyway.
+    if item.admin_locked and payload.allowed is False and rbac.holds_office_admin_role(db, target):
         raise HTTPException(
             status_code=409,
             detail="This permission keeps the platform administrable and cannot be removed from an administrator",
@@ -257,6 +260,22 @@ def set_user_permission(user_id: uuid.UUID, payload: UserPermissionUpdate,
     return user_permissions(user_id, payload.project_id, db, current_user)
 
 
+def _project_reviewer_ids(db: Session, project_id: uuid.UUID) -> list[uuid.UUID]:
+    """The office's reviewers on this project: active members holding `task.review`.
+
+    Was `role_on_project == CONSULTANT`. Reviewing work is a permission the
+    office's own roles hold, so the question is asked of the permission.
+    """
+    members = db.query(ProjectMember).join(User, User.id == ProjectMember.user_id).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.is_active == True,  # noqa: E712
+    ).order_by(User.full_name).all()
+    return [
+        member.user_id for member in members
+        if has_permission(db, member.user, "task.review", project_id)
+    ]
+
+
 @router.get("/projects/{project_id}/consultants", response_model=list[ConsultantScopeOut])
 def project_consultants(project_id: uuid.UUID, db: Session = Depends(get_db),
                         current_user: User = Depends(get_current_user)):
@@ -270,13 +289,7 @@ def project_consultants(project_id: uuid.UUID, db: Session = Depends(get_db),
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    consultant_ids = [
-        row.user_id for row in db.query(ProjectMember).filter(
-            ProjectMember.project_id == project_id,
-            ProjectMember.role_on_project == UserRole.CONSULTANT,
-            ProjectMember.is_active == True,  # noqa: E712
-        ).all()
-    ]
+    consultant_ids = _project_reviewer_ids(db, project_id)
     assignments = db.query(ProjectConsultantReviewer).filter(
         ProjectConsultantReviewer.project_id == project_id).all()
     scopes = db.query(ConsultantEngineerScope).filter(
@@ -305,13 +318,7 @@ def set_consultant_engineer_scope(project_id: uuid.UUID, payload: ConsultantScop
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    is_consultant = db.query(ProjectMember.id).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.user_id == payload.consultant_user_id,
-        ProjectMember.role_on_project == UserRole.CONSULTANT,
-        ProjectMember.is_active == True,  # noqa: E712
-    ).first()
-    if not is_consultant:
+    if payload.consultant_user_id not in _project_reviewer_ids(db, project_id):
         raise HTTPException(status_code=400, detail="That person is not an active consultant on this project")
 
     member_ids = {

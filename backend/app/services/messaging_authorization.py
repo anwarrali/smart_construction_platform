@@ -21,9 +21,7 @@ from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.user import User
 from app.services.messaging_policy import (
-    PROJECT_GROUPS,
-    can_create_group,
-    can_project_broadcast,
+    PROJECT_GROUPS,
 )
 
 
@@ -56,19 +54,26 @@ def can_message_user(
     return True
 
 
-def can_create_project_group_conversation(user: User) -> bool:
-    return can_create_group(user.role.value)
+def can_create_project_group_conversation(
+    db: Session, user: User, project_id: uuid.UUID
+) -> bool:
+    """Whether this person may address a whole group on this project.
+
+    Was `role in {"admin", "project_manager"}` on the retired enum; now the
+    office decides through `message.broadcast`, per project.
+    """
+    return has_permission(db, user, "message.broadcast", project_id)
 
 
-def can_send_project_announcement(user: User) -> bool:
-    return can_project_broadcast(user.role.value)
+def can_send_project_announcement(db: Session, user: User, project_id: uuid.UUID) -> bool:
+    return has_permission(db, user, "message.broadcast", project_id)
 
 
 def resolve_group_recipient_ids(
     db: Session, sender: User, project_id: uuid.UUID, group_code: str
 ) -> set[uuid.UUID]:
     code = group_code.strip().upper()
-    if not can_create_project_group_conversation(sender):
+    if not can_create_project_group_conversation(db, sender, project_id):
         return set()
     project = db.get(Project, project_id)
     if not project or not user_has_project_access(db, sender, project_id):
@@ -212,7 +217,7 @@ def can_send_to_conversation(db: Session, user: User, conversation: Conversation
 def available_group_codes(db: Session, user: User, project_id: uuid.UUID) -> list[str]:
     if not user_has_project_access(db, user, project_id):
         return []
-    if can_create_project_group_conversation(user):
+    if can_create_project_group_conversation(db, user, project_id):
         disciplines = {
             value.casefold()
             for (value,) in db.query(ProjectMember.project_discipline).filter(

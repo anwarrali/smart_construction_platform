@@ -207,22 +207,25 @@ def is_external_participant(db: Session, user: User, project_id: uuid.UUID | Non
     whoever added them. Failing that, the account's own `is_internal` flag
     answers for contexts with no project.
 
-    `is_internal` is only consulted for an account the backfill has reached.
-    Before that it is an unset column, not a claim, and reading it as one would
-    make every unmigrated user look like an outsider and strip their office-wide
-    permissions — the platform had no external participants before this
-    redesign, so "not yet decided" resolves to staff.
+    An account with no office role is treated as an outsider. It holds no
+    permissions anyway (`resolved_permissions` refuses it), and anywhere this
+    is asked on its own the most restrictive answer is the safe one.
     """
     if project_id is not None and membership_context(db, user.id, project_id).is_external:
         return True
     if user.org_role_id is None:
-        # Pre-backfill, the only externality signal a row carries is the
-        # retired affiliation. Reading it here is what stops the migration
-        # window from being a period in which a contractor's engineer could
-        # approve the office's design changes. `is_internal` is not consulted
-        # because it has not been decided for this account yet.
-        return user.engineer_affiliation == "main_contractor"
+        return True
     return not bool(user.is_internal)
+
+
+def holds_office_admin_role(db: Session, user: User) -> bool:
+    """Whether this person holds the office administrator role.
+
+    The undeletable role is how the platform names "somebody must always be
+    able to administer": its admin-locked permissions are restored after every
+    override, and it is never something an override can take away.
+    """
+    return bool(getattr(get_role(db, user.org_role_id), "undeletable", False))
 
 
 # ---------------------------------------------------------------------------
@@ -597,7 +600,8 @@ def ensure_tenant_organization(db: Session, *, name: str | None = None) -> Compa
 
     admin = (
         db.query(User)
-        .filter(User.role == UserRole.ADMIN, User.company_id.isnot(None))
+        .join(Role, Role.id == User.org_role_id)
+        .filter(Role.undeletable.is_(True), User.company_id.isnot(None))
         .order_by(User.created_at.asc())
         .first()
     )

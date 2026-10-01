@@ -57,6 +57,7 @@ from app.core.schedule_dates import inclusive_duration_days
 from app.services.audit_service import record_audit
 from app.services.private_storage import private_storage
 from app.services.authorization import has_permission, require
+from app.services.task_assignment import assignee_refusal
 from app.services.consultant_approval_service import (
     authorized_consultant_ids,
     can_consultant_review_task,
@@ -66,13 +67,6 @@ from app.services.file_storage import delete_upload
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
-ENGINEER_ROLES = {UserRole.ENGINEER}
-#: Who may hold a task. Workers are gone from the platform, so the set is the
-#: office's own people plus whoever an office has put on the project; the
-#: real check is project membership, which `_validated_assignees` applies.
-TASK_ASSIGNEE_ROLES = {
-    UserRole.ENGINEER, UserRole.CONSULTANT, UserRole.PROJECT_MANAGER
-}
 
 def _notify(db: Session, user_id, title: str, message: str, task: Task, notification_type: NotificationType) -> None:
     """Notify one person about a task.
@@ -152,19 +146,10 @@ def _get_task_or_403(task_id: uuid.UUID, db: Session, current_user: User) -> Tas
     return task
 
 
-def _has_project_role(db: Session, user: User, project_id: uuid.UUID, role: UserRole) -> bool:
-    return bool(db.query(ProjectMember).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.user_id == user.id,
-        ProjectMember.role_on_project == role,
-        ProjectMember.is_active == True,
-    ).first())
-
-
 def _is_project_manager(db: Session, user: User, project_id: uuid.UUID) -> bool:
     project = db.get(Project, project_id)
-    # The id comparison already implies the role: `project_manager_id` is
-    # validated to be an active PROJECT_MANAGER wherever it is written.
+    # `project_manager_id` is validated by `can_run_project` wherever it is
+    # written, so the id alone identifies the person accountable here.
     return bool(project and project.project_manager_id == user.id)
 
 
@@ -208,33 +193,18 @@ def _validate_task_assignees(
     rows = db.query(ProjectMember, User).join(User, User.id == ProjectMember.user_id).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.user_id.in_(assignee_ids),
-        ProjectMember.role_on_project.in_(TASK_ASSIGNEE_ROLES),
-        ProjectMember.is_active == True,
-        User.role.in_(TASK_ASSIGNEE_ROLES),
-        User.status == UserStatus.ACTIVE,
     ).all()
     by_id = {user.id: (membership, user) for membership, user in rows}
-    if set(by_id) != set(assignee_ids):
-        raise HTTPException(
-            status_code=400,
-            detail="Every assignee must be an active member of this project",
-        )
-    project = db.get(Project, project_id)
     effective_discipline = _normalized_discipline(discipline)
     for assignee_id in assignee_ids:
-        membership, assignee = by_id[assignee_id]
-        if membership.role_on_project == UserRole.PROJECT_MANAGER:
-            if not project or project.project_manager_id != assignee_id:
-                raise HTTPException(status_code=400, detail="Only this project's assigned Project Manager is eligible")
-        if assignee.role == UserRole.ENGINEER:
-            # `project_id` is the parameter this function receives; `task` was a
-            # name that never existed here, so this raised NameError for any
-            # assignee whose legacy role is ENGINEER rather than refusing them.
-            if not has_permission(db, assignee, "task.update_progress", project_id):
-                raise HTTPException(
-                    status_code=400,
-                    detail="This person cannot be assigned execution work on this project",
-                )
+        membership, assignee = by_id.get(assignee_id, (None, None))
+        refusal = assignee_refusal(db, project_id, membership, assignee)
+        if refusal:
+            raise HTTPException(status_code=400, detail=refusal)
+        # A specialist is matched to their discipline. Domain logic, not
+        # authorization: it applies to whoever practises a discipline (an
+        # engineering profile), not to a role name.
+        if assignee.engineer_profile:
             profile_discipline = _normalized_discipline(
                 assignee.engineer_profile.discipline.value if assignee.engineer_profile else None
             )

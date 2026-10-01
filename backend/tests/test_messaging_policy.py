@@ -2,8 +2,6 @@ import unittest
 from datetime import datetime, timezone, timedelta
 
 from app.services.messaging_policy import (
-    can_create_group,
-    can_project_broadcast,
     context_is_supported,
     conversation_search_visible,
     participants_belong_to_project,
@@ -41,12 +39,14 @@ class MessagingPolicyTests(unittest.TestCase):
             {"civil", "electrical"}, {item["id"] for item in self.members}
         ))
 
-    def test_08_engineer_cannot_project_broadcast(self):
-        self.assertFalse(can_project_broadcast("engineer"))
-
-    def test_09_pm_and_admin_can_project_broadcast(self):
-        self.assertTrue(can_project_broadcast("project_manager"))
-        self.assertTrue(can_project_broadcast("admin"))
+    def test_08_broadcast_is_a_permission_not_a_role_name(self):
+        # Who may address a whole project is `message.broadcast`, resolved per
+        # project like every other permission; the role-name helpers are gone.
+        from app.core.permission_catalogue import BY_CODE
+        from app.services import messaging_policy as policy
+        self.assertIn("message.broadcast", BY_CODE)
+        self.assertFalse(hasattr(policy, "can_project_broadcast"))
+        self.assertFalse(hasattr(policy, "can_create_group"))
 
     def test_10_context_supports_task(self):
         self.assertTrue(context_is_supported("TASK"))
@@ -76,10 +76,6 @@ class MessagingPolicyTests(unittest.TestCase):
 
         self.assertFalse(hasattr(policy, "worker_can_message"))
         self.assertNotIn("WORKERS", policy.PROJECT_GROUPS)
-
-    def test_14_group_creation_is_restricted(self):
-        self.assertTrue(can_create_group("project_manager"))
-        self.assertFalse(can_create_group("engineer"))
 
     def test_15_unread_counts_are_user_specific(self):
         now = datetime.now(timezone.utc)

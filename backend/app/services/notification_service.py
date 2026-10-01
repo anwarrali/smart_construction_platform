@@ -246,7 +246,6 @@ def notify_project_users(
     *,
     project_id: uuid.UUID,
     exclude_user_id: uuid.UUID | None = None,
-    roles=None,
     **kwargs,
 ) -> list[Notification]:
     """Notify the project's team.
@@ -270,12 +269,9 @@ def notify_project_users(
         return []
 
     member_query = select(ProjectMember.user_id).where(ProjectMember.project_id == project_id)
-    if roles:
-        member_query = member_query.where(ProjectMember.role.in_(list(roles)))
     recipient_ids = [row[0] for row in db.execute(member_query).all()]
-    if not roles:
-        # The manager and owner are not necessarily rows in project_members.
-        recipient_ids.extend([project.project_manager_id, project.owner_id])
+    # The manager and owner are not necessarily rows in project_members.
+    recipient_ids.extend([project.project_manager_id, project.owner_id])
 
     recipients = [uid for uid in recipient_ids if uid and uid != exclude_user_id]
     return notify_users(db, user_ids=recipients, project_id=project_id, **kwargs)

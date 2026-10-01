@@ -147,8 +147,9 @@ def effective_permissions(
     wants its main contractor to maintain the construction programme, or to
     raise and close tasks on their own scope, is describing a real arrangement;
     refusing it would be the platform overruling the office about its own
-    project. So four codes — `task.create`, `task.edit`, `schedule.edit`,
-    `issue.resolve` — are office work by default and delegable by decision.
+    project. So five codes — `task.create`, `task.edit`, `schedule.edit`,
+    `issue.resolve`, `message.broadcast` — are office work by default and
+    delegable by decision.
 
     What is never delegable is certification (approving work, verifying a
     report, approving a design change, certifying a payment claim, confirming
@@ -161,15 +162,9 @@ def effective_permissions(
     if user.status != UserStatus.ACTIVE:
         return set()
 
+    # Raises `UnmigratedUser` for an account with no office role: there is no
+    # fallback to the retired enum, so such an account holds nothing.
     granted = rbac.resolved_permissions(db, user, project_id)
-
-    if user.org_role_id is None:
-        # Fallback path: this account predates the backfill, so the role-level
-        # overrides have not been folded into a role row for it yet.
-        for code, allowed in _role_overrides(db, user.role).items():
-            if code not in BY_CODE:
-                continue
-            granted.add(code) if allowed else granted.discard(code)
 
     granted = _apply_user_overrides(db, user, project_id, granted)
 
@@ -184,7 +179,7 @@ def effective_permissions(
     # The office administrator role is the undeletable one, which is how the
     # platform names "somebody must always be able to administer". A branch
     # here also recognised an unmigrated ADMIN account; there are none.
-    if bool(getattr(rbac.get_role(db, user.org_role_id), "undeletable", False)):
+    if rbac.holds_office_admin_role(db, user):
         granted |= {item.code for item in CATALOGUE if item.admin_locked}
 
     if rbac.is_external_participant(db, user, project_id):
@@ -206,6 +201,34 @@ def has_permission(
     if permission.project_scoped and project_id is not None:
         return user_has_project_access(db, user, project_id)
     return True
+
+
+def can_run_project(db: Session, user: User) -> bool:
+    """Whether this person may be named a project's manager.
+
+    The capability, not a title: somebody who may be staffed onto a project
+    and who may run its team. It used to be `role == PROJECT_MANAGER` on one
+    of the two write paths, so an office could not nominate somebody in a role
+    it had created however it had permissioned them — and `create_project` and
+    `update_project` answered the same question two different ways.
+    """
+    return rbac.is_staffable(db, user) and has_permission(db, user, "project.manage_members")
+
+
+def can_be_project_client(db: Session, user: User) -> bool:
+    """Whether this person may be named a project's client (`Project.owner_id`).
+
+    An active account from outside the office whose role carries the client's
+    view of a project. It used to be `role == OWNER`. Both halves matter:
+    `client_portal.view` alone is also held by the office administrator, and
+    an office member is never the client of a project the office runs; being
+    external alone would admit a contractor.
+    """
+    return (
+        user.status == UserStatus.ACTIVE
+        and not user.is_internal
+        and has_permission(db, user, "client_portal.view")
+    )
 
 
 def can_view_all_projects_effective(db: Session, user: User) -> bool:

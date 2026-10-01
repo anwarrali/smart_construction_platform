@@ -332,7 +332,10 @@ NEVER_EXTERNAL_AUTHORITY = (
 #: arrangement (a main contractor maintaining the construction programme, or
 #: raising and closing tasks on their own scope) and not the platform's
 #: business to forbid.
-DELEGABLE_OFFICE_WORK = ("task.create", "task.edit", "schedule.edit", "issue.resolve")
+#: Office work by default — no external role inherits it — but an office may
+#: delegate it to one named outside person on one project. `message.broadcast`
+#: belongs here: a main contractor may be allowed to address the whole project.
+DELEGABLE_OFFICE_WORK = ("task.create", "task.edit", "schedule.edit", "issue.resolve", "message.broadcast")
 PLATFORM_AUTHORITY = (
     "platform.manage_users", "platform.manage_permissions",
     "platform.view_all_projects", "platform.create_project",

@@ -12,14 +12,6 @@ PROJECT_GROUPS = (
 )
 
 
-def can_project_broadcast(role: str) -> bool:
-    return role in {"admin", "project_manager"}
-
-
-def can_create_group(role: str) -> bool:
-    return role in {"admin", "project_manager"}
-
-
 def participants_belong_to_project(
     requested_ids: set[str], active_project_ids: set[str]
 ) -> bool:

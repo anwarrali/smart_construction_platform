@@ -45,8 +45,8 @@ from app.services import rbac
 from app.services.user_service import create_provisioned_user, add_user_to_project
 from app.services.audit_service import record_audit
 from app.services.authorization import (
-    can_view_all_projects_effective, has_permission, manageable_project, require,
-    require_permission,
+    can_be_project_client, can_run_project, can_view_all_projects_effective,
+    has_permission, manageable_project, require, require_permission,
 )
 from app.models.notification import Notification
 from app.models.enums import NotificationType
@@ -54,6 +54,9 @@ from app.services.consultant_approval_service import normalize_discipline
 from app.services.project_view_service import record_visit, visit_boundary
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+
+PM_REFUSAL = "The nominated project manager must be an active member who can manage a project team"
+CLIENT_REFUSAL = "The project owner must be an active client contact from outside the office"
 
 
 def _approval_config_response(project: Project) -> ProjectApprovalConfigOut:
@@ -300,24 +303,18 @@ def create_project(
     current_user: User = Depends(require_permission("platform.create_project")),
 ):
     # Whoever the office nominates to run the project, provided they can
-    # actually run one. `project.manage_members` is that capability; the role
-    # comparison this replaces meant an office could not nominate somebody in a
-    # role it had created, however it had permissioned them.
+    # actually run one — `can_run_project`, the same rule `update_project`
+    # applies.
     pm_id = project_data.project_manager_id or current_user.id
     if pm_id != current_user.id:
         pm = db.query(User).filter(User.id == pm_id).first()
-        if not pm or not rbac.is_staffable(db, pm) or not has_permission(
-            db, pm, "project.manage_members"
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail="The nominated project manager must be an active member who can manage a project team",
-            )
+        if not pm or not can_run_project(db, pm):
+            raise HTTPException(status_code=400, detail=PM_REFUSAL)
 
     if project_data.owner_id:
         owner = db.query(User).filter(User.id == project_data.owner_id).first()
-        if not owner or owner.role != UserRole.OWNER or owner.status != UserStatus.ACTIVE:
-            raise HTTPException(status_code=400, detail="Assigned owner must be an active Owner")
+        if not owner or not can_be_project_client(db, owner):
+            raise HTTPException(status_code=400, detail=CLIENT_REFUSAL)
 
     new_project = Project(
         name=project_data.name,
@@ -401,8 +398,8 @@ def update_project(
 
     if project_data.owner_id is not None:
         owner = db.query(User).filter(User.id == project_data.owner_id).first()
-        if not owner or owner.role != UserRole.OWNER or owner.status != UserStatus.ACTIVE:
-            raise HTTPException(status_code=400, detail="Assigned owner must be an active Owner")
+        if not owner or not can_be_project_client(db, owner):
+            raise HTTPException(status_code=400, detail=CLIENT_REFUSAL)
         project.owner_id = project_data.owner_id
         add_user_to_project(
             db,
@@ -414,8 +411,8 @@ def update_project(
     if project_data.project_manager_id is not None:
         if project_data.project_manager_id != project.project_manager_id:
             pm = db.query(User).filter(User.id == project_data.project_manager_id).first()
-            if not pm or pm.role != UserRole.PROJECT_MANAGER or pm.status != UserStatus.ACTIVE:
-                raise HTTPException(status_code=400, detail="Assigned project manager must be an active Project Manager")
+            if not pm or not can_run_project(db, pm):
+                raise HTTPException(status_code=400, detail=PM_REFUSAL)
             project.project_manager_id = project_data.project_manager_id
             if project_data.project_manager_id:
                 add_user_to_project(
@@ -865,11 +862,10 @@ def remove_project_member(
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    # The office's principals are changed in project setup, not here. The
-    # branch above this asked whether the *actor* was a PROJECT_MANAGER and
-    # narrowed what they could remove to two enum values, which said nothing
-    # about a role an office had created.
-    if member.role_on_project in {UserRole.OWNER, UserRole.PROJECT_MANAGER}:
+    # The project's principals — its client and its manager — are changed in
+    # project setup, not here. Asked of the project, not of a role name.
+    project = db.get(Project, project_id)
+    if project and user_id in {project.owner_id, project.project_manager_id}:
         raise HTTPException(status_code=400, detail="Reassign the project owner or manager before removing this membership")
 
     assigned_tasks = db.query(Task).filter(
@@ -894,7 +890,6 @@ def remove_project_member(
                  details={"user_id": user_id, "removed_task_assignments": len(assigned_tasks),
                           "unassigned_active_tasks": unassigned_active_tasks,
                           "global_account_preserved": True})
-    project = db.get(Project, project_id)
     db.add(Notification(user_id=user_id, title="Project Assignment Removed",
         message=f"Your assignment to {project.name if project else 'the project'} was removed."
                 + (f" {unassigned_active_tasks} active task(s) are now unassigned." if unassigned_active_tasks else ""),
@@ -941,8 +936,21 @@ def transfer_project_member(
     ).first()
     if not source_member:
         raise HTTPException(status_code=404, detail="Active source project membership not found")
-    if source_member.role_on_project not in {UserRole.ENGINEER, UserRole.CONSULTANT}:
-        raise HTTPException(status_code=400, detail="Only Engineers and Consultants can be transferred")
+    # Two people cannot be moved this way, and neither rule is a role name.
+    # A project's principals are reassigned in project setup. And somebody
+    # taking part for an outside party belongs to *that project's* party: a
+    # party is per project, so carrying `party_id` across would point the new
+    # membership at another project's contractor.
+    if user_id in {source_project.owner_id, source_project.project_manager_id}:
+        raise HTTPException(
+            status_code=400,
+            detail="Reassign the project owner or manager before transferring this person",
+        )
+    if source_member.party_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Somebody taking part for an outside party is added to the other project under its own party",
+        )
 
     assigned_tasks = db.query(Task).filter(
         Task.project_id == project_id,
@@ -974,10 +982,9 @@ def transfer_project_member(
     target_member.project_notes = source_member.project_notes
     # Same rule as the two endpoints above, and for the same reason: site
     # responsibility follows the assignment, not the account's legacy role.
-    target_member.party_id = source_member.party_id
-    target_member.is_site_engineer = bool(
-        data.is_site_engineer and source_member.party_id is None
-    )
+    target_member.party_id = None
+    target_member.project_role_id = source_member.project_role_id
+    target_member.is_site_engineer = bool(data.is_site_engineer)
     target_member.assigned_by_id = current_user.id
     source_member.is_active = False
     source_member.is_site_engineer = False

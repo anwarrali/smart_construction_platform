@@ -174,7 +174,10 @@ def create_design_change(
     recipients = {project.project_manager_id if project else None}
     for member in memberships:
         profile = member.user.engineer_profile
-        if member.role_on_project in {UserRole.ENGINEER, UserRole.CONSULTANT} and profile and profile.discipline.value in relevant_disciplines:
+        # The specialists in the disciplines the change touches. Was "Engineer
+        # or Consultant on the project with that discipline"; the role half
+        # said nothing a discipline profile does not already say.
+        if profile and profile.discipline.value in relevant_disciplines:
             recipients.add(member.user_id)
         if member.is_site_engineer:
             recipients.add(member.user_id)

@@ -28,9 +28,10 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.enums import IssueStatus, UserRole
+from app.models.enums import IssueStatus
 from app.models.issue import Issue
-from app.models.project import Project, ProjectMember
+from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
+from app.models.rbac import ProjectParty, Role
 from app.models.user import User
 from app.services.voice_task_matcher import (
     CANDIDATE_THRESHOLD,
@@ -45,7 +46,14 @@ ISSUE_MATCH_THRESHOLD = 0.34
 
 @dataclass(frozen=True)
 class Person:
-    """One project member, reduced to what resolution and display need."""
+    """One project member, reduced to what resolution and display need.
+
+    `role` describes the person's part in this project as space-separated
+    words — `project_manager`, `owner`, `contractor`, `consultant`, plus their
+    office and project role codes — which is what spoken role words are
+    matched against. It is derived from the project and the configurable roles
+    (`part_in_project`), never from the retired enum.
+    """
 
     user_id: UUID
     name: str
@@ -65,6 +73,8 @@ def project_people(db: Session, *, project_id, exclude_user_id=None) -> list[Per
         ProjectMember.project_id == project_id,
         ProjectMember.is_active == True,  # noqa: E712
     ).all()
+    project = db.get(Project, project_id)
+    reviewers = _reviewer_ids(db, project_id)
     people: list[Person] = []
     for member in members:
         if exclude_user_id is not None and member.user_id == exclude_user_id:
@@ -72,10 +82,47 @@ def project_people(db: Session, *, project_id, exclude_user_id=None) -> list[Per
         person = db.get(User, member.user_id)
         if person is None:
             continue
-        people.append(
-            Person(person.id, person.full_name or "", member.role_on_project.value)
-        )
+        people.append(Person(
+            person.id, person.full_name or "",
+            part_in_project(db, project, member, person, reviewers),
+        ))
     return sorted(people, key=lambda item: item.name)
+
+
+def _reviewer_ids(db: Session, project_id) -> set:
+    return {
+        user_id for (user_id,) in db.query(ProjectConsultantReviewer.user_id).filter(
+            ProjectConsultantReviewer.project_id == project_id
+        ).all()
+    }
+
+
+def part_in_project(db: Session, project, member: ProjectMember, person: User, reviewers: set) -> str:
+    """The words that name this person's part in the project.
+
+    The project's own client and manager are read off the project; an outside
+    participant from their party; a reviewer from the project's reviewer
+    assignments; and the office and project role codes are appended, so an
+    office's "Resident Engineer" still answers to "المهندس".
+    """
+    words: list[str] = []
+    if project is not None and person.id == project.project_manager_id:
+        words.append("project_manager")
+    if project is not None and person.id == project.owner_id:
+        words.append("owner")
+    party = db.get(ProjectParty, member.party_id) if member.party_id else None
+    if party is not None:
+        if party.kind == "CLIENT":
+            words.append("owner")
+        elif party.kind in {"MAIN_CONTRACTOR", "SUBCONTRACTOR"}:
+            words.append("contractor")
+    if person.id in reviewers:
+        words.append("consultant")
+    for role_id in (person.org_role_id, member.project_role_id):
+        role = db.get(Role, role_id) if role_id else None
+        if role is not None and role.code not in words:
+            words.append(role.code)
+    return " ".join(dict.fromkeys(words))
 
 
 def project_owner(db: Session, project_id) -> Person | None:
@@ -257,35 +304,26 @@ def assignable_people(db: Session, *, project_id) -> list[Person]:
     Engineer, Worker, Consultant, or assigned Project Manager" — a rule the
     assistant could have applied before ever proposing it.
 
-    The eligibility rule itself is imported from the tasks API rather than
-    restated, so the two lists cannot drift.
+    The eligibility rule is `task_assignment.assignee_refusal`, the one the
+    tasks API applies, so the two lists cannot drift.
     """
-    from app.api.tasks import TASK_ASSIGNEE_ROLES
-    from app.models.enums import UserStatus
+    from app.services.task_assignment import assignee_refusal
 
     members = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.is_active == True,  # noqa: E712
     ).all()
     project = db.get(Project, project_id)
+    reviewers = _reviewer_ids(db, project_id)
     people: list[Person] = []
     for member in members:
-        if member.role_on_project not in TASK_ASSIGNEE_ROLES:
-            continue
         person = db.get(User, member.user_id)
-        if person is None or person.role not in TASK_ASSIGNEE_ROLES:
+        if assignee_refusal(db, project_id, member, person):
             continue
-        if getattr(person, "status", None) != UserStatus.ACTIVE:
-            continue
-        if member.role_on_project == UserRole.PROJECT_MANAGER and (
-            project is None or project.project_manager_id != member.user_id
-        ):
-            # Any project manager may be a member; only *this* project's
-            # assigned manager is eligible to be given its work.
-            continue
-        people.append(
-            Person(person.id, person.full_name or "", member.role_on_project.value)
-        )
+        people.append(Person(
+            person.id, person.full_name or "",
+            part_in_project(db, project, member, person, reviewers),
+        ))
     return sorted(people, key=lambda item: item.name)
 
 

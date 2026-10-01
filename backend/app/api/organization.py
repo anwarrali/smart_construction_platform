@@ -117,7 +117,7 @@ def _validated_permissions(codes: list[str], *, is_internal_only: bool) -> set[s
         # including people added long after the decision was made. So the whole
         # `office_only` set is refused here, not just the locked subset.
         #
-        # Delegating one of the four delegable codes to an outside firm is
+        # Delegating one of the delegable office codes to an outside firm is
         # still possible — through Access Control, for one named person on one
         # named project, which is a decision somebody makes and signs. That is
         # the difference the two ceilings exist to draw.

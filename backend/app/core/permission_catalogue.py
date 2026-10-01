@@ -446,6 +446,12 @@ CATALOGUE: tuple[Permission, ...] = (
        "Message another participant on the project.", {ADMIN, PM, ENGINEER, CONSULTANT}),
     _p("message.send_client", "requests", "Send client updates",
        "Send an update to the project's client.", {ADMIN, PM, ENGINEER}),
+    # Was `role in {"admin", "project_manager"}` in `messaging_policy`. A
+    # code of its own rather than a borrowed one, so an office can decide who
+    # speaks to a whole project separately from who staffs it.
+    _p("message.broadcast", "requests", "Message the whole project",
+       "Start project group conversations and send announcements to the project.",
+       {ADMIN, PM}, office_only=True),
 )
 
 BY_CODE: dict[str, Permission] = {item.code: item for item in CATALOGUE}
