@@ -1389,7 +1389,9 @@
     "limitedToCount_other": "Limited to {{count}} engineers",
     "engineerScopeHint": "Leave every box unticked for no engineer restriction; tick engineers to limit this consultant to their work.",
     "noEngineers": "This project has no engineers to assign yet.",
-    "enforcementNote": "Permissions are enforced by the server on every request. Hiding a control here is presentation only — a change takes effect for the API as well."
+    "enforcementNote": "Permissions are enforced by the server on every request. Hiding a control here is presentation only — a change takes effect for the API as well.",
+    "rolesMoved": "What each role can do is edited on the Office roles page, which lists every role the office has — the seeded ones and the ones it created.",
+    "openOfficeRoles": "Open Office roles"
   },
   "aiInsight": {
     "DISCIPLINE_NOT_IN_IFC": {
@@ -1675,7 +1677,8 @@
   },
   "dashboardSelectorPage": {
     "active_engineer_organization_side_is": "Active Engineer organization side is required.",
-    "loading_your_assigned_projects": "Loading your assigned projects…"
+    "loading_your_assigned_projects": "Loading your assigned projects…",
+    "account_not_active": "This account is not active."
   },
   "designChanges": {
     "engineering_change_requests": "Engineering change requests",
@@ -2657,7 +2660,8 @@
     "manage_company_accounts_roles": "Manage company accounts, roles, specialization, and access status",
     "search_name_email_phone": "Search name, email, phone...",
     "all_roles": "All roles",
-    "all_disciplines": "All disciplines"
+    "all_disciplines": "All disciplines",
+    "office_role_required": "Choose an office role for the new account."
   },
   "userTable": {
     "edit": "Edit",

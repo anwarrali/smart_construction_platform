@@ -25,14 +25,11 @@ import organizationService, {
  *
  * The server refuses to edit, transfer or remove the membership that carries
  * the project's owner or its assigned manager — those are changed in project
- * setup, not here. That is the rule the row actions mirror. It used to be
- * written as `["engineer", "consultant"].includes(member.user.role)`, which
- * asked what the *account* is instead of what the membership is, and so hid
- * the actions from anybody an office puts on a project under a role it created
- * itself.
+ * setup, not here. That is the rule the row actions mirror: it asks who the
+ * project names as its principals, never what role the account holds.
  */
-const isAdjustableMembership = (member: ProjectMember) =>
-  !["owner", "project_manager"].includes(member.roleOnProject || "");
+const isAdjustableMembership = (member: ProjectMember, project: Project | undefined) =>
+  !project || (member.userId !== project.ownerId && member.userId !== project.projectManagerId);
 
 export const ProjectTeamPage = () => {
   const { t } = useTranslation();
@@ -64,11 +61,8 @@ export const ProjectTeamPage = () => {
      the discipline and the name, and what the assignment *is* — party, project
      role, disciplines, site responsibility — is chosen in the form below. */
   const [disciplineFilter, setDisciplineFilter] = useState("");
-  // Kept as a constant rather than a control: the eligible-user query still
-  // accepts the retired affiliation filter, and sending nothing means "no
-  // affiliation filter". Internal vs external is now a property of the
-  // assignment being made, chosen in the form below.
-  const affiliationFilter = "";
+  /** Members the server would accept as reviewers here (`reviewer_refusal`). */
+  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [projectDiscipline, setProjectDiscipline] = useState("");
@@ -114,11 +108,13 @@ export const ProjectTeamPage = () => {
     setBusy(true);
     setError("");
     try {
-      const [team, approval] = await Promise.all([
+      const [team, approval, eligibleReviewers] = await Promise.all([
         api.projects.getMembers(projectId),
         api.projects.getApprovalWorkflow(projectId),
+        api.projects.getEligibleMembers(projectId, "reviewer"),
       ]);
       setMembers(team.filter((member) => member.isActive));
+      setReviewerIds(eligibleReviewers);
       setApprovalMode(approval.mode);
       setCentralizedReviewerId(approval.centralizedReviewerId || "");
       setDisciplineReviewers(Object.fromEntries(
@@ -140,26 +136,22 @@ export const ProjectTeamPage = () => {
       api.projects.getAvailableTeamMembers(projectId, {
         search: search || undefined,
         discipline: disciplineFilter || undefined,
-        affiliation: affiliationFilter || undefined,
       }).then((users) => {
         setAvailable(users);
         setSelectedUserId((current) => users.some((user) => user.id === current) ? current : users[0]?.id || "");
       }).catch((err: any) => setError(err?.response?.data?.detail || "Unable to load eligible users."));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [addOpen, affiliationFilter, disciplineFilter, projectId, search]);
+  }, [addOpen, disciplineFilter, projectId, search]);
 
   const selectedUser = useMemo(() => available.find((user) => user.id === selectedUserId), [available, selectedUserId]);
   const otherProjects = projects.filter((project) => project.id !== projectId);
   const disciplineCodes = useMemo(() => disciplines.map((item) => item.code), [disciplines]);
-  /* Everyone serving as a Consultant on this project is eligible to be its
-     reviewer. Requiring the external-consultant affiliation on top of the
-     project role also excluded accounts whose global role is Consultant, which
-     left the reviewer dropdown empty on projects staffed with those accounts. */
+  /* Reviewer candidates are the members the server itself would accept:
+     active office staff on this project who hold `task.review`. */
   const consultantMembers = useMemo(
-    () => members.filter((member) =>
-      member.roleOnProject === "consultant" && member.user?.status === "active"),
-    [members],
+    () => members.filter((member) => reviewerIds.includes(member.userId)),
+    [members, reviewerIds],
   );
 
   const run = async (operation: () => Promise<unknown>, success?: string) => {
@@ -226,22 +218,18 @@ export const ProjectTeamPage = () => {
 
   const addMember = async () => {
     if (!selectedUser) return;
-    /* `roleOnProject` is the retired column and the server derives it when the
-       configurable role is supplied; it is still sent for a client that has
-       not been updated. The Site Engineer flag is only sent when it can
-       apply, so switching from an internal assignment to an external one does
-       not carry a stale value into a 400. */
-    const ok = await run(() => api.projects.addMember(
-      projectId, selectedUser.id, selectedUser.role,
-      assignmentTitle || undefined, canBeSiteEngineer() && siteEngineer,
-      projectDiscipline || selectedUser.engineerProfile?.discipline,
-      projectNotes || undefined,
-      {
-        projectRoleId: projectRoleId || undefined,
-        partyId: partyId || null,
-        disciplineIds,
-      },
-    ));
+    /* The Site Engineer flag is only sent when it can apply, so switching from
+       an internal assignment to an external one does not carry a stale value
+       into a 400. */
+    const ok = await run(() => api.projects.addMember(projectId, selectedUser.id, {
+      assignmentTitle: assignmentTitle || undefined,
+      isSiteEngineer: canBeSiteEngineer() && siteEngineer,
+      projectDiscipline: projectDiscipline || selectedUser.engineerProfile?.discipline,
+      projectNotes: projectNotes || undefined,
+      projectRoleId: projectRoleId || undefined,
+      partyId: partyId || null,
+      disciplineIds,
+    }));
     if (ok) { setAddOpen(false); resetAssignmentForm(); }
   };
 
@@ -319,11 +307,11 @@ export const ProjectTeamPage = () => {
         <th className="p-3">{t("projectTeam.member")}</th><th className="p-3">{t("projectTeam.role_discipline")}</th><th className="p-3">{t("projectTeam.company_affiliation")}</th><th className="p-3">{t("projectTeam.project_responsibility")}</th><th className="p-3">{t("projectTeam.assigned")}</th><th className="p-3">{t("projectTeam.actions")}</th>
       </tr></thead><tbody>{members.map((member) => <tr key={member.id} className="border-b align-top last:border-0">
         <td className="p-3"><p className="font-medium">{member.user?.fullName}</p><p className="text-xs text-muted-foreground">{member.user?.email}</p><Badge size="sm" variant={member.user?.status === "active" ? "success" : "neutral"}>{member.user?.status ? vocabulary.term(member.user.status) : t("projectTeam.unknown_status")}</Badge></td>
-        <td className="p-3"><p>{member.projectRoleName || vocabulary.role(member.user?.role)}</p><p className="text-muted-foreground">{(member.disciplineCodes || []).length ? (member.disciplineCodes || []).map((code) => vocabulary.discipline(code)).join(", ") : (member.projectDiscipline ? vocabulary.discipline(member.projectDiscipline) : "—")}</p></td>
+        <td className="p-3"><p>{member.projectRoleName || vocabulary.orgRole(member.user?.orgRole)}</p><p className="text-muted-foreground">{(member.disciplineCodes || []).length ? (member.disciplineCodes || []).map((code) => vocabulary.discipline(code)).join(", ") : (member.projectDiscipline ? vocabulary.discipline(member.projectDiscipline) : "—")}</p></td>
         <td className="p-3"><p>{member.user?.organization || "—"}</p><Badge size="sm" variant={member.isExternal ? "warning" : "neutral"}>{member.isExternal ? (member.partyName ? t("projectTeam.external_party", { party: member.partyName }) : t("projectTeam.external_unassigned")) : t("projectTeam.internal")}</Badge></td>
         <td className="p-3"><p>{member.assignmentTitle || t("projectTeam.project_participant")}</p>{member.isSiteEngineer && <Badge size="sm" variant="success">{t("projectTeam.site_engineer")}</Badge>}<p className="mt-1 max-w-xs text-xs text-muted-foreground">{member.projectNotes}</p></td>
         <td className="p-3 text-muted-foreground">{formatDate(member.createdAt || "")}</td>
-        <td className="p-3">{canManageMembers && isAdjustableMembership(member) && <div className="flex flex-wrap gap-2">
+        <td className="p-3">{canManageMembers && isAdjustableMembership(member, projects.find((project) => project.id === projectId)) && <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => openEdit(member)}>{t("projectTeam.edit_project_assignment")}</Button>
           {otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setAnotherMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.add_to_another_project")}</Button>}
           {canConfigureApproval && otherProjects.length > 0 && <Button size="sm" variant="outline" onClick={() => { setTransferMember(member); setTargetProjectId(otherProjects[0]?.id || ""); }}>{t("projectTeam.transfer")}</Button>}
@@ -335,8 +323,8 @@ export const ProjectTeamPage = () => {
     <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title={t("projectTeam.add_team_member")} size="lg"><div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2"><Input label={t("projectTeam.search_database_users")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("projectTeam.name_or_email")} />
         <Select label={t("projectTeam.discipline")} value={disciplineFilter} onChange={(event) => setDisciplineFilter(event.target.value)} options={[{ value: "", label: t("projectTeam.all_disciplines") }, ...disciplines.map((item) => ({ value: item.code, label: item.nameEn }))]} /></div>
-      <Select label={t("projectTeam.eligible_active_user")} value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${vocabulary.role(user.role)} · ${user.engineerProfile?.discipline ? vocabulary.discipline(user.engineerProfile.discipline) : t("projectTeam.no_discipline")} · ${user.organization || t("projectTeam.no_organization")}` }))} />
-      {selectedUser && <div className="rounded border p-3 text-sm"><p className="font-medium">{selectedUser.fullName}</p><p>{selectedUser.email} · {vocabulary.role(selectedUser.role)} · {selectedUser.engineerProfile?.discipline}</p><p>{selectedUser.organization || t("projectTeam.no_organization")} · {selectedUser.engineerAffiliation ? vocabulary.role(selectedUser.engineerAffiliation) : ""}</p></div>}
+      <Select label={t("projectTeam.eligible_active_user")} value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} options={available.map((user) => ({ value: user.id, label: `${user.fullName} · ${vocabulary.orgRole(user.orgRole)} · ${user.engineerProfile?.discipline ? vocabulary.discipline(user.engineerProfile.discipline) : t("projectTeam.no_discipline")} · ${user.organization || t("projectTeam.no_organization")}` }))} />
+      {selectedUser && <div className="rounded border p-3 text-sm"><p className="font-medium">{selectedUser.fullName}</p><p>{selectedUser.email} · {vocabulary.orgRole(selectedUser.orgRole)} · {selectedUser.engineerProfile?.discipline}</p><p>{selectedUser.organization || t("projectTeam.no_organization")}</p></div>}
       <div className="grid gap-3 sm:grid-cols-2">
         <Select label={t("projectTeam.participation")} value={partyId} onChange={(event) => { setPartyId(event.target.value); if (event.target.value) { setSiteEngineer(false); setProjectRoleId(""); } }}
           options={[{ value: "", label: t("projectTeam.internal") }, ...parties.map((party) => ({ value: party.id, label: `${party.displayName} · ${t(`projectParties.kind_${party.kind}`)}` }))]} />
@@ -386,7 +374,7 @@ export const ProjectTeamPage = () => {
     <Modal isOpen={!!anotherMember} onClose={() => setAnotherMember(null)} title={t("projectTeam.add_to_another_project")}><div className="space-y-4">
       <p className="text-sm">{t("projectTeam.this_adds")} <strong>{anotherMember?.user?.fullName}</strong> to another assigned project and keeps the current membership.</p>
       <Select label={t("projectTeam.target_project")} value={targetProjectId} onChange={(event) => setTargetProjectId(event.target.value)} options={otherProjects.map((project) => ({ value: project.id, label: project.name }))} />
-      <ModalActions><Button variant="outline" onClick={() => setAnotherMember(null)}>{t("projectTeam.cancel")}</Button><Button disabled={!targetProjectId || busy} onClick={async () => { if (!anotherMember) return; const ok = await run(() => api.projects.addMember(targetProjectId, anotherMember.userId, anotherMember.roleOnProject, anotherMember.assignmentTitle, false, anotherMember.projectDiscipline, anotherMember.projectNotes), "Member added to another project; current membership was kept."); if (ok) setAnotherMember(null); }}>{t("projectTeam.add_to_another_project")}</Button></ModalActions>
+      <ModalActions><Button variant="outline" onClick={() => setAnotherMember(null)}>{t("projectTeam.cancel")}</Button><Button disabled={!targetProjectId || busy} onClick={async () => { if (!anotherMember) return; const ok = await run(() => api.projects.addMember(targetProjectId, anotherMember.userId, { assignmentTitle: anotherMember.assignmentTitle, projectDiscipline: anotherMember.projectDiscipline, projectNotes: anotherMember.projectNotes, projectRoleId: anotherMember.projectRoleId || undefined }), "Member added to another project; current membership was kept."); if (ok) setAnotherMember(null); }}>{t("projectTeam.add_to_another_project")}</Button></ModalActions>
     </div></Modal>
 
     <Modal isOpen={!!transferMember} onClose={() => setTransferMember(null)} title={t("projectTeam.transfer_project_member")}><div className="space-y-4">

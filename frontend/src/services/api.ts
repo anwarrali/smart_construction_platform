@@ -155,6 +155,11 @@ const api = {
       axiosInstance
         .get<UserProfile>(ENDPOINTS.USERS.BY_ID(id))
         .then((res) => res.data),
+    /** Accounts the server would accept as a project's client or manager. */
+    eligible: (purpose: "project_owner" | "project_manager") =>
+      axiosInstance
+        .get<UserProfile[]>(`${ENDPOINTS.USERS.ELIGIBLE}?${parseQueryParams({ purpose })}`)
+        .then((res) => res.data),
     getProfile: () =>
       axiosInstance
         .get<UserProfile>(ENDPOINTS.USERS.PROFILE)
@@ -240,20 +245,18 @@ const api = {
       axiosInstance.put<ProjectApprovalConfig>(ENDPOINTS.PROJECTS.APPROVAL_WORKFLOW(id), data).then((res) => res.data),
     getAvailableEngineers: (id: string) =>
       axiosInstance.get<User[]>(ENDPOINTS.PROJECTS.AVAILABLE_ENGINEERS(id)).then((res) => res.data),
-    getAvailableTeamMembers: (id: string, filters?: { search?: string; role?: string; discipline?: string; affiliation?: string }) =>
+    getAvailableTeamMembers: (id: string, filters?: { search?: string; roleId?: string; discipline?: string }) =>
       axiosInstance.get<User[]>(`${ENDPOINTS.PROJECTS.AVAILABLE_TEAM_MEMBERS(id)}?${parseQueryParams(filters || {})}`).then((res) => res.data),
-    /**
-     * Add somebody to a project.
-     *
-     * `projectRoleId`, `partyId` and `disciplineIds` are the configurable
-     * model. `roleOnProject` is still sent because the legacy column is
-     * still NOT NULL until the contract migration; the server derives it
-     * when it is omitted.
-     */
-    addMember: (projectId: string, userId: string, roleOnProject: string, assignmentTitle?: string, isSiteEngineer = false, projectDiscipline?: string, projectNotes?: string, extra?: { projectRoleId?: string; partyId?: string | null; disciplineIds?: string[] }) =>
+    /** User ids of the members who qualify, by the rule the assigning endpoint applies. */
+    getEligibleMembers: (id: string, purpose: "task_assignee" | "reviewer") =>
+      axiosInstance.get<string[]>(`${ENDPOINTS.PROJECTS.ELIGIBLE_MEMBERS(id)}?${parseQueryParams({ purpose })}`).then((res) => res.data),
+    /** Add somebody to a project, optionally with the role and party they take part under. */
+    addMember: (projectId: string, userId: string, details?: {
+      assignmentTitle?: string; isSiteEngineer?: boolean; projectDiscipline?: string; projectNotes?: string;
+      projectRoleId?: string; partyId?: string | null; disciplineIds?: string[];
+    }) =>
       axiosInstance.post<ProjectMember>(ENDPOINTS.PROJECTS.ADD_MEMBER(projectId), {
-        userId, roleOnProject, assignmentTitle, isSiteEngineer, projectDiscipline, projectNotes,
-        ...(extra || {}),
+        userId, isSiteEngineer: false, ...(details || {}),
       }).then((res) => res.data),
     updateMemberAssignment: (projectId: string, userId: string, data: { assignmentTitle?: string; isSiteEngineer?: boolean; projectRoleId?: string; projectDiscipline?: string; disciplineIds?: string[]; projectNotes?: string }) =>
       axiosInstance.patch<ProjectMember>(ENDPOINTS.PROJECTS.UPDATE_ASSIGNMENT(projectId, userId), data).then((res) => res.data),

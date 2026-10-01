@@ -1441,7 +1441,9 @@
     "limitedToCount_other": "محصور بـ {{count}} مهندس",
     "engineerScopeHint": "اترك كل الخانات فارغة لعدم تقييد المهندسين؛ أو حدّد مهندسين لحصر هذا الاستشاري بأعمالهم.",
     "noEngineers": "لا يوجد مهندسون في هذا المشروع بعد.",
-    "enforcementNote": "يتحقق الخادم من الصلاحيات في كل طلب. إخفاء عنصر هنا هو أمر عرضي فقط — والتغيير يسري على الواجهة البرمجية أيضًا."
+    "enforcementNote": "يتحقق الخادم من الصلاحيات في كل طلب. إخفاء عنصر هنا هو أمر عرضي فقط — والتغيير يسري على الواجهة البرمجية أيضًا.",
+    "rolesMoved": "تُحرَّر صلاحيات كل دور في صفحة أدوار المكتب، التي تعرض كل أدوار المكتب — المُعدّة مسبقًا والتي أنشأها المكتب.",
+    "openOfficeRoles": "فتح أدوار المكتب"
   },
   "aiInsight": {
     "DISCIPLINE_NOT_IN_IFC": {
@@ -1727,7 +1729,8 @@
   },
   "dashboardSelectorPage": {
     "active_engineer_organization_side_is": "يجب تحديد الجهة التنظيمية للمهندس النشط.",
-    "loading_your_assigned_projects": "جارٍ تحميل مشاريعك المُسندة…"
+    "loading_your_assigned_projects": "جارٍ تحميل مشاريعك المُسندة…",
+    "account_not_active": "هذا الحساب غير مفعّل."
   },
   "designChanges": {
     "engineering_change_requests": "طلبات التغيير الهندسي",
@@ -2713,7 +2716,8 @@
     "manage_company_accounts_roles": "إدارة حسابات الشركة والأدوار والتخصصات وحالة الوصول",
     "search_name_email_phone": "البحث بالاسم أو البريد أو الهاتف...",
     "all_roles": "كل الأدوار",
-    "all_disciplines": "كل التخصصات"
+    "all_disciplines": "كل التخصصات",
+    "office_role_required": "اختر دورًا مكتبيًا للحساب الجديد."
   },
   "userTable": {
     "edit": "تعديل",

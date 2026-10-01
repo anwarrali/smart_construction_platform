@@ -11,7 +11,7 @@ import { Select } from "../../../components/ui/Select";
 import { Badge } from "../../../components/ui/Badge";
 import { Loader } from "../../../components/ui/Loader";
 import { usersService } from "../services/users.service";
-import { getRoleLabel } from "../../../utils/roleMapper";
+import { orgRoleName } from "../../../utils/vocabulary";
 import { formatDate } from "../../../utils/date";
 import { getInitials, getAvatarColor } from "../../../utils/helpers";
 import { useAuth } from "../../../hooks/useAuth";
@@ -51,7 +51,8 @@ export const ProfilePage = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const canEditSpecialization = profile?.role === "engineer" || profile?.role === "consultant";
+  // A specialization belongs to office staff, and to anybody who already has one recorded.
+  const canEditSpecialization = Boolean(profile?.engineerProfile) || profile?.isInternal !== false;
 
   const loadProfile = async () => {
     setIsLoading(true);
@@ -217,7 +218,7 @@ export const ProfilePage = () => {
               <h2 className="mt-4 text-lg font-semibold">{profile.fullName}</h2>
               <p className="text-sm text-muted-foreground">{profile.email}</p>
               <div className="mt-3 flex flex-wrap justify-center gap-2">
-                <Badge variant="info">{getRoleLabel(profile.role)}</Badge>
+                <Badge variant="info">{orgRoleName(profile.orgRole) || "—"}</Badge>
                 <Badge variant={profile.status === "active" ? "success" : "warning"}>
                   {profile.status || "unknown"}
                 </Badge>

@@ -120,10 +120,11 @@ const ManagedTasksPage = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const debouncedSearch = useDebounce(search);
-  const { checkPermission, isProjectManager } = useRole();
+  const { hasCapability } = useRole();
+  const editsTasks = hasCapability("task.edit");
   const workspace = useProjectWorkspace();
   const activeProjectId = workspace.projectId;
-  const canCreate = checkPermission("create_task");
+  const canCreate = hasCapability("task.create");
   const isFirstRender = useRef(true);
 
   const fetchTasks = useCallback(async () => {
@@ -240,7 +241,7 @@ const ManagedTasksPage = () => {
           />
         </div>
 
-        <TaskBoard tasks={tasks} isLoading={isLoading} onEdit={isProjectManager ? (task) => { setEditingTask(task); setIsFormOpen(true); } : undefined} onDelete={isProjectManager ? handleDelete : undefined} />
+        <TaskBoard tasks={tasks} isLoading={isLoading} onEdit={editsTasks ? (task) => { setEditingTask(task); setIsFormOpen(true); } : undefined} onDelete={editsTasks ? handleDelete : undefined} />
       </Card>
 
       <TaskForm
@@ -254,7 +255,10 @@ const ManagedTasksPage = () => {
   );
 };
 
+/** Same split as the task detail page: managing work, or doing it. */
 export const TasksPage = () => {
-  const { isEngineer } = useRole();
-  return isEngineer ? <EngineerTasksPage /> : <ManagedTasksPage />;
+  const { hasCapability, permissionsReady } = useRole();
+  if (!permissionsReady) return null;
+  const managesWork = hasCapability("task.edit") || hasCapability("task.review") || hasCapability("task.view_all");
+  return managesWork ? <ManagedTasksPage /> : <EngineerTasksPage />;
 };

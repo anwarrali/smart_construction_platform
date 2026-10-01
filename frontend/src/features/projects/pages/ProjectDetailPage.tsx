@@ -33,7 +33,8 @@ export const ProjectDetailPage = () => {
   const [recentChanges, setRecentChanges] = useState<Array<{id:string;title:string;status:string;createdAt:string}>>([]);
   const [recentReports, setRecentReports] = useState<Array<{id:string;summaryText?:string;reportDate:string;reviewStatus?:string}>>([]);
   const [projectStats, setProjectStats] = useState<null | { taskTotal: number; taskDone: number; taskInProgress: number; taskBlocked: number; tasksDueToday: number; taskProgressPercentage: number; delayedTasks: number; criticalPathTasks: number; openIssues: number; urgentIssues: number; unresolvedDesignChanges: number; siteReports: number; teamMembers: number; milestoneTotal: number; milestoneCompleted: number; milestonePending: number; recentActivity: Array<{action:string;entityType:string;timestamp:string}> }>(null);
-  const { isProjectManager, isAdmin } = useRole();
+  const { hasCapability } = useRole();
+  const canStaff = hasCapability("project.manage_members");
 
   const loadProject = async (projectId: string) => {
     setIsLoading(true);
@@ -45,7 +46,7 @@ export const ProjectDetailPage = () => {
       ]);
       setProject(data); setProjectStats(stats);
       setRecentChanges((changes || []).slice(0, 5)); setRecentReports((reports || []).slice(0, 5));
-      if (isProjectManager || isAdmin) {
+      if (canStaff) {
         const available = await api.projects.getAvailableTeamMembers(projectId);
         setAvailableEngineers(available); setEngineerId(available[0]?.id || "");
       }
@@ -61,11 +62,11 @@ export const ProjectDetailPage = () => {
       await loadProject(activeProjectId);
     };
     fetchProject();
-  }, [activeProjectId, isProjectManager, isAdmin]);
+  }, [activeProjectId, canStaff]);
 
   if (isLoading) return <Loader fullPage />;
 
-  if (error) return <div className="page-container"><Card><p className="text-sm text-state-overdue">{error}</p><Button className="mt-4" variant="outline" onClick={()=>navigate(isProjectManager ? ROUTES.PM_PROJECTS : ROUTES.PROJECTS)}>{t("projectDetail.back_to_projects")}</Button></Card></div>;
+  if (error) return <div className="page-container"><Card><p className="text-sm text-state-overdue">{error}</p><Button className="mt-4" variant="outline" onClick={()=>navigate(ROUTES.PROJECTS)}>{t("projectDetail.back_to_projects")}</Button></Card></div>;
 
   if (!project) {
     return (
@@ -86,14 +87,14 @@ export const ProjectDetailPage = () => {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => navigate(isProjectManager ? ROUTES.PM_PROJECTS : ROUTES.PROJECTS)}
+        onClick={() => navigate(ROUTES.PROJECTS)}
       >
         ← {t("projectDetail.back_to_projects")}
       </Button>
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{project.name}</h1>
-        <div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => navigate(isProjectManager ? workspace.path("ifc") : `/projects/${project.id}/ifc`)}>{t("projectDetail.ifc_intelligence")}</Button><Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/projects/${project.id}/evidence` : workspace.path("evidence"))}>{t("projectDetail.evidence_photos")}</Button>{isProjectManager && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("schedule"))}>{t("projectDetail.schedule")}</Button>}{(isProjectManager || isAdmin) && <Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/projects/${project.id}/milestones` : workspace.path("milestones"))}>{t("projectDetail.milestones")}</Button>}{isProjectManager && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("messages"))}>{t("projectDetail.messages")}</Button>}{(isProjectManager || isAdmin) && <Button size="sm" variant="outline" onClick={() => navigate(isAdmin ? `/admin/projects/${project.id}/team` : workspace.path("team"))}>{t("projectDetail.team")}</Button>}<Badge variant={project.status === "active" ? "success" : "neutral"}>
+        <div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => navigate(workspace.path("ifc"))}>{t("projectDetail.ifc_intelligence")}</Button><Button size="sm" variant="outline" onClick={() => navigate(workspace.path("evidence"))}>{t("projectDetail.evidence_photos")}</Button>{hasCapability("schedule.view") && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("schedule"))}>{t("projectDetail.schedule")}</Button>}{hasCapability("schedule.view") && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("milestones"))}>{t("projectDetail.milestones")}</Button>}{hasCapability("message.send") && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("messages"))}>{t("projectDetail.messages")}</Button>}{canStaff && <Button size="sm" variant="outline" onClick={() => navigate(workspace.path("team"))}>{t("projectDetail.team")}</Button>}<Badge variant={project.status === "active" ? "success" : "neutral"}>
           {vocabulary.projectStatus(project.status)}
         </Badge></div>
       </div>
@@ -195,14 +196,14 @@ export const ProjectDetailPage = () => {
             {t("projectDetail.stat.team")} ({project.members?.length || 0})
           </h3>
           <div className="space-y-2">
-            {(isProjectManager || isAdmin) && availableEngineers.length > 0 && <div className="flex gap-2 pb-3 border-b"><Select value={engineerId} onChange={e=>setEngineerId(e.target.value)} options={availableEngineers.map(engineer=>({value:engineer.id,label:`${engineer.fullName} · ${vocabulary.role(engineer.role)} · ${engineer.engineerProfile?.discipline ? vocabulary.discipline(engineer.engineerProfile.discipline) : t("projectTeam.no_discipline")}`}))}/><Button size="sm" disabled={!engineerId} onClick={async()=>{const user=availableEngineers.find(item=>item.id===engineerId);if(!user)return;await api.projects.addMember(project.id,engineerId,user.role);await loadProject(project.id);}}>{t("common.add")}</Button></div>}
+            {canStaff && availableEngineers.length > 0 && <div className="flex gap-2 pb-3 border-b"><Select value={engineerId} onChange={e=>setEngineerId(e.target.value)} options={availableEngineers.map(engineer=>({value:engineer.id,label:`${engineer.fullName} · ${vocabulary.orgRole(engineer.orgRole)} · ${engineer.engineerProfile?.discipline ? vocabulary.discipline(engineer.engineerProfile.discipline) : t("projectTeam.no_discipline")}`}))}/><Button size="sm" disabled={!engineerId} onClick={async()=>{const user=availableEngineers.find(item=>item.id===engineerId);if(!user)return;await api.projects.addMember(project.id,user.id);await loadProject(project.id);}}>{t("common.add")}</Button></div>}
             {project.members?.map((member) => (
               <div
                 key={member.id}
                 className="flex items-center justify-between"
               >
                 <span className="text-sm">{member.user?.fullName}</span>
-                <div className="flex items-center gap-2"><Badge size="sm">{vocabulary.projectRole(member.roleOnProject)}</Badge>{(isProjectManager || isAdmin) && ["engineer","consultant"].includes(member.roleOnProject) && <Button size="sm" variant="ghost" onClick={async()=>{await api.projects.removeMember(project.id,member.userId);await loadProject(project.id);}}>{t("projectDetail.remove")}</Button>}</div>
+                <div className="flex items-center gap-2"><Badge size="sm">{member.projectRoleName || vocabulary.orgRole(member.user?.orgRole)}</Badge>{canStaff && member.userId !== project.ownerId && member.userId !== project.projectManagerId && <Button size="sm" variant="ghost" onClick={async()=>{await api.projects.removeMember(project.id,member.userId);await loadProject(project.id);}}>{t("projectDetail.remove")}</Button>}</div>
               </div>
             ))}
             {(!project.members || project.members.length === 0) && (

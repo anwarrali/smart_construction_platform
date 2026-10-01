@@ -31,8 +31,8 @@ export const projectsService = {
   getMembers: async (id: string) => {
     return api.projects.getMembers(id);
   },
-  addMember: async (projectId: string, userId: string, role: string) => {
-    return api.projects.addMember(projectId, userId, role);
+  addMember: async (projectId: string, userId: string) => {
+    return api.projects.addMember(projectId, userId);
   },
   removeMember: async (projectId: string, userId: string): Promise<void> => {
     return api.projects.removeMember(projectId, userId);

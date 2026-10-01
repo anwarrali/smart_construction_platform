@@ -55,7 +55,9 @@ const statusOf = (token: McpToken): typeof REVOKED | typeof EXPIRED | typeof ACT
 
 export const McpClientsPage = () => {
   const { t, i18n } = useTranslation();
-  const { isAdmin } = useRole();
+  const { hasCapability } = useRole();
+  // The server shows everybody's tokens to holders of `platform.manage_users`.
+  const seesAllTokens = hasCapability("platform.manage_users");
   const locale = i18n.language?.startsWith("ar") ? "ar" : "en";
 
   const [tokens, setTokens] = useState<McpToken[] | null>(null);
@@ -133,8 +135,8 @@ export const McpClientsPage = () => {
 
   /** Shown only when there is somebody else's token in the list to label. */
   const showsOwner = useMemo(
-    () => isAdmin && (tokens ?? []).some((token) => token.ownerName),
-    [isAdmin, tokens],
+    () => seesAllTokens && (tokens ?? []).some((token) => token.ownerName),
+    [seesAllTokens, tokens],
   );
 
   const columns: Column<McpToken>[] = [
@@ -269,7 +271,7 @@ export const McpClientsPage = () => {
               />
               {t("mcpClients.showInactive")}
             </label>
-            {isAdmin && (
+            {seesAllTokens && (
               <span className="text-xs text-muted-foreground">
                 {t("mcpClients.adminNote")}
               </span>

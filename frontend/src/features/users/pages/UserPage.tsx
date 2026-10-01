@@ -135,27 +135,25 @@ export const UsersPage = () => {
 
   const handleSubmit = async (data: UserFormData) => {
     const status = data.status as UserStatus;
-    /* The office role and the disciplines are the whole payload now. No
-       `role`, no `engineerAffiliation`, no single `engineerProfile.discipline`:
-       the server derives what it still has to write to the retired columns
-       from the role itself, so the client never has to know the retired
-       vocabulary existed. */
-    const payload = {
+    /* The office role and the disciplines are the whole payload: the role
+       decides every permission and whether the person is office staff. */
+    const common = {
       fullName: data.fullName || "",
       email: data.email || "",
-      password: data.password || "",
-      orgRoleId: data.orgRoleId,
       disciplineIds: data.disciplineIds || [],
-      status,
       phoneNumber: data.phoneNumber || undefined,
       organization: data.organization || undefined,
     };
 
     if (editingUser) {
-      await usersService.update(editingUser.id, payload);
+      await usersService.update(editingUser.id, { ...common, status, orgRoleId: data.orgRoleId || undefined });
       toast.success("User updated successfully.");
     } else {
-      await usersService.create(payload);
+      if (!data.orgRoleId) {
+        toast.error(t("userPage.office_role_required"));
+        return;
+      }
+      await usersService.create({ ...common, password: data.password || "", orgRoleId: data.orgRoleId });
       toast.success("Active user account created successfully.");
     }
     setIsFormOpen(false);

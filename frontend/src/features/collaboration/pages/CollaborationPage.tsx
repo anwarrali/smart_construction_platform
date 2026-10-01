@@ -26,7 +26,7 @@ type SiteVisit = { id: string; projectId: string; engineerId: string; title: str
 type Activity = { id: string; occurredAt: string; action: string; entityType: string; entityId?: string; details: Record<string, unknown> };
 type MessageAccountability = { messageId: string; status: string; reminderCount: number };
 type ActionCenter = { generatedAt: string; counts: Record<string, number>; ownerRequests: OwnerRequest[]; messageAccountability: MessageAccountability[]; upcomingSiteVisits: SiteVisit[]; notifications: { id: string; title: string; message: string }[] };
-type Member = { userId: string; fullName?: string; roleOnProject?: string; isActive?: boolean; user?: { id: string; fullName: string; role?: string; status?: string } };
+type Member = { userId: string; fullName?: string; projectRoleName?: string | null; isActive?: boolean; user?: { id: string; fullName: string; status?: string } };
 /** A clashing visit, described well enough to judge without loading it. */
 type VisitConflict = { id: string; title: string; projectId: string; projectName?: string; scheduledStart: string; scheduledEnd: string; visitType: string; status: string };
 
@@ -91,7 +91,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
   const { t } = useTranslation();
   const workspace = useProjectWorkspace();
   const { user } = useAuth();
-  const { isProjectManager, isAdmin, hasCapability } = useRole();
+  const { hasCapability } = useRole();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [projects, setProjects] = useState<Project[]>(workspace.assignedProjects);
@@ -191,9 +191,11 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
      request each have a catalogue code the endpoint already checks; asking
      for the code means an office that grants it to a role it invented gets
      the button too. */
-  const canSchedule = hasCapability("site_visit.schedule") || isProjectManager || isAdmin;
-  const canCreateRequest = hasCapability("owner_request.create") || isProjectManager || isAdmin;
-  const canReview = (item: OwnerRequest) => isProjectManager || isAdmin || item.assignedToId === user?.id;
+  const canSchedule = hasCapability("site_visit.schedule");
+  const canCreateRequest = hasCapability("owner_request.create");
+  const canReview = (item: OwnerRequest) => hasCapability("owner_request.review") || item.assignedToId === user?.id;
+  /** Booking a visit for somebody else: the server allows it to people not narrowed to their own work. */
+  const schedulesForOthers = hasCapability("task.view_all");
 
   const run = async (key: string, operation: () => Promise<unknown>, message: string) => {
     setBusy(key);
@@ -375,7 +377,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
         <Input label={t("siteVisit.location")} helperText={t("siteVisit.locationHint")} value={visitForm.location} onChange={(e) => editVisit({ location: e.target.value })} />
         {/* A manager schedules on an engineer's behalf; conflicts are checked
             against that engineer's calendar, so it must be selectable. */}
-        {(isProjectManager || isAdmin) && (
+        {schedulesForOthers && (
           <Select label={t("siteVisit.responsibleEngineer")} value={visitForm.engineerId} onChange={(e) => editVisit({ engineerId: e.target.value })}
             options={[{ value: "", label: t("siteVisit.responsibleEngineerSelf") }, ...selectableMembers.map((m) => { const id = m.user?.id || m.userId; return { value: id, label: memberName(id) }; })]} />
         )}
@@ -392,7 +394,7 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
                   <input type="checkbox" className="h-4 w-4 shrink-0" checked={checked}
                     onChange={(e) => editVisit({ participantIds: e.target.checked ? [...visitForm.participantIds, id] : visitForm.participantIds.filter((x) => x !== id) })} />
                   <span className="truncate">{memberName(id)}</span>
-                  {m.roleOnProject && <span className="ms-auto shrink-0 text-xs text-muted-foreground">{vocabulary.projectRole(m.roleOnProject)}</span>}
+                  {m.projectRoleName && <span className="ms-auto shrink-0 text-xs text-muted-foreground">{m.projectRoleName}</span>}
                 </label>;
               })}
             </div>}

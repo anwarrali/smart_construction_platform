@@ -13,6 +13,8 @@ import { Table } from "../../../components/ui/Table";
 import type { Column } from "../../../components/ui/Table/Table";
 import { projectsService } from "../services/projects.service";
 import { usersService } from "../../users/services/users.service";
+import api from "../../../services/api";
+import { projectWorkspaceBase } from "../../../utils/projectRoutes";
 import { formatDate } from "../../../utils/date";
 import { useRole } from "../../../hooks/useRole";
 import { useVocabulary } from "../../../utils/vocabulary";
@@ -31,7 +33,6 @@ type ProjectFormState = {
   status: ProjectStatus;
   ownerId: string;
   projectManagerId: string;
-  consultantId: string;
 };
 
 const emptyProjectForm: ProjectFormState = {
@@ -45,7 +46,6 @@ const emptyProjectForm: ProjectFormState = {
   status: "planning",
   ownerId: "",
   projectManagerId: "",
-  consultantId: "",
 };
 
 const normalizeUsers = (response: unknown): UserProfile[] => {
@@ -72,7 +72,7 @@ const PROJECT_STATUSES: ProjectStatus[] = ["planning", "active", "on_hold", "del
 
 export const ProjectsPage = () => {
   const { t } = useTranslation();
-  const { isAdmin, isProjectManager, isEngineer, checkPermission } = useRole();
+  const { hasCapability } = useRole();
   const vocabulary = useVocabulary();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -86,26 +86,37 @@ export const ProjectsPage = () => {
   const [selectedMembers, setSelectedMembers] = useState<ProjectMember[]>([]);
   const [form, setForm] = useState<ProjectFormState>(emptyProjectForm);
   const [isSaving, setIsSaving] = useState(false);
-  const canCreate = checkPermission("create_project");
+  const canCreate = hasCapability("platform.create_project");
+  /** Project setup: owner, manager, dates, budget. */
+  const canEditSetup = hasCapability("project.edit");
+  const canStaff = hasCapability("project.manage_members");
+  const seesPortfolio = hasCapability("platform.view_all_projects");
+  const choosesPrincipals = canCreate || canEditSetup;
 
-  const owners = useMemo(() => users.filter((user) => user.role === "owner" && user.status === "active"), [users]);
-  const projectManagers = useMemo(
-    () => users.filter((user) => user.role === "project_manager" && user.status === "active"),
-    [users],
-  );
-  const consultants = useMemo(
-    () => users.filter((user) => user.role === "engineer" && user.engineerAffiliation === "external_consultant" && user.status === "active"),
-    [users],
-  );
+  /* Candidates come from the server, by the same rule it applies when the
+     project is saved — never from a role name the interface would have to
+     guess at. */
+  const [owners, setOwners] = useState<UserProfile[]>([]);
+  const [projectManagers, setProjectManagers] = useState<UserProfile[]>([]);
 
-  const userById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+  const userById = useMemo(
+    () => new Map([...users, ...owners, ...projectManagers].map((user) => [user.id, user])),
+    [users, owners, projectManagers],
+  );
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const projectResponse = await projectsService.list({ limit: 100 });
       setProjects(normalizeProjects(projectResponse));
-      if (isAdmin) {
+      if (choosesPrincipals) {
+        const [eligibleOwners, eligibleManagers] = await Promise.all([
+          api.users.eligible("project_owner"), api.users.eligible("project_manager"),
+        ]);
+        setOwners(eligibleOwners);
+        setProjectManagers(eligibleManagers);
+      }
+      if (seesPortfolio && hasCapability("platform.manage_users")) {
         const userResponse = await usersService.list();
         setUsers(normalizeUsers(userResponse));
       } else {
@@ -116,7 +127,7 @@ export const ProjectsPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, t]);
+  }, [choosesPrincipals, seesPortfolio, hasCapability, t]);
 
   useEffect(() => {
     fetchData();
@@ -140,7 +151,6 @@ export const ProjectsPage = () => {
   };
 
   const openEdit = (project: Project) => {
-    const consultantMember = project.members?.find((member) => member.roleOnProject === "consultant" && member.isActive);
     setSelectedProject(project);
     setForm({
       id: project.id,
@@ -154,7 +164,6 @@ export const ProjectsPage = () => {
       status: project.status,
       ownerId: project.ownerId || "",
       projectManagerId: project.projectManagerId || "",
-      consultantId: consultantMember?.userId || "",
     });
     setIsFormOpen(true);
   };
@@ -201,13 +210,8 @@ export const ProjectsPage = () => {
         projectManagerId: form.projectManagerId,
       };
 
-      const savedProject = selectedProject
-        ? await projectsService.update(selectedProject.id, payload)
-        : await projectsService.create(payload);
-
-      if (form.consultantId) {
-        await projectsService.addMember(savedProject.id, form.consultantId, "consultant");
-      }
+      if (selectedProject) await projectsService.update(selectedProject.id, payload);
+      else await projectsService.create(payload);
 
       toast.success(selectedProject ? t("projectsPage.projectUpdated") : t("projectsPage.projectCreated"));
       setIsFormOpen(false);
@@ -278,24 +282,16 @@ export const ProjectsPage = () => {
       header: "",
       render: (project) => (
         <div className="flex justify-end gap-2">
-          {!isEngineer && <Button variant="outline" size="sm" onClick={() => openMembers(project)}>
+          <Button variant="outline" size="sm" onClick={() => openMembers(project)}>
             {t("projectsPage.view_members")}
-          </Button>}
-          {isAdmin && <Button variant="outline" size="sm" onClick={() => navigate(`/admin/projects/${project.id}/team`)}>
+          </Button>
+          {canStaff && <Button variant="outline" size="sm" onClick={() => navigate(`/admin/projects/${project.id}/team`)}>
             {t("projectsPage.manage_team")}
           </Button>}
-          <Button size="sm" onClick={() => navigate(
-            isProjectManager
-              ? `/project-manager/projects/${project.id}/dashboard`
-              : isEngineer
-                ? (isEngineer && window.location.pathname.startsWith("/consultant-engineer")
-                  ? `/consultant-engineer/projects/${project.id}/dashboard`
-                  : `/engineer/projects/${project.id}/dashboard`)
-                : `/projects/${project.id}`
-          )}>
+          <Button size="sm" onClick={() => navigate(projectWorkspaceBase(project.id))}>
             {t("projectsPage.open")}
           </Button>
-          {isAdmin && (
+          {canEditSetup && (
             <Button variant="ghost" size="sm" onClick={() => openEdit(project)}>
               {t("projectsPage.edit")}
             </Button>
@@ -305,7 +301,7 @@ export const ProjectsPage = () => {
       className: "text-right",
     },
   ];
-  const visibleColumns = isAdmin ? columns : columns.filter(column => !["ownerId", "projectManagerId"].includes(String(column.key)));
+  const visibleColumns = seesPortfolio ? columns : columns.filter(column => !["ownerId", "projectManagerId"].includes(String(column.key)));
 
   return (
     <div className="page-container space-y-6">
@@ -313,11 +309,11 @@ export const ProjectsPage = () => {
         <div>
           <h1 className="text-2xl font-bold">{t("projectsPage.projects")}</h1>
           <p className="text-muted-foreground">{
-            isProjectManager
-              ? t("projectsPage.subtitlePm")
-              : isEngineer
-                ? t("projectsPage.subtitleEngineer")
-                : t("projectsPage.subtitleDefault")
+            seesPortfolio
+              ? t("projectsPage.subtitleDefault")
+              : canStaff
+                ? t("projectsPage.subtitlePm")
+                : t("projectsPage.subtitleEngineer")
           }</p>
         </div>
         {canCreate && (
@@ -426,15 +422,6 @@ export const ProjectsPage = () => {
               ]}
               required
             />
-            <Select
-              label={t("projectsPage.initial_consultant")}
-              value={form.consultantId}
-              onChange={(e) => setForm({ ...form, consultantId: e.target.value })}
-              options={[
-                { value: "", label: t("projectsPage.noConsultantSelected") },
-                ...consultants.map((consultant) => ({ value: consultant.id, label: consultant.fullName })),
-              ]}
-            />
           </div>
           <ModalActions>
             <Button variant="outline" type="button" onClick={() => setIsFormOpen(false)}>
@@ -461,7 +448,7 @@ export const ProjectsPage = () => {
                 <p className="text-xs text-muted-foreground">{member.user?.email || userById.get(member.userId)?.email || ""}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="info">{vocabulary.projectRole(member.roleOnProject)}</Badge>
+                <Badge variant="info">{member.projectRoleName || vocabulary.orgRole(member.user?.orgRole)}</Badge>
                 <Badge variant={member.isActive ? "success" : "neutral"}>
                   {member.isActive ? t("projectsPage.active") : t("projectsPage.inactive")}
                 </Badge>

@@ -1,3 +1,4 @@
+import type { OrgRoleRef } from "./auth";
 export type ProjectStatus =
   | "planning"
   | "active"
@@ -28,7 +29,6 @@ export interface Project {
     id: string;
     fullName: string;
     email: string;
-    role: string;
   };
   coverImageUrl?: string;
   members: ProjectMember[];
@@ -40,7 +40,6 @@ export interface ProjectMember {
   id: string;
   projectId: string;
   userId: string;
-  roleOnProject: string;
   isActive: boolean;
   assignmentTitle?: string;
   projectDiscipline?: string;
@@ -62,9 +61,8 @@ export interface ProjectMember {
     id: string;
     fullName: string;
     email: string;
-    role: string;
+    orgRole?: OrgRoleRef | null;
     organization?: string;
-    engineerAffiliation?: "internal_engineer" | "main_contractor" | "external_consultant";
     status: string;
     engineerProfile?: { discipline: string };
   };

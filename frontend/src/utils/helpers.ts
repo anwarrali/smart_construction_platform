@@ -86,14 +86,15 @@ export const getAvatarColor = (name: string): string => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-export const formatAssigneeRole = (role: string, discipline?: string): string => {
+/** "Senior Engineer · Civil": the office role's name, then the discipline. */
+export const formatAssigneeRole = (
+  person: { orgRole?: { nameEn: string } | null; engineerProfile?: { discipline?: string } | null },
+): string => {
   const titleCase = (value: string) => value
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  const disciplineLabel = discipline ? titleCase(discipline) : "";
-  if (role === "engineer") return `${disciplineLabel ? `${disciplineLabel} ` : ""}Engineer`;
-  if (role === "consultant") return `${disciplineLabel ? `${disciplineLabel} ` : ""}Consultant`;
-  return titleCase(role);
+  const discipline = person.engineerProfile?.discipline;
+  return [person.orgRole?.nameEn, discipline ? titleCase(discipline) : ""].filter(Boolean).join(" · ");
 };
 
 export const debounce = <T extends (...args: unknown[]) => unknown>(

@@ -15,7 +15,7 @@ import {
 import { Link } from "react-router-dom";
 import api from "../../../../services/api";
 import { Badge } from "../../../../components/ui/Badge";
-import { getRoleLabel } from "../../../../utils/roleMapper";
+import { orgRoleName } from "../../../../utils/vocabulary";
 import { useVocabulary } from "../../../../utils/vocabulary";
 import { formatDate } from "../../../../utils/date";
 import { ROUTES } from "../../../../utils/constants";
@@ -89,7 +89,8 @@ export const AdminDashboard = () => {
 
   const roleDistribution = useMemo(() => {
     const counts = users.reduce<Record<string, number>>((acc, user) => {
-      acc[user.role] = (acc[user.role] || 0) + 1;
+      const name = orgRoleName(user.orgRole) || "—";
+      acc[name] = (acc[name] || 0) + 1;
       return acc;
     }, {});
 
@@ -175,7 +176,7 @@ export const AdminDashboard = () => {
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant="info">{getRoleLabel(user.role)}</Badge>
+                  <Badge variant="info">{orgRoleName(user.orgRole) || "—"}</Badge>
                   <Badge variant={user.status === "active" ? "success" : "neutral"}>
                     {user.status || "unknown"}
                   </Badge>
@@ -200,7 +201,7 @@ export const AdminDashboard = () => {
             {roleDistribution.map(({ role, count, percentage }) => (
               <div key={role} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{getRoleLabel(role as any)}</span>
+                  <span className="font-medium">{role}</span>
                   <span className="text-muted-foreground">{count}</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">

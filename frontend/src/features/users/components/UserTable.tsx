@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { Column } from "../../../components/ui/Table/Table";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
-import { getRoleLabel } from "../../../utils/roleMapper";
+import { orgRoleName } from "../../../utils/vocabulary";
 import { formatDate } from "../../../utils/date";
 import { getInitials, getAvatarColor } from "../../../utils/helpers";
 import type { UserProfile } from "../../../types/user";
@@ -55,11 +55,10 @@ export const UserTable = ({
     },
     {
       key: "role",
-      /* The office's own name for the role, falling back to the retired label
-         only for an account the backfill has not reached. */
+      /* The office's own name for the role. */
       header: "Office role",
       render: (user) => (
-        <Badge variant="info">{user.orgRole?.nameEn || getRoleLabel(user.role)}</Badge>
+        <Badge variant="info">{orgRoleName(user.orgRole) || "—"}</Badge>
       ),
     },
     {

@@ -54,7 +54,11 @@ export const SiteReportsPage = () => {
   const [reports, setReports] = useState<SiteReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const isFirstRender = useRef(true);
-  const { role } = useRole();
+  const { hasCapability } = useRole();
+  /* The server narrows filing to members carrying site responsibility,
+     unless somebody sees all of a project's work (`task.view_all`). */
+  const seesAllWork = hasCapability("task.view_all");
+  const canVerify = hasCapability("site_report.verify");
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const focusedReportId = searchParams.get("reportId");
@@ -122,9 +126,9 @@ export const SiteReportsPage = () => {
       api.tasks.getByProject(activeProjectId).then((response: any) => setTasks(Array.isArray(response) ? response : response.data || [])).catch(() => setTasks([]));
     }
     else api.projects.list().then(r => { setProjects(r.data); if(r.data[0]) setProjectId(r.data[0].id); });
-    api.field.context().then(context => { const ids = context.projects.filter(project => project.isSiteEngineer).map(project => project.id); setSiteProjectIds(ids); if (role === "engineer" && ids[0]) setProjectId(ids[0]); }).catch(() => setSiteProjectIds([]));
-  }, [activeProjectId, role, workspace.project]);
-  const canSubmit = role === "project_manager" || (role === "engineer" && siteProjectIds.length > 0);
+    api.field.context().then(context => { const ids = context.projects.filter(project => project.isSiteEngineer).map(project => project.id); setSiteProjectIds(ids); if (!seesAllWork && ids[0]) setProjectId(ids[0]); }).catch(() => setSiteProjectIds([]));
+  }, [activeProjectId, seesAllWork, workspace.project]);
+  const canSubmit = hasCapability("site_report.submit") && (seesAllWork || siteProjectIds.length > 0);
 
   // Opening a site report from a scheduled visit prefills the report from that
   // visit instead of asking the engineer to retype what the platform knows.
@@ -256,7 +260,7 @@ export const SiteReportsPage = () => {
                   {/* Verification: server-enforced for the assigned Project
                       Manager only (site_report.verify); this UI merely hides
                       the action for everyone else — it is not the guard. */}
-                  {role === "project_manager" && report.reviewStatus === "submitted" && (
+                  {canVerify && report.reviewStatus === "submitted" && (
                     <div className="mt-3 flex items-center gap-2 rounded-lg border bg-muted/20 p-3">
                       <span className="text-sm font-medium">{t("siteReports.verification_needed")}</span>
                       <Button size="sm" isLoading={verifyingId === report.id} onClick={() => verifyReport(report)}>{t("siteReports.verify")}</Button>
@@ -298,7 +302,7 @@ export const SiteReportsPage = () => {
       <Modal isOpen={formOpen} onClose={() => { setFormOpen(false); setEditingId(""); setPrefilledVisit(null); if (siteVisitId) { const next = new URLSearchParams(searchParams); next.delete("siteVisitId"); setSearchParams(next, { replace: true }); } }} title={editingId ? t("siteReports.edit_draft_title") : t("siteReports.create_title")}>
         <form onSubmit={submitReport} className="space-y-4">
           {prefilledVisit && <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm"><p className="font-medium">{t("siteReports.prefilled_from_a_scheduled_site_visit")}</p><p className="mt-0.5 text-muted-foreground">{t("siteReports.visit_summary", { type: vocabulary.siteVisitType(prefilledVisit.visitType), date: prefilledVisit.reportDate })}</p></div>}
-          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">{t("siteReports.project")}</span> {workspace.project?.name}</p> : <Select label={t("siteReports.project_2")} value={projectId} onChange={e=>setProjectId(e.target.value)} options={projects.filter(project => role === "project_manager" || siteProjectIds.includes(project.id)).map(p=>({value:p.id,label:p.name}))}/>}
+          {activeProjectId ? <p className="text-sm"><span className="text-muted-foreground">{t("siteReports.project")}</span> {workspace.project?.name}</p> : <Select label={t("siteReports.project_2")} value={projectId} onChange={e=>setProjectId(e.target.value)} options={projects.filter(project => seesAllWork || siteProjectIds.includes(project.id)).map(p=>({value:p.id,label:p.name}))}/>}
           <Input label={t("siteReports.work_summary")} value={summary} onChange={e=>setSummary(e.target.value)} required/>
           <Select label={t("siteReports.related_task_optional")} value={taskId} onChange={e=>setTaskId(e.target.value)} options={[{value:"",label:t("siteReports.general_daily_report")},...tasks.map(task=>({value:task.id,label:`${task.taskCode} — ${task.name}`}))]}/>
           <Input label={t("siteReports.weather")} value={weather} onChange={e=>setWeather(e.target.value)}/>
