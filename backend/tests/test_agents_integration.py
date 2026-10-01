@@ -26,6 +26,7 @@ from app.models.user import User
 from app.db.database import SessionLocal
 from app.services.agents import BY_NAME, Certainty, available_agents, run_agent, run_all
 from app.services.agents.runtime import AGENT_CATEGORY
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -50,8 +51,8 @@ def world(db):
     today = date.today()
 
     def user(name, role):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                         hashed_password="x", role=role, status=UserStatus.ACTIVE))
 
     manager = user("AgentPm", UserRole.PROJECT_MANAGER)
     outsider = user("AgentOutsider", UserRole.PROJECT_MANAGER)

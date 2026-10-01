@@ -33,6 +33,7 @@ from app.models.company import Company
 from app.models.enums import ProjectStatus, UserRole, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import User
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -74,10 +75,10 @@ def world(db):
     db.flush()
 
     def user(name, role, company=None, affiliation=None):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      company_id=company.id if company else None,
-                      engineer_affiliation=affiliation)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
+                                           company_id=company.id if company else None,
+                                           engineer_affiliation=affiliation))
         db.add(person)
         return person
 

@@ -24,6 +24,7 @@ from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.collaboration import SiteVisitCreate
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -47,8 +48,8 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                         hashed_password="x", role=role, status=UserStatus.ACTIVE))
 
     manager = user("Manager", UserRole.PROJECT_MANAGER)
     engineer = user("Engineer", UserRole.ENGINEER)
@@ -177,8 +178,9 @@ def test_a_back_to_back_visit_is_not_a_conflict(world):
 
 
 def test_a_participant_outside_the_project_is_rejected(world):
-    outsider = User(full_name="Outsider", email=f"outsider-{uuid4().hex[:8]}@test.local",
-                    hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE)
+    outsider = with_office_role(world["db"], User(
+        full_name="Outsider", email=f"outsider-{uuid4().hex[:8]}@test.local",
+        hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE))
     world["db"].add(outsider)
     world["db"].flush()
 

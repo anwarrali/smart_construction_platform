@@ -117,11 +117,3 @@ from app.models.collaboration import (
     SiteVisit, SiteVisitParticipant, AIInsightSource,
 )
 from app.models.agent_run import AgentRun  # noqa: F401,E402
-
-# Every account reaches the database with an office role, whichever code path
-# wrote it. Registered here because this module is the one place guaranteed to
-# have been imported once every model exists — see the module docstring for why
-# the invariant is enforced rather than left to each caller.
-from app.db.user_role_backstop import install as _install_user_role_backstop  # noqa: E402
-
-_install_user_role_backstop()

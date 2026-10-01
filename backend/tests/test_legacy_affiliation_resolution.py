@@ -15,9 +15,9 @@ was then written as internal office staff:
     engineer_affiliation="main_contracter"  ->  engineer  ->  is_internal=True
 
 which drops the project-scoped ceiling `is_external_participant` exists to
-impose. `app/db/user_role_backstop.py` records having made the same mistake once
-already from the other direction — filling `org_role_id` without `is_internal` —
-and this is that failure reached by a different route.
+impose. The `rbac.apply_org_role` docstring records the same mistake having been
+made once already from the other direction — filling `org_role_id` without
+`is_internal` — and this is that failure reached by a different route.
 
 The fix is to refuse. There is no safe role to guess here: guessing high hands
 an outsider internal access, and guessing low would silently strip a legitimate
@@ -47,6 +47,9 @@ from app.core.role_templates import (
 from app.db.database import SessionLocal
 from app.models.enums import UserRole, UserStatus
 from app.models.user import User
+from app.services import rbac
+from app.services.user_service import create_provisioned_user
+from tests.office_roles import with_office_role
 
 #: Values that must keep working. Exactly the closed set `UserCreateByAdmin`
 #: validates against, written out rather than imported from the module under
@@ -212,45 +215,66 @@ def test_every_seeded_template_remains_reachable_by_code():
         assert BY_CODE_TEMPLATE[code].code == code
 
 
-# --- end to end, through the path that had the bug ---------------------------
+# --- end to end, through the paths that write accounts --------------------
 
-def test_a_user_row_with_a_corrupt_affiliation_cannot_be_flushed(db):
-    """The backstop is where the fail-open actually reached the database.
-
-    `app/db/user_role_backstop.py` fills `org_role_id` for any new `User` that
-    arrives without one, and it resolves the role through
-    `template_for_legacy`. Before the fix this row was written with the
-    `engineer` template and `is_internal=True`. Now the flush raises and the
-    account does not exist — which is the outcome that matters, since the
-    schema validator only guards the API and this listener sees every writer.
-    """
-    row = User(
-        full_name="Corrupt Affiliation",
-        email=f"corrupt-affiliation-{uuid4().hex[:12]}@example.com",
+def _engineer(affiliation):
+    return User(
+        full_name="Affiliation Check",
+        email=f"affiliation-{uuid4().hex[:12]}@example.com",
         hashed_password="x",
         role=UserRole.ENGINEER,
         status=UserStatus.ACTIVE,
-        engineer_affiliation="main_contracter",
+        engineer_affiliation=affiliation,
     )
-    db.add(row)
+
+
+def test_a_corrupt_affiliation_is_refused_before_the_account_is_written(db):
+    """Where the fail-open used to reach the database, it now stops.
+
+    It reached the database through `user_role_backstop`, which resolved a
+    role during the flush for any `User` written without one. That listener is
+    gone; every path that writes an account now resolves its role *before*
+    writing, through `rbac.apply_legacy_template_role` or its provisioning
+    equivalent — and that resolution is what refuses. Before the fix this
+    account got the `engineer` template and `is_internal=True`.
+    """
+    row = _engineer("main_contracter")
     with pytest.raises(UnknownAffiliation):
-        db.flush()
-    db.rollback()
+        rbac.apply_legacy_template_role(db, row)
     assert row.org_role_id is None
 
 
-def test_a_user_row_with_a_recognised_affiliation_still_flushes(db):
-    """The control. Without it the test above passes for the wrong reason."""
-    row = User(
-        full_name="Valid Affiliation",
-        email=f"valid-affiliation-{uuid4().hex[:12]}@example.com",
-        hashed_password="x",
-        role=UserRole.ENGINEER,
-        status=UserStatus.ACTIVE,
-        engineer_affiliation="main_contractor",
-    )
+def test_provisioning_refuses_a_corrupt_affiliation_and_writes_nothing(db):
+    """The service path, below the API schema that already rejects the value.
+
+    `UserCreateByAdmin` guards `POST /users`; `create_provisioned_user` is also
+    reachable from code, and must not turn a typo into office staff either.
+    """
+    admin = with_office_role(db, User(
+        full_name="Affiliation Admin", email=f"affiliation-admin-{uuid4().hex[:12]}@example.com",
+        hashed_password="x", role=UserRole.ADMIN, status=UserStatus.ACTIVE,
+    ))
+    db.add(admin)
+    db.flush()
+    email = f"corrupt-provisioned-{uuid4().hex[:12]}@example.com"
+
+    with pytest.raises(UnknownAffiliation):
+        create_provisioned_user(
+            db, creator=admin, email=email, full_name="Corrupt Provisioned",
+            role=UserRole.ENGINEER, engineer_affiliation="main_contracter",
+            password="Str0ngPassw0rd!", send_email=False,
+        )
+    db.rollback()
+    assert db.query(User).filter(User.email == email).first() is None
+
+
+def test_a_recognised_affiliation_still_resolves_to_an_external_role(db):
+    """The control. Without it the tests above could pass for the wrong reason."""
+    row = _engineer("main_contractor")
+    role = rbac.apply_legacy_template_role(db, row)
+    assert role is not None and role.code == "contractor_representative"
+    assert row.org_role_id == role.id
+    assert row.is_internal is False, "a contractor must not be written as internal"
     db.add(row)
     db.flush()
-    assert row.org_role_id is not None, "the backstop did not assign a role"
-    assert row.is_internal is False, "a contractor must not be written as internal"
     db.rollback()

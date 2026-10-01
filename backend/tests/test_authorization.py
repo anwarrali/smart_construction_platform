@@ -29,6 +29,7 @@ from app.services.authorization import (
     consultant_covers_engineers, effective_permissions, has_permission, require,
 )
 from app.services.consultant_approval_service import can_consultant_review_task
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -52,9 +53,9 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role, affiliation=None):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                    engineer_affiliation=affiliation)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                         hashed_password="x", role=role, status=UserStatus.ACTIVE,
+                                         engineer_affiliation=affiliation))
 
     admin = user("Admin", UserRole.ADMIN)
     manager = user("Manager", UserRole.PROJECT_MANAGER)
@@ -207,7 +208,7 @@ def _configure_role(db, user, code, allowed):
     from uuid import uuid4 as _uuid4
 
     source = rbac.get_role(db, user.org_role_id)
-    assert source is not None, "the backstop should have given this account a role"
+    assert source is not None, "the fixture should have given this account a role"
     copy = Role(
         organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
         name_en=source.name_en, scope=source.scope,
@@ -347,9 +348,10 @@ def test_no_engineer_scope_means_no_engineer_restriction(world):
 
 
 def test_a_consultant_who_is_not_a_project_member_reviews_nothing(world):
-    stranger = User(full_name="Stranger", email=f"stranger-{uuid4().hex[:6]}@test.local",
-                    hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-                    engineer_affiliation="external_consultant")
+    stranger = with_office_role(world["db"], User(
+        full_name="Stranger", email=f"stranger-{uuid4().hex[:6]}@test.local",
+        hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+        engineer_affiliation="external_consultant"))
     world["db"].add(stranger)
     world["db"].flush()
     assert not can_consultant_review_task(

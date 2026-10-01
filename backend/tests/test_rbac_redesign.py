@@ -50,6 +50,7 @@ from app.services import rbac
 from app.services.authorization import (
     effective_permissions, has_permission, legacy_effective_permissions,
 )
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -86,13 +87,13 @@ def legacy_world(db):
 
     def user(name, role, affiliation=None, company=None, organization=None,
              status=UserStatus.ACTIVE):
-        person = User(
+        person = with_office_role(db, User(
             full_name=name, email=f"{name.lower().replace(' ', '')}-{suffix}@test.local",
             hashed_password="x", role=role, status=status,
             engineer_affiliation=affiliation,
             company_id=company.id if company else None,
             organization=organization,
-        )
+        ))
         db.add(person)
         return person
 
@@ -679,19 +680,19 @@ def test_no_template_grants_a_non_project_scoped_permission_to_an_external_role(
 def test_an_account_without_a_role_is_refused(db, legacy_world):
     """The contract, stated as a test.
 
-    Every account holds a database role. `user_role_backstop` fills the column
-    for anything written without one, so producing an unmigrated account takes
-    a deliberate `UPDATE` — and resolving one raises rather than falling back
-    to the retired enum. The fallback this replaces is what made a partial
+    Every account holds a database role: every creation path assigns one
+    before writing, so producing an unmigrated account takes a deliberate
+    `UPDATE` — and resolving one raises rather than falling back to the
+    retired enum. The fallback this replaces is what made a partial
     backfill survivable; it is not needed once nothing can create the state it
     tolerated, and keeping it would leave two answers to one question.
     """
     from app.services.rbac import UnmigratedUser
 
     architect = legacy_world["architect"]
-    # The backstop gave it a role on the way in; take it away to construct the
+    # The fixture gave it a role on the way in; take it away to construct the
     # state the fallback used to serve.
-    assert architect.org_role_id is not None, "the backstop should have filled this"
+    assert architect.org_role_id is not None, "the fixture should have assigned a role"
     architect.org_role_id = None
     db.flush()
 

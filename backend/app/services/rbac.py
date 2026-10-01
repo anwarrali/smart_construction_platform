@@ -298,9 +298,9 @@ def is_staffable(db: Session, user: User) -> bool:
 
     Was `bool(role.legacy_role)` — the row-level spelling of the same
     `legacy_role IS NULL` predicate `_archived_role_ids` used, and moved for the
-    same reason. An account with no role at all is still not staffable: the
-    backstop gives every new row one, so `None` here means something is wrong
-    rather than something is permitted.
+    same reason. An account with no role at all is still not staffable: every
+    creation path assigns one before writing, so `None` here means something is
+    wrong rather than something is permitted.
     """
     if user.status != UserStatus.ACTIVE:
         return False
@@ -322,9 +322,9 @@ def resolved_permissions(
     `UserPermissionOverride`, which `app.services.authorization` applies.
     """
     if user.org_role_id is None:
-        # No fallback any more. An account without a role is a bug — the
-        # backstop fills the column for anything created without one, and the
-        # backfill reached everything that predates it — so resolving one
+        # No fallback any more. An account without a role is a bug — every
+        # creation path assigns one before writing, and the backfill reached
+        # everything that predates them — so resolving one
         # through the retired enum would be guessing at authority rather than
         # reading it. Failing loudly is the point of the contract step.
         raise UnmigratedUser(
@@ -550,6 +550,39 @@ def seed_roles(
     return result
 
 
+def seed_fresh_database(db: Session) -> bool:
+    """Seed the shared disciplines and role templates on a brand-new database.
+
+    Role rows used to reach a database only through `python -m
+    app.db.rbac_backfill`, which is run by hand and is in no start sequence —
+    so on a fresh deployment the initial administrator found no `org_admin`
+    and was created without an office role, and every permission check then
+    refused them. This closes that gap with the same `seed_disciplines` and
+    `seed_roles` the backfill uses; it is not a second definition of any role.
+
+    It acts only on a database that holds **no system roles and no accounts**,
+    and returns whether it did. That condition is what makes it safe to call
+    from a start sequence:
+
+    * On an initialized database it does nothing at all. `seed_roles` refreshes
+      an existing role's template permissions, which would re-grant a
+      permission an administrator switched off on a shared template (the older
+      Access Control screen writes those denials there); never touching an
+      existing role is what keeps that customization intact.
+    * On a legacy database — accounts, but no roles yet — it also does
+      nothing. Those accounts need `rbac_backfill`, which folds the retired
+      `RolePermissionOverride` decisions into the roles as it seeds them;
+      seeding plain templates first would lose them.
+    """
+    has_roles = db.query(Role.id).filter(Role.organization_id.is_(None)).first() is not None
+    has_accounts = db.query(User.id).first() is not None
+    if has_roles or has_accounts:
+        return False
+    seed_disciplines(db)
+    seed_roles(db)
+    return True
+
+
 def ensure_tenant_organization(db: Session, *, name: str | None = None) -> Company:
     """The consulting office this deployment belongs to.
 
@@ -591,13 +624,31 @@ def ensure_tenant_organization(db: Session, *, name: str | None = None) -> Compa
 # Assignment helpers used by the API and the backfill
 # ---------------------------------------------------------------------------
 
+def apply_org_role(user: User, role: Role) -> None:
+    """Set somebody's office role and the side of the office it puts them on.
+
+    The two columns move together or not at all. `is_external_participant`
+    reads `is_internal` the moment `org_role_id` is set, and the column defaults
+    to true, so writing the role without the flag silently reclassifies a
+    contractor as office staff. That mistake was made once already: the first
+    version of the retired `user_role_backstop` listener filled `org_role_id`
+    alone, which dropped the non-project-scoped ceiling and handed a contractor
+    `platform.view_all_projects` on every project in the office. That ceiling
+    is asserted by `test_no_external_participant_holds_an_office_wide_permission`.
+
+    Needs no flush and no id, which is what lets a creation path give an account
+    its role *before* it is written.
+    """
+    user.org_role_id = role.id
+    user.is_internal = bool(role.is_internal_only)
+
+
 def assign_org_role(
     db: Session, *, user: User, role: Role, organization_id: uuid.UUID,
     job_title: str | None = None,
 ) -> OrganizationMembership:
     """Give somebody an office role, and record the membership behind it."""
-    user.org_role_id = role.id
-    user.is_internal = bool(role.is_internal_only)
+    apply_org_role(user, role)
     membership = db.query(OrganizationMembership).filter(
         OrganizationMembership.user_id == user.id,
         OrganizationMembership.organization_id == organization_id,
@@ -657,6 +708,25 @@ def template_role_for_legacy_user(db: Session, user: User) -> Role | None:
     """The seeded role an existing account migrates onto."""
     template = template_for_legacy(user.role, user.engineer_affiliation)
     return role_by_code(db, template.code, user.company_id)
+
+
+def apply_legacy_template_role(db: Session, user: User) -> Role | None:
+    """Give an account the seeded role its retired enum maps to, before it is written.
+
+    For the creation paths that still describe a person by `users.role` — the
+    initial administrator, the demo seed — so that the account reaches the
+    database already holding the role `resolved_permissions` requires. Nothing
+    fills the column during a flush any more: a path that skips this writes an
+    account with no role, which permission resolution then refuses. The mapping
+    is `template_role_for_legacy_user`'s, not a second one.
+
+    Returns None, and leaves the account untouched, when that template has not
+    been seeded; callers decide whether that is an error.
+    """
+    role = template_role_for_legacy_user(db, user)
+    if role is not None:
+        apply_org_role(user, role)
+    return role
 
 
 def role_label_for(db: Session, user: User) -> str:

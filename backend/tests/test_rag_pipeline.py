@@ -40,6 +40,7 @@ from app.services.rag.store import (
     ChunkSource, PgVectorStore, PreparedChunk, ScoredChunk, VectorDimensionMismatch,
 )
 from tests.embedding_stub import StubEmbeddingClient
+from tests.office_roles import with_office_role
 
 pytest.importorskip("pypdf", reason="pypdf is required for the RAG pipeline")
 
@@ -289,13 +290,13 @@ def test_embedding_nothing_calls_no_provider():
 def world(db):
     """Two projects with one document each, so isolation is testable."""
     suffix = uuid.uuid4().hex[:8]
-    user = User(
+    user = with_office_role(db, User(
         full_name=f"RagUser{suffix}",
         email=f"raguser.{suffix}@constro.io",
         hashed_password="x",
         role=UserRole.PROJECT_MANAGER,
         status=UserStatus.ACTIVE,
-    )
+    ))
     db.add(user)
     db.flush()
 

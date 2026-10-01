@@ -40,6 +40,7 @@ from app.services.rag import ingestion
 from app.services.rag.answering import NOT_FOUND_MESSAGE, NOT_FOUND_TOKEN
 from tests.embedding_stub import STUB_MODEL, StubEmbeddingClient
 from tests.pdf_fixture import build_pdf
+from tests.office_roles import with_office_role
 
 pytest.importorskip("pypdf", reason="pypdf is required for the RAG pipeline")
 
@@ -147,14 +148,14 @@ def world(db, tmp_path):
     created: dict = {}
 
     def user(name, role, discipline=None):
-        person = User(
+        person = with_office_role(db, User(
             full_name=f"{name}{suffix}",
             email=f"{name.lower()}.{suffix}@constro.io",
             hashed_password=hash_password(PASSWORD),
             role=role,
             status=UserStatus.ACTIVE,
             engineer_affiliation="external_consultant" if discipline else None,
-        )
+        ))
         db.add(person)
         db.flush()
         if discipline:

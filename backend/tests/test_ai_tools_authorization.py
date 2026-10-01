@@ -28,6 +28,7 @@ from app.models.task import Task
 from app.models.user import User
 from app.services import rbac
 from app.services.ai_tools import BY_NAME, available_tools, call_tool
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -52,10 +53,13 @@ def world(db):
     roles = rbac.seed_roles(db)
 
     def user(name, role, org_role_code=None):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                    org_role_id=roles[org_role_code].id if org_role_code else None,
-                    is_internal=True if org_role_code else None)
+        person = User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                      hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        if org_role_code:
+            person.org_role_id = roles[org_role_code].id
+            person.is_internal = True
+            return person
+        return with_office_role(db, person)
 
     manager = user("ToolPm", UserRole.PROJECT_MANAGER)
     outsider = user("ToolOutsider", UserRole.PROJECT_MANAGER)

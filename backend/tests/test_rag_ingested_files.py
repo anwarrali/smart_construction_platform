@@ -48,6 +48,7 @@ from app.services.rag.pdf_text import DocumentTextError
 from app.services.rag.store import ChunkSource, PgVectorStore
 from tests.embedding_stub import STUB_MODEL, StubEmbeddingClient, zero_vector
 from tests.pdf_fixture import build_pdf
+from tests.office_roles import with_office_role
 
 pytest.importorskip("pypdf", reason="pypdf is required for the RAG pipeline")
 
@@ -96,12 +97,12 @@ def world(db, tmp_path, monkeypatch):
     (tmp_path / "uploads").mkdir()
     monkeypatch.setattr(settings, "RAG_ENABLED", True)
 
-    manager = User(full_name="RagPm", email=f"ragpm-{suffix}@example.com",
-                   hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    outsider = User(full_name="RagOther", email=f"ragother-{suffix}@example.com",
-                    hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="RagOwner", email=f"ragowner-{suffix}@example.com",
-                 hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="RagPm", email=f"ragpm-{suffix}@example.com",
+                                        hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    outsider = with_office_role(db, User(full_name="RagOther", email=f"ragother-{suffix}@example.com",
+                                         hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    owner = with_office_role(db, User(full_name="RagOwner", email=f"ragowner-{suffix}@example.com",
+                                      hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE))
     db.add_all([manager, outsider, owner])
     db.flush()
 

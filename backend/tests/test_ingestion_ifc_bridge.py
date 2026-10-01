@@ -32,6 +32,7 @@ from app.services.ingestion.categories import FileCategory
 from app.services.ingestion.contracts import ProcessorContext
 from app.services.ingestion.processors.ifc import IFCProcessor
 from app.services.ifc_processing_service import VERSION_TRANSITIONS
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -52,10 +53,10 @@ def db():
 @pytest.fixture()
 def world(db):
     suffix = uuid4().hex[:10]
-    manager = User(full_name="BridgePm", email=f"bridgepm-{suffix}@example.com",
-                   hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="BridgeOwner", email=f"bridgeowner-{suffix}@example.com",
-                 hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="BridgePm", email=f"bridgepm-{suffix}@example.com",
+                                        hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    owner = with_office_role(db, User(full_name="BridgeOwner", email=f"bridgeowner-{suffix}@example.com",
+                                      hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE))
     db.add_all([manager, owner])
     db.flush()
     project = Project(name=f"Bridge {suffix}", status=ProjectStatus.ACTIVE,

@@ -360,8 +360,8 @@ def template_for_legacy(role: UserRole, affiliation: str | None) -> RoleTemplate
     `main_contracter` falling through to `(ENGINEER, None)` produced the
     `engineer` template — `is_internal_only=True` — and silently turned an
     external contractor into internal office staff. That is the same failure
-    the `is_internal` note in `app/db/user_role_backstop.py` records having
-    already been made once, arrived at from the other direction.
+    the `rbac.apply_org_role` docstring records having already been made once,
+    arrived at from the other direction.
 
     `None` is not a typo and keeps its meaning: the roles that never carried an
     affiliation resolve through the `(role, None)` entry as before.

@@ -41,6 +41,7 @@ from app.models.task import Task
 from app.models.user import User
 from app.services import rbac, work_scope
 from app.services.authorization import effective_permissions, has_permission
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -261,11 +262,16 @@ def test_a_pre_backfill_contractor_account_is_already_external(db, office):
     office's design changes — which is exactly what the retired guards
     prevented.
     """
-    unmigrated = User(
+    # The role is given explicitly, as `user_role_backstop` used to give it
+    # during the flush. Since the contract step an account with no role cannot
+    # be resolved at all (`test_an_account_without_a_role_is_refused`), so the
+    # "pre-backfill" state described above no longer exists: what this pins now
+    # is that the role a main-contractor engineer maps to is an external one.
+    unmigrated = with_office_role(db, User(
         full_name="Unmigrated", email=f"unmigrated-{office['suffix']}@test.local",
         hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
         engineer_affiliation="main_contractor",
-    )
+    ))
     db.add(unmigrated)
     db.flush()
     assert rbac.is_external_participant(db, unmigrated, None) is True
@@ -274,12 +280,13 @@ def test_a_pre_backfill_contractor_account_is_already_external(db, office):
 
 def test_a_pre_backfill_office_account_is_not_external(db, office):
     """And the bridge does not sweep up the office's own people."""
+    # As above: the role is explicit, and the office-staff role is what is pinned.
     for affiliation in (None, "internal_engineer"):
-        person = User(
+        person = with_office_role(db, User(
             full_name="Staff", email=f"staff-{affiliation}-{office['suffix']}@test.local",
             hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
             engineer_affiliation=affiliation,
-        )
+        ))
         db.add(person)
         db.flush()
         assert rbac.is_external_participant(db, person, None) is False, affiliation

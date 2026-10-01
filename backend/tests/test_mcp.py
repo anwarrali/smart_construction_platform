@@ -39,6 +39,7 @@ from app.services import mcp
 from app.services.ai_tools.contracts import ToolKind
 from app.services.ai_tools.registry import BY_NAME, TOOLS
 from app.services.mcp import protocol
+from tests.office_roles import with_office_role
 
 PASSWORD = "McpTest!2345"
 
@@ -66,8 +67,8 @@ def world(db, monkeypatch):
     suffix = uuid4().hex[:10]
 
     def user(name, status=UserStatus.ACTIVE, role=UserRole.PROJECT_MANAGER):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                      hashed_password=hash_password(PASSWORD), role=role, status=status)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                           hashed_password=hash_password(PASSWORD), role=role, status=status))
         db.add(person)
         db.flush()
         return person

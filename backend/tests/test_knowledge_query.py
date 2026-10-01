@@ -22,6 +22,7 @@ from app.models.task import Task
 from app.models.user import User
 from app.schemas.knowledge import KnowledgeQueryRequest
 from app.services import ifc_processing_service as service
+from tests.office_roles import with_office_role
 
 pytest.importorskip("ifcopenshell")
 
@@ -55,10 +56,10 @@ def world(db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "IFC_GEOMETRY_ENABLED", True)
     monkeypatch.setattr(settings, "IFC_COORDINATION_CHECKS_ENABLED", True)
 
-    manager = User(full_name="KnowPm", email=f"knowpm-{suffix}@example.com", hashed_password="x",
-                   role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="KnowOwner", email=f"knowowner-{suffix}@example.com", hashed_password="x",
-                 role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="KnowPm", email=f"knowpm-{suffix}@example.com", hashed_password="x",
+                                        role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    owner = with_office_role(db, User(full_name="KnowOwner", email=f"knowowner-{suffix}@example.com", hashed_password="x",
+                                      role=UserRole.OWNER, status=UserStatus.ACTIVE))
     db.add_all([manager, owner])
     db.flush()
     project = Project(name=f"Knowledge {suffix}", status=ProjectStatus.ACTIVE,

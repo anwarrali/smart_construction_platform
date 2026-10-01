@@ -57,6 +57,7 @@ from app.models.enums import IssueSeverity
 from app.services.domain_event_dispatcher import (
     IMPORTANT_EVENTS, emit_domain_event,
 )
+from tests.office_roles import with_office_role
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -211,10 +212,10 @@ def test_a_rejected_issue_emits_nothing(db, world):
     reach, which raises before the row is written.
     """
     from fastapi import HTTPException
-    stranger = User(
+    stranger = with_office_role(db, User(
         full_name="EventStranger", email=f"stranger.{uuid.uuid4().hex[:8]}@constro.io",
         hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-    )
+    ))
     db.add(stranger)
     db.flush()
 

@@ -61,6 +61,7 @@ from app.models.step_up import StepUpGrant
 from app.models.user import EngineerProfile, User
 from app.models.collaboration import SiteVisit
 from datetime import datetime, timedelta, timezone
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -105,9 +106,9 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role=UserRole.ENGINEER, affiliation="main_contractor"):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation if role == UserRole.ENGINEER else None)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
+                                           engineer_affiliation=affiliation if role == UserRole.ENGINEER else None))
         db.add(person)
         return person
 

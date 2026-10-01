@@ -50,6 +50,7 @@ from app.services.mcp import credentials, limits, protocol
 from app.services.mcp import tokens as token_service
 from app.services.mcp.credentials import Credential, CredentialError
 from app.services.mcp.tokens import TokenError
+from tests.office_roles import with_office_role
 
 PASSWORD = "McpHard!2345"
 
@@ -81,8 +82,8 @@ def world(db, monkeypatch):
     suffix = uuid4().hex[:10]
 
     def user(name, status=UserStatus.ACTIVE, role=UserRole.PROJECT_MANAGER):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                      hashed_password=hash_password(PASSWORD), role=role, status=status)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                           hashed_password=hash_password(PASSWORD), role=role, status=status))
         db.add(person)
         db.flush()
         return person

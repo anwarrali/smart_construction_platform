@@ -39,6 +39,7 @@ from app.models.permission import RolePermissionOverride, UserPermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.services.authorization import can_view_all_projects_effective, has_permission
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -79,9 +80,9 @@ def world(db):
         # list_projects, which builds ProjectsListResponse itself and runs its
         # nested UserOut.email through Pydantic's EmailStr validator, which
         # rejects the reserved .local TLD.
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
+                                           engineer_affiliation=affiliation))
         db.add(person)
         return person
 
@@ -146,7 +147,7 @@ def _configure_role(db, user, code, allowed):
     from uuid import uuid4 as _uuid4
 
     source = rbac.get_role(db, user.org_role_id)
-    assert source is not None, "the backstop should have given this account a role"
+    assert source is not None, "the fixture should have given this account a role"
     copy = Role(
         organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
         name_en=source.name_en, scope=source.scope,

@@ -19,6 +19,7 @@ from app.db.database import SessionLocal
 from app.models.enums import UserRole, UserStatus
 from app.models.audit_log import AuditLog
 from app.models.user import User
+from app.services import rbac
 from app.services.audit_service import record_audit
 
 
@@ -103,6 +104,27 @@ def _require_alembic_head(db: Session) -> str:
             f"Database migration is {current}; run 'alembic upgrade head' to reach {heads[0]}"
         )
     return current
+
+
+def _assign_administrator_role(db: Session, user: User) -> None:
+    """Give the initial administrator the `org_admin` office role before it is written.
+
+    On a fresh deployment nothing has seeded the roles yet — this is the first
+    account the database will hold — so `rbac.seed_fresh_database` seeds them
+    here, and does nothing on a database that already has them. The role is
+    then resolved through the same legacy mapping every other creation path
+    uses, and set with its `is_internal` flag, before the account is written.
+
+    Refuses rather than creating an administrator with no role: permission
+    resolution rejects such an account outright, so it could sign in and do
+    nothing — a broken deployment that looks like a working one.
+    """
+    rbac.seed_fresh_database(db)
+    if rbac.apply_legacy_template_role(db, user) is None:
+        raise RuntimeError(
+            "No 'org_admin' role exists, so the administrator could not be given "
+            "an office role. Run `python -m app.db.rbac_backfill` to seed the roles."
+        )
 
 
 def bootstrap_admin(db: Session, config: BootstrapConfig) -> str:
@@ -193,6 +215,7 @@ def bootstrap_admin(db: Session, config: BootstrapConfig) -> str:
         must_change_password=True,
         invitation_accepted=False,
     )
+    _assign_administrator_role(db, user)
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -28,6 +28,7 @@ from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.project import ProjectMemberAssignExisting, ProjectUpdate
 from app.services.authorization import has_permission, manageable_project
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -50,9 +51,9 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role, affiliation=None):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
+                                           engineer_affiliation=affiliation))
         db.add(person)
         return person
 
@@ -164,7 +165,7 @@ def _configure_role(db, user, code, allowed):
     from uuid import uuid4 as _uuid4
 
     source = rbac.get_role(db, user.org_role_id)
-    assert source is not None, "the backstop should have given this account a role"
+    assert source is not None, "the fixture should have given this account a role"
     copy = Role(
         organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
         name_en=source.name_en, scope=source.scope,

@@ -42,6 +42,7 @@ from app.schemas.rag import RagReindexRequest
 from app.services.rag import ingestion, maintenance
 from app.services.rag.store import ChunkSource, PgVectorStore, PreparedChunk
 from tests.embedding_stub import STUB_MODEL, stub_embedding_service, zero_vector
+from tests.office_roles import with_office_role
 
 pytest.importorskip("pypdf", reason="pypdf is required for the RAG pipeline")
 
@@ -91,12 +92,12 @@ def world(db, monkeypatch):
     # is what makes "already current" the default state.
     monkeypatch.setattr(settings, "OPENAI_EMBEDDING_MODEL", STUB_MODEL)
 
-    manager = User(full_name="MaintPm", email=f"maintpm-{suffix}@example.com",
-                   hashed_password="x", role=UserRole.PROJECT_MANAGER,
-                   status=UserStatus.ACTIVE)
-    stranger = User(full_name="MaintOther", email=f"maintother-{suffix}@example.com",
-                    hashed_password="x", role=UserRole.PROJECT_MANAGER,
-                    status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="MaintPm", email=f"maintpm-{suffix}@example.com",
+                                        hashed_password="x", role=UserRole.PROJECT_MANAGER,
+                                        status=UserStatus.ACTIVE))
+    stranger = with_office_role(db, User(full_name="MaintOther", email=f"maintother-{suffix}@example.com",
+                                         hashed_password="x", role=UserRole.PROJECT_MANAGER,
+                                         status=UserStatus.ACTIVE))
     db.add_all([manager, stranger])
     db.flush()
 

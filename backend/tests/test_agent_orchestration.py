@@ -26,6 +26,7 @@ from app.services.agents.subscriptions import (
     EVENT_COOLDOWN, TriggerType, agents_for_event, decide, event_subscription_map,
 )
 from app.services.domain_event_dispatcher import IMPORTANT_EVENTS
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -48,8 +49,8 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                         hashed_password="x", role=role, status=UserStatus.ACTIVE))
 
     manager = user("OrchPm", UserRole.PROJECT_MANAGER)
     outsider = user("OrchOutsider", UserRole.PROJECT_MANAGER)

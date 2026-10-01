@@ -37,6 +37,7 @@ from app.models.permission import RolePermissionOverride, UserPermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.services.authorization import has_permission
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -77,9 +78,9 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role, affiliation=None):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
+                                           engineer_affiliation=affiliation))
         db.add(person)
         return person
 
@@ -152,7 +153,7 @@ def _configure_role(db, user, code, allowed):
     from uuid import uuid4 as _uuid4
 
     source = rbac.get_role(db, user.org_role_id)
-    assert source is not None, "the backstop should have given this account a role"
+    assert source is not None, "the fixture should have given this account a role"
     copy = Role(
         organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
         name_en=source.name_en, scope=source.scope,
@@ -255,8 +256,8 @@ def test_granting_schedule_view_lets_a_worker_in_without_widening_membership(db,
     _grant(db, world["worker"], "schedule.view")
     assert get_gantt_data(world["project"].id, db=db, current_user=world["worker"])
 
-    outsider = User(full_name="RbacOutsider", email=f"outsider-{uuid4().hex[:8]}@test.local",
-                    hashed_password="x", role=UserRole.WORKER, status=UserStatus.ACTIVE)
+    outsider = with_office_role(db, User(full_name="RbacOutsider", email=f"outsider-{uuid4().hex[:8]}@test.local",
+                                         hashed_password="x", role=UserRole.WORKER, status=UserStatus.ACTIVE))
     db.add(outsider)
     db.flush()
     _grant(db, outsider, "schedule.view")
@@ -311,9 +312,9 @@ def test_a_grant_of_ai_view_insights_still_requires_project_access(db, world):
     _grant(db, world["engineer"], "ai.view_insights")
     assert list_insights(world["project"].id, db=db, current_user=world["engineer"], page=1, page_size=50) == []
 
-    outsider = User(full_name="RbacAiOutsider", email=f"ai-outsider-{uuid4().hex[:8]}@test.local",
-                    hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-                    engineer_affiliation="main_contractor")
+    outsider = with_office_role(db, User(full_name="RbacAiOutsider", email=f"ai-outsider-{uuid4().hex[:8]}@test.local",
+                                         hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+                                         engineer_affiliation="main_contractor"))
     db.add(outsider)
     db.flush()
     _grant(db, outsider, "ai.view_insights")

@@ -40,6 +40,7 @@ from app.models.milestone import Milestone
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
 from app.models.task import Task, TaskDependency, TaskReview
 from app.models.user import EngineerProfile, User
+from app.services import rbac
 
 
 SEED_NAMESPACE = uuid.UUID("57473ba3-2a91-5f5d-8dd9-4d115c38b07c")
@@ -207,6 +208,8 @@ def _ensure_user(
             organization=organization,
             engineer_affiliation=affiliation,
         )
+        # Given its office role before it is written.
+        rbac.apply_legacy_template_role(db, user)
         db.add(user)
 
     if discipline is not None:

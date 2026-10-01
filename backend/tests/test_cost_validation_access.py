@@ -26,6 +26,7 @@ from app.models.cost_validation import CostValidation
 from app.models.enums import CostValidationStatus, ProjectStatus, UserRole, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import User
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -61,8 +62,8 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                           hashed_password="x", role=role, status=UserStatus.ACTIVE))
         db.add(person)
         return person
 

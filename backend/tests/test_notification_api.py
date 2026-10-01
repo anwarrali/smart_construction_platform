@@ -25,6 +25,7 @@ from app.models.enums import NotificationType, UserRole, UserStatus
 from app.models.notification import Notification
 from app.models.user import User
 from app.services import notification_service
+from tests.office_roles import with_office_role
 
 PASSWORD = "Correct#12345"
 
@@ -50,13 +51,13 @@ def people(db):
     suffix = uuid4().hex[:10]
 
     def user(name):
-        person = User(
+        person = with_office_role(db, User(
             full_name=name,
             email=f"{name.lower()}.{suffix}@constro.io",
             hashed_password=hash_password(PASSWORD),
             role=UserRole.PROJECT_MANAGER,
             status=UserStatus.ACTIVE,
-        )
+        ))
         db.add(person)
         return person
 

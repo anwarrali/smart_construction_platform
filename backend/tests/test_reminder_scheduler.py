@@ -28,6 +28,7 @@ from app.services.reminder_service import (
     evaluate_all_projects,
     evaluate_project_reminders,
 )
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -53,10 +54,10 @@ def scenario(db):
     commits per project, and the scheduler tick opens its own session.
     """
     suffix = uuid4().hex[:10]
-    owner = User(full_name="Reminder Owner", email=f"owner-{suffix}@test.local",
-                 hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE)
-    engineer = User(full_name="Reminder Engineer", email=f"eng-{suffix}@test.local",
-                    hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE)
+    owner = with_office_role(db, User(full_name="Reminder Owner", email=f"owner-{suffix}@test.local",
+                                      hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE))
+    engineer = with_office_role(db, User(full_name="Reminder Engineer", email=f"eng-{suffix}@test.local",
+                                         hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE))
     db.add_all([owner, engineer])
     db.flush()
     project = Project(name=f"Reminder Test Project {suffix}", status=ProjectStatus.ACTIVE,

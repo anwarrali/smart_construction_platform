@@ -32,6 +32,7 @@ from app.models.user import User
 from app.services.ingestion import state
 from app.services.ingestion.categories import FileCategory
 from tests.pdf_fixture import build_pdf
+from tests.office_roles import with_office_role
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 DWG = b"AC1027" + b"\x00" * 64
@@ -73,12 +74,12 @@ def world(db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "INGESTION_ENABLED", True)
     monkeypatch.setattr(settings, "INGESTION_BACKGROUND_PROCESSING_ENABLED", False)
 
-    manager = User(full_name="IngestPm", email=f"ingestpm-{suffix}@example.com",
-                   hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    outsider = User(full_name="IngestOther", email=f"ingestother-{suffix}@example.com",
-                    hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="IngestOwner", email=f"ingestowner-{suffix}@example.com",
-                 hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="IngestPm", email=f"ingestpm-{suffix}@example.com",
+                                        hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    outsider = with_office_role(db, User(full_name="IngestOther", email=f"ingestother-{suffix}@example.com",
+                                         hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    owner = with_office_role(db, User(full_name="IngestOwner", email=f"ingestowner-{suffix}@example.com",
+                                      hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE))
     db.add_all([manager, outsider, owner])
     db.flush()
 

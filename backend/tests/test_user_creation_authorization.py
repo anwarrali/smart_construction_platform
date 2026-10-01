@@ -40,6 +40,7 @@ from app.models.rbac import Discipline, Role
 from app.models.user import User
 from app.schemas.user import EngineerProfileCreate, UserCreateByAdmin
 from app.services import rbac
+from app.services.authorization import effective_permissions
 from app.services.user_service import create_provisioned_user, legacy_role_for
 
 PASSWORD = "Str0ngPassw0rd!"
@@ -314,10 +315,7 @@ def test_the_consultant_compatibility_rewrite_is_unchanged(office):
 
 
 def test_every_created_account_still_gets_a_database_role(office):
-    """`user_role_backstop`'s precondition, unchanged by this task.
-
-    Regression cover only: the backstop itself was not touched.
-    """
+    """Provisioning assigns the role itself; nothing fills it in afterwards."""
     db = office["db"]
     user, _ = create_provisioned_user(
         db, creator=office["admin"], email=_new_email(office, "hasrole"),
@@ -328,18 +326,63 @@ def test_every_created_account_still_gets_a_database_role(office):
     assert user.is_internal is True
 
 
-def test_a_bare_user_row_still_gets_a_role_from_the_backstop(office):
-    """The listener fills `org_role_id` for a row written without one."""
+def test_a_bare_user_row_gets_no_role_and_cannot_be_authorized(office):
+    """What writing an account outside the creation paths now produces.
+
+    `user_role_backstop` used to fill `org_role_id` during the flush for any
+    `User` written without one. It is gone: every creation path assigns the
+    role before writing, so a row that skips that is a bug, and it surfaces as
+    a refusal at the first permission check rather than as a guessed role.
+    """
     db = office["db"]
-    email = _new_email(office, "bare")
     row = User(
-        full_name="Bare Row", email=email, hashed_password="x",
+        full_name="Bare Row", email=_new_email(office, "bare"), hashed_password="x",
         role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
         engineer_affiliation="internal_engineer",
     )
     db.add(row)
     db.flush()
-    assert row.org_role_id is not None, "the backstop did not assign a role"
+    assert row.org_role_id is None, "something is still filling the role during the flush"
+    with pytest.raises(rbac.UnmigratedUser):
+        effective_permissions(db, row)
+
+
+# --- every creation path assigns the role itself -----------------------------
+
+def test_the_legacy_creation_path_assigns_its_role_before_writing(office):
+    db = office["db"]
+    user, _ = create_provisioned_user(
+        db, creator=office["admin"], email=_new_email(office, "legacypath"),
+        full_name="Legacy Path", role=UserRole.ENGINEER,
+        engineer_affiliation="main_contractor", password=PASSWORD, send_email=False,
+    )
+    assert user.org_role_id == office["roles"]["contractor_representative"].id
+    assert user.is_internal is False, "a contractor must not be written as internal"
+
+
+def test_the_configured_role_path_assigns_its_role_before_writing(office):
+    db = office["db"]
+    user, _ = create_provisioned_user(
+        db, creator=office["admin"], email=_new_email(office, "configuredrole"),
+        full_name="Configured Role", org_role=office["roles"]["surveyor"],
+        password=PASSWORD, send_email=False,
+    )
+    assert user.org_role_id == office["roles"]["surveyor"].id
+    assert user.is_internal is True
+
+
+def test_the_demo_seed_assigns_its_role_before_writing(office):
+    from app.db.seed_demo import _ensure_user
+
+    db = office["db"]
+    user = _ensure_user(
+        db, key=f"seedpath-{uuid4().hex[:10]}", email=_new_email(office, "seed"),
+        full_name="Seeded Owner", role=UserRole.OWNER,
+        company=office["organization"], password=PASSWORD,
+    )
+    db.flush()
+    assert user.org_role_id == office["roles"]["client_representative"].id
+    assert user.is_internal is False
 
 
 # --- staffability ------------------------------------------------------------

@@ -27,6 +27,7 @@ from app.services.agents.notification_policy import (
     REVIEW_CONFIDENCE, URGENT_CONFIDENCE, decide_notification,
 )
 from app.services.domain_event_dispatcher import emit_domain_event
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -50,8 +51,8 @@ def world(db, monkeypatch):
     suffix = uuid4().hex[:10]
 
     def user(name, role):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                         hashed_password="x", role=role, status=UserStatus.ACTIVE))
 
     manager = user("AutoPm", UserRole.PROJECT_MANAGER)
     site_engineer = user("AutoSiteEngineer", UserRole.ENGINEER)

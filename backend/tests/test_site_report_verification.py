@@ -23,6 +23,7 @@ from app.models.project import Project, ProjectMember
 from app.models.site_report import SiteReport
 from app.models.user import User
 from app.schemas.site_report import SiteReportReviewRequest
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -45,8 +46,8 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role, status=UserStatus.ACTIVE):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                      hashed_password="x", role=role, status=status)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                           hashed_password="x", role=role, status=status))
         db.add(person)
         return person
 

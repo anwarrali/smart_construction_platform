@@ -28,6 +28,7 @@ from app.models.ifc import IFCElement, IFCModelGroup, IFCModelVersion
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.services import ifc_processing_service as service
+from tests.office_roles import with_office_role
 
 pytest.importorskip("ifcopenshell")
 
@@ -66,10 +67,10 @@ def uploaded(db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "PRIVATE_UPLOAD_DIR", str(root))
     monkeypatch.setattr(settings, "IFC_GEOMETRY_ENABLED", True)
 
-    manager = User(full_name="GeomPm", email=f"geompm-{suffix}@test.local",
-                   hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="GeomOwner", email=f"geomowner-{suffix}@test.local",
-                 hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="GeomPm", email=f"geompm-{suffix}@test.local",
+                                        hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    owner = with_office_role(db, User(full_name="GeomOwner", email=f"geomowner-{suffix}@test.local",
+                                      hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE))
     db.add_all([manager, owner])
     db.flush()
     project = Project(name=f"Geometry Guard {suffix}", status=ProjectStatus.ACTIVE,

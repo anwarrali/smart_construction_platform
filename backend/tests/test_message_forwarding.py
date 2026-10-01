@@ -22,6 +22,7 @@ from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.message import ConversationCreate, ForwardMessageCreate
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -44,9 +45,9 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role, affiliation=None):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
+                                           engineer_affiliation=affiliation))
         db.add(person)
         return person
 

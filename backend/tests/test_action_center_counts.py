@@ -23,6 +23,7 @@ from app.models.enums import ConversationType, ProjectStatus, UserRole, UserStat
 from app.models.message import Conversation, Message
 from app.models.project import Project
 from app.models.user import User
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -44,10 +45,10 @@ def db():
 def world(db):
     """One project, one conversation, one recipient."""
     suffix = uuid4().hex[:10]
-    sender = User(full_name="Sender", email=f"sender-{suffix}@test.local",
-                  hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    recipient = User(full_name="Recipient", email=f"recipient-{suffix}@test.local",
-                     hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
+    sender = with_office_role(db, User(full_name="Sender", email=f"sender-{suffix}@test.local",
+                                       hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    recipient = with_office_role(db, User(full_name="Recipient", email=f"recipient-{suffix}@test.local",
+                                          hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
     db.add_all([sender, recipient])
     db.flush()
     project = Project(name=f"Action Centre Project {suffix}", status=ProjectStatus.ACTIVE,

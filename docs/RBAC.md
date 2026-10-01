@@ -352,17 +352,66 @@ tolerated: `work_scope.sees_all_disciplines`' affiliation branch,
 `document_access._pre_migration_scope`, and the unmigrated-admin clause in
 `effective_permissions`. An account without a role now raises `UnmigratedUser`.
 
-Nothing can create such an account. `create_provisioned_user` assigns a role on
-both paths, and `app.db.user_role_backstop` — now unconditional — fills the
-column for any `User` written anywhere else, moving `is_internal` with it. A
-setting whose only remaining effect would be to break the system is worse than
-no setting, so it is gone rather than defaulted to true.
+No creation path produces such an account: each one assigns the role itself,
+before the row is written (see *Every account is written with its role*
+below). A setting whose only remaining effect would be to break the system is
+worse than no setting, so it is gone rather than defaulted to true.
 
 `legacy_effective_permissions` and `RolePermissionOverride` survive as the
 equivalence gate's evidence. `PUT /access-control/roles` writes *through* to the
 configured roles that provision the legacy value being edited, so the older
 Access Control screen still changes what it says it changes; without that it
 would have returned 200 and done nothing.
+
+### Every account is written with its role
+
+Each path that writes a `User` gives it an office role — and `is_internal`
+with it — *before* the row reaches the database:
+
+| Path | How the role is chosen |
+| --- | --- |
+| `create_provisioned_user` (`POST /users`, both branches) | The requested `org_role`, or the seeded template its legacy enum maps to, applied with `rbac.apply_org_role`; the organization membership is recorded after the flush, because it needs the account's id |
+| `bootstrap_admin` (the initial administrator) | `org_admin`, through `rbac.apply_legacy_template_role`. On a fresh deployment it first seeds the roles (below). It **refuses** rather than write an administrator it cannot give a role |
+| `seed_demo` | The template each demo account's legacy enum maps to, through `rbac.apply_legacy_template_role` |
+
+`rbac.apply_org_role` is the one place `org_role_id` and `is_internal` are set
+together. They must move as a pair: `is_external_participant` reads
+`is_internal` the moment a role is set, and the column defaults to true, so a
+role written without the flag silently reclassifies a contractor as office
+staff.
+
+**Nothing fills the column during a flush any more.** `app.db.user_role_backstop`
+— a `before_flush` listener that resolved a role for any `User` arriving
+without one — has been removed. It had become redundant on every production
+path, where `create_provisioned_user` overwrote whatever it wrote, and the test
+fixtures now assign roles explicitly (`tests/office_roles.py`). Keeping it
+would have meant a code path that forgets to assign a role gets a *guessed*
+one. Without it, such an account is written with no role and the first
+permission check raises `UnmigratedUser` — the bug surfaces instead of being
+papered over. `test_a_bare_user_row_gets_no_role_and_cannot_be_authorized`
+pins that contract, and one test per creation path asserts the role it
+assigns.
+
+The unknown-affiliation refusal (`UnknownAffiliation`) used to take effect at
+that flush. It now takes effect where the role is resolved:
+`apply_legacy_template_role` and `create_provisioned_user` both refuse a
+`main_contracter`-style typo, and write nothing.
+
+### A fresh deployment gets its roles from bootstrap
+
+No migration seeds the role templates — a migration must not import
+application constants (see `a92d4e1f70b3`) — so a database migrated from
+nothing holds no roles. `bootstrap_admin` closes that gap: before creating the
+first administrator it calls `rbac.seed_fresh_database`, which runs the same
+`seed_disciplines` and `seed_roles` the backfill uses.
+
+It acts only on a database with **no system roles and no accounts**, and does
+nothing anywhere else. That condition is what makes it safe in a start
+sequence: `seed_roles` refreshes an existing role's template permissions, and
+the older Access Control screen stores administrators' denials on exactly those
+shared templates, so re-seeding an initialized database would switch them back
+on. `test_fresh_deployment_rbac.py` exercises all of this against a genuinely
+fresh database migrated from nothing.
 
 ## Migration state
 
@@ -372,6 +421,10 @@ has not run.
 - `app.db.rbac_backfill` — idempotent, `--dry-run` supported. Maps every account
   onto a role, seeds disciplines, creates parties from existing memberships, and
   writes explicit document shares reproducing the access contractors already had.
+  Needed only for a database holding accounts from before the redesign — it
+  folds their retired `RolePermissionOverride` decisions into the roles as it
+  seeds them. A fresh deployment does not need it; `bootstrap_admin` seeds the
+  roles (see above).
 - `app.db.rbac_equivalence` — compares the retired resolution against the live
   one for every (user, project) pair. Differences are allowed only when they
   match a declared change in `INTENTIONAL_CHANGES`.
@@ -396,7 +449,7 @@ make here.
 | --- | --- |
 | No existing active account lacks `org_role_id` | **Yes** — `active_users_missing_roles` reports 0, asserted by a test |
 | No API creation path can produce one | **Yes** — `create_provisioned_user` assigns a role on both paths |
-| No *other* code path can produce one | **Yes** — `app.db.user_role_backstop`, a `before_flush` listener, fills the column and `is_internal` for any account that arrives without them |
+| No *other* code path can produce one | **Yes** — at the time, `app.db.user_role_backstop`, a `before_flush` listener, filled the column and `is_internal` for any account that arrived without them. It has since been removed: every creation path now assigns the role itself (see *Every account is written with its role*) |
 | Suite passes with the flag on | **Yes** — 1820 passed, 17 skipped, 0 failed |
 | Equivalence gate passes with the flag on | **Yes** — 0 unexpected differences |
 

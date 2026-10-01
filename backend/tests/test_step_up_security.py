@@ -26,6 +26,7 @@ from app.services import rate_limit_service, step_up_service
 from app.services.step_up_service import (
     consume_grant, request_challenge, require_step_up, verify_challenge,
 )
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -48,9 +49,9 @@ def people(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role):
-        person = User(full_name=name, email=f"{name.lower()}.{suffix}@constro.io",
-                      hashed_password=hash_password("Correct#12345"),
-                      role=role, status=UserStatus.ACTIVE)
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}.{suffix}@constro.io",
+                                           hashed_password=hash_password("Correct#12345"),
+                                           role=role, status=UserStatus.ACTIVE))
         db.add(person)
         return person
 

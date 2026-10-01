@@ -37,6 +37,7 @@ from app.services.rag.store import (
 from tests.embedding_stub import (
     STUB_MODEL, StubEmbeddingClient, dimensions, stub_embedding_service, zero_vector,
 )
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -58,9 +59,9 @@ def db():
 def world(db):
     """Flush-only. The `db` fixture's rollback is the whole teardown."""
     suffix = uuid4().hex[:10]
-    user = User(full_name="VecPm", email=f"vecpm-{suffix}@example.com",
-                hashed_password="x", role=UserRole.PROJECT_MANAGER,
-                status=UserStatus.ACTIVE)
+    user = with_office_role(db, User(full_name="VecPm", email=f"vecpm-{suffix}@example.com",
+                                     hashed_password="x", role=UserRole.PROJECT_MANAGER,
+                                     status=UserStatus.ACTIVE))
     db.add(user)
     db.flush()
     project = Project(name=f"Vector {suffix}", status=ProjectStatus.ACTIVE,

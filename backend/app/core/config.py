@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     # pre-backfill fallback in `rbac.resolved_permissions`; the contract step
     # removed that fallback, so the invariant it expressed — every account
     # holds a database role — is now structural rather than optional.
-    # `app.db.user_role_backstop` guarantees it at write time and
+    # Every creation path assigns the role before writing the account, and
     # `resolved_permissions` refuses anything that slipped through. A setting
     # whose only remaining effect would be to break the system is worse than no
     # setting.

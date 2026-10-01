@@ -36,6 +36,7 @@ from app.services.realtime import (
 )
 from app.services.realtime.broker import AuthorizationScope, RealtimeBroker
 from app.services.realtime.publisher import MAX_PAYLOAD_BYTES, publish
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -65,10 +66,10 @@ def world(db):
     suffix = uuid.uuid4().hex[:8]
 
     def user(name, role=UserRole.PROJECT_MANAGER):
-        person = User(
+        person = with_office_role(db, User(
             full_name=f"{name}{suffix}", email=f"{name.lower()}.{suffix}@constro.io",
             hashed_password="x", role=role, status=UserStatus.ACTIVE,
-        )
+        ))
         db.add(person)
         db.flush()
         return person

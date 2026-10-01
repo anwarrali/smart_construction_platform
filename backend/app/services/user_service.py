@@ -162,21 +162,20 @@ def create_provisioned_user(
         invitation_accepted=direct_account,
         is_email_verified=direct_account,
     )
+
+    # Every account gets a database role, including one created through the
+    # legacy path, and it gets it *before* the row is written. The legacy path
+    # resolves the seeded role its enum maps to. Nothing fills `org_role_id`
+    # during the flush, so this is the only place this path's role comes from.
+    effective_role = org_role or rbac.template_role_for_legacy_user(db, user)
+    if effective_role is not None:
+        rbac.apply_org_role(user, effective_role)
     db.add(user)
     db.flush()
 
-    # Every account gets a database role, including one created through the
-    # legacy path. Without this, that path would mint accounts with
-    # `org_role_id IS NULL` — which resolve through the pre-backfill fallback,
-    # and which `RBAC_REQUIRE_DB_ROLES` turns into a hard failure. A creation
-    # path that produces accounts the platform is about to refuse to serve is
-    # not a fallback, it is a trap, so the legacy path resolves the seeded role
-    # its enum maps to and assigns that.
-    effective_role = org_role or rbac.template_role_for_legacy_user(db, user)
     if effective_role is not None:
-        # `assign_org_role` sets `org_role_id` and `is_internal`, so the
-        # account is resolved through the configured model from its first
-        # request rather than through the pre-backfill fallback.
+        # The membership behind the role needs the account's id, so it is
+        # recorded after the flush. `assign_org_role` re-applies the same role.
         rbac.assign_org_role(
             db, user=user, role=effective_role,
             organization_id=resolved_company_id or rbac.ensure_tenant_organization(db).id,

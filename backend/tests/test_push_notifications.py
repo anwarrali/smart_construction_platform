@@ -36,6 +36,7 @@ from app.services import device_token_service, notification_service
 from app.services.push import dispatcher
 from app.services.push.base import DeliveryStatus, PushMessage, PushResult
 from app.services.push.fcm import FCMProvider
+from tests.office_roles import with_office_role
 
 
 # --- fixtures ---------------------------------------------------------------
@@ -62,13 +63,13 @@ def people(db):
     suffix = uuid.uuid4().hex[:10]
 
     def make(name):
-        person = User(
+        person = with_office_role(db, User(
             full_name=name,
             email=f"{name.lower()}.{suffix}@constro.io",
             hashed_password="x",
             role=UserRole.PROJECT_MANAGER,
             status=UserStatus.ACTIVE,
-        )
+        ))
         db.add(person)
         return person
 
@@ -493,13 +494,13 @@ def test_pagination_returns_a_stable_newest_first_window(db, people):
 @pytest.fixture()
 def committed_user(db):
     """A user that genuinely exists in the database, removed afterwards."""
-    person = User(
+    person = with_office_role(db, User(
         full_name="PushBoundary",
         email=f"pushboundary.{uuid.uuid4().hex[:10]}@constro.io",
         hashed_password="x",
         role=UserRole.PROJECT_MANAGER,
         status=UserStatus.ACTIVE,
-    )
+    ))
     db.add(person)
     db.commit()
     try:

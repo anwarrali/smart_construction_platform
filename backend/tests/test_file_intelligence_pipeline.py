@@ -24,6 +24,7 @@ from app.models.enums import DocumentType, ProjectStatus, UserRole, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from tests.pdf_fixture import build_pdf
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -49,10 +50,10 @@ def world(db, tmp_path, monkeypatch):
 
     # example.com rather than .test.local: DocumentOut nests UserOut, whose
     # EmailStr rejects reserved TLDs, and this suite serialises the response.
-    manager = User(full_name="DocPm", email=f"docpm-{suffix}@example.com", hashed_password="x",
-                   role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="DocOwner", email=f"docowner-{suffix}@example.com", hashed_password="x",
-                 role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="DocPm", email=f"docpm-{suffix}@example.com", hashed_password="x",
+                                        role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+    owner = with_office_role(db, User(full_name="DocOwner", email=f"docowner-{suffix}@example.com", hashed_password="x",
+                                      role=UserRole.OWNER, status=UserStatus.ACTIVE))
     db.add_all([manager, owner])
     db.flush()
     project = Project(name=f"Docs {suffix}", status=ProjectStatus.ACTIVE,

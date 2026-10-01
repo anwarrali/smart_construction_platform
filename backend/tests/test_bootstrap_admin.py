@@ -102,6 +102,22 @@ class AuthSession:
         return None
 
 
+@pytest.fixture(autouse=True)
+def stand_in_office_role(monkeypatch):
+    """These tests are about credentials, run against a stub session.
+
+    Seeding and resolving the `org_admin` role needs a real database, which the
+    stub is not; that behaviour is covered end to end, against a freshly
+    migrated database, by `test_fresh_deployment_rbac.py`. Here the account is
+    handed a role id so the credential flow runs as it would after that step.
+    """
+    def assign(_db, user):
+        user.org_role_id = uuid.uuid4()
+        user.is_internal = True
+
+    monkeypatch.setattr("app.db.bootstrap_admin._assign_administrator_role", assign)
+
+
 @pytest.fixture
 def migration_head(monkeypatch):
     monkeypatch.setattr(
