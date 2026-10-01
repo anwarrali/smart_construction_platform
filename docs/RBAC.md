@@ -378,12 +378,17 @@ one.
 
 1. `alembic upgrade head` — **schema only**. No migration seeds roles; a
    migration must not import application constants.
-2. `python -m app.db.bootstrap_admin` — takes a PostgreSQL advisory lock
-   (`BOOTSTRAP_LOCK_KEY`), so concurrent replicas serialize; seeds disciplines
-   and role templates through `rbac.seed_fresh_database` (only on a database
-   with no roles and no accounts); creates the first administrator on
-   `org_admin`. Re-running verifies and changes nothing.
+2. `python -m app.db.bootstrap_admin --if-configured` — takes a PostgreSQL
+   advisory lock (`BOOTSTRAP_LOCK_KEY`), so concurrent replicas serialize;
+   seeds disciplines and role templates through `rbac.seed_fresh_database`
+   (only on a database with no roles and no accounts); creates the first
+   administrator on `org_admin` when the `BOOTSTRAP_ADMIN_*` variables are
+   set. With none set it still seeds the roles (`initialize_rbac`), so a
+   database is never left without them. Re-running changes nothing.
 3. The demo seed, if enabled, after that.
+
+These are steps of the image's `CMD`, the one start sequence every
+environment runs — Docker Compose included (`tests/test_start_sequence.py`).
 
 No manual RBAC step exists. `tests/test_fresh_deployment_rbac.py` runs this
 against a database migrated from nothing on the test server.

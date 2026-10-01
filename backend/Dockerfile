@@ -10,7 +10,16 @@ COPY . .
 
 EXPOSE 8000
 
-# Wait for the database, then apply committed schema changes, then serve.
+# The one start sequence, for every environment: Docker Compose, Railway and
+# Render all run this CMD, and nothing overrides it (asserted by
+# tests/test_start_sequence.py). In order:
+#
+#   1. wait for the database;
+#   2. apply migrations — schema only;
+#   3. initialize RBAC: create the configured initial administrator, or, when
+#      none is configured, just seed the role templates on a fresh database;
+#   4. the demo seed, only when explicitly enabled;
+#   5. serve.
 #
 # The wait is not a delay — it polls and proceeds the instant the database
 # answers. Without it, a database that is merely slow (still recovering, or
