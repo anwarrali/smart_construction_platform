@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.tasks import _is_project_manager, _next_task_code
 from app.core.deps import get_current_user
 from app.db.database import get_db
-from app.models.enums import IssueSeverity, IssueStatus, NotificationType, TaskPriority, TaskStatus, UserRole
+from app.models.enums import IssueSeverity, IssueStatus, NotificationType, TaskPriority, TaskStatus
 from app.models.ifc import AIInsight, IFCElement, IFCEntityLink, IFCModelVersion
 from app.models.issue import Issue
 from app.models.notification import Notification
@@ -26,6 +26,7 @@ from app.services.audit_service import record_audit
 from app.services.authorization import require
 from app.services.collaboration_policy import choose_discipline_assignee
 from app.services.ifc_policy import can_ifc
+from app.services import rbac
 
 router = APIRouter(prefix="/projects/{project_id}/ai-intelligence", tags=["AI Intelligence"])
 
@@ -95,7 +96,7 @@ def _notify_issue_owners(db: Session, issue: Issue, *, actor_id: uuid.UUID, disc
         ProjectMember.project_id == issue.project_id, ProjectMember.is_active == True,  # noqa: E712
     ).all()
     candidates = [{
-        "id": member.user_id, "role": member.role_on_project.value,
+        "id": member.user_id, "role": rbac.member_role_code(db, member),
         "discipline": member.project_discipline or (
             member.user.engineer_profile.discipline.value if member.user.engineer_profile else None
         ), "active": member.is_active,

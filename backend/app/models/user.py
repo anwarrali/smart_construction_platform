@@ -1,6 +1,7 @@
 """
-User model for the five supported global roles. Engineering discipline and
-company affiliation are separate from authorization roles.
+User accounts. What a person may do comes from their office role
+(`org_role_id` → `roles` → `role_permissions`); engineering discipline and the
+firm they work for are separate from authorization.
 
 Role-specific extra data lives in separate profile tables
 (EngineerProfile, ContractorProfile) to keep this table lean and normalized.
@@ -18,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import EngineerDiscipline, UserRole, UserStatus
+from app.models.enums import EngineerDiscipline, UserStatus
 
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -30,11 +31,6 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     phone_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    role: Mapped[UserRole] = mapped_column(
-        PG_ENUM(UserRole, name="user_role", create_type=True),
-        nullable=False,
-        index=True,
-    )
     status: Mapped[UserStatus] = mapped_column(
         PG_ENUM(UserStatus, name="user_status", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
@@ -47,27 +43,23 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     invitation_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     organization: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    engineer_affiliation: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     company_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("companies.id"), nullable=True
     )
 
-    # --- Configurable RBAC ---------------------------------------------------
-    # `role` above is the retired enum. It is still written and still read by
-    # the legacy authorization path, which the equivalence gate compares
-    # against, and it is dropped only in the final contract migration. Until
-    # then `org_role_id` is the authority whenever it is set.
-
-    #: The office role this person holds. NULL only before the backfill has
-    #: run, or for an external participant who has no office membership.
-    org_role_id: Mapped[uuid.UUID | None] = mapped_column(
+    # --- Authorization -------------------------------------------------------
+    #: The office role this person holds — the source of every permission they
+    #: have. Required: an account cannot be written without one, so there is
+    #: no state in which somebody exists but nobody decided what they may do.
+    #: Set it with `rbac.apply_org_role`, which moves `is_internal` with it.
+    org_role_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("roles.id", ondelete="RESTRICT"),
-        nullable=True, index=True,
+        nullable=False, index=True,
     )
     #: Consulting-office staff, as opposed to somebody from a contractor,
-    #: subcontractor or the client. Replaces every read of
-    #: `engineer_affiliation`. Denormalized from organization membership
-    #: because it is checked on nearly every request.
+    #: subcontractor or the client. Follows the office role's
+    #: `is_internal_only`; denormalized because it is checked on nearly every
+    #: request.
     is_internal: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true", index=True,
     )
@@ -127,7 +119,7 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 
     def __repr__(self) -> str:
-        return f"<User id={self.id} email={self.email} role={self.role}>"
+        return f"<User id={self.id} email={self.email} org_role_id={self.org_role_id}>"
 
 
 class EngineerProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):

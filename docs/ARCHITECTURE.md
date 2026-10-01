@@ -117,7 +117,7 @@ Domains:
 
 | Domain | Representative tables |
 |---|---|
-| Identity & RBAC | `users`, `companies`, `roles`, `role_permissions`, `disciplines`, `user_disciplines`, `organization_memberships`, `project_parties`, `project_member_disciplines`, `role_permission_overrides`, `user_permission_overrides`, `consultant_engineer_scopes` |
+| Identity & RBAC | `users`, `companies`, `roles`, `role_permissions`, `disciplines`, `user_disciplines`, `organization_memberships`, `project_parties`, `project_member_disciplines`, `user_permission_overrides`, `consultant_engineer_scopes` |
 | Auth & security | `revoked_tokens`, `password_reset_tokens`, `otp_challenges`, `step_up_grants`, `rate_limit_hits`, `audit_logs` |
 | Projects & work | `projects`, `project_members`, `tasks`, `task_dependencies`, `task_comments`, `task_reviews`, `task_reschedule_logs`, `milestones` |
 | Field & site | `site_reports`, `site_visits`, `site_visit_participants`, `field_submissions`, `field_submission_photos`, `photo_categories`, `photo_category_assignments` |
@@ -208,16 +208,14 @@ until a `DocumentPartyShare` row exists. There is no project-level fallback.
 Both are explicitly documented as presentation state — the server re-checks
 every operation.
 
-### Migration state (important, and current)
+### Migration state
 
-The retired enum has **not** been removed. `users.role` (`UserRole`) is still
-`NOT NULL` and still written; `users.org_role_id` is the authority whenever it
-is set. `Role.legacy_role` and `legacy_affiliation` exist solely to satisfy that
-NOT NULL during provisioning, and are documented as dropped by the same
-migration that drops `users.role`. `legacy_effective_permissions()` is kept,
-uncalled, so `app/db/rbac_equivalence.py` can prove no account's access changed.
-`RBAC_REQUIRE_DB_ROLES` has already been retired; `app/db/user_role_backstop.py`
-now guarantees the invariant at write time.
+Closed. `users.org_role_id` is `NOT NULL` and is the only source of authority;
+the retired enum, the affiliation column, `project_members.role_on_project`,
+`roles.legacy_role` / `legacy_affiliation` and `role_permission_overrides` were
+dropped by `e1a9c3d5f720`. A database still holding the retired columns is
+carried across offline by `app.db.rbac_backfill` at revision `c84d6e2f1a37`.
+See [RBAC.md](RBAC.md).
 
 ---
 
@@ -430,9 +428,10 @@ performed.**
 6. **Configuration that refuses to lie.** The settings validator will not boot a
    process that claims a feature works when it cannot, and boot logs state
    plainly whether push, RAG and realtime are configured.
-7. **A migration with an evidence gate.** `rbac_equivalence.py` compares the new
-   model's answer against the retired one for every real account, rather than
-   asserting the redesign was safe.
+7. **A migration that was proved, then closed.** The RBAC redesign was gated on
+   an equivalence comparison of old against new for every real account before
+   the retired model was removed; its legacy-upgrade path stays tested end to
+   end on throwaway databases.
 8. **Substantial backend test coverage.** 90 test modules, including dedicated
    suites for external-party isolation, authorization equivalence, AI tool
    authorization, and IFC failure paths.
@@ -448,13 +447,8 @@ performed.**
    discovery, but anyone holding or guessing a URL can fetch the file. IFC and
    voice already demonstrate the correct pattern (`private_storage` plus an
    authenticated `FileResponse`); documents and attachments do not use it.
-2. **Two role models are live at once.** `users.role` (enum, NOT NULL) and
-   `users.org_role_id` coexist. `core/deps.py` still contains role-based helpers
-   — `require_admin`, `require_project_creation`,
-   `require_project_member_management`, and `get_manageable_project_or_403`
-   (which shortcuts on `is_admin`) — that bypass the configurable path the rest
-   of the system funnels through. This is the intended migration window, but
-   until it closes there are two answers to "who may do this".
+2. **~~Two role models are live at once.~~ Resolved.** The retired enum and its
+   columns are gone; every decision goes through `effective_permissions`.
 3. **Vector search does not scale.** Cosine similarity is computed in Python over
    JSONB rows, brute force per query. Fine at the current corpus size, but linear
    in documents and single-threaded. `RAG.md` §10 documents the pgvector
@@ -497,7 +491,7 @@ Ordered by risk reduced per unit of work.
 | # | Recommendation | Addresses |
 |---|---|---|
 | 1 | Serve documents and attachments through an authenticated streaming endpoint (or signed, expiring URLs), and unmount `/uploads` from `StaticFiles`. Reuse the `private_storage` pattern already proven by IFC. | Risk 1 |
-| 2 | Close the RBAC migration window: replace the remaining role-based helpers in `core/deps.py` with `require_permission`, then run the equivalence gate and drop `users.role`, `Role.legacy_role`, `legacy_affiliation` and `legacy_effective_permissions`. | Risk 2 |
+| 2 | ~~Close the RBAC migration window.~~ Done: role-based helpers removed, retired schema dropped (`e1a9c3d5f720`). | Risk 2 |
 | 3 | Move IFC processing and agent analysis out of the request path onto a real job runner. Given the deliberate no-broker stance, a database-backed queue table using the advisory-lock worker pattern already in `scheduler.py` would fit the existing architecture without new infrastructure. | Risk 4 |
 | 4 | Execute the documented pgvector migration (`pgvector/pgvector:pg15`, a `vector` column, an IVFFlat index) behind the existing `VectorStore` Protocol. | Risk 3 |
 | 5 | Write the S3/R2 `PrivateStorage` implementation and give public uploads the same abstraction, so the backend becomes stateless. | Risk 5 |

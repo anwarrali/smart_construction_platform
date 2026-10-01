@@ -11,6 +11,7 @@ import { errorMessage } from "../../utils/errorMessage";
 import { ROUTES } from "../../utils/constants";
 import api from "../../services/api";
 import type { RecipientOptions, SharedEntityType } from "../../types/message";
+import { orgRoleName } from "../../utils/vocabulary";
 
 /**
  * The single Forward / Ask-for-Opinion control used by every entity that
@@ -156,7 +157,7 @@ export const CommunicationActions = ({
                   />
                   <span>
                     <span className="block text-sm font-medium">{recipient.fullName}</span>
-                    <span className="text-xs text-muted-foreground">{recipient.role.replaceAll("_", " ")}</span>
+                    <span className="text-xs text-muted-foreground">{orgRoleName(recipient.orgRole)}</span>
                   </span>
                 </label>
               ))}

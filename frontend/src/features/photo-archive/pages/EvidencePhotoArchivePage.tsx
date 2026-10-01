@@ -29,8 +29,10 @@ export const EvidencePhotoArchivePage = () => {
   const params = useParams<{ projectId?: string; id?: string }>();
   const workspace = useProjectWorkspace();
   const projectId = params.projectId || params.id || workspace.projectId;
-  const { isAdmin, isProjectManager } = useRole();
-  const canManage = isAdmin || isProjectManager;
+  const { hasCapability } = useRole();
+  // Managing evidence categories is project setup; the server asks for
+  // `project.manage_members` on the project.
+  const canManage = hasCapability("project.manage_members");
   const [categories, setCategories] = useState<PhotoCategory[]>([]);
   const [items, setItems] = useState<EvidencePhotoArchiveItem[]>([]);
   const [total, setTotal] = useState(0);

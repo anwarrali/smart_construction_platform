@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, user_has_project_access
 from app.db.database import get_db
 from app.models.ai_governance import AIActionVersion
-from app.models.enums import UserRole
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.ai_action import AIActionPage, AIActionRevertRequest, AIActionRevertResult

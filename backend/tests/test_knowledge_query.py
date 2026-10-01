@@ -15,13 +15,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.knowledge import query_project_knowledge
 from app.core.config import settings
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, TaskStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, TaskStatus, UserStatus
 from app.models.ifc import IFCModelGroup, IFCModelVersion
 from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.knowledge import KnowledgeQueryRequest
 from app.services import ifc_processing_service as service
+from tests.office_roles import with_office_role
 
 pytest.importorskip("ifcopenshell")
 
@@ -55,18 +56,15 @@ def world(db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "IFC_GEOMETRY_ENABLED", True)
     monkeypatch.setattr(settings, "IFC_COORDINATION_CHECKS_ENABLED", True)
 
-    manager = User(full_name="KnowPm", email=f"knowpm-{suffix}@example.com", hashed_password="x",
-                   role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="KnowOwner", email=f"knowowner-{suffix}@example.com", hashed_password="x",
-                 role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="KnowPm", email=f"knowpm-{suffix}@example.com", hashed_password="x", status=UserStatus.ACTIVE), "project_manager")
+    owner = with_office_role(db, User(full_name="KnowOwner", email=f"knowowner-{suffix}@example.com", hashed_password="x", status=UserStatus.ACTIVE), "client_representative")
     db.add_all([manager, owner])
     db.flush()
     project = Project(name=f"Knowledge {suffix}", status=ProjectStatus.ACTIVE,
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=manager.id,
-                         role_on_project=UserRole.PROJECT_MANAGER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=manager.id, is_active=True))
     # `task_code` is NOT NULL; the API generates it with `_next_task_code`,
     # and a fixture has to supply one just the same.
     db.add_all([

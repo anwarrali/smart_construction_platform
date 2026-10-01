@@ -1,43 +1,19 @@
-"""Administrator-configured deviations from the default role permissions.
+"""Administrator decisions about one person, and consultant review scopes.
 
-Nothing here grants anything on its own. The catalogue in
-`app.core.permission_catalogue` states what each role can do out of the box;
-these tables record the specific decisions an administrator has made on top of
-it, so an organisation with an unusual structure can be supported without
-forking the role model.
+What a *role* may do lives in `roles` / `role_permissions`, edited through the
+organization API. These tables record decisions about individuals: a
+permission granted or revoked for one person (everywhere, or on one project),
+and which engineers a consultant reviews.
 """
 
 import uuid
 
 from sqlalchemy import Boolean, ForeignKey, Index, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
-from app.models.enums import UserRole
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
-
-
-class RolePermissionOverride(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Grant or revoke a permission for a whole role, platform-wide."""
-
-    __tablename__ = "role_permission_overrides"
-    __table_args__ = (
-        UniqueConstraint("role", "permission_code", name="uq_role_permission_override"),
-    )
-
-    role: Mapped[UserRole] = mapped_column(
-        PG_ENUM(UserRole, name="user_role", create_type=False), nullable=False, index=True
-    )
-    permission_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
-    #: True grants, False revokes. There is no third state: absence of a row
-    #: means "fall back to the role default".
-    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
 
 
 class UserPermissionOverride(Base, UUIDPrimaryKeyMixin, TimestampMixin):

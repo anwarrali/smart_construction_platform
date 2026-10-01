@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/dependency_injection.dart';
-import '../../core/auth/session_manager.dart';
+import '../../core/auth/capabilities.dart';
 import '../../core/network/network_exceptions.dart';
 import '../../core/push/push_controller.dart';
 import '../../core/theme/app_colors.dart';
@@ -66,13 +66,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         _error = null;
       });
     }
-    final user = ref.read(sessionProvider).user;
+    final narrowed = !readCapabilities(ref).has('task.view_all');
     final project = ref.read(projectContextProvider).selected;
     try {
       final result = await ref
           .read(notificationRepositoryProvider)
           .list(
-            projectId: user?.role == 'engineer' ? project?.id : null,
+            // People narrowed to their own work see the selected project's.
+            projectId: narrowed ? project?.id : null,
             unread: _unreadOnly ? true : null,
           );
       if (mounted) {
@@ -254,13 +255,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   Future<void> _markAllRead() async {
-    final user = ref.read(sessionProvider).user;
+    final narrowed = !readCapabilities(ref).has('task.view_all');
     final project = ref.read(projectContextProvider).selected;
     try {
       await ref
           .read(notificationRepositoryProvider)
           .markAllRead(
-            projectId: user?.role == 'engineer' ? project?.id : null,
+            // People narrowed to their own work see the selected project's.
+            projectId: narrowed ? project?.id : null,
           );
       if (mounted) {
         setState(

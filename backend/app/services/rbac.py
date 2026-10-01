@@ -13,23 +13,12 @@ first half of its answer here. Everything after that — administrator overrides
 the inactive-account rule, the project-access rule — still happens there, in
 the order it always did.
 
-## The transition, stated plainly
+## Where permissions come from
 
-Permissions used to come from a role *enum* through
-`permission_catalogue.role_defaults`. They now come from the `roles` /
-`role_permissions` tables. Both paths exist while the backfill runs, and the
-rule for choosing between them is deliberately not a feature flag:
-
-    a user with `org_role_id` set is resolved from the database;
-    a user without one falls back to the catalogue defaults for their
-    legacy `User.role`.
-
-A flag would have made the cutover a moment when every unmigrated account
-silently lost all access. Keying off the column instead means an account is
-migrated exactly when its row says it is, and a half-finished backfill leaves
-nobody locked out. `settings.RBAC_REQUIRE_DB_ROLES` turns the fallback into a
-hard failure once an operator is satisfied the backfill is complete, and the
-contract migration removes the fallback entirely.
+Only from the database: `users.org_role_id → roles → role_permissions`,
+unioned with the project role a membership carries. `users.org_role_id` is
+NOT NULL, so every account has an office role; the retired six-value enum and
+its catalogue defaults no longer exist anywhere at runtime.
 
 ## Two rules that configuration cannot override
 
@@ -49,8 +38,7 @@ from dataclasses import dataclass
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.permission_catalogue import BY_CODE, CATALOGUE, role_defaults
+from app.core.permission_catalogue import BY_CODE, CATALOGUE
 from app.core.role_templates import (
     DISCIPLINES,
     LEGACY_CONSULTANT_TEMPLATE,
@@ -58,10 +46,9 @@ from app.core.role_templates import (
     TEMPLATES,
     RoleTemplate,
     discipline_code_for_legacy,
-    template_for_legacy,
 )
 from app.models.company import Company
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.project import ProjectMember
 from app.models.rbac import (
     Discipline,
@@ -207,22 +194,25 @@ def is_external_participant(db: Session, user: User, project_id: uuid.UUID | Non
     whoever added them. Failing that, the account's own `is_internal` flag
     answers for contexts with no project.
 
-    `is_internal` is only consulted for an account the backfill has reached.
-    Before that it is an unset column, not a claim, and reading it as one would
-    make every unmigrated user look like an outsider and strip their office-wide
-    permissions — the platform had no external participants before this
-    redesign, so "not yet decided" resolves to staff.
+    An account with no office role is treated as an outsider. It holds no
+    permissions anyway (`resolved_permissions` refuses it), and anywhere this
+    is asked on its own the most restrictive answer is the safe one.
     """
     if project_id is not None and membership_context(db, user.id, project_id).is_external:
         return True
     if user.org_role_id is None:
-        # Pre-backfill, the only externality signal a row carries is the
-        # retired affiliation. Reading it here is what stops the migration
-        # window from being a period in which a contractor's engineer could
-        # approve the office's design changes. `is_internal` is not consulted
-        # because it has not been decided for this account yet.
-        return user.engineer_affiliation == "main_contractor"
+        return True
     return not bool(user.is_internal)
+
+
+def holds_office_admin_role(db: Session, user: User) -> bool:
+    """Whether this person holds the office administrator role.
+
+    The undeletable role is how the platform names "somebody must always be
+    able to administer": its admin-locked permissions are restored after every
+    override, and it is never something an override can take away.
+    """
+    return bool(getattr(get_role(db, user.org_role_id), "undeletable", False))
 
 
 # ---------------------------------------------------------------------------
@@ -239,13 +229,9 @@ def is_client_participant(db: Session, user: User, project_id: uuid.UUID | None)
     project and nothing on another, and a client is an external party whose
     access hangs off `ProjectParty` like any other.
 
-    Two sources, and the order matters — the same order and the same reason as
-    `is_external_participant`. A membership pointing at a `ProjectParty` of
-    kind CLIENT is decisive: it is a statement about this project. Failing
-    that, an account the backfill has not reached carries only its retired
-    role, so that answers until the row is migrated. `rbac_backfill` creates
-    the client party and attaches the owner's membership to it, so the bridge
-    is for the migration window only and goes with the contract step.
+    One source: a membership pointing at a `ProjectParty` of kind CLIENT. It is
+    a statement about this project, so the same person can be the client on
+    one job and nothing on another.
 
     Deliberately *not* a permission. What the client may see is
     `client_portal.view` and the document scope; this is which *rows* the
@@ -257,19 +243,16 @@ def is_client_participant(db: Session, user: User, project_id: uuid.UUID | None)
         if context.is_external and context.party is not None:
             return context.party.kind == PARTY_CLIENT
         if context.member is not None:
-            # On the project as office staff. Whatever the retired column says,
-            # they are not the client here.
+            # On the project as office staff: not the client here.
             return False
     return False
 
 
-#: Roles that exist to hold history rather than to be worked under. A role with
-#: no `legacy_role` is one the platform refuses to create accounts under
-#: (`user_service.legacy_role_for`), and that is the same predicate as "nobody
-#: may be staffed onto a project under it" — today that is exactly the archived
-#: field-staff role retired worker accounts sit on.
+#: Roles that exist to hold history rather than to be worked under.
+#:
+#: Asked through `Role.is_archived`, a property of the role itself.
 def _archived_role_ids(db: Session):
-    return db.query(Role.id).filter(Role.legacy_role.is_(None)).scalar_subquery()
+    return db.query(Role.id).filter(Role.is_archived.is_(True)).scalar_subquery()
 
 
 def staffable_filter(db: Session):
@@ -292,11 +275,18 @@ def staffable_filter(db: Session):
 
 
 def is_staffable(db: Session, user: User) -> bool:
-    """The row-level form of `staffable_filter`, for an account already loaded."""
+    """The row-level form of `staffable_filter`, for an account already loaded.
+
+    Was `bool(role.legacy_role)` — the row-level spelling of the same
+    `legacy_role IS NULL` predicate `_archived_role_ids` used, and moved for the
+    same reason. An account with no role at all is still not staffable: every
+    creation path assigns one before writing, so `None` here means something is
+    wrong rather than something is permitted.
+    """
     if user.status != UserStatus.ACTIVE:
         return False
     role = get_role(db, user.org_role_id)
-    return bool(role is not None and role.legacy_role)
+    return bool(role is not None and not role.is_archived)
 
 
 def resolved_permissions(
@@ -313,14 +303,9 @@ def resolved_permissions(
     `UserPermissionOverride`, which `app.services.authorization` applies.
     """
     if user.org_role_id is None:
-        # No fallback any more. An account without a role is a bug — the
-        # backstop fills the column for anything created without one, and the
-        # backfill reached everything that predates it — so resolving one
-        # through the retired enum would be guessing at authority rather than
-        # reading it. Failing loudly is the point of the contract step.
-        raise UnmigratedUser(
-            f"User {user.id} has no org_role_id. Run app.db.rbac_backfill."
-        )
+        # `users.org_role_id` is NOT NULL, so only an unsaved, hand-built
+        # account can get here. Refuse rather than guess at its authority.
+        raise UnmigratedUser(f"User {user.id} has no org_role_id")
     granted = role_permission_codes(db, user.org_role_id)
 
     context = membership_context(db, user.id, project_id)
@@ -454,29 +439,20 @@ def seed_roles(
     *,
     organization_id: uuid.UUID | None = None,
     include_legacy_consultant: bool = False,
-    role_overrides: dict[UserRole, dict[str, bool]] | None = None,
+    role_overrides: dict[str, dict[str, bool]] | None = None,
 ) -> dict[str, Role]:
     """Create the role templates and their permissions. Idempotent.
 
-    `role_overrides` carries whatever an administrator had configured on the
-    retired `RolePermissionOverride` table, keyed by the legacy role. Those
-    decisions are folded into every template that inherits from that role, so
-    configuration made before the redesign survives it — which is also what
-    keeps the equivalence gate empty for an office that had customised its
-    permissions.
+    `role_overrides`, keyed by template code, adjusts a template's set as it is
+    seeded. Only the legacy backfill passes it: it carries decisions an
+    administrator made on the retired role-keyed override table, so they
+    survive the move (see `app.db.legacy_rbac.LEGACY_INHERITS`).
     """
     overrides = role_overrides or {}
-    # `legacy_consultant` is seeded unconditionally. It used to be opt-in, and
-    # that was a hole: `template_for_legacy` maps `UserRole.CONSULTANT` onto it,
-    # so without the row there is no role for such an account to migrate to —
-    # `template_role_for_legacy_user` returns None, the backfill skips it, and
-    # under `RBAC_REQUIRE_DB_ROLES` the account cannot resolve at all. No *new*
-    # account is ever CONSULTANT (`UserCreateByAdmin` rewrites it), but rows
-    # from before the redesign exist, and a mapping that only works when the
-    # caller remembers a keyword argument is not a mapping.
-    #
+    # `legacy_consultant` is seeded unconditionally, so the legacy backfill
+    # always has a role to move a retired Consultant account onto.
     # `include_legacy_consultant` is kept so existing callers do not break; it
-    # no longer changes anything.
+    # changes nothing.
     templates: list[RoleTemplate] = [*TEMPLATES, LEGACY_CONSULTANT_TEMPLATE]
 
     query = db.query(Role)
@@ -502,21 +478,14 @@ def seed_roles(
                 is_system=True,
                 undeletable=template.undeletable,
                 rank=template.rank,
-                legacy_role=template.legacy_role,
-                legacy_affiliation=template.legacy_affiliation,
+                is_archived=template.is_archived,
             )
             db.add(role)
             db.flush()
-        elif role.legacy_role is None and template.legacy_role is not None:
-            # A row seeded before the provisioning columns existed. Filling it
-            # here means a deployment that re-seeds gets the same answer the
-            # migration wrote, so the two can never disagree.
-            role.legacy_role = template.legacy_role
-            role.legacy_affiliation = template.legacy_affiliation
         result[template.code] = role
 
         codes = template.permissions()
-        for code, allowed in overrides.get(template.inherits, {}).items():
+        for code, allowed in overrides.get(template.code, {}).items():
             if code not in BY_CODE:
                 continue
             codes.add(code) if allowed else codes.discard(code)
@@ -540,6 +509,30 @@ def seed_roles(
     return result
 
 
+def seed_fresh_database(db: Session) -> bool:
+    """Seed the shared disciplines and role templates on a brand-new database.
+
+    Migrations create schema only; this is where a fresh deployment's initial
+    RBAC data comes from, ahead of `bootstrap_admin` assigning `org_admin`.
+
+    It acts only on a database that holds **no system roles and no accounts**,
+    and returns whether it did. That condition is what makes it safe to call
+    from a start sequence:
+
+    * On an initialized database it does nothing at all, so an office's
+      customizations of its roles are never touched.
+    * A database with accounts but no roles cannot exist at head:
+      `users.org_role_id` is NOT NULL. It does nothing there either.
+    """
+    has_roles = db.query(Role.id).filter(Role.organization_id.is_(None)).first() is not None
+    has_accounts = db.query(User.id).first() is not None
+    if has_roles or has_accounts:
+        return False
+    seed_disciplines(db)
+    seed_roles(db)
+    return True
+
+
 def ensure_tenant_organization(db: Session, *, name: str | None = None) -> Company:
     """The consulting office this deployment belongs to.
 
@@ -554,7 +547,8 @@ def ensure_tenant_organization(db: Session, *, name: str | None = None) -> Compa
 
     admin = (
         db.query(User)
-        .filter(User.role == UserRole.ADMIN, User.company_id.isnot(None))
+        .join(Role, Role.id == User.org_role_id)
+        .filter(Role.undeletable.is_(True), User.company_id.isnot(None))
         .order_by(User.created_at.asc())
         .first()
     )
@@ -581,13 +575,31 @@ def ensure_tenant_organization(db: Session, *, name: str | None = None) -> Compa
 # Assignment helpers used by the API and the backfill
 # ---------------------------------------------------------------------------
 
+def apply_org_role(user: User, role: Role) -> None:
+    """Set somebody's office role and the side of the office it puts them on.
+
+    The two columns move together or not at all. `is_external_participant`
+    reads `is_internal` the moment `org_role_id` is set, and the column defaults
+    to true, so writing the role without the flag silently reclassifies a
+    contractor as office staff. That mistake was made once already: the first
+    version of the retired `user_role_backstop` listener filled `org_role_id`
+    alone, which dropped the non-project-scoped ceiling and handed a contractor
+    `platform.view_all_projects` on every project in the office. That ceiling
+    is asserted by `test_no_external_participant_holds_an_office_wide_permission`.
+
+    Needs no flush and no id, which is what lets a creation path give an account
+    its role *before* it is written.
+    """
+    user.org_role_id = role.id
+    user.is_internal = bool(role.is_internal_only)
+
+
 def assign_org_role(
     db: Session, *, user: User, role: Role, organization_id: uuid.UUID,
     job_title: str | None = None,
 ) -> OrganizationMembership:
     """Give somebody an office role, and record the membership behind it."""
-    user.org_role_id = role.id
-    user.is_internal = bool(role.is_internal_only)
+    apply_org_role(user, role)
     membership = db.query(OrganizationMembership).filter(
         OrganizationMembership.user_id == user.id,
         OrganizationMembership.organization_id == organization_id,
@@ -643,10 +655,20 @@ def resolve_discipline(
     return query.order_by(Discipline.organization_id.nullslast()).first()
 
 
-def template_role_for_legacy_user(db: Session, user: User) -> Role | None:
-    """The seeded role an existing account migrates onto."""
-    template = template_for_legacy(user.role, user.engineer_affiliation)
-    return role_by_code(db, template.code, user.company_id)
+def apply_template_role(db: Session, user: User, code: str) -> Role | None:
+    """Give an account, before it is written, the office role with this code.
+
+    For the creation paths that name a seeded role directly — the initial
+    administrator (`org_admin`), the demo seed. The office's own copy of the
+    role is preferred over the shared template, so `user.company_id` must be
+    set first. Returns None, and leaves the account untouched, when no such
+    role exists; callers decide whether that is an error — an account cannot
+    be written without one, `users.org_role_id` being NOT NULL.
+    """
+    role = role_by_code(db, code, user.company_id)
+    if role is not None:
+        apply_org_role(user, role)
+    return role
 
 
 def role_label_for(db: Session, user: User) -> str:
@@ -658,8 +680,6 @@ def role_label_for(db: Session, user: User) -> str:
     language model than a stable identifier it has never seen, and the office
     chose that word for a reason.
 
-    Falls back to the retired enum for an account the backfill has not reached.
-
     Reads its inputs with `getattr` because this is a *label*, not a decision:
     it is called from prompt assembly and logging, where being handed a partial
     object should produce a duller string rather than an exception. Nothing in
@@ -667,16 +687,22 @@ def role_label_for(db: Session, user: User) -> str:
     shrugged at a missing column would be exactly the wrong kind of tolerant.
     """
     role = get_role(db, getattr(user, "org_role_id", None))
-    if role is not None:
-        return role.name_en
-    legacy = getattr(user, "role", None)
-    return legacy.value if legacy is not None else "unknown"
+    return role.name_en if role is not None else "unknown"
 
 
-def active_users_missing_roles(db: Session) -> int:
-    """How many live accounts the backfill has not reached. Zero means done."""
-    return (
-        db.query(User)
-        .filter(User.org_role_id.is_(None), User.status == UserStatus.ACTIVE)
-        .count()
-    )
+def role_code(db: Session, user: User) -> str | None:
+    """The stable code of this person's office role, for audit records and payloads.
+
+    A label, like `role_label_for`: what an audit row or an API payload records
+    about who somebody was. Never an input to an authorization decision.
+    """
+    role = get_role(db, getattr(user, "org_role_id", None))
+    return role.code if role is not None else None
+
+
+def member_role_code(db: Session, member) -> str | None:
+    """The role a project member acts under here: their project role, else their office role."""
+    role = get_role(db, getattr(member, "project_role_id", None))
+    if role is None and getattr(member, "user", None) is not None:
+        role = get_role(db, member.user.org_role_id)
+    return role.code if role is not None else None

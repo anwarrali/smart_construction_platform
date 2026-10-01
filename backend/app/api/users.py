@@ -25,7 +25,7 @@ from app.models.collaboration import OwnerRequest, SiteVisit
 from app.models.voice_analysis import VoiceAnalysis
 from app.models.voice_action import VoiceExecutionLog
 from app.models.ai_governance import AIActionVersion
-from app.models.enums import UserRole, UserStatus, EngineerDiscipline
+from app.models.enums import UserStatus, EngineerDiscipline
 from app.schemas.user import (
     UserOut,
     UserUpdate,
@@ -34,11 +34,12 @@ from app.schemas.user import (
     UserCreateByAdmin,
     UserCreateResponse,
 )
-from app.core.deps import get_current_user, require_can_create_user
+from app.core.deps import get_current_user
 from app.models.rbac import Discipline, Role
 from app.services import rbac
-from app.services.authorization import has_permission, require, require_permission
-from app.core.permissions import can_create_team_role, can_manage_all_users, is_engineer
+from app.services.authorization import (
+    can_be_project_client, can_run_project, has_permission, require, require_permission,
+)
 from app.core.security import hash_password, verify_password
 from app.services.user_service import create_provisioned_user, generate_temporary_password
 from app.services.file_storage import save_upload
@@ -54,7 +55,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 @router.get("", response_model=List[UserOut])
 def list_users(
-    role: Optional[UserRole] = None,
+    role_id: Optional[uuid.UUID] = None,
     status: Optional[UserStatus] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -64,8 +65,8 @@ def list_users(
     if current_user.company_id:
         query = query.filter(User.company_id == current_user.company_id)
 
-    if role:
-        query = query.filter(User.role == role)
+    if role_id:
+        query = query.filter(User.org_role_id == role_id)
     if status:
         query = query.filter(User.status == status)
     if search:
@@ -76,7 +77,7 @@ def list_users(
 @router.get("/search", response_model=List[UserOut])
 def search_users(
     q: str,
-    role: Optional[str] = None,
+    role_id: Optional[uuid.UUID] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -97,8 +98,8 @@ def search_users(
     )
     if current_user.company_id:
         query = query.filter(User.company_id == current_user.company_id)
-    if role:
-        query = query.filter(User.role == role)
+    if role_id:
+        query = query.filter(User.org_role_id == role_id)
     else:
         # Everybody an office may staff onto a project, by the same predicate
         # the candidate list and the assignment endpoint use. It used to narrow
@@ -110,15 +111,44 @@ def search_users(
     return query.limit(20).all()
 
 
+@router.get("/eligible", response_model=List[UserOut])
+def eligible_users(
+    purpose: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Who may be named a project's client or manager, decided by the server.
+
+    `purpose` is `project_owner` or `project_manager`. The project forms used
+    to filter the user list by the retired enum (`role === "owner"`), which a
+    role an office created could never satisfy; the same rules the project
+    endpoints enforce (`can_be_project_client`, `can_run_project`) now answer
+    here too, so the picker and the endpoint cannot disagree.
+    """
+    if not (
+        has_permission(db, current_user, "platform.create_project")
+        or has_permission(db, current_user, "project.edit")
+        or has_permission(db, current_user, "project.manage_members")
+    ):
+        raise HTTPException(status_code=403, detail="Not authorized to list project principals")
+    rules = {"project_owner": can_be_project_client, "project_manager": can_run_project}
+    rule = rules.get(purpose)
+    if rule is None:
+        raise HTTPException(status_code=400, detail="purpose must be project_owner or project_manager")
+    query = db.query(User).filter(User.status == UserStatus.ACTIVE)
+    if current_user.company_id:
+        query = query.filter(User.company_id == current_user.company_id)
+    return [user for user in query.order_by(User.full_name).all() if rule(db, user)]
+
+
 def _requested_org_role(db: Session, role_id: uuid.UUID) -> Role:
     """The office role this request names, or a 400 explaining why not.
 
     Three refusals, and each one is a rule the office cannot configure around:
     the role has to exist and be active, it has to belong to this office (or be
     a shared template), and it has to be one accounts may be created under at
-    all — which excludes the archived field-staff role that retired worker
-    accounts sit on. That last check is what keeps Worker unreachable through
-    the new provisioning path as well as the old one.
+    all — which excludes an archived role, such as the field-staff role that
+    retired worker accounts sit on.
     """
     office = rbac.ensure_tenant_organization(db)
     role = db.get(Role, role_id)
@@ -126,7 +156,7 @@ def _requested_org_role(db: Session, role_id: uuid.UUID) -> Role:
         raise HTTPException(status_code=400, detail="That office role does not exist")
     if role.organization_id is not None and role.organization_id != office.id:
         raise HTTPException(status_code=400, detail="That role belongs to another office")
-    if not role.legacy_role:
+    if role.is_archived:
         raise HTTPException(
             status_code=400,
             detail=f"Accounts cannot be created under the '{role.name_en}' role",
@@ -170,25 +200,14 @@ def create_user(
 ):
     """Create an active account under one of the office's configured roles.
 
-    Two paths, and the difference is what the request names. With
-    `orgRoleId`, the account is created under a role the office maintains and
-    the gate is `platform.manage_users` — the permission an office can actually
-    administer, and the one that already guards every other endpoint on this
-    router. Without it, the retired `role` enum path still works and is still
-    gated by `can_create_team_role`, so a client that has not been updated
-    behaves exactly as before.
+    Gated on `platform.manage_users`, a permission the office administers. The
+    role decides the account's authority; refusing an archived role is an
+    invariant in `create_provisioned_user`, not a permission.
     """
-    org_role = None
-    discipline_ids: list[uuid.UUID] = []
-    if user_data.org_role_id is not None:
-        require(db, current_user, "platform.manage_users")
-        org_role = _requested_org_role(db, user_data.org_role_id)
-        discipline_ids = _requested_disciplines(db, user_data.discipline_ids)
-    elif not can_create_team_role(current_user.role, user_data.role):
-        raise HTTPException(
-            status_code=403,
-            detail=f"You are not authorized to create users with role '{user_data.role.value}'",
-        )
+    require(db, current_user, "platform.manage_users")
+
+    org_role = _requested_org_role(db, user_data.org_role_id)
+    discipline_ids = _requested_disciplines(db, user_data.discipline_ids)
 
     discipline = None
     employee_id = None
@@ -202,12 +221,10 @@ def create_user(
             creator=current_user,
             email=user_data.email,
             full_name=user_data.full_name,
-            role=user_data.role,
             org_role=org_role,
             discipline_ids=discipline_ids,
             phone_number=user_data.phone_number,
             organization=user_data.organization,
-            engineer_affiliation=user_data.engineer_affiliation,
             engineer_discipline=discipline,
             employee_id=employee_id,
             password=user_data.password,
@@ -218,9 +235,9 @@ def create_user(
 
     response = UserCreateResponse.model_validate(user)
     record_audit(db, actor_id=current_user.id, action="created", entity_type="user", entity_id=user.id,
-                 details={"role": user.role.value, "org_role": org_role.code if org_role else None,
+                 details={"org_role": org_role.code,
                           "disciplines": [str(item) for item in discipline_ids],
-                          "engineer_affiliation": user.engineer_affiliation, "direct_account": True})
+                          "direct_account": True})
     db.commit()
     return response
 
@@ -349,7 +366,10 @@ def get_user_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not can_manage_all_users(current_user.role) and current_user.id != user_id:
+    # Was `can_manage_all_users(current_user.role)`. `platform.manage_users`
+    # is the catalogue code for administering other people's accounts, and
+    # resolves identically for every account in the database.
+    if not has_permission(db, current_user, "platform.manage_users") and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to view this user")
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -392,9 +412,8 @@ def update_user_by_admin(
             user.status = update_data.status
 
         # --- the configurable model ----------------------------------------
-        # Changing somebody's office role changes what they may do, so it is
-        # the same class of act as changing the retired enum below and takes
-        # the same step-up challenge. `assign_org_role` moves `is_internal`
+        # Changing somebody's office role changes what they may do, so it takes
+        # the step-up challenge. `assign_org_role` moves `is_internal`
         # with it, which is what keeps an account from being reclassified
         # internal/external by half.
         if update_data.org_role_id is not None and update_data.org_role_id != user.org_role_id:
@@ -417,38 +436,8 @@ def update_user_by_admin(
                 primary_id=wanted[0] if wanted else None,
             )
 
-        if update_data.role is not None:
-            if user.id == current_user.id and update_data.role != UserRole.ADMIN:
-                raise HTTPException(status_code=400, detail="You cannot remove your own administrator role")
-            # Only an actual change of role demands step-up: re-saving a
-            # profile form that happens to echo the current role should not
-            # pester the administrator for a code.
-            resolved_role = UserRole.ENGINEER if update_data.role == UserRole.CONSULTANT else update_data.role
-            if resolved_role != user.role:
-                require_step_up(db, current_user, "admin.change_user_role")
-            user.role = resolved_role
-
-        # The retired columns, kept truthful without being asked for.
-        #
-        # What stood here validated `engineer_affiliation` against three magic
-        # strings, demanded an organization for an "external consultant", and
-        # required a single-valued `EngineerProfile.discipline`. All three are
-        # the retired model: the office side is `is_internal` (moved by
-        # `assign_org_role` above), and disciplines are many-to-many on
-        # `user_disciplines`.
-        #
-        # `engineer_affiliation` is still written because `users.role` is still
-        # NOT NULL and the pre-backfill bridges read it during the migration
-        # window. It is derived from the role the account holds, never supplied.
-        if user.org_role is not None:
-            user.engineer_affiliation = user.org_role.legacy_affiliation or (
-                "internal_engineer" if user.role == UserRole.ENGINEER else None
-            )
-        elif user.role != UserRole.ENGINEER:
-            user.engineer_affiliation = None
-
-        # `EngineerProfile` is likewise legacy. It is updated when a client
-        # still sends one, and never demanded.
+        # The engineering profile is updated when the request carries one, and
+        # never demanded.
         if update_data.engineer_profile:
             if user.engineer_profile:
                 user.engineer_profile.discipline = update_data.engineer_profile.discipline
@@ -467,7 +456,8 @@ def update_user_by_admin(
                 )
 
         record_audit(db, actor_id=current_user.id, action="updated", entity_type="user", entity_id=user.id,
-                     details={"fields": sorted(update_data.model_fields_set), "role": user.role.value})
+                     details={"fields": sorted(update_data.model_fields_set),
+                              "org_role": user.org_role.code if user.org_role else None})
         db.commit()
         db.refresh(user)
         return user
@@ -610,7 +600,8 @@ def permanently_delete_user(
         action="permanently_deleted",
         entity_type="user",
         entity_id=user.id,
-        details={"email": user.email, "role": user.role.value, "detachedLinks": detachable_links},
+        details={"email": user.email, "org_role": user.org_role.code if user.org_role else None,
+                 "detachedLinks": detachable_links},
     )
     db.delete(user)
     db.commit()

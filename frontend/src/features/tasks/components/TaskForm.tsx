@@ -61,7 +61,7 @@ const memberLabel = (member: ProjectMember) => {
   const discipline = (member.disciplineCodes || []).length
     ? (member.disciplineCodes || []).map(titleCase).join(", ")
     : member.projectDiscipline || member.user.engineerProfile?.discipline;
-  const role = member.projectRoleName || titleCase(member.user.role);
+  const role = member.projectRoleName || member.user.orgRole?.nameEn || "—";
   const responsibility = member.assignmentTitle ? ` · ${member.assignmentTitle}` : "";
   const site = member.isSiteEngineer ? " · Site Engineer" : "";
   return `${member.user.fullName} — ${role} · ${titleCase(discipline)} · ${affiliationLabel(member)}${responsibility}${site}`;
@@ -83,6 +83,7 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
   const [dependencySearch, setDependencySearch] = useState("");
   const [dependencyIds, setDependencyIds] = useState<string[]>([]);
   const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [assignableIds, setAssignableIds] = useState<string[]>([]);
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [milestoneId, setMilestoneId] = useState("");
@@ -123,8 +124,10 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
       projectsService.getMembers(activeProjectId),
       tasksService.getByProject(activeProjectId),
       api.milestones.list(activeProjectId),
-    ]).then(([team, response, milestoneData]) => {
+      api.projects.getEligibleMembers(activeProjectId, "task_assignee"),
+    ]).then(([team, response, milestoneData, assignable]) => {
       setMembers(team);
+      setAssignableIds(assignable);
       setMilestones(milestoneData);
       const tasks = Array.isArray(response) ? response : response.data || response.items || [];
       setProjectTasks(tasks.filter((candidate) => candidate.id !== task?.id));
@@ -132,12 +135,11 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
   }, [activeProjectId, isOpen, task?.id]);
 
   const eligibleMembers = useMemo(() => members.filter((member) => {
-    if (!member.isActive || member.user.status !== "active") return false;
-    if (!["engineer", "consultant", "project_manager"].includes(member.user.role)) return false;
-    if (member.user.engineerAffiliation === "external_consultant" || member.roleOnProject === "consultant") return false;
+    // The server's own assignment rule (`assignee_refusal`), asked up front.
+    if (!assignableIds.includes(member.userId)) return false;
     const haystack = memberLabel(member).toLowerCase();
     return !assigneeSearch.trim() || haystack.includes(assigneeSearch.trim().toLowerCase());
-  }), [assigneeSearch, members]);
+  }), [assigneeSearch, members, assignableIds]);
 
   const dependencyOptions = useMemo(() => projectTasks.filter((candidate) => {
     const haystack = `${candidate.taskCode} ${candidate.name} ${candidate.status}`.toLowerCase();

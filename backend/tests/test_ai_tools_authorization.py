@@ -22,12 +22,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, TaskStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, TaskStatus, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.user import User
 from app.services import rbac
 from app.services.ai_tools import BY_NAME, available_tools, call_tool
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -52,16 +53,19 @@ def world(db):
     roles = rbac.seed_roles(db)
 
     def user(name, role, org_role_code=None):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                    org_role_id=roles[org_role_code].id if org_role_code else None,
-                    is_internal=True if org_role_code else None)
+        person = User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                      hashed_password="x", status=UserStatus.ACTIVE)
+        if org_role_code:
+            person.org_role_id = roles[org_role_code].id
+            person.is_internal = True
+            return person
+        return with_office_role(db, person, role)
 
-    manager = user("ToolPm", UserRole.PROJECT_MANAGER)
-    outsider = user("ToolOutsider", UserRole.PROJECT_MANAGER)
-    surveyor = user("ToolSurveyor", UserRole.ENGINEER, "surveyor")
-    owner = user("ToolOwner", UserRole.OWNER)
-    suspended = user("ToolSuspended", UserRole.PROJECT_MANAGER)
+    manager = user("ToolPm", "project_manager")
+    outsider = user("ToolOutsider", "project_manager")
+    surveyor = user("ToolSurveyor", "engineer", "surveyor")
+    owner = user("ToolOwner", "client_representative")
+    suspended = user("ToolSuspended", "project_manager")
     suspended.status = UserStatus.INACTIVE
     db.add_all([manager, outsider, surveyor, owner, suspended])
     db.flush()
@@ -70,10 +74,9 @@ def world(db):
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    for person, role in ((manager, UserRole.PROJECT_MANAGER), (surveyor, UserRole.ENGINEER),
-                         (suspended, UserRole.PROJECT_MANAGER)):
-        db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=role, is_active=True,
+    for person, role in ((manager, "project_manager"), (surveyor, "engineer"),
+                         (suspended, "project_manager")):
+        db.add(ProjectMember(project_id=project.id, user_id=person.id, is_active=True,
                              project_role_id=(
                                  roles["surveyor"].id if person is surveyor else None
                              )))

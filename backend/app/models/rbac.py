@@ -95,16 +95,13 @@ class Role(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true",
     )
-    #: Which legacy `UserRole` an account created under this role is written
-    #: with, and which `engineer_affiliation` goes with it. **Migration-window
-    #: only.** `users.role` is still NOT NULL, so provisioning has to put
-    #: something there; recording it on the role keeps that decision explicit
-    #: instead of deriving it from whatever permissions an office configured.
-    #: Both columns are dropped by the same migration that drops `users.role`.
-    #: NULL means "no account may be created under this role" — which is the
-    #: archived field-staff template, and nothing else.
-    legacy_role: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    legacy_affiliation: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    #: This role exists to preserve historical attribution, not to be worked
+    #: under: no account may be created on it, and nobody holding it may be
+    #: staffed onto a project. Exactly one seeded template sets it: the one
+    #: retired worker accounts were moved onto.
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false",
+    )
 
     permissions: Mapped[list["RolePermission"]] = relationship(
         back_populates="role", cascade="all, delete-orphan",

@@ -103,7 +103,7 @@ export const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
                 {assignee.avatarUrl ? <img src={assignee.avatarUrl} alt="" className="h-full w-full object-cover" /> : getInitials(assignee.fullName)}
               </div>)}
             </div>
-            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-foreground">{primaryAssignee.fullName}{assignees.length > 1 && <span className="ml-1 text-primary">+{assignees.length - 1}</span>}</p><p className="truncate text-[11px] text-muted-foreground">{formatAssigneeRole(primaryAssignee.role, primaryAssignee.engineerProfile?.discipline)}</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-foreground">{primaryAssignee.fullName}{assignees.length > 1 && <span className="ml-1 text-primary">+{assignees.length - 1}</span>}</p><p className="truncate text-[11px] text-muted-foreground">{formatAssigneeRole(primaryAssignee)}</p></div>
           </> : <span className="text-xs text-muted-foreground">{t("taskCard.unassigned")}</span>}
         </div>
         {(onEdit || onDelete) && <div className="flex justify-end gap-2 border-t pt-2">

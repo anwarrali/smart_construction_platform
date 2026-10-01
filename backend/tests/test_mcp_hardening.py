@@ -37,7 +37,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import SessionLocal
 from app.models.audit_log import AuditLog
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.mcp_token import (
     SCOPE_PROPOSE, SCOPE_READ, TOKEN_PREFIX, McpClientToken,
 )
@@ -50,6 +50,7 @@ from app.services.mcp import credentials, limits, protocol
 from app.services.mcp import tokens as token_service
 from app.services.mcp.credentials import Credential, CredentialError
 from app.services.mcp.tokens import TokenError
+from tests.office_roles import with_office_role
 
 PASSWORD = "McpHard!2345"
 
@@ -80,24 +81,23 @@ def world(db, monkeypatch):
     monkeypatch.setattr(settings, "MCP_ENABLED", True)
     suffix = uuid4().hex[:10]
 
-    def user(name, status=UserStatus.ACTIVE, role=UserRole.PROJECT_MANAGER):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                      hashed_password=hash_password(PASSWORD), role=role, status=status)
+    def user(name, status=UserStatus.ACTIVE, role="project_manager"):
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                           hashed_password=hash_password(PASSWORD), status=status), role)
         db.add(person)
         db.flush()
         return person
 
     manager = user("HardPm")
     outsider = user("HardOut")
-    admin = user("HardAdmin", role=UserRole.ADMIN)
+    admin = user("HardAdmin", role="org_admin")
 
     def project(name, owner):
         row = Project(name=f"{name} {suffix}", status=ProjectStatus.ACTIVE,
                       owner_id=owner.id, project_manager_id=owner.id)
         db.add(row)
         db.flush()
-        db.add(ProjectMember(project_id=row.id, user_id=owner.id,
-                             role_on_project=owner.role, is_active=True))
+        db.add(ProjectMember(project_id=row.id, user_id=owner.id, is_active=True))
         return row
 
     project_a = project("Hard A", manager)

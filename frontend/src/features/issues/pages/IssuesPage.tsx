@@ -27,7 +27,8 @@ export const IssuesPage = () => {
   const { t } = useTranslation();
   const vocabulary = useVocabulary();
   const workspace = useProjectWorkspace();
-  const { isProjectManager } = useRole();
+  const { hasCapability } = useRole();
+  const canResolve = hasCapability("issue.resolve");
   const [searchParams, setSearchParams] = useSearchParams();
   const focusedIssueId = searchParams.get("issueId");
   const activeProjectId = workspace.projectId;
@@ -177,7 +178,7 @@ export const IssuesPage = () => {
                   <AttachmentPanel projectId={issue.projectId} entityType="ISSUE" entityId={issue.id} initialCount={issue.attachmentCount} />
                   <CommunicationActions className="mt-2 me-2 align-middle" entityType="ISSUE" entityId={issue.id} projectId={issue.projectId} />
                   <Button className="mt-2 mr-2" size="sm" variant="outline" onClick={() => setDiscussionIssueId((current) => current === issue.id ? "" : issue.id)}>{discussionIssueId === issue.id ? t("issue.hideDiscussion") : t("issue.openDiscussion")}</Button>
-                  {isProjectManager && ["open", "in_progress"].includes(issue.status) && <Button className="mt-2" size="sm" variant="outline" onClick={async () => { const resolution = window.prompt("Resolution note (required)"); if (!resolution?.trim()) return; try { await issuesService.update(issue.id, { status: "resolved", resolutionNotes: resolution.trim() }); await fetchIssues(); toast.success("Issue resolved. The assigned Engineer can resume if no blockers remain."); } catch (err: any) { toast.error(errorMessage(err, "Issue could not be resolved.")); } }}>{t("issuesPage.resolve")}</Button>}
+                  {canResolve && ["open", "in_progress"].includes(issue.status) && <Button className="mt-2" size="sm" variant="outline" onClick={async () => { const resolution = window.prompt("Resolution note (required)"); if (!resolution?.trim()) return; try { await issuesService.update(issue.id, { status: "resolved", resolutionNotes: resolution.trim() }); await fetchIssues(); toast.success("Issue resolved. The assigned Engineer can resume if no blockers remain."); } catch (err: any) { toast.error(errorMessage(err, "Issue could not be resolved.")); } }}>{t("issuesPage.resolve")}</Button>}
                   {discussionIssueId === issue.id && <div className="mt-3"><ContextDiscussion projectId={issue.projectId} contextType="ISSUE" contextId={issue.id} title={t("issuesPage.issue_discussion")} /></div>}
                 </div>
               </div>

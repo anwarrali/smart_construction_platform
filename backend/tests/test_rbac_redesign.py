@@ -1,44 +1,33 @@
-"""The consulting-office RBAC redesign, proved rather than asserted.
+"""The consulting-office RBAC redesign, applied to a legacy database.
 
-The load-bearing test here is `test_backfill_changes_nobody_s_permissions`: it
-builds a world containing every account shape the old model could produce —
+A world containing every account shape the retired model could produce —
 administrator, project manager, internal engineer, main-contractor engineers,
 an external consultant, a client and two workers, with documents, field
-evidence and two site engineers of different disciplines — migrates it, and
-then compares the retired permission resolution against the live one for every
-(person, project) pair. Anything that differs must be a change declared in
-advance in `app.db.rbac_equivalence.INTENTIONAL_CHANGES`; anything else fails.
+evidence and two site engineers of different disciplines — is written the way
+that model wrote it (`users.role`, `engineer_affiliation`, `role_on_project`,
+no office role), then carried across by `app.db.rbac_backfill`.
 
-Everything runs inside one transaction against the real database and is rolled
-back, so the shared development database is never written to. That matters
-here more than usual: the backfill's normal entry point commits.
+It runs on a private copy of a database migrated to the last revision that
+still has those columns (`legacy_db`, see `tests/isolated_databases.py`): the
+shared development database no longer has them at all.
 """
 
 from datetime import date
-from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.permission_catalogue import BY_CODE, role_defaults
-from app.core.role_templates import (
-    LEGACY_ROLE_MAP,
-    TEMPLATES,
-    BY_CODE_TEMPLATE,
-    template_for_legacy,
-)
-from app.db import rbac_backfill, rbac_equivalence
-from app.core.config import settings
-from app.db.database import SessionLocal
+from app.core.permission_catalogue import BY_CODE
+from app.core.role_templates import BY_CODE_TEMPLATE, TEMPLATES
+from app.db import rbac_backfill
 from app.models.company import Company
 from app.models.document import Document
 from app.models.enums import (
     DocumentType, EngineerDiscipline, FieldSubmissionStatus, ProjectStatus,
-    TaskStatus, UserRole, UserStatus,
+    TaskStatus, UserStatus,
 )
 from app.models.field_submission import FieldSubmission
-from app.models.permission import RolePermissionOverride, UserPermissionOverride
+from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.rbac import (
     Discipline, DocumentPartyShare, OrganizationMembership,
@@ -47,70 +36,45 @@ from app.models.rbac import (
 from app.models.task import Task
 from app.models.user import EngineerProfile, User
 from app.services import rbac
-from app.services.authorization import (
-    effective_permissions, has_permission, legacy_effective_permissions,
-)
+from app.services.authorization import effective_permissions, has_permission
+from tests.isolated_databases import insert_legacy_account, insert_legacy_member
 
 
 @pytest.fixture()
-def db():
-    session = SessionLocal()
-    try:
-        session.execute(text("SELECT 1"))
-    except SQLAlchemyError:  # pragma: no cover - only without a database
-        session.close()
-        pytest.skip("database is not reachable")
-    try:
-        yield session
-    finally:
-        session.rollback()
-        session.close()
+def db(legacy_db):
+    session, _url = legacy_db
+    return session
 
 
 @pytest.fixture()
 def legacy_world(db):
-    """Every account shape the retired model could produce, plus real data.
-
-    Deliberately built with the *old* columns only — `role`,
-    `engineer_affiliation`, `role_on_project`, `EngineerProfile.discipline` —
-    because that is what a database being migrated actually looks like. Nothing
-    here sets `org_role_id`; the backfill is what fills it in.
-    """
-    suffix = uuid4().hex[:10]
-
-    office = Company(name=f"Nasser Consulting Office {suffix}", is_active=True)
-    contractor = Company(name=f"Barakat Contracting {suffix}", is_active=True)
-    client_firm = Company(name=f"Al-Quds Development {suffix}", is_active=True)
+    """Every account shape the retired model could produce, plus real data."""
+    office = Company(name="Nasser Consulting Office", is_active=True)
+    contractor = Company(name="Barakat Contracting", is_active=True)
+    client_firm = Company(name="Al-Quds Development", is_active=True)
     db.add_all([office, contractor, client_firm])
     db.flush()
 
-    def user(name, role, affiliation=None, company=None, organization=None,
-             status=UserStatus.ACTIVE):
-        person = User(
-            full_name=name, email=f"{name.lower().replace(' ', '')}-{suffix}@test.local",
-            hashed_password="x", role=role, status=status,
-            engineer_affiliation=affiliation,
-            company_id=company.id if company else None,
+    def user(name, role, affiliation=None, company=None, organization=None):
+        user_id = insert_legacy_account(
+            db, email=f"{name.lower()}@legacy.test", full_name=name, role=role,
+            affiliation=affiliation, company_id=company.id if company else None,
             organization=organization,
         )
-        db.add(person)
-        return person
+        return db.get(User, user_id)
 
-    admin = user("Admin", UserRole.ADMIN, company=office)
-    manager = user("Manager", UserRole.PROJECT_MANAGER, company=office)
-    architect = user("Architect", UserRole.ENGINEER, "internal_engineer", office)
-    site_civil = user("SiteCivil", UserRole.ENGINEER, "main_contractor", contractor,
+    admin = user("Admin", "ADMIN", company=office)
+    manager = user("Manager", "PROJECT_MANAGER", company=office)
+    architect = user("Architect", "ENGINEER", "internal_engineer", office)
+    site_civil = user("SiteCivil", "ENGINEER", "main_contractor", contractor,
                       organization="Barakat Contracting")
-    site_elec = user("SiteElec", UserRole.ENGINEER, "main_contractor", contractor,
+    site_elec = user("SiteElec", "ENGINEER", "main_contractor", contractor,
                      organization="Barakat Contracting")
-    reviewer = user("Reviewer", UserRole.ENGINEER, "external_consultant", office,
+    reviewer = user("Reviewer", "ENGINEER", "external_consultant", office,
                     organization="Nasser Consulting Office")
-    client = user("Client", UserRole.OWNER, company=client_firm)
-    worker_a = user("WorkerA", UserRole.WORKER, company=contractor,
-                    organization="Barakat Contracting")
-    worker_b = user("WorkerB", UserRole.WORKER, company=contractor,
-                    organization="Barakat Contracting")
-    db.flush()
+    client = user("Client", "OWNER", company=client_firm)
+    worker_a = user("WorkerA", "WORKER", company=contractor, organization="Barakat Contracting")
+    worker_b = user("WorkerB", "WORKER", company=contractor, organization="Barakat Contracting")
 
     db.add_all([
         EngineerProfile(user_id=architect.id, discipline=EngineerDiscipline.ARCHITECTURAL),
@@ -120,7 +84,7 @@ def legacy_world(db):
     ])
 
     project = Project(
-        name=f"Ramallah Tower {suffix}", status=ProjectStatus.ACTIVE,
+        name="Ramallah Tower", status=ProjectStatus.ACTIVE,
         company_id=office.id, owner_id=client.id, project_manager_id=manager.id,
         start_date=date(2026, 1, 5),
     )
@@ -128,30 +92,26 @@ def legacy_world(db):
     db.flush()
 
     def member(person, role_on_project, *, site_engineer=False, discipline=None):
-        row = ProjectMember(
-            project_id=project.id, user_id=person.id, role_on_project=role_on_project,
-            is_active=True, is_site_engineer=site_engineer, project_discipline=discipline,
+        member_id = insert_legacy_member(
+            db, project_id=project.id, user_id=person.id, role_on_project=role_on_project,
+            site_engineer=site_engineer, discipline=discipline,
         )
-        db.add(row)
-        return row
+        return db.get(ProjectMember, member_id)
 
-    member(manager, UserRole.PROJECT_MANAGER)
-    member(architect, UserRole.ENGINEER, discipline="architectural")
-    # Two site engineers, different disciplines, same project — the shape the
-    # brief calls out and that the old model had no test for.
-    civil_member = member(site_civil, UserRole.ENGINEER, site_engineer=True, discipline="civil")
-    elec_member = member(site_elec, UserRole.ENGINEER, site_engineer=True, discipline="electrical")
-    # An external consultant is stored as ENGINEER globally and CONSULTANT on
-    # the project. This divergence is what makes the project-role mapping in
-    # the backfill delicate.
-    member(reviewer, UserRole.CONSULTANT, discipline="mechanical")
-    member(client, UserRole.OWNER)
-    member(worker_a, UserRole.WORKER, discipline="civil")
-    member(worker_b, UserRole.WORKER, discipline="electrical")
-    db.flush()
+    member(manager, "PROJECT_MANAGER")
+    member(architect, "ENGINEER", discipline="architectural")
+    # Two site engineers, different disciplines, same project.
+    civil_member = member(site_civil, "ENGINEER", site_engineer=True, discipline="civil")
+    elec_member = member(site_elec, "ENGINEER", site_engineer=True, discipline="electrical")
+    # An external consultant was stored as ENGINEER globally and CONSULTANT on
+    # the project; the backfill derives the project role from the person.
+    member(reviewer, "CONSULTANT", discipline="mechanical")
+    member(client, "OWNER")
+    member(worker_a, "WORKER", discipline="civil")
+    member(worker_b, "WORKER", discipline="electrical")
 
     task = Task(
-        project_id=project.id, name="Column pour, zone B", task_code=f"T-{suffix[:6]}",
+        project_id=project.id, name="Column pour, zone B", task_code="T-LEGACY",
         status=TaskStatus.IN_PROGRESS, created_by_id=manager.id, discipline="civil",
     )
     db.add(task)
@@ -159,10 +119,10 @@ def legacy_world(db):
 
     documents = [
         Document(project_id=project.id, uploaded_by_id=architect.id,
-                 title=f"Structural drawings {suffix}", document_type=DocumentType.DRAWING,
+                 title="Structural drawings", document_type=DocumentType.DRAWING,
                  file_url="/x/a.pdf"),
         Document(project_id=project.id, uploaded_by_id=manager.id,
-                 title=f"Main contract {suffix}", document_type=DocumentType.CONTRACT,
+                 title="Main contract", document_type=DocumentType.CONTRACT,
                  file_url="/x/b.pdf"),
     ]
     db.add_all(documents)
@@ -173,10 +133,10 @@ def legacy_world(db):
         description="Formwork complete", status=FieldSubmissionStatus.SUBMITTED,
     )
     db.add(evidence)
-    db.flush()
+    db.commit()
 
     return {
-        "suffix": suffix, "office": office, "contractor": contractor,
+        "office": office, "contractor": contractor,
         "client_firm": client_firm, "project": project, "task": task,
         "admin": admin, "manager": manager, "architect": architect,
         "site_civil": site_civil, "site_elec": site_elec, "reviewer": reviewer,
@@ -186,115 +146,58 @@ def legacy_world(db):
     }
 
 
+PEOPLE = ("admin", "manager", "architect", "site_civil", "site_elec", "reviewer",
+          "client", "worker_a", "worker_b")
+
+
 @pytest.fixture()
 def migrated(db, legacy_world):
-    """`legacy_world` after the backfill, still inside the test transaction."""
-    report = rbac_backfill.run(db, commit=False)
-    db.flush()
-    for person in (
-        legacy_world["admin"], legacy_world["manager"], legacy_world["architect"],
-        legacy_world["site_civil"], legacy_world["site_elec"], legacy_world["reviewer"],
-        legacy_world["client"], legacy_world["worker_a"], legacy_world["worker_b"],
-    ):
-        db.refresh(person)
+    """`legacy_world` after the backfill."""
+    report = rbac_backfill.run(db)
+    for key in PEOPLE:
+        db.refresh(legacy_world[key])
     return {**legacy_world, "report": report}
 
 
 # ---------------------------------------------------------------------------
-# The gate
+# Where everybody lands
 # ---------------------------------------------------------------------------
 
-def test_backfill_changes_nobody_s_permissions(db, migrated):
-    """The whole redesign in one assertion.
-
-    Every account, every project it can reach, old resolution against new. A
-    difference is allowed only when it matches a change declared in
-    `INTENTIONAL_CHANGES`; anything else is a silent widening or a silent
-    revocation, which is the failure mode this redesign most needed to avoid.
-    """
-    report = rbac_equivalence.run(db)
-
-    assert report.unexpected == [], (
-        "The configurable role model resolves differently from the retired one "
-        "for accounts where no change was declared:\n"
-        + "\n".join(item.render() for item in report.unexpected)
-    )
-    assert report.pairs_checked > 0
+#: The office role each legacy account must end up on.
+LANDS_ON = {
+    "admin": "org_admin",
+    "manager": "project_manager",
+    "architect": "engineer",
+    "site_civil": "contractor_representative",
+    "site_elec": "contractor_representative",
+    "reviewer": "senior_engineer",
+    "client": "client_representative",
+    "worker_a": "archived_field_staff",
+    "worker_b": "archived_field_staff",
+}
 
 
-def test_the_only_expected_difference_is_worker_removal(db, migrated):
-    """Declared changes are declared, not discovered after the fact."""
-    report = rbac_equivalence.run(db)
-    reasons = {item.explained_by for item in report.expected}
-    assert reasons == {
-        "worker_archived — Worker accounts hold no permissions",
-        "consultant_document_scope_explicit — Consultant reviewers no longer "
-        "carry project.view_all_disciplines",
-        "external_party_office_authority — External participants hold none of "
-        "the office's own authority",
-    }
-
-    # And the change is real, not a category nobody landed in: both worker
-    # accounts must actually appear, having lost the permissions the retired
-    # WORKER role held.
-    worker_emails = {migrated["worker_a"].email, migrated["worker_b"].email}
-    seen = {item.user_email for item in report.expected}
-    assert worker_emails <= seen
-    for item in report.expected:
-        if item.user_email in worker_emails:
-            assert item.gained == set()
-            assert "task.view" in item.lost
+def test_every_account_lands_on_its_office_role(db, migrated):
+    landed = {key: db.get(Role, migrated[key].org_role_id).code for key in PEOPLE}
+    assert landed == LANDS_ON
 
 
-def test_the_equivalence_gate_fails_when_a_role_is_widened(db, migrated):
-    """A negative control.
-
-    A gate that has never been seen to fail is not evidence of anything. This
-    grants a role a permission the retired model did not give it and asserts
-    the comparison reports it as *unexpected* — so a passing run elsewhere in
-    this file means the check looked and found nothing, rather than not
-    looking.
-    """
-    architect = migrated["architect"]
-    assert rbac_equivalence.run(db).unexpected == []
-
-    db.add(RolePermission(
-        role_id=architect.org_role_id, permission_code="platform.create_project",
-        allowed=True,
-    ))
-    db.flush()
-
-    report = rbac_equivalence.run(db)
-    offending = [
-        item for item in report.unexpected if item.user_email == architect.email
-    ]
-    assert offending, "the gate did not notice a widened role"
-    assert "platform.create_project" in offending[0].gained
-    assert report.ok is False
+def test_office_staff_hold_exactly_their_template(db, migrated):
+    """What an internal account may do is its template, nothing carried over
+    from the retired role and nothing lost on the way."""
+    for key in ("admin", "manager", "architect", "reviewer"):
+        person = migrated[key]
+        template = BY_CODE_TEMPLATE[LANDS_ON[key]]
+        assert effective_permissions(db, person) == template.permissions(), key
 
 
-def test_every_migration_target_template_matches_its_legacy_defaults(db, migrated):
-    """A template people are migrated onto grants exactly what they held.
-
-    This is the property that makes the gate above come out empty, checked
-    directly so a future edit to a template is caught at the source rather than
-    as a mysterious equivalence failure.
-    """
-    #: The one template that deliberately differs, and by exactly what. Listed
-    #: here rather than allowed generically, so a second divergence introduced
-    #: later fails this test instead of slipping through.
-    declared = {"senior_engineer": {"project.view_all_disciplines"}}
-
-    for (legacy_role, _affiliation), code in LEGACY_ROLE_MAP.items():
-        template = BY_CODE_TEMPLATE[code]
-        if template.inherits is None:
-            # The archived field-staff template. Empty on purpose.
-            assert template.permissions() == set()
-            continue
-        difference = role_defaults(legacy_role) ^ template.permissions()
-        assert difference == declared.get(code, set()), (
-            f"{code} would change what a {legacy_role.value} can do: {difference}"
-        )
+def test_external_accounts_hold_none_of_the_office_authority(db, migrated):
+    project_id = migrated["project"].id
+    for key in ("site_civil", "site_elec", "client"):
+        granted = effective_permissions(db, migrated[key], project_id)
+        assert granted <= BY_CODE_TEMPLATE[LANDS_ON[key]].permissions(), key
+        assert not granted & rbac.NON_PROJECT_SCOPED, key
+        assert not {code for code in granted if BY_CODE[code].office_only}, key
 
 
 # ---------------------------------------------------------------------------
@@ -434,7 +337,7 @@ def test_a_new_role_grants_a_permission_with_no_code_change(db, migrated):
     """
     office = migrated["office"]
     resident = Role(
-        organization_id=office.id, code=f"resident_engineer_{migrated['suffix']}",
+        organization_id=office.id, code="resident_engineer",
         name_en="Resident Engineer", name_ar="مهندس مقيم", scope="BOTH",
         is_internal_only=True,
     )
@@ -484,7 +387,7 @@ def test_the_office_administrator_cannot_be_configured_out_of_administering(db, 
 
 
 def test_a_project_role_can_differ_from_the_office_role(db, migrated):
-    """The thing `role_on_project == user.role` used to forbid."""
+    """The thing the retired model forbade: a project role had to equal the global one."""
     architect = migrated["architect"]
     pm_role = rbac.role_by_code(db, "project_manager")
     member = db.query(ProjectMember).filter(
@@ -500,22 +403,27 @@ def test_a_project_role_can_differ_from_the_office_role(db, migrated):
     assert "task.create" not in effective_permissions(db, architect, None)
 
 
-def test_seed_roles_folds_configured_role_overrides(db, legacy_world):
-    """An office that had customised permissions keeps its customisation."""
-    db.add(RolePermissionOverride(
-        role=UserRole.ENGINEER, permission_code="schedule.view", allowed=True,
-        reason="this office lets engineers see the programme",
-    ))
-    db.flush()
+def test_the_backfill_folds_retired_role_overrides_into_the_roles(db, legacy_world):
+    """An office that had customised the retired roles keeps its customisation."""
+    granted, denied = "schedule.edit", "issue.create"
+    assert granted not in BY_CODE_TEMPLATE["engineer"].permissions()
+    assert denied in BY_CODE_TEMPLATE["engineer"].permissions()
+    for code, allowed in ((granted, True), (denied, False)):
+        db.execute(text(
+            "INSERT INTO role_permission_overrides (id, role, permission_code, allowed) "
+            "VALUES (gen_random_uuid(), CAST('ENGINEER' AS user_role), :code, :allowed)"
+        ), {"code": code, "allowed": allowed})
+    db.commit()
 
-    roles = rbac.seed_roles(
-        db,
-        organization_id=legacy_world["office"].id,
-        role_overrides=rbac_backfill._legacy_role_overrides(db),
-    )
-    assert "schedule.view" in rbac.role_permission_codes(db, roles["engineer"].id)
-    # And a role that does not inherit from ENGINEER is unaffected.
-    assert "schedule.view" not in rbac.role_permission_codes(db, roles["office_staff"].id)
+    rbac_backfill.run(db)
+
+    engineer = rbac.role_by_code(db, "engineer")
+    held = rbac.role_permission_codes(db, engineer.id)
+    assert granted in held
+    assert denied not in held
+    # A role that did not inherit from ENGINEER is unaffected.
+    office_staff = rbac.role_by_code(db, "office_staff")
+    assert granted not in rbac.role_permission_codes(db, office_staff.id)
 
 
 # ---------------------------------------------------------------------------
@@ -525,7 +433,7 @@ def test_seed_roles_folds_configured_role_overrides(db, legacy_world):
 def test_one_person_can_cover_two_disciplines(db, migrated):
     """The structure `EngineerProfile.discipline` could not express."""
     person = migrated["architect"]
-    mechanical = rbac.role_by_code and db.query(Discipline).filter(
+    mechanical = db.query(Discipline).filter(
         Discipline.code == "mechanical", Discipline.organization_id.is_(None)
     ).first()
     electrical = db.query(Discipline).filter(
@@ -609,8 +517,8 @@ def test_the_backfill_is_idempotent(db, migrated):
         "user_disciplines": db.query(UserDiscipline).count(),
         "shares": db.query(DocumentPartyShare).count(),
     }
-    rbac_backfill.run(db, commit=False)
-    db.flush()
+    report = rbac_backfill.run(db)
+    assert report.users_mapped == 0
     after = {
         "roles": db.query(Role).count(),
         "parties": db.query(ProjectParty).count(),
@@ -623,10 +531,7 @@ def test_the_backfill_is_idempotent(db, migrated):
 
 def test_the_backfill_maps_every_account(db, migrated):
     assert migrated["report"].unmapped_users == []
-    unmigrated = db.query(User).filter(
-        User.org_role_id.is_(None), User.status == UserStatus.ACTIVE,
-    ).count()
-    assert unmigrated == 0
+    assert db.query(User).filter(User.org_role_id.is_(None)).count() == 0
 
 
 def test_the_office_is_the_project_owner_organization(db, migrated):
@@ -650,12 +555,6 @@ def test_a_contractor_organization_is_a_label_not_a_parent(db, migrated):
     assert not hasattr(party, "organization_id")
 
 
-# `test_unmigrated_accounts_keep_working` stood here and is gone. It asserted
-# that an account with no `org_role_id` resolved through the retired enum —
-# which was the fallback itself, and which the contract step removed. There is
-# no such account any more: `resolved_permissions` raises `UnmigratedUser`, and
-# `test_an_account_without_a_role_is_refused` below pins that instead.
-
 # ---------------------------------------------------------------------------
 # Catalogue integrity
 # ---------------------------------------------------------------------------
@@ -676,24 +575,13 @@ def test_no_template_grants_a_non_project_scoped_permission_to_an_external_role(
         )
 
 
-def test_an_account_without_a_role_is_refused(db, legacy_world):
-    """The contract, stated as a test.
+def test_an_account_without_a_role_is_refused():
+    """Resolution never guesses: no office role, no permissions — an error."""
+    from uuid import uuid4
 
-    Every account holds a database role. `user_role_backstop` fills the column
-    for anything written without one, so producing an unmigrated account takes
-    a deliberate `UPDATE` — and resolving one raises rather than falling back
-    to the retired enum. The fallback this replaces is what made a partial
-    backfill survivable; it is not needed once nothing can create the state it
-    tolerated, and keeping it would leave two answers to one question.
-    """
     from app.services.rbac import UnmigratedUser
 
-    architect = legacy_world["architect"]
-    # The backstop gave it a role on the way in; take it away to construct the
-    # state the fallback used to serve.
-    assert architect.org_role_id is not None, "the backstop should have filled this"
-    architect.org_role_id = None
-    db.flush()
-
+    roleless = User(id=uuid4(), full_name="Roleless", email="roleless@legacy.test",
+                    hashed_password="x", status=UserStatus.ACTIVE, is_internal=True)
     with pytest.raises(UnmigratedUser):
-        effective_permissions(db, architect)
+        effective_permissions(None, roleless)

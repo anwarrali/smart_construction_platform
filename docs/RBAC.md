@@ -1,7 +1,7 @@
 # Roles, permissions and project parties
 
-How the platform decides what somebody may do, after the consulting-office
-redesign. The proposal this implements is
+How the platform decides what somebody may do. The configurable model is the
+only one: the retired role enum and its columns are gone from the schema. The proposal this implements is
 [CONSULTING_OFFICE_REDESIGN.md](CONSULTING_OFFICE_REDESIGN.md); this document
 describes what is actually in the code.
 
@@ -46,9 +46,8 @@ none of them keeps a role table any more.
 effective_permissions(user, project_id):
     1. office role's permissions  ∪  project role's permissions   (rbac.resolved_permissions)
          − every office_only permission, if the person is external   ← role default
-    2. RolePermissionOverride       (pre-backfill fallback path only)
-    3. UserPermissionOverride, global
-    4. UserPermissionOverride, this project
+    2. UserPermissionOverride, global
+    3. UserPermissionOverride, this project
     ─────────────────────────────────────────────────────────────
     ∩ {} if the account is not ACTIVE
     − every non-project-scoped permission, if the person is external
@@ -312,211 +311,159 @@ The decision to notify *at all* is unchanged — `decide_notification` still
 weighs confidence, severity and certainty, and `dedupe_key` still means one
 notification per finding, ever.
 
-## Legacy dependency audit — final
+## One source of authority
 
-The redesign began with 78 legacy `user.role` comparisons. **Six remain, and
-none of them decides anything.**
+```
+User ──org_role_id──▶ Role ──▶ RolePermission ──▶ effective_permissions
+```
 
-| What is left | Count | Why |
-| --- | --- | --- |
-| `authorization.legacy_effective_permissions` | 1 | The retired resolution, preserved verbatim. It is the equivalence gate's other half — the only evidence the migration was safe. It is never called by the application. |
-| Writes to `users.role` / `engineer_affiliation` | 3 | Both columns are still `NOT NULL`, so provisioning still fills them. Derived from the office role (`Role.legacy_role`), never read back to decide anything. |
-| Comments | 2 | Prose recording what was removed and why. |
+That is the whole model. `users.org_role_id` is `NOT NULL`, so every account
+holds an office role, and nothing else about an account — no enum, no
+affiliation string, no project-role label, no claim in a token — is an input
+to any decision.
 
-Everything else went. In particular:
+**Retired-model dependencies in runtime code: 0.** Counted over code tokens in
+`backend/app` (comments and docstrings excluded): no read of `users.role`,
+`engineer_affiliation`, `role_on_project`, `legacy_role`,
+`legacy_affiliation`, `RolePermissionOverride` or `UserRole`. Those names
+survive in exactly one place, the offline legacy migration tool
+(`app.db.legacy_rbac` and `app.db.rbac_backfill`), which nothing at runtime
+imports — see *Upgrading a legacy database*.
 
-- **Project scope** no longer has a `PROJECT_MANAGER` early return.
-  `user_has_project_access`, `accessible_project_ids` and `manageable_project`
-  resolve one union — owner, assigned manager, or active member — then the
-  permission. Declared as `project_manager_membership_honoured`.
-- **The client** is a `ProjectParty(kind=CLIENT)`, asked through
-  `rbac.is_client_participant`, not `UserRole.OWNER`.
-- **Who may be staffed** is `rbac.staffable_filter` / `is_staffable`: active,
-  and not parked on a role that exists only to hold history. One predicate,
-  used by the candidate list, the assignment endpoint and the user search, so
-  they cannot disagree.
-- **The retired helpers are gone**: `require_roles`,
-  `is_main_contractor_engineer`, `is_consultant_engineer` and their two
-  `require_*` wrappers had no callers.
-- **Two account-creation endpoints are gone**: `POST /users/engineers` and
-  `POST /users/owners` each hardcoded one identity and neither client called
-  them. `POST /users` takes `orgRoleId` and `disciplineIds`.
+What replaced each retired decision, so nobody has to rediscover it:
 
-## The contract step
-
-**Done.** `RBAC_REQUIRE_DB_ROLES` has been retired, not merely enabled.
-
-It gated the pre-backfill fallback in `rbac.resolved_permissions`. That fallback
-is removed, and with it the three bridges that depended on the state it
-tolerated: `work_scope.sees_all_disciplines`' affiliation branch,
-`document_access._pre_migration_scope`, and the unmigrated-admin clause in
-`effective_permissions`. An account without a role now raises `UnmigratedUser`.
-
-Nothing can create such an account. `create_provisioned_user` assigns a role on
-both paths, and `app.db.user_role_backstop` — now unconditional — fills the
-column for any `User` written anywhere else, moving `is_internal` with it. A
-setting whose only remaining effect would be to break the system is worse than
-no setting, so it is gone rather than defaulted to true.
-
-`legacy_effective_permissions` and `RolePermissionOverride` survive as the
-equivalence gate's evidence. `PUT /access-control/roles` writes *through* to the
-configured roles that provision the legacy value being edited, so the older
-Access Control screen still changes what it says it changes; without that it
-would have returned 200 and done nothing.
-
-## Migration state
-
-Expand → backfill → switch → contract. Currently **switched**; the contract step
-has not run.
-
-- `app.db.rbac_backfill` — idempotent, `--dry-run` supported. Maps every account
-  onto a role, seeds disciplines, creates parties from existing memberships, and
-  writes explicit document shares reproducing the access contractors already had.
-- `app.db.rbac_equivalence` — compares the retired resolution against the live
-  one for every (user, project) pair. Differences are allowed only when they
-  match a declared change in `INTENTIONAL_CHANGES`.
-
-A user with no `org_role_id` resolves through the catalogue defaults for their
-legacy `User.role`. That fallback is keyed off the column rather than a feature
-flag, so a half-finished backfill locks nobody out.
-`RBAC_REQUIRE_DB_ROLES=true` turns such an account into a hard error instead.
-
-### Is `RBAC_REQUIRE_DB_ROLES` safe to enable?
-
-**Yes.** The suite passes with it on, the equivalence gate passes with it on,
-and nothing can create an account it would reject.
-
-The flag gates one thing: whether an account **without** `org_role_id` resolves
-through the fallback or raises. It has nothing to do with the legacy role
-comparisons listed below — those read `users.role` directly and would keep
-working with the flag either way. Conflating the two is the easiest mistake to
-make here.
-
-| Condition | State |
+| Was | Is |
 | --- | --- |
-| No existing active account lacks `org_role_id` | **Yes** — `active_users_missing_roles` reports 0, asserted by a test |
-| No API creation path can produce one | **Yes** — `create_provisioned_user` assigns a role on both paths |
-| No *other* code path can produce one | **Yes** — `app.db.user_role_backstop`, a `before_flush` listener, fills the column and `is_internal` for any account that arrives without them |
-| Suite passes with the flag on | **Yes** — 1820 passed, 17 skipped, 0 failed |
-| Equivalence gate passes with the flag on | **Yes** — 0 unexpected differences |
+| "is the Project Manager" (`role == PROJECT_MANAGER`) on create/update | `authorization.can_run_project` — staffable and holds `project.manage_members` |
+| "is the owner" (`role == OWNER`) | `authorization.can_be_project_client` — active, external, holds `client_portal.view`; on a project, `rbac.is_client_participant` (a CLIENT party) |
+| "is an administrator" (`role == ADMIN`) | the permission the endpoint needs; for "who administers the office", `rbac.holds_office_admin_role` (the undeletable role) |
+| who may hold a task (`role in {ENGINEER, CONSULTANT, PM}`) | `task_assignment.assignee_refusal` — active member holding `task.update_progress` |
+| who may review (`external_consultant`) | `task_assignment.reviewer_refusal` — active office member holding `task.review` |
+| broadcasts and group conversations (ADMIN/PM) | `message.broadcast` (office-only) |
+| photo categories ("PM or Admin") | `project.manage_members` on the project |
+| AI-proposed actions by role | one permission per action (`app.ai.action_rules.ACTION_PERMISSIONS`) |
+| the tenant office (an ADMIN's company) | the company of the undeletable role's holder |
+| labels shown to people and models | `rbac.role_code` / `rbac.member_role_code` / `rbac.role_label_for` |
 
-The 17 skipped tests are the ones that describe the fallback itself: twelve
-configure a role through `RolePermissionOverride`, which `effective_permissions`
-consults only while an account has no `org_role_id`, and one asserts that an
-unmigrated account keeps working. They are skipped rather than deleted because
-the fallback is still load-bearing production code until the contract migration
-removes it, and until then it needs a test. The behaviour they cover —
-an administrator can change what a role may do — is covered on the *new*
-mechanism by `test_organization_api.py` and by `test_7b` in the security
-regression suite.
+## Roles are data
 
-Getting here surfaced a live bug worth recording. On the migrated path,
-`admin_locked` codes were restored by `resolved_permissions` **before** the
-per-person override layer ran, so a `UserPermissionOverride` could strip
-`platform.manage_users` off the office administrator — the exact lockout the
-lock exists to prevent. The legacy path re-applied them after overrides, so the
-asymmetry was invisible until every account had a role. Both paths now restore
-them last.
+The 18 seeded templates are defined in `app.core.role_templates` with
+**explicit** permission sets — named bases (`OFFICE_ADMINISTRATION`,
+`PROJECT_LEADERSHIP`, `ENGINEERING`, `CLIENT`) plus per-template additions and
+withholdings — never derived from a retired role.
+`tests/test_role_templates.py` pins every template's exact grant set.
 
-The flag is left **off** in the committed configuration. Turning it on is an
-operator decision about a specific database: it converts a silent fallback into
-a loud failure, which is worth having, but it should be switched deliberately
-rather than shipped flipped.
+`rbac.seed_roles` is idempotent: it creates a missing template and adds a
+template's missing permissions, and never removes a permission or touches an
+office's own role. An office customizes by editing a role on the Office roles
+page (`PUT /organization/roles/{id}/permissions`); editing a shared template
+copies it into the office first. The retired role-by-permission matrix
+(`/access-control/roles`) and its write-through table are gone.
 
-### Contract-step preconditions, as of this pass
+## How accounts are written
 
-| Precondition | State |
+Every path assigns the role **before** the row is written, through
+`rbac.apply_org_role`, which sets `org_role_id` and `is_internal` together.
+Nothing fills the column during a flush, and the schema refuses a row without
+one.
+
+| Path | Role |
 | --- | --- |
-| Account creation off the legacy enum | **Yes** — `orgRoleId` + `disciplineIds`; the enum path survives only as a compatibility shim |
-| All frontend callers migrated | **Yes** — `RoleGuard` and both affiliation guards are deleted; every route is behind `PermissionGuard` |
-| Deep links preserved | **Yes** — retired prefixes redirect, asserted per prefix in `projectRoutes.test.ts` |
-| All tests migrated | **Yes** — no fixture treats Worker as an active role |
-| No API creation path leaves an unmigrated account | **Yes** — asserted by `test_the_legacy_creation_path_still_assigns_a_database_role` |
-| Suite passes with `RBAC_REQUIRE_DB_ROLES=true` | **Yes** — 1820 passed, 17 skipped (the fallback's own tests), 0 failed |
-| Project membership UI free of the legacy role select | **Yes** |
-| Worker no longer an active product role | **Yes** — no provisioning path, no business logic, no vocabulary, no fixture |
-| Authorization equivalence holds | **Yes** — 0 unexpected differences |
-| **All production callers of `users.role` migrated** | **No — 78 remain.** This is the one outstanding blocker. |
+| `POST /users` → `create_provisioned_user` | the requested `orgRoleId` (required); refuses an archived role and refuses no role |
+| `bootstrap_admin` | `org_admin`, through `rbac.apply_template_role`; refuses rather than write an administrator without it |
+| `seed_demo` | the template named by each demo account's `role_code` |
+| `rbac_backfill` (legacy databases only) | the template `legacy_rbac.template_for_legacy` maps the retired pair to |
 
-**Still to do (contract step):** drop `users.role`,
-`project_members.role_on_project`, `role_permission_overrides.role`,
-`users.engineer_affiliation`, `engineer_profiles.discipline`, then the
-`user_role` and `engineer_discipline` PostgreSQL types. `ALTER TYPE … DROP VALUE`
-does not exist, so the `WORKER` value can only go when the whole type does —
-which is why all three tables must be migrated in one window.
+## A fresh deployment
 
----
+1. `alembic upgrade head` — **schema only**. No migration seeds roles; a
+   migration must not import application constants.
+2. `python -m app.db.bootstrap_admin` — takes a PostgreSQL advisory lock
+   (`BOOTSTRAP_LOCK_KEY`), so concurrent replicas serialize; seeds disciplines
+   and role templates through `rbac.seed_fresh_database` (only on a database
+   with no roles and no accounts); creates the first administrator on
+   `org_admin`. Re-running verifies and changes nothing.
+3. The demo seed, if enabled, after that.
 
-## Legacy role checks still in production code
+No manual RBAC step exists. `tests/test_fresh_deployment_rbac.py` runs this
+against a database migrated from nothing on the test server.
 
-Seventy-two `user.role == UserRole.X` comparisons remain outside the migration
-machinery, down from seventy-eight. None is reached through `has_permission`;
-they read the retired column directly, which is why the contract migration
-cannot drop `users.role` yet. They fall into five shapes, and the shape decides
-what each needs:
+## Upgrading a legacy database
 
-| Cat. | Shape | Count | What it needs |
-| --- | --- | --- | --- |
-| **A** | `role == ADMIN`, used as a sees-everything bypass | 15 | Mostly duplicates `platform.view_all_projects`. Mechanical, one endpoint at a time. |
-| **B** | `role == PROJECT_MANAGER and project.project_manager_id == user.id` | 10 | An **ownership** check wearing a role check. Six were removed this pass: both write paths validate `project_manager_id` to be an active PROJECT_MANAGER, so the role half was always implied by the id comparison. The rest are negative forms (`... != user.id`) where dropping it would refuse everybody, and they need reading individually. |
-| **C** | `role == OWNER`, narrowing what the client sees | 9 | Should read the CLIENT party (`membership_context(...).party.kind`). `document_access` already does, keeping the role check only as the pre-backfill bridge. |
-| **D** | `role == ENGINEER`, narrowing to own work | 23 | Most are shadowed by `work_scope`; the rest need a per-endpoint decision about which permission expresses the narrowing. |
-| **F** | `role == PROJECT_MANAGER` without an ownership test | 13 | Each is a distinct product question and is not safe to answer mechanically. |
-| **E** | `role == CONSULTANT` | 1 | Unreachable on `User.role`. One was removed as dead code; the survivor is inside a set membership where removing it changes nothing. |
+A database whose accounts still carry the retired `users.role` /
+`engineer_affiliation` columns is carried across once, offline:
 
-The one in `authorization.manageable_project` deserves naming separately. It
-reads "a project manager may only act on the project they are assigned to", and
-translating it needs a decision rather than a refactor: under configurable
-roles, *who* is confined to their own projects? Everybody without
-`platform.view_all_projects` is the obvious answer and would narrow an engineer
-who has been granted `project.manage_members` — which may be right, but it is a
-behaviour change in the most central helper in the system and should be made
-deliberately.
+```
+alembic upgrade c84d6e2f1a37        # the last revision with the legacy columns
+python -m app.db.rbac_backfill      # --dry-run to preview
+alembic upgrade head                # e1a9c3d5f720 removes the legacy schema
+```
 
-**None of these blocks `RBAC_REQUIRE_DB_ROLES`** — see above. They block the
-*contract* step only.
+- The contract migration **refuses** while any account lacks an office role:
+  on such a database the retired columns are the only record of what those
+  people may do.
+- The backfill is one transaction. An `engineer_affiliation` it does not
+  recognise raises `UnknownAffiliation` and **rolls the whole run back** —
+  guessing high would hand an outsider internal access, guessing low would
+  strip a legitimate account. Fix the row and re-run.
+- It is idempotent, folds the retired role-keyed overrides into the seeded
+  roles, creates the CLIENT and contractor parties, and writes the document
+  shares that preserve the access contractors already had.
+- On a fresh or already-contracted database it changes nothing and says so.
+
+`tests/test_fresh_deployment_rbac.py` and `tests/test_rbac_redesign.py` run
+this path end to end on throwaway databases at the pre-contract revision.
+
+### What the contract migration removed
+
+`e1a9c3d5f720` dropped `users.role`, `users.engineer_affiliation`,
+`project_members.role_on_project`, `roles.legacy_role`,
+`roles.legacy_affiliation`, the `role_permission_overrides` table and the
+`user_role` PostgreSQL type, and made `users.org_role_id` `NOT NULL`. Its
+downgrade restores the schema (nullable) and fills `users.role` from each
+account's office role; affiliations, project-role labels and override rows
+are not reconstructed — restore those from a backup taken before upgrading.
+
+## The API
+
+- **Tokens carry identity only** (`sub`, `email`, expiry, type). No role
+  claim; login and refresh responses carry no role either. Authorization is
+  resolved from the database on every request.
+- `GET /access-control/me` — the caller's effective permissions; what the web
+  and mobile clients decide everything from.
+- `GET /access-control/permissions` — the catalogue, with `projectScoped`,
+  `adminLocked`, `officeOnly`, `neverExternal`.
+- `GET /users/eligible?purpose=project_owner|project_manager` and
+  `GET /projects/{id}/eligible-members?purpose=task_assignee|reviewer` — the
+  candidates the server itself would accept, by the same rule the assigning
+  endpoint applies, so a picker never offers somebody who is then refused.
+- `POST /users` requires `orgRoleId`; user and member payloads carry
+  `orgRole` / `projectRoleName`, never a role enum.
+
+## The clients
+
+The web app and the mobile app decide every access question with a catalogue
+code from `/access-control/me` (`useRole().hasCapability`, `Capabilities.has`)
+and show the office's own role name from `orgRole`. There is no static role
+table, no role mapper and no role-named landing logic: the dashboard is chosen
+by capability, and every route sits behind `PermissionGuard`.
+`frontend/src/utils/noRetiredRoles.test.ts` fails if any frontend source reads
+a retired role field again.
+
+## Out of scope, recorded
+
+- **`EngineerProfile.discipline`** still exists and is read by
+  `rbac.disciplines_for_user` as a fallback for an account with no
+  `user_disciplines` rows. It is a discipline, which narrows and never grants,
+  so it is not part of the authorization model this document closes.
+- **`/field-submissions/worker-dashboard`** is an alias kept for mobile builds
+  already installed; delete it once a build carrying `/my-field-work` has
+  shipped.
 
 ## Decisions, answered
 
-Three of the four questions that blocked this work have been answered by the
-confirmed product direction, and the answers are now in the code:
-
 | Question | Answer | Where it landed |
 | --- | --- | --- |
-| How is an account created? | Under the office's own configured role, with its own disciplines. | `UserCreateByAdmin.org_role_id` / `discipline_ids`, `Role.legacy_role`, the rewritten `UserForm` |
-| One workspace URL or four? | One, `/projects/:projectId/…`, with the retired prefixes kept as redirects. | `LegacyProjectPrefixRedirect`, the rewritten router, `projectRoutes.ts` |
-| Is a consultant-side account office staff? | **Yes.** The office *is* the consultant; review authority is a permission its own roles hold. | `add_project_member` site-responsibility rule, `LEGACY_ROLE_MAP` → `senior_engineer` |
-
-The fourth is a release question rather than a code one:
-
-### `/field-submissions/worker-dashboard`
-
-The mobile source calls `/my-field-work`; the alias exists for builds already
-on somebody's phone. It is the last Worker-shaped string reachable at runtime,
-and it is deliberately kept: removing it 404s an app somebody is still using.
-Delete it once a build carrying the rename has shipped — a one-line change.
-
-## What still has to be decided before the contract step
-
-### The 78 legacy role checks
-
-Categorised in the table above. Groups **B** (ownership checks wearing a role
-check) and **A** (admin bypasses that duplicate `platform.view_all_projects`)
-are mechanical and low-risk. Groups **D** and **F** are not: each is a distinct
-product question, and answering them in bulk would be inventing rules rather
-than migrating them. Examples of the questions in **F**:
-
-- *May a project manager add anyone the office employs to their project, or
-  only engineers?* (`add_project_member`, `remove_project_member`)
-- *May anyone other than the assigned manager submit a cost validation?*
-  (`cost_validations.py:66`)
-- *Should the field assistant answer for somebody who is neither an engineer
-  nor a manager — a surveyor, say?* (`field_assistant.py:44-58`)
-
-Each of those is a sentence of product intent, not a refactor.
-
-### `EngineerProfile.discipline`
-
-Still read by `disciplines_for_user` as the pre-backfill source. Its
-replacement (`user_disciplines`) is populated for every migrated account, so
-this is removable once the fallback goes — but the two must go together.
+| How is an account created? | Under the office's own configured role, with its own disciplines. | `UserCreateByAdmin.org_role_id` (required) / `discipline_ids`, the `UserForm` |
+| One workspace URL or four? | One, `/projects/:projectId/…`, with the retired prefixes kept as redirects. | `LegacyProjectPrefixRedirect`, `projectRoutes.ts` |
+| Is a consultant-side account office staff? | **Yes.** The office *is* the consultant; review authority is `task.review`, held by its own roles. | `reviewer_refusal`, `legacy_rbac.LEGACY_ROLE_MAP` → `senior_engineer` |

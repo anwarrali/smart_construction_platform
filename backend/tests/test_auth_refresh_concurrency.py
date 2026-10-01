@@ -27,8 +27,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.auth import refresh
 from app.core.security import create_refresh_token, hash_token
 from app.db.database import SessionLocal
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.user import User
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -61,10 +62,10 @@ def _purge(user_id, token_hashes):
 @pytest.fixture()
 def user(db):
     suffix = uuid.uuid4().hex[:10]
-    person = User(
+    person = with_office_role(db, User(
         full_name="Refresh Race User", email=f"refresh-race-{suffix}@example.com",
-        hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-    )
+        hashed_password="x", status=UserStatus.ACTIVE,
+    ), "engineer")
     db.add(person)
     db.commit()
     db.refresh(person)

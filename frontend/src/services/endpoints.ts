@@ -11,6 +11,7 @@ export const ENDPOINTS = {
   USERS: {
     BASE: "/users",
     BY_ID: (id: string) => `/users/${id}`,
+    ELIGIBLE: "/users/eligible",
     PROFILE: "/users/profile",
     UPDATE_PROFILE: "/users/profile",
     CHANGE_PASSWORD: "/users/change-password",
@@ -29,6 +30,7 @@ export const ENDPOINTS = {
       `/projects/${projectId}/members/${userId}/assignment`,
     AVAILABLE_ENGINEERS: (id: string) => `/projects/${id}/available-engineers`,
     AVAILABLE_TEAM_MEMBERS: (id: string) => `/projects/${id}/available-team-members`,
+    ELIGIBLE_MEMBERS: (id: string) => `/projects/${id}/eligible-members`,
     APPROVAL_WORKFLOW: (id: string) => `/projects/${id}/approval-workflow`,
     SUMMARY: "/projects/summary",
     OWNER_DASHBOARD: (id: string) => `/projects/${id}/owner-dashboard`,

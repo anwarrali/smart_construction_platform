@@ -29,6 +29,7 @@ from app.services.ifc_policy import can_ifc
 from app.services.knowledge_router import SourceAvailability, route_question
 from app.services.voice_analysis_authorization import authorized_voice_tasks
 from app.services.voice_query_service import answer_query, project_snapshot
+from app.services import rbac
 
 
 def _number(value):
@@ -121,11 +122,11 @@ def get_project_users(db, actor: User, project_id, args) -> dict:
             "id": str(person.id), "fullName": person.full_name,
             "role": (
                 membership.project_role_name
-                or (person.role.value if person.role else None)
+                or rbac.role_code(db, person)
             ),
             "roleOnProject": (
                 membership.project_role_name
-                or (membership.role_on_project.value if membership.role_on_project else None)
+                or rbac.member_role_code(db, membership)
             ),
             "party": membership.party_name,
             "isExternal": membership.is_external,

@@ -10,27 +10,13 @@ class PermissionOut(CamelModel):
     group: str
     label: str
     description: str
-    default_roles: list[str]
     project_scoped: bool
     admin_locked: bool
-
-
-class RolePermissionState(CamelModel):
-    role: str
-    permission_code: str
-    #: What the catalogue says before any configuration.
-    default_allowed: bool
-    #: What is actually in force after the administrator's changes.
-    effective_allowed: bool
-    overridden: bool
-
-
-class RolePermissionUpdate(CamelModel):
-    role: str = Field(max_length=40)
-    permission_code: str = Field(max_length=80)
-    #: null clears the override and returns the role to its default.
-    allowed: bool | None = None
-    reason: str | None = Field(default=None, max_length=500)
+    #: No external role inherits it; an administrator may still delegate it
+    #: to one named outside person on one project.
+    office_only: bool = False
+    #: Never held by an external participant, whatever is configured.
+    never_external: bool = False
 
 
 class UserPermissionUpdate(CamelModel):
@@ -53,7 +39,9 @@ class UserPermissionSummary(CamelModel):
     user_id: UUID
     full_name: str
     email: str
-    role: str
+    #: The person's office role.
+    role_code: str | None = None
+    role_name: str | None = None
     status: str
     project_id: UUID | None = None
     effective_permissions: list[str]

@@ -30,7 +30,6 @@ from app.core.deps import get_current_user
 from app.core.permission_catalogue import BY_CODE
 from app.db.database import get_db
 from app.models.company import Company
-from app.models.enums import UserRole
 from app.models.project import Project, ProjectMember
 from app.models.rbac import Discipline, ProjectParty, Role, RolePermission
 from app.models.user import User
@@ -117,7 +116,7 @@ def _validated_permissions(codes: list[str], *, is_internal_only: bool) -> set[s
         # including people added long after the decision was made. So the whole
         # `office_only` set is refused here, not just the locked subset.
         #
-        # Delegating one of the four delegable codes to an outside firm is
+        # Delegating one of the delegable office codes to an outside firm is
         # still possible — through Access Control, for one named person on one
         # named project, which is a decision somebody makes and signs. That is
         # the difference the two ceilings exist to draw.
@@ -154,10 +153,7 @@ def _editable_role(db: Session, role_id: uuid.UUID, organization_id: uuid.UUID) 
         organization_id=organization_id, code=role.code, name_en=role.name_en,
         name_ar=role.name_ar, description=role.description, scope=role.scope,
         is_internal_only=role.is_internal_only, is_system=role.is_system,
-        undeletable=role.undeletable, rank=role.rank,
-        # Carried over, not re-derived: an office copying "Site Engineer" must
-        # keep provisioning the same kind of account it did before the copy.
-        legacy_role=role.legacy_role, legacy_affiliation=role.legacy_affiliation,
+        undeletable=role.undeletable, rank=role.rank, is_archived=role.is_archived,
     )
     db.add(copy)
     db.flush()
@@ -204,12 +200,6 @@ def create_role(
         organization_id=office.id, code=data.code, name_en=data.name_en,
         name_ar=data.name_ar, description=data.description, scope=data.scope,
         is_internal_only=data.is_internal_only, rank=data.rank, is_system=False,
-        # A role the office invented has no legacy ancestor, so accounts
-        # created under it are written as ENGINEER — the least-privileged
-        # legacy value that still resolves. It is a placeholder for a column
-        # the contract migration deletes, and it grants nothing: what the role
-        # may actually do is `permissions` above.
-        legacy_role=UserRole.ENGINEER.name,
     )
     db.add(role)
     db.flush()

@@ -28,7 +28,7 @@ from app.db.database import SessionLocal
 from app.models.company import Company
 from app.models.document import Document
 from app.models.enums import (
-    DocumentType, ProjectStatus, TaskStatus, UserRole, UserStatus,
+    DocumentType, ProjectStatus, TaskStatus, UserStatus,
 )
 from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
@@ -76,11 +76,11 @@ def world(db):
     db.add(office)
     db.flush()
 
-    def user(name, role_code, *, legacy_role=UserRole.ENGINEER):
+    def user(name, role_code):
         role = roles[role_code]
         person = User(
             full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-            hashed_password="x", role=legacy_role, status=UserStatus.ACTIVE,
+            hashed_password="x", status=UserStatus.ACTIVE,
             company_id=office.id, org_role_id=role.id,
             is_internal=role.is_internal_only,
         )
@@ -88,11 +88,11 @@ def world(db):
         db.flush()
         return person
 
-    manager = user("Manager", "project_manager", legacy_role=UserRole.PROJECT_MANAGER)
+    manager = user("Manager", "project_manager")
     site_engineer = user("SiteEng", "site_engineer")
     contractor_person = user("ContractorRep", "contractor_representative")
     subcontractor_person = user("SubRep", "subcontractor_representative")
-    client_person = user("ClientRep", "client_representative", legacy_role=UserRole.OWNER)
+    client_person = user("ClientRep", "client_representative")
 
     project = Project(
         name=f"Isolation Project {suffix}", status=ProjectStatus.ACTIVE,
@@ -121,8 +121,7 @@ def world(db):
 
     def member(person, role_code, party=None, site=False):
         row = ProjectMember(
-            project_id=project.id, user_id=person.id,
-            role_on_project=person.role, project_role_id=roles[role_code].id,
+            project_id=project.id, user_id=person.id, project_role_id=roles[role_code].id,
             party_id=party.id if party else None, is_active=True,
             is_site_engineer=site,
         )

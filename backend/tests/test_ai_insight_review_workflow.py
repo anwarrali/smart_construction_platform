@@ -24,11 +24,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.ai_intelligence import intelligence_overview, list_insights, review_insight
 from app.db.database import SessionLocal
 from app.models.audit_log import AuditLog
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.ifc import AIInsight, IFCModelGroup, IFCModelVersion
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.ai_insight import AIInsightReview
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -53,12 +54,12 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                         hashed_password="x", status=UserStatus.ACTIVE), role)
 
-    admin = user("InsightAdmin", UserRole.ADMIN)
-    manager = user("InsightPm", UserRole.PROJECT_MANAGER)
-    owner = user("InsightOwner", UserRole.OWNER)
+    admin = user("InsightAdmin", "org_admin")
+    manager = user("InsightPm", "project_manager")
+    owner = user("InsightOwner", "client_representative")
     db.add_all([admin, manager, owner])
     db.flush()
 
@@ -66,8 +67,7 @@ def world(db):
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=manager.id,
-                         role_on_project=UserRole.PROJECT_MANAGER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=manager.id, is_active=True))
 
     group = IFCModelGroup(project_id=project.id, name=f"Group {suffix}", created_by_id=manager.id)
     db.add(group)
@@ -119,7 +119,6 @@ def _purge(db, project_ids, user_ids):
     for statement in (
         "DELETE FROM consultant_engineer_scopes WHERE project_id = ANY(:projects) OR consultant_user_id = ANY(:users)",
         "DELETE FROM user_permission_overrides WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
-        "DELETE FROM role_permission_overrides WHERE updated_by_id = ANY(:users)",
         "DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ANY(:projects))",
         "DELETE FROM tasks WHERE project_id = ANY(:projects) OR created_by_id = ANY(:users)",
         "DELETE FROM ai_insights WHERE project_id = ANY(:projects)",

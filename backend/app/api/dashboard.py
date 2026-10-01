@@ -17,7 +17,7 @@ from app.models.notification import Notification
 from app.models.task import TaskReview
 from app.core.deps import get_current_user, user_has_project_access
 from app.services.authorization import can_view_all_projects_effective, has_permission
-from app.models.enums import ProjectStatus, IssueStatus, IssueSeverity, TaskStatus, UserStatus, UserRole, DesignChangeStatus
+from app.models.enums import ProjectStatus, IssueStatus, IssueSeverity, TaskStatus, UserStatus, DesignChangeStatus
 from app.core.schedule_dates import inclusive_duration_days
 import json
 

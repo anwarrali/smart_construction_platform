@@ -16,8 +16,9 @@ from app.api.auth import LOGIN_SCOPE, login
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import SessionLocal
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.user import User
+from tests.office_roles import with_office_role
 
 
 class _Form:
@@ -47,9 +48,8 @@ def db():
 def account(db):
     suffix = uuid4().hex[:10]
     email = f"ratelimit.{suffix}@constro.io"
-    user = User(full_name="Rate Limited", email=email,
-                hashed_password=hash_password("Correct#12345"),
-                role=UserRole.ENGINEER, status=UserStatus.ACTIVE)
+    user = with_office_role(db, User(full_name="Rate Limited", email=email,
+                                     hashed_password=hash_password("Correct#12345"), status=UserStatus.ACTIVE), "engineer")
     db.add(user)
     db.commit()
     yield user, email

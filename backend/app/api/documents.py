@@ -18,7 +18,7 @@ from app.services.document_access import (
 from app.api.downloads import stored_file_response
 from app.services.file_storage import delete_upload
 from app.services.private_storage import private_storage
-from app.models.enums import UserRole, DocumentType, TaskStatus, NotificationType
+from app.models.enums import DocumentType, TaskStatus, NotificationType
 from app.models.project import Project
 from app.models.task import Task
 from app.models.notification import Notification

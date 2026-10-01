@@ -5,7 +5,6 @@ from app.services.photo_archive_policy import (
     SYSTEM_PHOTO_CATEGORIES,
     category_belongs_to_project,
     category_code,
-    category_management_allowed,
     matches_archive_filters,
     paginate_records,
 )
@@ -36,16 +35,6 @@ class PhotoArchivePolicyTests(unittest.TestCase):
 
     def test_02_custom_category_code_is_normalized(self):
         self.assertEqual(category_code("  Fire Alarm  "), "FIRE_ALARM")
-
-    def test_02b_pm_can_create_project_category(self):
-        self.assertTrue(category_management_allowed(
-            "project_manager", is_assigned_pm=True
-        ))
-
-    def test_02c_unauthorized_user_cannot_create_category(self):
-        self.assertFalse(category_management_allowed(
-            "engineer", is_assigned_pm=False
-        ))
 
     def test_03_custom_category_is_isolated_to_project(self):
         self.assertTrue(category_belongs_to_project("project-a", "project-a", False))

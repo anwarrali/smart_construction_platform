@@ -14,7 +14,7 @@ from app.services import rbac
 from app.services.authorization import has_permission
 from app.db.database import get_db
 from app.models.attachment import Attachment
-from app.models.enums import EvidencePhotoDirection, FieldSubmissionStatus, UserRole
+from app.models.enums import EvidencePhotoDirection, FieldSubmissionStatus
 from app.models.field_submission import (
     FieldSubmission,
     FieldSubmissionPhoto,
@@ -142,7 +142,7 @@ def create_photo_category(
 ):
     _project_or_404(db, project_id)
     if not can_manage_project_photo_categories(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="Only the Project Manager or Admin can manage categories")
+        raise HTTPException(status_code=403, detail="Managing photo categories requires permission to staff this project")
     try:
         code = category_code(data.name)
     except ValueError as exc:
@@ -184,7 +184,7 @@ def update_photo_category(
     current_user: User = Depends(get_current_user),
 ):
     if not can_manage_project_photo_categories(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="Only the Project Manager or Admin can manage categories")
+        raise HTTPException(status_code=403, detail="Managing photo categories requires permission to staff this project")
     category = db.get(PhotoCategory, category_id)
     if not category or category.project_id != project_id:
         raise HTTPException(status_code=404, detail="Project category not found")

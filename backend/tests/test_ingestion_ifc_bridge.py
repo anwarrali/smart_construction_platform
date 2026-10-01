@@ -22,7 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.ifc import IFCModelGroup, IFCModelVersion
 from app.models.ingestion import IngestedFile
 from app.models.project import Project, ProjectMember
@@ -32,6 +32,7 @@ from app.services.ingestion.categories import FileCategory
 from app.services.ingestion.contracts import ProcessorContext
 from app.services.ingestion.processors.ifc import IFCProcessor
 from app.services.ifc_processing_service import VERSION_TRANSITIONS
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -52,18 +53,17 @@ def db():
 @pytest.fixture()
 def world(db):
     suffix = uuid4().hex[:10]
-    manager = User(full_name="BridgePm", email=f"bridgepm-{suffix}@example.com",
-                   hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="BridgeOwner", email=f"bridgeowner-{suffix}@example.com",
-                 hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="BridgePm", email=f"bridgepm-{suffix}@example.com",
+                                        hashed_password="x", status=UserStatus.ACTIVE), "project_manager")
+    owner = with_office_role(db, User(full_name="BridgeOwner", email=f"bridgeowner-{suffix}@example.com",
+                                      hashed_password="x", status=UserStatus.ACTIVE), "client_representative")
     db.add_all([manager, owner])
     db.flush()
     project = Project(name=f"Bridge {suffix}", status=ProjectStatus.ACTIVE,
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=manager.id,
-                         role_on_project=UserRole.PROJECT_MANAGER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=manager.id, is_active=True))
     group = IFCModelGroup(project_id=project.id, name=f"Architecture {suffix}",
                           created_by_id=manager.id)
     db.add(group)

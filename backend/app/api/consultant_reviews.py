@@ -20,7 +20,7 @@ from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.audit_log import AuditLog
 from app.models.document import Document
-from app.models.enums import TaskPriority, TaskStatus, UserRole
+from app.models.enums import TaskPriority, TaskStatus
 from app.models.issue import Issue
 from app.models.project import Project, ProjectMember
 from app.models.site_report import SiteReport
@@ -84,9 +84,9 @@ def _person(user: User | None) -> dict | None:
     return {
         "id": str(user.id),
         "fullName": user.full_name,
-        "role": user.role.value,
+        "role": user.org_role.code if user.org_role else None,
         "specialization": user.engineer_profile.discipline.value if user.engineer_profile else None,
-        "organizationSide": user.engineer_affiliation,
+        "organizationSide": "internal" if user.is_internal else "external",
     }
 
 

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import ConsultantApprovalMode, ProjectStatus, UserRole
+from app.models.enums import ConsultantApprovalMode, ProjectStatus
 
 
 class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -103,7 +103,7 @@ class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 
 class ProjectMember(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Links a User to a Project with a role-on-project (team assignment)."""
+    """Links a User to a Project (team assignment)."""
 
     __tablename__ = "project_members"
     __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_project_member"),)
@@ -114,14 +114,9 @@ class ProjectMember(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    role_on_project: Mapped[UserRole] = mapped_column(
-        PG_ENUM(UserRole, name="user_role", create_type=False),
-        nullable=False,
-    )
-    #: The configurable role held on this project. Need not match the person's
-    #: office role: a Senior Engineer may be the Project Manager here, which
-    #: `role_on_project` could not express because it was required to equal the
-    #: user's global role.
+    #: The configurable role held on this project, unioned with the person's
+    #: office role. Need not match it: a Senior Engineer may be the Project
+    #: Manager here. NULL means the office role alone applies.
     project_role_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("roles.id", ondelete="RESTRICT"),
         nullable=True, index=True,

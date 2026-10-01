@@ -37,7 +37,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import SessionLocal
 from app.models.company import Company
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.ifc import IFCModelGroup, IFCModelVersion
 from app.models.project import Project, ProjectMember
 from app.models.user import User
@@ -84,7 +84,7 @@ def world(db):
     role = roles["project_manager"]
     manager = User(
         full_name=f"StreamManager{suffix}", email=f"stream.{suffix}@constro.io",
-        hashed_password=hash_password(PASSWORD), role=UserRole.PROJECT_MANAGER,
+        hashed_password=hash_password(PASSWORD),
         status=UserStatus.ACTIVE, company_id=office.id, org_role_id=role.id,
         is_internal=role.is_internal_only,
     )
@@ -98,7 +98,7 @@ def world(db):
     db.add(project)
     db.flush()
     db.add(ProjectMember(
-        project_id=project.id, user_id=manager.id, role_on_project=manager.role,
+        project_id=project.id, user_id=manager.id,
         project_role_id=role.id, is_active=True,
     ))
     db.flush()

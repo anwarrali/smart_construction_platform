@@ -17,7 +17,7 @@ from app.api.milestones import _next_code as _next_milestone_code
 from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.database import SessionLocal, get_db
-from app.models.enums import IssueSeverity, IssueStatus, TaskPriority, TaskStatus, UserRole
+from app.models.enums import IssueSeverity, IssueStatus, TaskPriority, TaskStatus
 from app.models.ifc import (
     IFCChangeRecord, IFCComparison, IFCCoordinationFinding, IFCElement, IFCEntityLink,
     IFCImpactSuggestion, IFCModelGroup, IFCModelVersion, IFCProcessingJob,

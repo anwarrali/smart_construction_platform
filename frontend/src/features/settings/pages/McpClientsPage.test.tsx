@@ -39,7 +39,8 @@ vi.mock("react-i18next", async (importOriginal) => ({
   useTranslation: () => ({ t: translate, i18n: { language: "en" } }),
 }));
 
-const role = { isAdmin: false };
+/* Whoever holds `platform.manage_users` sees everybody's tokens. */
+const role = { managesUsers: false, hasCapability: (code: string) => code === "platform.manage_users" && role.managesUsers };
 vi.mock("../../../hooks/useRole", () => ({ useRole: () => role }));
 
 const { McpClientsPage } = await import("./McpClientsPage");
@@ -72,7 +73,7 @@ const refused = (status: number, detail: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  role.isAdmin = false;
+  role.managesUsers = false;
   mcpApi.list.mockResolvedValue([token()]);
   projectsApi.list.mockResolvedValue({
     items: [{ id: PROJECT, name: "Marina Tower" }],
@@ -266,7 +267,7 @@ describe("McpClientsPage", () => {
     expect(screen.queryByText("mcpClients.columnOwner")).not.toBeInTheDocument();
 
     cleanup();
-    role.isAdmin = true;
+    role.managesUsers = true;
     render(<McpClientsPage />);
     expect(await screen.findByText("mcpClients.columnOwner")).toBeInTheDocument();
     expect(screen.getByText("Sam")).toBeInTheDocument();

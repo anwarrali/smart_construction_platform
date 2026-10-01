@@ -677,8 +677,8 @@ def create_project_announcement(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not can_send_project_announcement(current_user):
-        raise HTTPException(status_code=403, detail="Only Project Managers or Admins can announce")
+    if not can_send_project_announcement(db, current_user, data.project_id):
+        raise HTTPException(status_code=403, detail="You cannot send announcements on this project")
     conversation = _create_conversation(
         db,
         ConversationCreate(

@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.models.collaboration import AIInsightSource
 from app.models.design_change import DesignChange, DesignChangeAffectedDiscipline
 from app.models.enums import (
-    DesignChangeStatus, ProjectStatus, TaskStatus, UserRole, UserStatus,
+    DesignChangeStatus, ProjectStatus, TaskStatus, UserStatus,
 )
 from app.models.ifc import AIInsight
 from app.models.project import Project, ProjectMember
@@ -26,6 +26,7 @@ from app.models.user import User
 from app.db.database import SessionLocal
 from app.services.agents import BY_NAME, Certainty, available_agents, run_agent, run_all
 from app.services.agents.runtime import AGENT_CATEGORY
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -50,13 +51,13 @@ def world(db):
     today = date.today()
 
     def user(name, role):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
+                                         hashed_password="x", status=UserStatus.ACTIVE), role)
 
-    manager = user("AgentPm", UserRole.PROJECT_MANAGER)
-    outsider = user("AgentOutsider", UserRole.PROJECT_MANAGER)
-    site_engineer = user("AgentSiteEngineer", UserRole.ENGINEER)
-    owner = user("AgentOwner", UserRole.OWNER)
+    manager = user("AgentPm", "project_manager")
+    outsider = user("AgentOutsider", "project_manager")
+    site_engineer = user("AgentSiteEngineer", "engineer")
+    owner = user("AgentOwner", "client_representative")
     db.add_all([manager, outsider, site_engineer, owner])
     db.flush()
 
@@ -64,9 +65,8 @@ def world(db):
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    for person, role in ((manager, UserRole.PROJECT_MANAGER), (site_engineer, UserRole.ENGINEER)):
-        db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=role, is_active=True))
+    for person, role in ((manager, "project_manager"), (site_engineer, "engineer")):
+        db.add(ProjectMember(project_id=project.id, user_id=person.id, is_active=True))
 
     overdue = Task(project_id=project.id, task_code="T-001", name="Pour ground slab",
                    status=TaskStatus.IN_PROGRESS, progress_percentage=20,

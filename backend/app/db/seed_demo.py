@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import func, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 import app.models  # noqa: F401 - configure all SQLAlchemy relationships
@@ -30,7 +30,6 @@ from app.models.enums import (
     ProjectStatus,
     TaskPriority,
     TaskStatus,
-    UserRole,
     UserStatus,
 )
 from app.models.field_submission import FieldSubmission, PhotoCategory
@@ -39,7 +38,9 @@ from app.models.message import Conversation, ConversationParticipant, Message
 from app.models.milestone import Milestone
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
 from app.models.task import Task, TaskDependency, TaskReview
+from app.models.rbac import Role
 from app.models.user import EngineerProfile, User
+from app.services import rbac
 
 
 SEED_NAMESPACE = uuid.UUID("57473ba3-2a91-5f5d-8dd9-4d115c38b07c")
@@ -114,8 +115,9 @@ def _conflict(message: str) -> RuntimeError:
 
 
 def _find_admin(db: Session, configured_email: str | None) -> User:
+    # The office administrator: whoever holds the undeletable office role.
     query = db.query(User).filter(
-        User.role == UserRole.ADMIN,
+        User.org_role_id.in_(select(Role.id).where(Role.undeletable.is_(True))),
         User.is_superuser.is_(True),
         User.status.in_([UserStatus.ACTIVE, UserStatus.PENDING]),
     )
@@ -165,11 +167,10 @@ def _ensure_user(
     key: str,
     email: str,
     full_name: str,
-    role: UserRole,
+    role_code: str,
     company: Company,
     password: str,
     organization: str | None = None,
-    affiliation: str | None = None,
     discipline: EngineerDiscipline | None = None,
     license_number: str | None = None,
 ) -> User:
@@ -186,7 +187,8 @@ def _ensure_user(
     if by_id:
         if (
             by_id.email.lower() != email.lower()
-            or by_id.role != role
+            or by_id.org_role is None
+            or by_id.org_role.code != role_code
             or by_id.company_id != company.id
         ):
             raise _conflict(f"demo user '{email}' has unexpected identity fields")
@@ -197,7 +199,6 @@ def _ensure_user(
             email=email.lower(),
             full_name=full_name,
             hashed_password=hash_password(password),
-            role=role,
             status=UserStatus.ACTIVE,
             is_email_verified=True,
             is_superuser=False,
@@ -205,8 +206,10 @@ def _ensure_user(
             invitation_accepted=True,
             company_id=company.id,
             organization=organization,
-            engineer_affiliation=affiliation,
         )
+        # Given its office role before it is written.
+        if rbac.apply_template_role(db, user, role_code) is None:
+            raise _conflict(f"the '{role_code}' role does not exist; seed the roles first")
         db.add(user)
 
     if discipline is not None:
@@ -284,7 +287,6 @@ def _ensure_membership(
     db: Session,
     project: Project,
     user: User,
-    role: UserRole,
     title: str,
     discipline: str | None,
     admin: User,
@@ -304,14 +306,11 @@ def _ensure_membership(
         raise _conflict(f"membership for '{user.email}' is not demo-owned")
     membership = db.get(ProjectMember, record_id)
     if membership:
-        if membership.role_on_project != role:
-            raise _conflict(f"membership role for '{user.email}' is unexpected")
         return membership
     membership = ProjectMember(
         id=record_id,
         project_id=project.id,
         user_id=user.id,
-        role_on_project=role,
         is_active=True,
         assignment_title=title,
         project_discipline=discipline,
@@ -900,59 +899,57 @@ def seed_demo(db: Session, config: DemoSeedConfig) -> str:
     )
 
     user_specs = [
-        ("owner", "owner.demo@smartconstruction-demo.com", "Lina Al-Khatib", UserRole.OWNER, owner_company, None, None, None, None),
-        ("pm", "pm.demo@smartconstruction-demo.com", "Omar Nasser", UserRole.PROJECT_MANAGER, owner_company, None, None, None, None),
-        ("architect", "architect.contractor.demo@smartconstruction-demo.com", "Rana Haddad", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.ARCHITECTURAL, "ARCH-DEMO-101"),
-        ("civil", "civil.engineer.demo@smartconstruction-demo.com", "Yousef Khalil", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.CIVIL, "CIV-DEMO-102"),
-        ("electrical", "electrical.engineer.demo@smartconstruction-demo.com", "Maya Saleh", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.ELECTRICAL, "ELEC-DEMO-103"),
-        ("mechanical", "mechanical.engineer.demo@smartconstruction-demo.com", "Sami Darwish", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.MECHANICAL, "MECH-DEMO-104"),
-        ("arch_consultant", "architectural.consultant.demo@smartconstruction-demo.com", "Nour Mansour", UserRole.ENGINEER, consultant_company, consultant_company.name, "external_consultant", EngineerDiscipline.ARCHITECTURAL, "ARCH-CONS-DEMO-201"),
-        ("mep_consultant", "mep.consultant.demo@smartconstruction-demo.com", "Tariq Odeh", UserRole.ENGINEER, consultant_company, consultant_company.name, "external_consultant", EngineerDiscipline.ELECTRICAL, "MEP-CONS-DEMO-202"),
+        ("owner", "owner.demo@smartconstruction-demo.com", "Lina Al-Khatib", "client_representative", owner_company, None, None, None),
+        ("pm", "pm.demo@smartconstruction-demo.com", "Omar Nasser", "project_manager", owner_company, None, None, None),
+        ("architect", "architect.contractor.demo@smartconstruction-demo.com", "Rana Haddad", "contractor_representative", contractor_company, contractor_company.name, EngineerDiscipline.ARCHITECTURAL, "ARCH-DEMO-101"),
+        ("civil", "civil.engineer.demo@smartconstruction-demo.com", "Yousef Khalil", "contractor_representative", contractor_company, contractor_company.name, EngineerDiscipline.CIVIL, "CIV-DEMO-102"),
+        ("electrical", "electrical.engineer.demo@smartconstruction-demo.com", "Maya Saleh", "contractor_representative", contractor_company, contractor_company.name, EngineerDiscipline.ELECTRICAL, "ELEC-DEMO-103"),
+        ("mechanical", "mechanical.engineer.demo@smartconstruction-demo.com", "Sami Darwish", "contractor_representative", contractor_company, contractor_company.name, EngineerDiscipline.MECHANICAL, "MECH-DEMO-104"),
+        ("arch_consultant", "architectural.consultant.demo@smartconstruction-demo.com", "Nour Mansour", "senior_engineer", consultant_company, consultant_company.name, EngineerDiscipline.ARCHITECTURAL, "ARCH-CONS-DEMO-201"),
+        ("mep_consultant", "mep.consultant.demo@smartconstruction-demo.com", "Tariq Odeh", "senior_engineer", consultant_company, consultant_company.name, EngineerDiscipline.ELECTRICAL, "MEP-CONS-DEMO-202"),
         # Three Site Engineers of three disciplines on one project. This
         # replaces the three worker accounts the demo used to seed: workers
         # are no longer platform users, and field evidence is a site
         # engineer's output now. It also gives the demo the "several site
         # engineers, different specialisms" shape the product is built for.
-        ("site_civil", "site.civil.demo@smartconstruction-demo.com", "Ahmad Barakat", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.CIVIL, "CIV-SITE-105"),
-        ("site_mep", "site.mep.demo@smartconstruction-demo.com", "Bilal Hamdan", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.ELECTRICAL, "ELEC-SITE-106"),
-        ("site_arch", "site.arch.demo@smartconstruction-demo.com", "Kareem Zaid", UserRole.ENGINEER, contractor_company, contractor_company.name, "main_contractor", EngineerDiscipline.ARCHITECTURAL, "ARCH-SITE-107"),
+        ("site_civil", "site.civil.demo@smartconstruction-demo.com", "Ahmad Barakat", "contractor_representative", contractor_company, contractor_company.name, EngineerDiscipline.CIVIL, "CIV-SITE-105"),
+        ("site_mep", "site.mep.demo@smartconstruction-demo.com", "Bilal Hamdan", "contractor_representative", contractor_company, contractor_company.name, EngineerDiscipline.ELECTRICAL, "ELEC-SITE-106"),
+        ("site_arch", "site.arch.demo@smartconstruction-demo.com", "Kareem Zaid", "contractor_representative", contractor_company, contractor_company.name, EngineerDiscipline.ARCHITECTURAL, "ARCH-SITE-107"),
     ]
     users: dict[str, User] = {}
-    for key, email, name, role, company, organization, affiliation, discipline, license_number in user_specs:
+    for key, email, name, role_code, company, organization, discipline, license_number in user_specs:
         users[key] = _ensure_user(
             db,
             key=key,
             email=email,
             full_name=name,
-            role=role,
+            role_code=role_code,
             company=company,
             password=config.password,
             organization=organization,
-            affiliation=affiliation,
             discipline=discipline,
             license_number=license_number,
         )
 
     project = _ensure_project(db, owner_company, users["owner"], users["pm"], anchor)
     memberships = [
-        ("owner", UserRole.OWNER, "Project Owner", None, False),
-        ("pm", UserRole.PROJECT_MANAGER, "Project Manager", None, False),
-        ("architect", UserRole.ENGINEER, "Architectural Contractor Engineer", "architectural", True),
-        ("civil", UserRole.ENGINEER, "Civil Site Engineer", "civil", True),
-        ("electrical", UserRole.ENGINEER, "Electrical Site Engineer", "electrical", True),
-        ("mechanical", UserRole.ENGINEER, "Mechanical Site Engineer", "mechanical", True),
-        ("arch_consultant", UserRole.CONSULTANT, "Architectural Consultant Reviewer", "architectural", False),
-        ("mep_consultant", UserRole.CONSULTANT, "Electrical / MEP Consultant Reviewer", "electrical", False),
-        ("site_civil", UserRole.ENGINEER, "Civil Site Engineer", "civil", True),
-        ("site_mep", UserRole.ENGINEER, "MEP Site Engineer", "electrical", True),
-        ("site_arch", UserRole.ENGINEER, "Architectural Site Engineer", "architectural", True),
+        ("owner", "Project Owner", None, False),
+        ("pm", "Project Manager", None, False),
+        ("architect", "Architectural Contractor Engineer", "architectural", True),
+        ("civil", "Civil Site Engineer", "civil", True),
+        ("electrical", "Electrical Site Engineer", "electrical", True),
+        ("mechanical", "Mechanical Site Engineer", "mechanical", True),
+        ("arch_consultant", "Architectural Consultant Reviewer", "architectural", False),
+        ("mep_consultant", "Electrical / MEP Consultant Reviewer", "electrical", False),
+        ("site_civil", "Civil Site Engineer", "civil", True),
+        ("site_mep", "MEP Site Engineer", "electrical", True),
+        ("site_arch", "Architectural Site Engineer", "architectural", True),
     ]
-    for key, role, title, discipline, site_engineer in memberships:
+    for key, title, discipline, site_engineer in memberships:
         _ensure_membership(
             db,
             project,
             users[key],
-            role,
             title,
             discipline,
             admin,

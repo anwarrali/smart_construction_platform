@@ -64,7 +64,8 @@ const LinkList = ({ items, onNavigate }: { items:NavItem[]; onNavigate?:()=>void
  */
 export const Sidebar = ({ className = "", onNavigate }: { className?:string; onNavigate?:()=>void } = {}) => {
   const { t } = useTranslation();
-  const { isAdmin, permissionsReady, hasCapability, orgRoleLabel } = useRole();
+  const { permissionsReady, hasCapability, orgRoleLabel } = useRole();
+  const administers = hasCapability("platform.manage_users");
   const workspace = useProjectWorkspace();
 
   /* Show a link until we positively know the capability is revoked. Before the
@@ -188,7 +189,7 @@ export const Sidebar = ({ className = "", onNavigate }: { className?:string; onN
           <LinkList items={group.items} onNavigate={onNavigate}/>
         </div>)}
       </> : <>
-        <SectionLabel>{isAdmin?t("nav.administration"):t("nav.portfolio")}</SectionLabel>
+        <SectionLabel>{administers?t("nav.administration"):t("nav.portfolio")}</SectionLabel>
         <LinkList items={globalNav} onNavigate={onNavigate}/>
         <SectionLabel>{t("nav.communication")}</SectionLabel>
         <LinkList items={commonGlobal} onNavigate={onNavigate}/>

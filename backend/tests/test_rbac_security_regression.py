@@ -33,8 +33,7 @@ from app.db.database import SessionLocal
 from app.models.company import Company
 from app.models.document import Document
 from app.models.enums import (
-    DocumentType, FieldSubmissionStatus, ProjectStatus, TaskStatus, UserRole,
-    UserStatus,
+    DocumentType, FieldSubmissionStatus, ProjectStatus, TaskStatus, UserStatus,
 )
 from app.models.field_submission import FieldSubmission
 from app.models.permission import UserPermissionOverride
@@ -85,11 +84,11 @@ def world(db):
         ).all()
     }
 
-    def user(name, role_code, legacy=UserRole.ENGINEER, status=UserStatus.ACTIVE):
+    def user(name, role_code, status=UserStatus.ACTIVE):
         role = roles[role_code]
         person = User(
             full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-            hashed_password="x", role=legacy, status=status,
+            hashed_password="x", status=status,
             company_id=office.id, org_role_id=role.id,
             is_internal=role.is_internal_only,
         )
@@ -97,16 +96,16 @@ def world(db):
         db.flush()
         return person
 
-    manager = user("SecManager", "project_manager", UserRole.PROJECT_MANAGER)
+    manager = user("SecManager", "project_manager")
     office_engineer = user("SecEngineer", "engineer")
     site_civil = user("SecSiteCivil", "site_engineer")
     site_elec = user("SecSiteElec", "site_engineer")
     reviewer = user("SecReviewer", "senior_engineer")
     contractor_person = user("SecContractor", "contractor_representative")
     sub_person = user("SecSub", "subcontractor_representative")
-    client_person = user("SecClient", "client_representative", UserRole.OWNER)
+    client_person = user("SecClient", "client_representative")
     retired_worker = user(
-        "SecRetiredWorker", "archived_field_staff", UserRole.WORKER, UserStatus.INACTIVE,
+        "SecRetiredWorker", "archived_field_staff", UserStatus.INACTIVE,
     )
 
     project = Project(
@@ -134,7 +133,7 @@ def world(db):
 
     def member(person, role_code, *, party=None, site=False, discipline=None):
         row = ProjectMember(
-            project_id=project.id, user_id=person.id, role_on_project=person.role,
+            project_id=project.id, user_id=person.id,
             project_role_id=roles[role_code].id, is_active=True,
             is_site_engineer=site, party_id=party.id if party else None,
         )
@@ -320,6 +319,11 @@ NEVER_EXTERNAL_AUTHORITY = (
     "ai.review_insight", "ai.promote_insight",
     "project.manage_members", "project.manage_parties",
     "document.share_external", "project.edit", "project.invite_external",
+    # Deleting a project destroys every record the office and its external
+    # participants hold against it. Adding it here is what makes
+    # `test_7_...` prove that no override, on any project, can hand it to a
+    # contractor, a subcontractor or the client.
+    "project.delete",
 )
 
 #: Office *work*. An external role never inherits it, but an administrator can
@@ -327,7 +331,10 @@ NEVER_EXTERNAL_AUTHORITY = (
 #: arrangement (a main contractor maintaining the construction programme, or
 #: raising and closing tasks on their own scope) and not the platform's
 #: business to forbid.
-DELEGABLE_OFFICE_WORK = ("task.create", "task.edit", "schedule.edit", "issue.resolve")
+#: Office work by default — no external role inherits it — but an office may
+#: delegate it to one named outside person on one project. `message.broadcast`
+#: belongs here: a main contractor may be allowed to address the whole project.
+DELEGABLE_OFFICE_WORK = ("task.create", "task.edit", "schedule.edit", "issue.resolve", "message.broadcast")
 PLATFORM_AUTHORITY = (
     "platform.manage_users", "platform.manage_permissions",
     "platform.view_all_projects", "platform.create_project",
@@ -567,24 +574,31 @@ def test_12_no_new_account_can_be_provisioned_as_a_worker(db, world):
 
     Test 10 proves a *retired* worker account holds nothing. This proves the
     other half — that the platform cannot produce a new one. Both provisioning
-    paths are covered: the administrator helper and the schema the registration
-    model validates against.
+    layers are covered: the endpoint's role validation and the service it calls.
     """
-    from pydantic import ValidationError
+    from fastapi import HTTPException
 
-    from app.core.permissions import PRIMARY_ROLES, ROLE_LABELS, can_create_team_role
-    from app.schemas.user import UserCreate
+    from app.api.users import _requested_org_role
+    from app.services.user_service import create_provisioned_user
 
-    assert UserRole.WORKER not in PRIMARY_ROLES
-    assert UserRole.WORKER not in ROLE_LABELS
-    assert can_create_team_role(UserRole.ADMIN, UserRole.WORKER) is False
-    assert can_create_team_role(UserRole.ADMIN, UserRole.ENGINEER) is True
+    archived = world["roles"]["archived_field_staff"]
+    with pytest.raises(HTTPException) as refusal:
+        _requested_org_role(db, archived.id)
+    assert refusal.value.status_code == 400
+    assert _requested_org_role(db, world["roles"]["engineer"].id).code == "engineer"
 
-    with pytest.raises(ValidationError):
-        UserCreate(
-            email=f"newworker-{world['suffix']}@test.local",
-            full_name="New Worker", password="Sufficiently-Long-1",
-            phone_number="+970599123456", role=UserRole.WORKER,
+    admin = User(
+        full_name="SecProvisioner", email=f"secprov-{world['suffix']}@test.local",
+        hashed_password="x", status=UserStatus.ACTIVE, company_id=world["office"].id,
+        org_role_id=world["roles"]["org_admin"].id, is_internal=True,
+    )
+    db.add(admin)
+    db.flush()
+    with pytest.raises(ValueError, match="cannot be used to create accounts"):
+        create_provisioned_user(
+            db, creator=admin, email=f"newworker-{world['suffix']}@test.local",
+            full_name="New Worker", org_role=archived,
+            password="Sufficiently-Long-1", send_email=False,
         )
 
 
@@ -644,7 +658,7 @@ def test_12c_field_evidence_serialises_with_the_renamed_author(db, world):
     submitter = User(
         full_name="SecEvidenceAuthor",
         email=f"evidence-{world['suffix']}@example.com",
-        hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+        hashed_password="x", status=UserStatus.ACTIVE,
         company_id=world["office"].id,
         org_role_id=world["roles"]["site_engineer"].id, is_internal=True,
     )

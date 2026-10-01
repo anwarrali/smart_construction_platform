@@ -28,7 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import settings
 from app.core.security import SSE_TICKET_TYPE, create_access_token, create_sse_ticket, decode_token
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.services.realtime import (
@@ -36,6 +36,7 @@ from app.services.realtime import (
 )
 from app.services.realtime.broker import AuthorizationScope, RealtimeBroker
 from app.services.realtime.publisher import MAX_PAYLOAD_BYTES, publish
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -64,18 +65,18 @@ def world(db):
     """Two projects; a member of one, and an outsider who is a member of neither."""
     suffix = uuid.uuid4().hex[:8]
 
-    def user(name, role=UserRole.PROJECT_MANAGER):
-        person = User(
+    def user(name, role="project_manager"):
+        person = with_office_role(db, User(
             full_name=f"{name}{suffix}", email=f"{name.lower()}.{suffix}@constro.io",
-            hashed_password="x", role=role, status=UserStatus.ACTIVE,
-        )
+            hashed_password="x", status=UserStatus.ACTIVE,
+        ), role)
         db.add(person)
         db.flush()
         return person
 
     owner = user("RtOwner")
-    member = user("RtMember", UserRole.ENGINEER)
-    outsider = user("RtOutsider", UserRole.ENGINEER)
+    member = user("RtMember", "engineer")
+    outsider = user("RtOutsider", "engineer")
 
     def project(name, manager):
         item = Project(
@@ -89,8 +90,7 @@ def world(db):
     project_a = project("RtAlpha", owner)
     project_b = project("RtBeta", owner)
     db.add(ProjectMember(
-        project_id=project_a.id, user_id=member.id,
-        role_on_project=UserRole.ENGINEER, is_active=True,
+        project_id=project_a.id, user_id=member.id, is_active=True,
     ))
     db.commit()
 

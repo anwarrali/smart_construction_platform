@@ -5,17 +5,12 @@ export type Permission = {
   group: string;
   label: string;
   description: string;
-  defaultRoles: string[];
   projectScoped: boolean;
   adminLocked: boolean;
-};
-
-export type RolePermissionState = {
-  role: string;
-  permissionCode: string;
-  defaultAllowed: boolean;
-  effectiveAllowed: boolean;
-  overridden: boolean;
+  /** Stripped from anybody outside the office, whatever their role grants. */
+  officeOnly: boolean;
+  /** Never held by an external participant. */
+  neverExternal: boolean;
 };
 
 export type UserPermissionOverride = {
@@ -31,7 +26,9 @@ export type UserPermissionSummary = {
   userId: string;
   fullName: string;
   email: string;
-  role: string;
+  /** The office role the person holds. */
+  roleCode?: string | null;
+  roleName?: string | null;
   status: string;
   projectId?: string | null;
   effectivePermissions: string[];
@@ -53,9 +50,6 @@ export type ConsultantScope = {
  */
 export const accessControlService = {
   permissions: () => axios.get<Permission[]>("/access-control/permissions").then((r) => r.data),
-  roleMatrix: () => axios.get<RolePermissionState[]>("/access-control/roles").then((r) => r.data),
-  setRolePermission: (role: string, permissionCode: string, allowed: boolean | null) =>
-    axios.put<RolePermissionState>("/access-control/roles", { role, permissionCode, allowed }).then((r) => r.data),
   user: (userId: string, projectId?: string) =>
     axios.get<UserPermissionSummary>(`/access-control/users/${userId}`, {
       params: projectId ? { project_id: projectId } : undefined,

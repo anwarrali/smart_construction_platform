@@ -25,13 +25,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api import ingestion as ingestion_api
 from app.core.config import settings
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.ingestion import IngestedFile, IngestionJob
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.services.ingestion import state
 from app.services.ingestion.categories import FileCategory
 from tests.pdf_fixture import build_pdf
+from tests.office_roles import with_office_role
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 DWG = b"AC1027" + b"\x00" * 64
@@ -73,12 +74,12 @@ def world(db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "INGESTION_ENABLED", True)
     monkeypatch.setattr(settings, "INGESTION_BACKGROUND_PROCESSING_ENABLED", False)
 
-    manager = User(full_name="IngestPm", email=f"ingestpm-{suffix}@example.com",
-                   hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    outsider = User(full_name="IngestOther", email=f"ingestother-{suffix}@example.com",
-                    hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE)
-    owner = User(full_name="IngestOwner", email=f"ingestowner-{suffix}@example.com",
-                 hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE)
+    manager = with_office_role(db, User(full_name="IngestPm", email=f"ingestpm-{suffix}@example.com",
+                                        hashed_password="x", status=UserStatus.ACTIVE), "project_manager")
+    outsider = with_office_role(db, User(full_name="IngestOther", email=f"ingestother-{suffix}@example.com",
+                                         hashed_password="x", status=UserStatus.ACTIVE), "project_manager")
+    owner = with_office_role(db, User(full_name="IngestOwner", email=f"ingestowner-{suffix}@example.com",
+                                      hashed_password="x", status=UserStatus.ACTIVE), "client_representative")
     db.add_all([manager, outsider, owner])
     db.flush()
 
@@ -89,10 +90,8 @@ def world(db, tmp_path, monkeypatch):
     db.add_all([project, other_project])
     db.flush()
     db.add_all([
-        ProjectMember(project_id=project.id, user_id=manager.id,
-                      role_on_project=UserRole.PROJECT_MANAGER, is_active=True),
-        ProjectMember(project_id=other_project.id, user_id=outsider.id,
-                      role_on_project=UserRole.PROJECT_MANAGER, is_active=True),
+        ProjectMember(project_id=project.id, user_id=manager.id, is_active=True),
+        ProjectMember(project_id=other_project.id, user_id=outsider.id, is_active=True),
     ])
     db.commit()
     try:
@@ -329,8 +328,7 @@ def test_a_file_cannot_be_read_through_another_projects_route(db, world):
     through the other's URL — the check is the row's project, not the caller's."""
     mine = upload(db, world, filename="mine.pdf", content=pdf_bytes(world, ["mine"]),
                   mime="application/pdf")
-    db.add(ProjectMember(project_id=world["other_project"].id, user_id=world["manager"].id,
-                         role_on_project=UserRole.PROJECT_MANAGER, is_active=True))
+    db.add(ProjectMember(project_id=world["other_project"].id, user_id=world["manager"].id, is_active=True))
     db.commit()
     with pytest.raises(HTTPException) as refusal:
         ingestion_api.get_file(project_id=world["other_project"].id, file_id=mine.id,

@@ -26,7 +26,6 @@ from app.services.field_submission_policy import (
     evidence_review_allowed,
     evidence_submission_allowed,
 )
-from app.services.photo_archive_policy import category_management_allowed
 
 
 def _membership(db: Session, user: User, project_id) -> ProjectMember | None:
@@ -126,10 +125,13 @@ def authorized_reviewer_ids(db: Session, task: Task) -> set:
 def can_manage_project_photo_categories(
     db: Session, user: User, project_id
 ) -> bool:
-    project = db.get(Project, project_id)
-    return bool(project) and category_management_allowed(
-        user.role.value,
-        is_assigned_pm=bool(project and project.project_manager_id == user.id),
+    """Whether this person may define the project's photo categories.
+
+    A project setting, kept by whoever runs the project's team. Was the retired
+    enum: `admin`, or `project_manager` when assigned to this project.
+    """
+    return bool(db.get(Project, project_id)) and has_permission(
+        db, user, "project.manage_members", project_id
     )
 
 

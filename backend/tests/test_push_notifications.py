@@ -27,7 +27,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.database import SessionLocal
 from app.models.device_token import DeviceToken
 from app.models.enums import (
-    DevicePlatform, NotificationType, ProjectStatus, UserRole, UserStatus,
+    DevicePlatform, NotificationType, ProjectStatus, UserStatus,
 )
 from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
@@ -36,6 +36,7 @@ from app.services import device_token_service, notification_service
 from app.services.push import dispatcher
 from app.services.push.base import DeliveryStatus, PushMessage, PushResult
 from app.services.push.fcm import FCMProvider
+from tests.office_roles import with_office_role
 
 
 # --- fixtures ---------------------------------------------------------------
@@ -62,13 +63,12 @@ def people(db):
     suffix = uuid.uuid4().hex[:10]
 
     def make(name):
-        person = User(
+        person = with_office_role(db, User(
             full_name=name,
             email=f"{name.lower()}.{suffix}@constro.io",
             hashed_password="x",
-            role=UserRole.PROJECT_MANAGER,
             status=UserStatus.ACTIVE,
-        )
+        ), "project_manager")
         db.add(person)
         return person
 
@@ -438,9 +438,6 @@ def test_project_notification_reaches_the_team_but_not_the_actor(db, people):
     db.add(ProjectMember(
         project_id=project.id,
         user_id=member.id,
-        # NOT NULL, and there is no default: a membership without a role on the
-        # project is not a membership.
-        role_on_project=UserRole.PROJECT_MANAGER,
         is_active=True,
     ))
     db.flush()
@@ -493,13 +490,12 @@ def test_pagination_returns_a_stable_newest_first_window(db, people):
 @pytest.fixture()
 def committed_user(db):
     """A user that genuinely exists in the database, removed afterwards."""
-    person = User(
+    person = with_office_role(db, User(
         full_name="PushBoundary",
         email=f"pushboundary.{uuid.uuid4().hex[:10]}@constro.io",
         hashed_password="x",
-        role=UserRole.PROJECT_MANAGER,
         status=UserStatus.ACTIVE,
-    )
+    ), "project_manager")
     db.add(person)
     db.commit()
     try:

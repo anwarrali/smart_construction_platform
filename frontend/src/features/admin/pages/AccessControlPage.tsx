@@ -1,35 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Info, Lock, RefreshCw, Search, ShieldCheck, UserCog, Users } from "lucide-react";
+import { Info, ShieldCheck, UserCog, Users, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
-import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import api from "../../../services/api";
 import { errorMessage } from "../../../utils/errorMessage";
 import { useRole } from "../../../hooks/useRole";
+import { useVocabulary } from "../../../utils/vocabulary";
+import { ROUTES } from "../../../utils/constants";
 import { useAuthStore } from "../../../app/store/auth.store";
 import { useStepUp } from "../../../hooks/useStepUp";
 import {
   accessControlService,
   type ConsultantScope,
   type Permission,
-  type RolePermissionState,
   type UserPermissionSummary,
 } from "../services/accessControl.service";
 
 type Tab = "roles" | "people" | "consultants";
-type Person = { id: string; fullName: string; email: string; role: string; status: string };
+type Person = { id: string; fullName: string; email: string; status: string; orgRole?: { nameEn: string; nameAr?: string | null } | null };
 type ProjectRow = { id: string; name: string };
-type MemberRow = { userId: string; roleOnProject?: string; isActive?: boolean; user?: { id: string; fullName: string; role?: string; status?: string } };
-
-// The legacy role matrix. Roles an office creates are edited on the
-// Roles page (`/organization/roles`); this grid still covers the seeded
-// ones so an existing installation keeps the screen it knows.
-const ROLES = ["admin", "project_manager", "engineer", "consultant", "owner"] as const;
+type MemberRow = { userId: string; isActive?: boolean; user?: { id: string; fullName: string; status?: string } };
 
 /**
  * Access control for administrators.
@@ -39,7 +35,9 @@ const ROLES = ["admin", "project_manager", "engineer", "consultant", "owner"] as
  * `design_change.approve`. Three questions are separated because they are
  * genuinely different decisions:
  *
- *   Roles       — what a kind of person can do everywhere by default.
+ *   Roles       — what a kind of person can do; edited on the Office roles
+ *                 page, where every role the office has — seeded or its own —
+ *                 is listed. This tab points there.
  *   People      — an exception for one person, optionally on one project.
  *   Consultants — which engineers and disciplines a consultant reviews.
  *
@@ -51,16 +49,15 @@ export const AccessControlPage = () => {
   // shared verification dialog and replays the call once it is satisfied.
   const { run, dialog } = useStepUp();
   const { t } = useTranslation();
-  const { role: ownRole, refreshPermissions } = useRole();
+  const { refreshPermissions } = useRole();
+  const vocabulary = useVocabulary();
   const ownUserId = useAuthStore((state) => state.user?.id);
   const [tab, setTab] = useState<Tab>("roles");
   const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [matrix, setMatrix] = useState<RolePermissionState[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
-  const [search, setSearch] = useState("");
 
   const [personId, setPersonId] = useState("");
   const [personProjectId, setPersonProjectId] = useState("");
@@ -69,16 +66,12 @@ export const AccessControlPage = () => {
   const [scopeProjectId, setScopeProjectId] = useState("");
   const [consultants, setConsultants] = useState<ConsultantScope[]>([]);
   const [members, setMembers] = useState<MemberRow[]>([]);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [catalogue, roleMatrix] = await Promise.all([
-        accessControlService.permissions(),
-        accessControlService.roleMatrix(),
-      ]);
-      setPermissions(catalogue);
-      setMatrix(roleMatrix);
+      setPermissions(await accessControlService.permissions());
       const [userList, projectList] = await Promise.all([
         api.users.list({ limit: 200 }).catch(() => []),
         api.projects.list({ limit: 100 }).catch(() => []),
@@ -104,39 +97,7 @@ export const AccessControlPage = () => {
     return seen;
   }, [permissions]);
 
-  const visiblePermissions = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return permissions;
-    return permissions.filter((item) =>
-      item.label.toLowerCase().includes(needle) || item.description.toLowerCase().includes(needle));
-  }, [permissions, search]);
-
-  const stateFor = useCallback(
-    (role: string, code: string) => matrix.find((item) => item.role === role && item.permissionCode === code),
-    [matrix],
-  );
-
-  const toggleRole = async (role: string, permission: Permission, next: boolean) => {
-    const current = stateFor(role, permission.code);
-    // Returning to the default is expressed by clearing the override, which
-    // keeps the catalogue as the single source of truth.
-    const allowed = next === permission.defaultRoles.includes(role) ? null : next;
-    setBusy(`${role}:${permission.code}`);
-    try {
-      const updated = await run(() => accessControlService.setRolePermission(role, permission.code, allowed));
-      setMatrix((rows) => rows.map((row) =>
-        row.role === role && row.permissionCode === permission.code ? updated : row));
-      toast.success(t("accessControl.roleUpdated"));
-      // An administrator can change the permissions of their own role (e.g.
-      // revoke platform.view_all_projects from Admin) — without this, their
-      // own session's cached effective permissions would stay stale until
-      // their next full page load.
-      if (role === ownRole) void refreshPermissions();
-    } catch (error) {
-      toast.error(errorMessage(error, t("accessControl.updateFailed")));
-      if (current) setMatrix((rows) => [...rows]);
-    } finally { setBusy(""); }
-  };
+  const visiblePermissions = permissions;
 
   const loadPerson = useCallback(async (userId: string, projectId: string) => {
     if (!userId) { setSummary(null); return; }
@@ -156,8 +117,8 @@ export const AccessControlPage = () => {
       setSummary(await run(() => accessControlService.setUserPermission(
         summary.userId, permission.code, next, personProjectId || null)));
       toast.success(t("accessControl.personUpdated"));
-      // Same reasoning as toggleRole: an administrator can grant/revoke a
-      // permission directly on their own account.
+      // An administrator can grant or revoke a permission on their own
+      // account; their cached permissions must not stay stale.
       if (summary.userId === ownUserId) void refreshPermissions();
     } catch (error) {
       toast.error(errorMessage(error, t("accessControl.updateFailed")));
@@ -165,14 +126,16 @@ export const AccessControlPage = () => {
   };
 
   const loadConsultants = useCallback(async (projectId: string) => {
-    if (!projectId) { setConsultants([]); setMembers([]); return; }
+    if (!projectId) { setConsultants([]); setMembers([]); setAssigneeIds([]); return; }
     try {
-      const [scopes, memberRows] = await Promise.all([
+      const [scopes, memberRows, assignable] = await Promise.all([
         accessControlService.consultants(projectId),
         api.projects.getMembers(projectId) as unknown as Promise<MemberRow[]>,
+        api.projects.getEligibleMembers(projectId, "task_assignee"),
       ]);
       setConsultants(scopes);
       setMembers(memberRows || []);
+      setAssigneeIds(assignable);
     } catch (error) {
       toast.error(errorMessage(error, t("accessControl.loadFailed")));
     }
@@ -180,13 +143,11 @@ export const AccessControlPage = () => {
 
   useEffect(() => { void loadConsultants(scopeProjectId); }, [scopeProjectId, loadConsultants]);
 
+  /* Whose work a reviewer can be limited to: the members who can hold tasks
+     on this project, by the server's own assignment rule. */
   const reviewableEngineers = useMemo(
-    () => members.filter((item) =>
-      item.isActive !== false
-      && (item.user?.status ?? "active") === "active"
-      && item.roleOnProject !== "consultant"
-      && item.roleOnProject !== "owner"),
-    [members],
+    () => members.filter((item) => assigneeIds.includes(item.user?.id || item.userId)),
+    [members, assigneeIds],
   );
 
   const setScope = async (consultant: ConsultantScope, engineerId: string, include: boolean) => {
@@ -232,71 +193,11 @@ export const AccessControlPage = () => {
 
       {!loading && tab === "roles" && (
         <Card className="p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-semibold">{t("accessControl.rolesTitle")}</h2>
-              <p className="text-sm text-muted-foreground">{t("accessControl.rolesHint")}</p>
-            </div>
-            <Input label={t("common.search")} value={search} onChange={(e) => setSearch(e.target.value)}
-              rightElement={<Search size={15} className="text-muted-foreground" />} />
-          </div>
-
-          {groups.map((group) => {
-            const rows = visiblePermissions.filter((item) => item.group === group);
-            if (!rows.length) return null;
-            return (
-              <section key={group} className="mt-6">
-                <h3 className="label-caps text-muted-foreground">{t(`accessControl.groups.${group}`, { defaultValue: group })}</h3>
-                <div className="mt-2 overflow-x-auto">
-                  <table className="w-full min-w-[46rem] border-separate border-spacing-0 text-sm">
-                    <thead>
-                      <tr>
-                        <th className="sticky start-0 bg-card py-2 text-start font-semibold">{t("accessControl.permission")}</th>
-                        {ROLES.map((role) => (
-                          <th key={role} className="px-2 py-2 text-center text-xs font-semibold text-muted-foreground">
-                            {t(`roles.${role}`, { defaultValue: role })}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((permission) => (
-                        <tr key={permission.code} className="border-t">
-                          <td className="sticky start-0 max-w-sm bg-card py-2.5 pe-3">
-                            <p className="font-medium">{t(`permissions.${permission.code}.label`, { defaultValue: permission.label })}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {t(`permissions.${permission.code}.description`, { defaultValue: permission.description })}
-                            </p>
-                          </td>
-                          {ROLES.map((role) => {
-                            const state = stateFor(role, permission.code);
-                            const locked = role === "admin" && permission.adminLocked;
-                            return (
-                              <td key={role} className="px-2 py-2.5 text-center">
-                                <label className="inline-flex items-center justify-center" title={locked ? t("accessControl.lockedHint") : undefined}>
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4"
-                                    disabled={locked || busy === `${role}:${permission.code}`}
-                                    checked={state?.effectiveAllowed ?? permission.defaultRoles.includes(role)}
-                                    onChange={(e) => void toggleRole(role, permission, e.target.checked)}
-                                  />
-                                </label>
-                                {state?.overridden && (
-                                  <p className="mt-1 text-[10px] font-medium text-state-review">{t("accessControl.changed")}</p>
-                                )}
-                                {locked && <Lock size={11} className="mx-auto mt-1 text-muted-foreground" />}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            );
-          })}
+          <h2 className="text-xl font-semibold">{t("accessControl.rolesTitle")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("accessControl.rolesMoved")}</p>
+          <Link to={ROUTES.ADMIN_OFFICE_ROLES} className="mt-4 inline-block">
+            <Button variant="outline">{t("accessControl.openOfficeRoles")}</Button>
+          </Link>
         </Card>
       )}
 
@@ -307,7 +208,7 @@ export const AccessControlPage = () => {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Select label={t("accessControl.person")} value={personId} onChange={(e) => setPersonId(e.target.value)}
               options={[{ value: "", label: t("accessControl.selectPerson") },
-                ...people.map((item) => ({ value: item.id, label: `${item.fullName} — ${t(`roles.${item.role}`, { defaultValue: item.role })}` }))]} />
+                ...people.map((item) => ({ value: item.id, label: `${item.fullName} — ${vocabulary.orgRole(item.orgRole)}` }))]} />
             <Select label={t("accessControl.projectScope")} value={personProjectId} onChange={(e) => setPersonProjectId(e.target.value)}
               helperText={t("accessControl.projectScopeHint")}
               options={[{ value: "", label: t("accessControl.everywhere") },
@@ -319,7 +220,7 @@ export const AccessControlPage = () => {
           {summary && (
             <div className="mt-6 space-y-4">
               <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
-                <Badge variant="info">{t(`roles.${summary.role}`, { defaultValue: summary.role })}</Badge>
+                <Badge variant="info">{summary.roleName || "—"}</Badge>
                 <span className="text-muted-foreground">{summary.email}</span>
                 <span className="ms-auto text-xs text-muted-foreground">
                   {t("accessControl.holdsCount", { count: summary.effectivePermissions.length })}

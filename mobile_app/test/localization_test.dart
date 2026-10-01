@@ -100,13 +100,6 @@ void main() {
       });
     });
 
-    testWidgets('roles use the web wording', (tester) async {
-      final l10n = await _l10n(tester, const Locale('ar'));
-      expect(l10n.roleLabel('project_manager'), 'مدير المشروع');
-      expect(l10n.roleLabel('consultant'), 'الاستشاري');
-      expect(l10n.roleLabel('engineer'), 'مهندس');
-    });
-
     testWidgets('priorities use the web wording', (tester) async {
       final l10n = await _l10n(tester, const Locale('ar'));
       expect(l10n.priorityLabel('critical'), 'حرجة');

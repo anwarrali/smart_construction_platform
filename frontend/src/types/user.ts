@@ -1,15 +1,13 @@
-import type { UserRole, EngineerProfile, EngineerDiscipline, EngineerAffiliation } from "./auth";
+import type { EngineerProfile, EngineerDiscipline, OrgRoleRef } from "./auth";
 
 export interface UserProfile {
   id: string;
   fullName: string;
   email: string;
-  role: UserRole;
   status?: string;
   phoneNumber?: string;
   avatarUrl?: string;
   organization?: string;
-  engineerAffiliation?: EngineerAffiliation;
   telegramChatId?: string;
   notifyByEmail?: boolean;
   notifyByTelegram?: boolean;
@@ -20,23 +18,15 @@ export interface UserProfile {
   specialization?: string;
   bio?: string;
   createdAt?: string;
-  /**
-   * The configurable model. `orgRole` is the authority; `role` above is the
-   * retired column, still returned so nothing breaks mid-migration.
-   */
-  orgRole?: {
-    id: string;
-    code: string;
-    nameEn: string;
-    nameAr?: string | null;
-    isInternalOnly: boolean;
-  } | null;
+  /** The office role this person holds. */
+  orgRole?: OrgRoleRef | null;
   disciplines?: Array<{ id: string; code: string; nameEn: string; nameAr?: string | null }>;
   isInternal?: boolean;
 }
 
 export interface UserFilters {
-  role?: UserRole;
+  /** An office role id. */
+  roleId?: string;
   search?: string;
   status?: string;
   page?: number;
@@ -47,7 +37,7 @@ export interface UserListItem {
   id: string;
   fullName: string;
   email: string;
-  role: UserRole;
+  orgRole?: OrgRoleRef | null;
   isActive: boolean;
   status: string;
   assignedProjectsCount: number;

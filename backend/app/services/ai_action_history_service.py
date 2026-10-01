@@ -10,7 +10,7 @@ from app.core.deps import user_has_project_access
 from app.services.authorization import has_permission
 from app.models.ai_governance import AIActionVersion
 from app.models.design_change import DesignChange
-from app.models.enums import TaskStatus, UserRole
+from app.models.enums import TaskStatus
 from app.models.field_submission import FieldSubmission
 from app.models.issue import Issue
 from app.models.project import Project

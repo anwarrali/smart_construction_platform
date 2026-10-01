@@ -1,5 +1,5 @@
 """Regression coverage for a class of bug found while browser/API-testing the
-Consultant role: `User.role` can never literally equal `UserRole.CONSULTANT`.
+Consultant role: `User.role` can never literally equal `"legacy_consultant"`.
 
 `UserCreateByAdmin` (app.schemas.user) explicitly converts any request for the
 legacy CONSULTANT role into `role=ENGINEER, engineer_affiliation=
@@ -9,7 +9,7 @@ against the real API: posting `{"role": "consultant", ...}` to `/users` comes
 back with `"role": "engineer", "engineerAffiliation": "external_consultant"`.
 
 Several endpoints had not been updated to match that unification and still
-compared `current_user.role == UserRole.CONSULTANT` / `!= UserRole.CONSULTANT`
+compared `current_user.role == "legacy_consultant"` / `!= "legacy_consultant"`
 directly — a comparison that can never be true for any account that can
 actually be created, so the check always failed shut:
 
@@ -17,7 +17,7 @@ actually be created, so the check always failed shut:
     catalogue, with no `admin_locked` bypass, so `require()` rejected
     everyone, including Administrator.
   * `approve_design_change` / `reject_design_change` (app.api.design_changes)
-    additionally hardcoded `current_user.role == / != UserRole.CONSULTANT` as
+    additionally hardcoded `current_user.role == / != "legacy_consultant"` as
     their actual gate.
   * `review_cost_validation` (app.api.cost_validations) hardcoded the same
     always-false comparison.
@@ -51,10 +51,11 @@ from app.api.design_changes import approve_design_change, get_design_change_by_i
 from app.db.database import SessionLocal
 from app.models.cost_validation import CostValidation
 from app.models.design_change import DesignChange
-from app.models.enums import CostValidationStatus, DesignChangeStatus, EngineerDiscipline, ProjectStatus, UserRole, UserStatus
+from app.models.enums import CostValidationStatus, DesignChangeStatus, EngineerDiscipline, ProjectStatus, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import EngineerProfile, User
 from app.schemas.cost_validation import CostValidationReview
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -93,23 +94,22 @@ def _purge(db, project_ids, user_ids):
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation)
+    def user(name, role):
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "manager": user("DeadRolePm", UserRole.PROJECT_MANAGER),
-        "owner": user("DeadRoleOwner", UserRole.OWNER),
+        "manager": user("DeadRolePm", "project_manager"),
+        "owner": user("DeadRoleOwner", "client_representative"),
         # The real shape of "Consultant" today: ENGINEER + external_consultant.
-        "consultant": user("DeadRoleConsultant", UserRole.ENGINEER, "external_consultant"),
+        "consultant": user("DeadRoleConsultant", "senior_engineer"),
         # A Main Contractor Engineer must not gain approval rights just
         # because the catalogue default widened from {CONSULTANT} to
         # {ENGINEER} — the endpoint-level `is_consultant_engineer` gate is
         # what has to keep this excluded.
-        "contractor_engineer": user("DeadRoleContractor", UserRole.ENGINEER, "main_contractor"),
+        "contractor_engineer": user("DeadRoleContractor", "contractor_representative"),
     }
     db.flush()
     db.add(EngineerProfile(user_id=people["consultant"].id, discipline=EngineerDiscipline.CIVIL))
@@ -121,8 +121,7 @@ def world(db):
     db.add(project)
     db.flush()
     for key in ("manager", "consultant", "contractor_engineer"):
-        db.add(ProjectMember(project_id=project.id, user_id=people[key].id,
-                             role_on_project=UserRole.ENGINEER, is_active=True))
+        db.add(ProjectMember(project_id=project.id, user_id=people[key].id, is_active=True))
     db.flush()
 
     change = DesignChange(project_id=project.id, task_id=None, title="Rework the footing detail",
@@ -200,7 +199,7 @@ def test_a_consultant_engineer_outside_their_discipline_is_still_blocked(db, wor
 def test_consultant_discipline_scoping_on_the_design_change_list_and_detail_endpoints(db, world):
     """`list_design_changes` / `get_design_change_by_id` silently never
     auto-scoped a Consultant Engineer to their own discipline before this fix
-    (the same dead `role == UserRole.CONSULTANT` comparison)."""
+    (the same dead `role == "legacy_consultant"` comparison)."""
     result = get_design_change_by_id(world["change"].id, db=db, current_user=world["consultant"])
     assert result.id == world["change"].id
 

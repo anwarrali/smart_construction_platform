@@ -1,22 +1,16 @@
 /**
- * The retired platform roles.
- *
- * Roles are configured by the office now and come from
- * `GET /organization/roles`; this union is what the API still returns on
- * `User.role` while the legacy column exists, and it is used for
- * presentation fallbacks only. New code should read the `Role` record
- * rather than branch on these strings.
- *
- * `worker` is gone: workers are not platform users. Field evidence is
- * recorded by whoever holds `field_evidence.submit` — normally a Site
- * Engineer.
+ * The office role an account holds — a row the office maintains
+ * (`GET /organization/roles`), never a fixed union. It names the person's
+ * role and says whether they are office staff; what they may do comes from
+ * `GET /access-control/me`.
  */
-export type UserRole =
-  | "admin"
-  | "owner"
-  | "project_manager"
-  | "engineer"
-  | "consultant";
+export interface OrgRoleRef {
+  id: string;
+  code: string;
+  nameEn: string;
+  nameAr?: string | null;
+  isInternalOnly: boolean;
+}
 
 export type UserStatus = "active" | "inactive" | "suspended" | "pending";
 
@@ -25,7 +19,6 @@ export type EngineerDiscipline =
   | "civil"
   | "electrical"
   | "mechanical";
-export type EngineerAffiliation = "internal_engineer" | "main_contractor" | "external_consultant";
 
 export interface LoginRequest {
   email: string;
@@ -38,18 +31,14 @@ export interface CreateUserRequest {
   password: string;
   /**
    * The office role the account is created under — a row the administrator
-   * maintains, not a value from a fixed union. It decides the permissions,
-   * whether the person is office staff, and (until the contract migration)
-   * which legacy value the server writes to `role`.
+   * maintains. It decides the permissions and whether the person is office
+   * staff. Required: no account exists without one.
    */
-  orgRoleId?: string;
+  orgRoleId: string;
   /** Specializations the person practises. Several is normal. */
   disciplineIds?: string[];
-  /** Retired. Sent only when no office role is available to send. */
-  role?: UserRole;
   phoneNumber?: string;
   organization?: string;
-  engineerAffiliation?: EngineerAffiliation;
   engineerProfile?: {
     discipline: EngineerDiscipline;
     employeeId?: string;
@@ -59,11 +48,12 @@ export interface CreateUserRequest {
 export interface UpdateUserRequest {
   fullName?: string;
   email?: string;
-  role?: UserRole;
+  /** Move the account to another office role. */
+  orgRoleId?: string;
+  disciplineIds?: string[];
   status?: UserStatus;
   phoneNumber?: string;
   organization?: string;
-  engineerAffiliation?: EngineerAffiliation;
   engineerProfile?: {
     discipline: EngineerDiscipline;
     employeeId?: string;
@@ -90,12 +80,10 @@ export interface User {
   id: string;
   fullName: string;
   email: string;
-  role: UserRole;
   status: UserStatus;
   phoneNumber?: string;
   avatarUrl?: string;
   organization?: string;
-  engineerAffiliation?: EngineerAffiliation;
   isEmailVerified: boolean;
   isSuperuser: boolean;
   mustChangePassword: boolean;
@@ -105,18 +93,8 @@ export interface User {
   notifyByEmail: boolean;
   notifyByTelegram: boolean;
   engineerProfile?: EngineerProfile;
-  /**
-   * The office role this person holds — the authority. `role` above is the
-   * retired enum, still returned while the column exists and used only as a
-   * presentation fallback for an account the backfill has not reached.
-   */
-  orgRole?: {
-    id: string;
-    code: string;
-    nameEn: string;
-    nameAr?: string | null;
-    isInternalOnly: boolean;
-  } | null;
+  /** The office role this person holds. */
+  orgRole?: OrgRoleRef | null;
   disciplines?: Array<{ id: string; code: string; nameEn: string; nameAr?: string | null }>;
   /** Consulting-office staff, as opposed to an external participant. */
   isInternal?: boolean;

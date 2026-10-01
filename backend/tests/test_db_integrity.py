@@ -115,7 +115,24 @@ def test_the_migration_chain_has_exactly_one_head():
     # the only file-bearing table to lack. Additive and nullable: the bytes move
     # out of the public tree in `scripts/migrate_public_uploads.py`, which is a
     # file operation and therefore cannot live in a migration.
-    assert heads == ["f81c3a5d9e64"], f"expected exactly one head, found: {heads}"
+    # Bumped by `a92d4e1f70b3`, which grants the new `project.delete` permission
+    # to the two seeded roles whose accounts could already delete a project.
+    # Data only, no schema change: the code exists in the catalogue, but the
+    # live resolver answers from `role_permissions` rows and the seeder that
+    # writes them is a manual script, so without this the administrator who
+    # could delete a project yesterday could not delete one today.
+    # Bumped by `b73f5c8a2e91`, which gives `roles` an `is_archived` column and
+    # backfills it from `legacy_role IS NULL` — separating the archived-role
+    # policy from the migration-window translation column that was carrying it
+    # by coincidence.
+    # Bumped by `c84d6e2f1a37`, which grants the new `message.broadcast`
+    # permission to the roles that could already broadcast. Data only.
+    # Bumped by `e1a9c3d5f720`, the RBAC contract step: drops the retired role
+    # model (`users.role`, `users.engineer_affiliation`,
+    # `project_members.role_on_project`, `roles.legacy_role`,
+    # `roles.legacy_affiliation`, `role_permission_overrides`, the `user_role`
+    # type) and makes `users.org_role_id` NOT NULL.
+    assert heads == ["e1a9c3d5f720"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.

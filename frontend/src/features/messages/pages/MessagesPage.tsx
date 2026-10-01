@@ -20,6 +20,7 @@ import type { Project } from "../../../types/project";
 import { useProjectWorkspace } from "../../projects/context/ProjectWorkspaceContext";
 import { useRealtimeRefresh } from "../../../hooks/useRealtimeRefresh";
 import { projectEntityPath } from "../../../utils/projectRoutes";
+import { orgRoleName } from "../../../utils/vocabulary";
 
 type Tab = "all" | "unread" | "direct" | "teams" | "project";
 
@@ -28,7 +29,7 @@ export const MessagesPage = () => {
   const workspace = useProjectWorkspace();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { isAdmin, isProjectManager, hasCapability } = useRole();
+  const { hasCapability } = useRole();
   // "View original" must land inside the role's own project workspace: the
   // portfolio-level /issues route redirects role-scoped users to their
   // dashboard and drops the query parameter, so the entity would be lost.
@@ -318,7 +319,7 @@ export const MessagesPage = () => {
 
     <Modal isOpen={composeOpen} onClose={() => setComposeOpen(false)} title={t("messagesPage.new_project_conversation")} size="lg">
       <div className="space-y-4">
-        {(isAdmin || isProjectManager) && <label className="flex items-center gap-2 rounded border p-3 text-sm font-medium"><input type="checkbox" checked={announcement} onChange={(event) => setAnnouncement(event.target.checked)} /> Project/team announcement</label>}
+        {hasCapability("message.broadcast") && <label className="flex items-center gap-2 rounded border p-3 text-sm font-medium"><input type="checkbox" checked={announcement} onChange={(event) => setAnnouncement(event.target.checked)} /> Project/team announcement</label>}
         {!announcement && <Select label={t("messagesPage.send_to")} value={recipientMode} onChange={(event) => { setRecipientMode(event.target.value as typeof recipientMode); setRecipientIds([]); setGroupCode(""); }} options={[
           { value: "individual", label: "Individual" },
           { value: "multiple", label: "Multiple People" },
@@ -335,7 +336,7 @@ export const MessagesPage = () => {
               return <label key={recipient.id} className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-muted">
                 <input type={recipientMode === "individual" ? "radio" : "checkbox"} checked={checked}
                   onChange={() => setRecipientIds(recipientMode === "individual" ? [recipient.id] : checked ? recipientIds.filter((id) => id !== recipient.id) : [...recipientIds, recipient.id])} />
-                <span><span className="block text-sm font-medium">{recipient.fullName}</span><span className="text-xs text-muted-foreground">{recipient.role.replaceAll("_", " ")}</span></span>
+                <span><span className="block text-sm font-medium">{recipient.fullName}</span><span className="text-xs text-muted-foreground">{orgRoleName(recipient.orgRole)}</span></span>
               </label>;
             })}
           </div>
@@ -368,7 +369,7 @@ export const MessagesPage = () => {
               return <label key={recipient.id} className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-muted">
                 <input type={forwardRecipientMode === "individual" ? "radio" : "checkbox"} checked={checked}
                   onChange={() => setForwardRecipientIds(forwardRecipientMode === "individual" ? [recipient.id] : checked ? forwardRecipientIds.filter((id) => id !== recipient.id) : [...forwardRecipientIds, recipient.id])} />
-                <span><span className="block text-sm font-medium">{recipient.fullName}</span><span className="text-xs text-muted-foreground">{recipient.role.replaceAll("_", " ")}</span></span>
+                <span><span className="block text-sm font-medium">{recipient.fullName}</span><span className="text-xs text-muted-foreground">{orgRoleName(recipient.orgRole)}</span></span>
               </label>;
             })}
           </div>

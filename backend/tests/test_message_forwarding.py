@@ -16,12 +16,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.messages import create_conversation, forward_message
 from app.db.database import SessionLocal
 from app.models.audit_log import AuditLog
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.message import Conversation, Message
 from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.message import ConversationCreate, ForwardMessageCreate
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -43,20 +44,19 @@ def db():
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation)
+    def user(name, role):
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "manager": user("FwdPm", UserRole.PROJECT_MANAGER),
-        "engineer_a": user("FwdEngineerA", UserRole.ENGINEER, "main_contractor"),
-        "engineer_b": user("FwdEngineerB", UserRole.ENGINEER, "main_contractor"),
-        "engineer_c": user("FwdEngineerC", UserRole.ENGINEER, "main_contractor"),
-        "outsider": user("FwdOutsider", UserRole.ENGINEER, "main_contractor"),
-        "other_project_engineer": user("FwdOtherProjEngineer", UserRole.ENGINEER, "main_contractor"),
+        "manager": user("FwdPm", "project_manager"),
+        "engineer_a": user("FwdEngineerA", "contractor_representative"),
+        "engineer_b": user("FwdEngineerB", "contractor_representative"),
+        "engineer_c": user("FwdEngineerC", "contractor_representative"),
+        "outsider": user("FwdOutsider", "contractor_representative"),
+        "other_project_engineer": user("FwdOtherProjEngineer", "contractor_representative"),
     }
     db.flush()
 
@@ -67,10 +67,8 @@ def world(db):
     db.add_all([project, other_project])
     db.flush()
     for person in (people["manager"], people["engineer_a"], people["engineer_b"], people["engineer_c"]):
-        db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=person.role, is_active=True))
-    db.add(ProjectMember(project_id=other_project.id, user_id=people["other_project_engineer"].id,
-                         role_on_project=UserRole.ENGINEER, is_active=True))
+        db.add(ProjectMember(project_id=project.id, user_id=person.id, is_active=True))
+    db.add(ProjectMember(project_id=other_project.id, user_id=people["other_project_engineer"].id, is_active=True))
     db.flush()
     people["project"] = project
     people["other_project"] = other_project

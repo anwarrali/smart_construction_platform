@@ -19,11 +19,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.collaboration import create_site_visit, list_site_visits
 from app.db.database import SessionLocal
 from app.models.collaboration import SiteVisit
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.collaboration import SiteVisitCreate
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -47,13 +48,13 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                         hashed_password="x", status=UserStatus.ACTIVE), role)
 
-    manager = user("Manager", UserRole.PROJECT_MANAGER)
-    engineer = user("Engineer", UserRole.ENGINEER)
-    invited = user("Invited", UserRole.ENGINEER)
-    bystander = user("Bystander", UserRole.ENGINEER)
+    manager = user("Manager", "project_manager")
+    engineer = user("Engineer", "engineer")
+    invited = user("Invited", "engineer")
+    bystander = user("Bystander", "engineer")
     db.add_all([manager, engineer, invited, bystander])
     db.flush()
 
@@ -62,8 +63,7 @@ def world(db):
     db.add(project)
     db.flush()
     for person in (engineer, invited, bystander):
-        db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=UserRole.ENGINEER, is_active=True))
+        db.add(ProjectMember(project_id=project.id, user_id=person.id, is_active=True))
     db.flush()
     try:
         yield {"db": db, "project": project, "manager": manager, "engineer": engineer,
@@ -177,8 +177,9 @@ def test_a_back_to_back_visit_is_not_a_conflict(world):
 
 
 def test_a_participant_outside_the_project_is_rejected(world):
-    outsider = User(full_name="Outsider", email=f"outsider-{uuid4().hex[:8]}@test.local",
-                    hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE)
+    outsider = with_office_role(world["db"], User(
+        full_name="Outsider", email=f"outsider-{uuid4().hex[:8]}@test.local",
+        hashed_password="x", status=UserStatus.ACTIVE), "engineer")
     world["db"].add(outsider)
     world["db"].flush()
 

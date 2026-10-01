@@ -1,6 +1,9 @@
 .env
 backend/.env
 backend/uploads/
+# Private file storage (documents, attachments, IFC sources, voice audio).
+# Written at runtime and by the test suite; never source.
+backend/private_uploads/
 frontend/dist/
 frontend/node_modules/
 __pycache__/

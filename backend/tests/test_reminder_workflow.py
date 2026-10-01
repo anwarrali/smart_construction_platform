@@ -16,11 +16,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.database import SessionLocal
 from app.models.collaboration import OwnerRequest, ReminderEvent
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.services.reminder_service import evaluate_project_reminders
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -43,12 +44,12 @@ def world(db):
     suffix = uuid4().hex[:10]
 
     def user(name, role):
-        return User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                    hashed_password="x", role=role, status=UserStatus.ACTIVE)
+        return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                         hashed_password="x", status=UserStatus.ACTIVE), role)
 
-    owner = user("Client", UserRole.OWNER)
-    manager = user("Lead", UserRole.PROJECT_MANAGER)
-    engineer = user("Responsible", UserRole.ENGINEER)
+    owner = user("Client", "client_representative")
+    manager = user("Lead", "project_manager")
+    engineer = user("Responsible", "engineer")
     db.add_all([owner, manager, engineer])
     db.flush()
 
@@ -56,8 +57,7 @@ def world(db):
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=engineer.id,
-                         role_on_project=UserRole.ENGINEER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=engineer.id, is_active=True))
     db.flush()
     try:
         yield {"db": db, "project": project, "owner": owner, "manager": manager, "engineer": engineer}

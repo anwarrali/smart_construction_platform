@@ -32,11 +32,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.ai_intelligence import list_insights
 from app.api.scheduling import calculate_critical_path, get_delay_analysis, get_gantt_data
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
-from app.models.permission import RolePermissionOverride, UserPermissionOverride
+from app.models.enums import ProjectStatus, UserStatus
+from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.services.authorization import has_permission
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -59,7 +60,6 @@ def _purge(db, project_ids, user_ids):
     params = {"projects": list(project_ids), "users": list(user_ids)}
     for statement in (
         "DELETE FROM user_permission_overrides WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
-        "DELETE FROM role_permission_overrides WHERE updated_by_id = ANY(:users)",
         "DELETE FROM ai_insights WHERE project_id = ANY(:projects)",
         "DELETE FROM tasks WHERE project_id = ANY(:projects) OR created_by_id = ANY(:users)",
         "DELETE FROM notifications WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
@@ -76,18 +76,17 @@ def _purge(db, project_ids, user_ids):
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
-        person = User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation)
+    def user(name, role):
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("RbacAdmin", UserRole.ADMIN),
-        "manager": user("RbacPm", UserRole.PROJECT_MANAGER),
-        "owner": user("RbacOwner", UserRole.OWNER),
-        # schedule.view's default is the UserRole.CONSULTANT *role*, not an
+        "admin": user("RbacAdmin", "org_admin"),
+        "manager": user("RbacPm", "project_manager"),
+        "owner": user("RbacOwner", "client_representative"),
+        # schedule.view's default is the "legacy_consultant" *role*, not an
         # Engineer carrying the external-consultant affiliation — those are two
         # different shapes elsewhere in this app and must not be conflated here.
         # Confirmed intentional, not a migration artifact, in the investigation
@@ -95,15 +94,15 @@ def world(db):
         # the pre-catalogue hardcoded rule already blocked every Engineer
         # (see this file's module docstring), the frontend has never had a
         # schedule/Gantt route for either Engineer variant (only Admin/PM/
-        # Owner do), and `UserRole.CONSULTANT` itself can never be a real
+        # Owner do), and `"legacy_consultant"` itself can never be a real
         # stored role (`UserCreateByAdmin` persists it as unified Engineer) —
         # so this default has only ever really meant {ADMIN, PM, OWNER} in
         # practice, consistently, on both sides of the stack.
-        "consultant": user("RbacConsultant", UserRole.CONSULTANT),
+        "consultant": user("RbacConsultant", "legacy_consultant"),
         # The real "Consultant" shape: Engineer + external_consultant.
-        "consultant_engineer": user("RbacConsultantEngineer", UserRole.ENGINEER, "external_consultant"),
-        "engineer": user("RbacEngineer", UserRole.ENGINEER, "main_contractor"),
-        "worker": user("RbacWorker", UserRole.WORKER, "main_contractor"),
+        "consultant_engineer": user("RbacConsultantEngineer", "senior_engineer"),
+        "engineer": user("RbacEngineer", "contractor_representative"),
+        "worker": user("RbacWorker", "archived_field_staff"),
     }
     db.flush()
 
@@ -113,7 +112,6 @@ def world(db):
     db.flush()
     for key in ("manager", "consultant", "consultant_engineer", "engineer", "worker"):
         db.add(ProjectMember(project_id=project.id, user_id=people[key].id,
-                             role_on_project=UserRole.CONSULTANT if key == "consultant_engineer" else people[key].role,
                              is_active=True))
     db.flush()
 
@@ -133,11 +131,6 @@ def _grant(db, user, code, allowed=True, project_id=None):
 def _configure_role(db, user, code, allowed):
     """Change what the role this person holds may do, on the live mechanism.
 
-    `RolePermissionOverride` used to be how a role was configured, and these
-    tests used it directly. `effective_permissions` read that table only while
-    an account had no `org_role_id`; the contract step removed that branch, so
-    writing to it now changes nothing.
-
     The role is **copied first**, into a row belonging to this test alone, and
     the copy is what gets edited. Editing the seeded template in place would
     outlive the test — the templates are shared by every office and by every
@@ -152,13 +145,12 @@ def _configure_role(db, user, code, allowed):
     from uuid import uuid4 as _uuid4
 
     source = rbac.get_role(db, user.org_role_id)
-    assert source is not None, "the backstop should have given this account a role"
+    assert source is not None, "the fixture should have given this account a role"
     copy = Role(
         organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
         name_en=source.name_en, scope=source.scope,
         is_internal_only=source.is_internal_only, is_system=False,
-        rank=source.rank, legacy_role=source.legacy_role,
-        legacy_affiliation=source.legacy_affiliation,
+        rank=source.rank,
     )
     db.add(copy)
     db.flush()
@@ -255,8 +247,8 @@ def test_granting_schedule_view_lets_a_worker_in_without_widening_membership(db,
     _grant(db, world["worker"], "schedule.view")
     assert get_gantt_data(world["project"].id, db=db, current_user=world["worker"])
 
-    outsider = User(full_name="RbacOutsider", email=f"outsider-{uuid4().hex[:8]}@test.local",
-                    hashed_password="x", role=UserRole.WORKER, status=UserStatus.ACTIVE)
+    outsider = with_office_role(db, User(full_name="RbacOutsider", email=f"outsider-{uuid4().hex[:8]}@test.local",
+                                         hashed_password="x", status=UserStatus.ACTIVE), "archived_field_staff")
     db.add(outsider)
     db.flush()
     _grant(db, outsider, "schedule.view")
@@ -311,9 +303,8 @@ def test_a_grant_of_ai_view_insights_still_requires_project_access(db, world):
     _grant(db, world["engineer"], "ai.view_insights")
     assert list_insights(world["project"].id, db=db, current_user=world["engineer"], page=1, page_size=50) == []
 
-    outsider = User(full_name="RbacAiOutsider", email=f"ai-outsider-{uuid4().hex[:8]}@test.local",
-                    hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-                    engineer_affiliation="main_contractor")
+    outsider = with_office_role(db, User(full_name="RbacAiOutsider", email=f"ai-outsider-{uuid4().hex[:8]}@test.local",
+                                         hashed_password="x", status=UserStatus.ACTIVE), "contractor_representative")
     db.add(outsider)
     db.flush()
     _grant(db, outsider, "ai.view_insights")

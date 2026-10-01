@@ -208,7 +208,7 @@ class RoutingTests(TestCase):
              patch.object(voice_command_service, "build_action_drafts") as drafts:
             voice_command_service.interpret_command(
                 MagicMock(), command=subject, result=analysis_result,
-                user=SimpleNamespace(id=uuid4(), role=SimpleNamespace(value="engineer")),
+                user=SimpleNamespace(id=uuid4()),
             )
         return subject, drafts
 
@@ -314,7 +314,7 @@ class ContradictionTests(TestCase):
                     detected_intents=[VoiceIntent.PAUSE_TASK],
                     detected_task=DetectedTask(confidence=0.9, task_title="Roof Waterproofing"),
                 ),
-                user=SimpleNamespace(id=uuid4(), role=SimpleNamespace(value="engineer")),
+                user=SimpleNamespace(id=uuid4()),
             )
         drafts.assert_not_called()
         self.assertEqual(subject.status, VoiceAnalysisStatus.NEEDS_CLARIFICATION)
@@ -341,7 +341,7 @@ class ContradictionTests(TestCase):
                     detected_intents=[VoiceIntent.PAUSE_TASK],
                     detected_task=DetectedTask(confidence=0.9, task_title="Foundation Rebar"),
                 ),
-                user=SimpleNamespace(id=uuid4(), role=SimpleNamespace(value="engineer")),
+                user=SimpleNamespace(id=uuid4()),
             )
         # No contradiction to raise, and the model proposed nothing, so the
         # reply is a neutral question rather than an invented note.
@@ -465,7 +465,7 @@ class ReasoningTests(TestCase):
             voice_command_service.interpret_command(
                 MagicMock(), command=subject,
                 result=result(request_kind=VoiceRequestKind.REASONING),
-                user=SimpleNamespace(id=uuid4(), role=SimpleNamespace(value="engineer")),
+                user=SimpleNamespace(id=uuid4()),
             )
         drafts.assert_not_called()
         answering.assert_called_once()

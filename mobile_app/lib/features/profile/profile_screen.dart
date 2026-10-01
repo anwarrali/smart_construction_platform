@@ -22,7 +22,7 @@ class ProfileScreen extends ConsumerWidget {
     // The office's own name for this person, which is the only label that
     // stays true when an office invents a role. Falls back to the retired
     // enum's label for an account the backfill has not reached.
-    final role = user.orgRoleName ?? context.l10n.roleLabel(user.role);
+    final role = user.roleLabel;
     final screenHeight = MediaQuery.sizeOf(context).height;
     final headerHeight = (screenHeight * .32).clamp(210.0, 260.0);
     final bottomInset = MediaQuery.paddingOf(context).bottom;

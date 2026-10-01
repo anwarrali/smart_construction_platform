@@ -19,7 +19,7 @@ from app.services import rbac, work_scope
 from app.services.file_storage import delete_upload
 from app.services.private_storage import private_storage
 from app.models.enums import VoiceProcessingStatus
-from app.models.enums import UserRole, NotificationType
+from app.models.enums import NotificationType
 from app.services.authorization import has_permission, require, manageable_project
 from app.models.project import Project
 from app.models.project import ProjectMember
@@ -290,14 +290,8 @@ def review_site_report(
     report = db.get(SiteReport, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Site report not found")
-    # The capability is configurable (`site_report.verify`), but
-    # `manageable_project` still pins it to the Project Manager actually
-    # assigned to this project — a grant can never let a PM verify a report
-    # on someone else's project, and it re-checks project access for every
-    # other role. Admin, which holds no default here, can still be granted
-    # the permission explicitly through Access Control without this check
-    # narrowing them to a single project (the PM-only branch inside
-    # `manageable_project` only applies to `UserRole.PROJECT_MANAGER`).
+    # `site_report.verify` on this project; `manageable_project` re-checks
+    # project access, so a grant never reaches a project somebody is not on.
     manageable_project(db, current_user, report.project_id, "site_report.verify")
     if report.review_status != "submitted":
         raise HTTPException(

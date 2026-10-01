@@ -24,6 +24,7 @@ from app.ai.transcription_service import MAX_AUDIO_BYTES, TranscriptionService, 
 from app.core.config import settings
 from app.core.deps import get_current_user, user_has_project_access
 from app.services import rbac
+from app.services.authorization import has_permission
 from app.db.database import get_db
 from app.models.attachment import Attachment
 from app.models.enums import VoiceAnalysisStatus
@@ -107,7 +108,7 @@ async def create_voice_analysis(
         id=analysis_id, project_id=project_id, user_id=current_user.id,
         task_id=task.id if task else None, field_submission_id=field_submission_id,
         duration_seconds=duration_seconds, status=VoiceAnalysisStatus.UPLOADED,
-        role_at_recording_time=current_user.role.value,
+        role_at_recording_time=rbac.role_code(db, current_user),
         retention_policy=f"{settings.VOICE_AUDIO_RETENTION_DAYS}_DAYS",
     )
     db.add_all([attachment, analysis])
@@ -262,7 +263,7 @@ async def analyze_command(
     proposed, validation = validate_proposed_action(
         proposed,
         selected_project_id=request.project_id,
-        user_role=current_user.role.value,
+        may=lambda code: has_permission(db, current_user, code, request.project_id),
     )
     return AnalyzeCommandResponse(
         transcript=request.transcript,

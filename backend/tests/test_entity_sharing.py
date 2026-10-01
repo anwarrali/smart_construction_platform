@@ -21,7 +21,7 @@ from app.models.design_change import DesignChange
 from app.models.document import Document
 from app.models.enums import (
     DesignChangeStatus, DocumentType, IssueSeverity, IssueStatus,
-    ProjectStatus, TaskStatus, UserRole, UserStatus,
+    ProjectStatus, TaskStatus, UserStatus,
 )
 from app.models.issue import Issue
 from app.models.message import Conversation, Message
@@ -32,6 +32,7 @@ from app.models.site_report import SiteReport
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.message import ShareEntityCreate
+from tests.office_roles import with_office_role
 
 
 @pytest.fixture()
@@ -53,16 +54,15 @@ def db():
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
-        person = User(full_name=name, email=f"{name.lower()}.{suffix}@constro.io",
-                      hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                      engineer_affiliation=affiliation)
+    def user(name, role):
+        person = with_office_role(db, User(full_name=name, email=f"{name.lower()}.{suffix}@constro.io",
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "manager": user("SharePm", UserRole.PROJECT_MANAGER),
-        "owner": user("ShareOwner", UserRole.OWNER),
+        "manager": user("SharePm", "project_manager"),
+        "owner": user("ShareOwner", "client_representative"),
         # Office staff, not contractor-side. What this suite is about is
         # *sharing an item as a message* between two engineers on a project;
         # the `main_contractor` affiliation these carried made them external
@@ -70,11 +70,11 @@ def world(db):
         # correctly refused the share and the test failed for a reason that had
         # nothing to do with sharing. `contractor_rep` keeps the affiliation
         # deliberately — it is the one that exists to be an outside party.
-        "engineer_a": user("ShareEngineerA", UserRole.ENGINEER, "internal_engineer"),
-        "engineer_b": user("ShareEngineerB", UserRole.ENGINEER, "internal_engineer"),
-        "contractor_rep": user("ShareContractorRep", UserRole.ENGINEER, "main_contractor"),
-        "outsider": user("ShareOutsider", UserRole.ENGINEER, "internal_engineer"),
-        "other_project_engineer": user("ShareOtherEngineer", UserRole.ENGINEER, "internal_engineer"),
+        "engineer_a": user("ShareEngineerA", "engineer"),
+        "engineer_b": user("ShareEngineerB", "engineer"),
+        "contractor_rep": user("ShareContractorRep", "contractor_representative"),
+        "outsider": user("ShareOutsider", "engineer"),
+        "other_project_engineer": user("ShareOtherEngineer", "engineer"),
     }
     db.flush()
 
@@ -85,8 +85,7 @@ def world(db):
     db.add_all([project, other_project])
     db.flush()
     for person in (people["manager"], people["engineer_a"], people["engineer_b"]):
-        db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=person.role, is_active=True))
+        db.add(ProjectMember(project_id=project.id, user_id=person.id, is_active=True))
     # On the project for an outside firm. Deny-by-default means they read
     # no documents on it until something is shared with their party.
     contractor_party = ProjectParty(
@@ -97,12 +96,10 @@ def world(db):
     db.flush()
     people["contractor_rep"].is_internal = False
     db.add(ProjectMember(
-        project_id=project.id, user_id=people["contractor_rep"].id,
-        role_on_project=UserRole.ENGINEER, party_id=contractor_party.id,
+        project_id=project.id, user_id=people["contractor_rep"].id, party_id=contractor_party.id,
         is_active=True,
     ))
-    db.add(ProjectMember(project_id=other_project.id, user_id=people["other_project_engineer"].id,
-                         role_on_project=UserRole.ENGINEER, is_active=True))
+    db.add(ProjectMember(project_id=other_project.id, user_id=people["other_project_engineer"].id, is_active=True))
     db.flush()
 
     issue = Issue(project_id=project.id, title="Electrical routing conflict",

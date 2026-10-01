@@ -40,10 +40,6 @@ def normalized_page(page: int, page_size: int) -> tuple[int, int, int]:
 # than none, so they are gone rather than partially corrected.
 
 
-def category_management_allowed(role: str, *, is_assigned_pm: bool) -> bool:
-    return role == "admin" or (role == "project_manager" and is_assigned_pm)
-
-
 def matches_archive_filters(record: dict, *, project_id, **filters) -> bool:
     """Reference filter semantics used by unit tests and non-SQL consumers."""
     if str(record["project_id"]) != str(project_id):

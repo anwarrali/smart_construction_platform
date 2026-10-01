@@ -322,7 +322,7 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
               .where(
                 (person) =>
                     person.fullName.toLowerCase().contains(needle) ||
-                    l10n.roleLabel(person.role).toLowerCase().contains(needle),
+                    person.roleLabel.toLowerCase().contains(needle),
               )
               .toList();
 
@@ -417,7 +417,7 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            subtitle: Text(l10n.roleLabel(person.role)),
+            subtitle: Text(person.roleLabel),
             onChanged: (checked) => setState(() {
               if (checked == true) {
                 _selected.add(person.id);

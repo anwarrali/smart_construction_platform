@@ -26,7 +26,7 @@ export const DesignChangesPage = () => {
   const [changes, setChanges] = useState<DesignChange[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const isFirstRender = useRef(true);
-  const { role } = useRole();
+  const { hasCapability } = useRole();
   const [formOpen, setFormOpen] = useState(false);
   const [projects, setProjects] = useState<{id:string;name:string}[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -69,7 +69,8 @@ export const DesignChangesPage = () => {
     if (activeProjectId && workspace.project) { setProjects([workspace.project]); setProjectId(activeProjectId); return; }
     api.projects.list().then(r => { setProjects(r.data); if(r.data[0]) setProjectId(r.data[0].id); });
   }, [activeProjectId, workspace.project]);
-  const canPropose = role === "project_manager" || role === "engineer";
+  const canPropose = hasCapability("design_change.propose");
+  const canApprove = hasCapability("design_change.approve");
   const createChange = async (e: React.FormEvent) => { e.preventDefault(); await designChangesService.create({projectId:activeProjectId || projectId,title,description,reason,sourceDiscipline:discipline,affectedDisciplines:[discipline],expectedCostImpact:costImpact?Number(costImpact):undefined,expectedScheduleImpactDays:scheduleImpact?Number(scheduleImpact):undefined}); setFormOpen(false); setTitle(""); setDescription(""); fetchChanges(); };
 
   if (isLoading) return <Loader fullPage />;
@@ -142,7 +143,7 @@ export const DesignChangesPage = () => {
                     {t("designChanges.affected_count", { count: change.affectedDisciplines.length })}
                   </div>
                 )}
-                {role === "consultant" && ["proposed","under_review"].includes(change.status) && <div className="flex gap-2 ml-3"><Button size="sm" onClick={async()=>{await api.designChanges.approve(change.id);fetchChanges();}}>{t("designChanges.approve")}</Button><Button size="sm" variant="destructive" onClick={async()=>{await api.designChanges.reject(change.id,t("designChanges.quick_reject_reason"));fetchChanges();}}>{t("designChanges.reject")}</Button></div>}
+                {canApprove && ["proposed","under_review"].includes(change.status) && <div className="flex gap-2 ml-3"><Button size="sm" onClick={async()=>{await api.designChanges.approve(change.id);fetchChanges();}}>{t("designChanges.approve")}</Button><Button size="sm" variant="destructive" onClick={async()=>{await api.designChanges.reject(change.id,t("designChanges.quick_reject_reason"));fetchChanges();}}>{t("designChanges.reject")}</Button></div>}
               </div>
             </Card>
           ))}

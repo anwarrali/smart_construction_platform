@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.models.enums import UserRole, UserStatus, VoiceAnalysisStatus
+from app.models.enums import UserStatus, VoiceAnalysisStatus
 from app.schemas.voice_analysis import (
     ConstructionVoiceResult,
     DetectedLocation,
@@ -77,12 +77,12 @@ class StrictVoiceSchemaTests(TestCase):
 
 
 class VoiceRulesEngineTests(TestCase):
-    def _actor(self, role: UserRole):
+    def _actor(self, label: str):
+        """`label` names the speaker; the permission check is patched per case."""
         return SimpleNamespace(
             id=uuid4(),
-            role=role,
+            full_name=label,
             status=UserStatus.ACTIVE,
-            engineer_affiliation=None,
             org_role_id=None,
             is_internal=True,
         )
@@ -95,7 +95,7 @@ class VoiceRulesEngineTests(TestCase):
         )
 
     def test_official_progress_needs_the_progress_permission(self):
-        actor = self._actor(UserRole.WORKER)
+        actor = self._actor("archived_field_staff")
         command = self._command(actor)
         draft = SimpleNamespace(
             action_type="UPDATE_TASK_PROGRESS",
@@ -119,7 +119,7 @@ class VoiceRulesEngineTests(TestCase):
         self.assertEqual(raised.exception.status_code, 403)
 
     def test_low_confidence_requires_human_edit(self):
-        actor = self._actor(UserRole.ENGINEER)
+        actor = self._actor("engineer")
         command = self._command(actor)
         draft = SimpleNamespace(
             action_type="ADD_TASK_NOTE",
@@ -143,7 +143,7 @@ class VoiceRulesEngineTests(TestCase):
         self.assertIn("Low-confidence", raised.exception.detail)
 
     def test_missing_clarification_blocks_execution(self):
-        actor = self._actor(UserRole.ENGINEER)
+        actor = self._actor("engineer")
         command = self._command(actor)
         draft = SimpleNamespace(
             action_type="UPDATE_TASK_PROGRESS",
@@ -173,7 +173,7 @@ class VoiceRulesEngineTests(TestCase):
         representative; the property is about Voice, not about who the
         speaker is, so the refusal is driven by the permission answer.
         """
-        actor = self._actor(UserRole.OWNER)
+        actor = self._actor("client_representative")
         command = self._command(actor)
         draft = SimpleNamespace(
             action_type="CREATE_ISSUE",

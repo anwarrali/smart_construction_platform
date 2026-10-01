@@ -9,7 +9,8 @@ import { useAuthStore } from "../../app/store/auth.store";
 import api from "../../services/api";
 import type { Project } from "../../types/project";
 
-const EngineerEntry = () => {
+/** Somebody whose work is the tasks they hold: straight into it. */
+const WorkEntry = () => {
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -25,51 +26,37 @@ const EngineerEntry = () => {
     return () => { cancelled = true; };
   }, []);
 
-  if (
-    !user
-    || user.role !== "engineer"
-    || !["main_contractor", "external_consultant"].includes(user.engineerAffiliation || "")
-    || user.status !== "active"
-  ) {
-    return <div className="rounded-xl border bg-card p-6 text-destructive">{t("dashboardSelectorPage.active_engineer_organization_side_is")}</div>;
+  if (!user || user.status !== "active") {
+    return <div className="rounded-xl border bg-card p-6 text-destructive">{t("dashboardSelectorPage.account_not_active")}</div>;
   }
   if (error) return <div className="rounded-xl border bg-card p-6 text-destructive">{error}</div>;
   if (!projects) return <div className="p-8 text-center text-muted-foreground">{t("dashboardSelectorPage.loading_your_assigned_projects")}</div>;
-  if (projects.length === 1) {
-    const base = user.engineerAffiliation === "external_consultant" ? "/consultant-engineer/projects" : "/engineer/projects";
-    return <Navigate to={`${base}/${projects[0].id}/dashboard`} replace />;
-  }
-  return <Navigate to={user.engineerAffiliation === "external_consultant" ? "/consultant-engineer/projects" : "/engineer/projects"} replace />;
+  if (projects.length === 1) return <Navigate to={`/projects/${projects[0].id}/my-work`} replace />;
+  return <Navigate to="/projects" replace />;
 };
 
 /**
- * DashboardSelectorPage
- * Reads the authenticated user's role and renders the correct role-based dashboard.
- * Engineers → EngineerDashboard
- * Owner → redirect to /owner-dashboard
- * Admin → redirect to /admin
+ * Where a sign-in lands, chosen by what the person may do.
  *
- * The Worker branch is gone with the role. It used to land on /my-actions,
- * which stays reachable to everybody — it is simply no longer anybody's
- * default landing page.
+ * Each destination is guarded by the same capability that picks it here, so
+ * the landing page is always one the person can open — whatever the office
+ * called their role.
  */
 export const DashboardSelectorPage = () => {
-  const { role } = useRole();
+  const { t } = useTranslation();
+  const user = useAuthStore((state) => state.user);
+  const { hasCapability, permissionsReady, isInternal } = useRole();
 
-  if (!role) return <Navigate to="/auth/login" replace />;
-
-  switch (role) {
-    case "owner":
-      return <Navigate to="/owner-dashboard" replace />;
-    case "admin":
-      return <Navigate to="/admin" replace />;
-    case "project_manager":
-      return <ProjectManagerDashboard />;
-    case "consultant":
-      return <ConsultantDashboard />;
-    case "engineer":
-      return <EngineerEntry />;
-    default:
-      return <Navigate to="/projects" replace />;
+  if (!user) return <Navigate to="/auth/login" replace />;
+  if (!permissionsReady) {
+    return <div className="p-8 text-center text-muted-foreground">{t("common.loading")}</div>;
   }
+  if (hasCapability("platform.manage_users")) return <Navigate to="/admin" replace />;
+  if (hasCapability("project.manage_members") || hasCapability("platform.create_project")) {
+    return <ProjectManagerDashboard />;
+  }
+  if (!isInternal && hasCapability("client_portal.view")) return <Navigate to="/owner-dashboard" replace />;
+  if (hasCapability("task.review")) return <ConsultantDashboard />;
+  if (hasCapability("task.view")) return <WorkEntry />;
+  return <Navigate to="/projects" replace />;
 };

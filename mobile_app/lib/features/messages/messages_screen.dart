@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/dependency_injection.dart';
+import '../../core/auth/capabilities.dart';
 import '../../core/auth/session_manager.dart';
 import '../../core/network/network_exceptions.dart';
 import '../../core/widgets/async_views.dart';
@@ -76,8 +77,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   }
 
   Future<void> _compose() async {
-    final project = ref.read(projectContextProvider).selected;
-    final user = ref.read(sessionProvider).user;
+    final project = ref.read(projectContextProvider).selected;
     if (project == null) return;
     final selected = <String>{};
     var groupCode = '';
@@ -104,7 +104,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                     )),
-                if (user?.isProjectManager == true || user?.role == 'admin')
+                if (readCapabilities(ref).has('message.broadcast'))
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(context.l10n.messagesAnnouncement),
@@ -160,7 +160,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                         contentPadding: EdgeInsets.zero,
                         value: selected.contains(recipient.id),
                         title: Text(recipient.fullName, overflow: TextOverflow.ellipsis),
-                        subtitle: Text(context.l10n.roleLabel(recipient.role)),
+                        subtitle: Text(recipient.roleLabel),
                         onChanged: (checked) => setSheetState(() {
                           if (checked == true) {
                             selected.add(recipient.id);

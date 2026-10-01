@@ -36,7 +36,7 @@ from app.models.attachment import Attachment
 from app.models.company import Company
 from app.models.document import Document
 from app.models.enums import (
-    DocumentType, FieldSubmissionStatus, ProjectStatus, TaskStatus, UserRole, UserStatus,
+    DocumentType, FieldSubmissionStatus, ProjectStatus, TaskStatus, UserStatus,
 )
 from app.models.field_submission import (
     FieldSubmission, FieldSubmissionPhoto, PhotoCategoryAssignment,
@@ -111,7 +111,7 @@ def world(db):
     def person(label: str) -> User:
         user = User(
             full_name=f"{label}{suffix}", email=f"{label.lower()}.{suffix}@constro.io",
-            hashed_password=hash_password(PASSWORD), role=UserRole.PROJECT_MANAGER,
+            hashed_password=hash_password(PASSWORD),
             status=UserStatus.ACTIVE, company_id=office.id, org_role_id=role.id,
             is_internal=role.is_internal_only,
         )
@@ -130,7 +130,7 @@ def world(db):
         db.add(project)
         db.flush()
         db.add(ProjectMember(
-            project_id=project.id, user_id=manager.id, role_on_project=manager.role,
+            project_id=project.id, user_id=manager.id,
             project_role_id=role.id, is_active=True,
         ))
         db.flush()

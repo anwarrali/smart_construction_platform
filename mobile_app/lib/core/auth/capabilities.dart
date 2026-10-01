@@ -84,6 +84,11 @@ Capabilities capabilitiesOf(WidgetRef ref, {String? projectId}) =>
 Capabilities capabilitiesFrom(Ref ref, {String? projectId}) =>
     _fold(ref.watch(capabilitiesProvider(projectId)));
 
+/// A one-off reading for event handlers and async work, where watching is
+/// not allowed. Same optimistic default as [capabilitiesOf].
+Capabilities readCapabilities(WidgetRef ref, {String? projectId}) =>
+    _fold(ref.read(capabilitiesProvider(projectId)));
+
 Capabilities _fold(AsyncValue<Capabilities> value) => value.maybeWhen(
       data: (resolved) => resolved,
       orElse: () => const Capabilities.pending(),

@@ -151,7 +151,7 @@ def interpret(subject, analysis_result, tasks, *, pending=None, capable=True,
     ):
         voice_command_service.interpret_command(
             db, command=subject, result=analysis_result,
-            user=SimpleNamespace(id=uuid4(), role=SimpleNamespace(value="engineer")),
+            user=SimpleNamespace(id=uuid4()),
         )
     return subject
 
@@ -556,7 +556,6 @@ class NoSilentStateTests(TestCase):
         question.voice_analysis_id = subject.id
         user = SimpleNamespace(
             id=subject.user_id, status=UserStatus.ACTIVE,
-            role=SimpleNamespace(value="engineer"),
         )
         with patch.object(
             voice_command_service, "assert_command_access", return_value=None
@@ -601,8 +600,7 @@ class ClarifiedRequestNeverEndsInSilence(TestCase):
             asyncio.run(voice_api._interpret_clarified_request(
                 db, command=subject,
                 user=SimpleNamespace(
-                    id=uuid4(), role=SimpleNamespace(value="engineer"),
-                    engineer_affiliation=None,
+                    id=uuid4(),
                 ),
                 original="في تأخير في وصول المواد لمهمة اليوم",
                 answer="المواد الكهربائية تأخرت.",

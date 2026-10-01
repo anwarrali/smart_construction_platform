@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import { useTranslation } from "react-i18next";
 
 /**
@@ -15,8 +16,16 @@ import { useTranslation } from "react-i18next";
 const humanize = (value: string) =>
   value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
+/** An office role as the API returns it on a user. */
+type RoleName = { nameEn: string; nameAr?: string | null } | null | undefined;
+
+/** An office role's name in the current language. Roles are office data, not vocabulary. */
+export const orgRoleName = (role: RoleName, language: string = i18next.language || "en"): string =>
+  role ? (language.startsWith("ar") ? role.nameAr || role.nameEn : role.nameEn) : "";
+
 export const useVocabulary = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const arabic = (i18n.resolvedLanguage || i18n.language || "en").startsWith("ar");
 
   const lookup = (namespace: string, value: unknown, lowercase = true): string => {
     if (value === null || value === undefined || value === "") return "";
@@ -26,10 +35,8 @@ export const useVocabulary = () => {
   };
 
   return {
-    /** Retired platform role: admin, project_manager, engineer, consultant, owner. */
-    role: (value: unknown) => lookup("roles", value),
-    /** Role held on one project; the same vocabulary as platform roles. */
-    projectRole: (value: unknown) => lookup("roles", value),
+    /** An office role's name, in the reader's language. Roles are office data, not vocabulary. */
+    orgRole: (role: RoleName) => orgRoleName(role, arabic ? "ar" : "en"),
     taskStatus: (value: unknown) => lookup("task.status", value),
     priority: (value: unknown) => lookup("task.priority", value),
     projectStatus: (value: unknown) => lookup("project.status", value),
