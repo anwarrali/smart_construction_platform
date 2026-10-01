@@ -144,6 +144,24 @@ def _serialize(db: Session) -> None:
     db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": BOOTSTRAP_LOCK_KEY})
 
 
+def initialize_rbac(db: Session) -> str:
+    """Seed a fresh database's disciplines and role templates, and nothing else.
+
+    The start sequence runs this when no initial administrator is configured,
+    so a database is never left without roles just because nobody set the
+    bootstrap variables: migrations create schema only, and this is where the
+    initial RBAC data comes from. Same lock and same idempotent seed as the
+    administrator path; on an initialized database it changes nothing.
+    """
+    _serialize(db)
+    migration = _require_alembic_head(db)
+    seeded = rbac.seed_fresh_database(db)
+    db.commit()
+    if seeded:
+        return f"Seeded disciplines and role templates on a fresh database (migration={migration})."
+    return f"Roles already initialized; nothing to seed (migration={migration})."
+
+
 def bootstrap_admin(db: Session, config: BootstrapConfig) -> str:
     _serialize(db)
     migration = _require_alembic_head(db)
@@ -254,21 +272,20 @@ def bootstrap_admin(db: Session, config: BootstrapConfig) -> str:
     )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--if-configured",
         action="store_true",
-        help="Exit successfully when none of the bootstrap variables are set.",
+        help="When none of the bootstrap variables are set, only seed the role "
+        "templates on a fresh database instead of failing.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         config = _load_config(if_configured=args.if_configured)
-        if config is None:
-            return 0
         with SessionLocal() as db:
-            print(bootstrap_admin(db, config))
+            print(initialize_rbac(db) if config is None else bootstrap_admin(db, config))
         return 0
     except Exception as exc:
         print(f"Initial administrator bootstrap failed: {exc}", file=sys.stderr)

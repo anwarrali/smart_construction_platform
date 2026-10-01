@@ -387,11 +387,12 @@ executes, and everything is traceable to a real person's authority.**
 | `frontend` | `./frontend/Dockerfile` (node:20 build → nginx:1.27-alpine) | 5173→80 | Vite env inlined as **build args** |
 | `flutter-tools` | `mobile_app/Dockerfile.ci` | — | `mobile-tools` profile; never starts with `docker compose up` |
 
-Backend start sequence: `wait_for_db.py` (polls, proceeds the instant the
-database answers) → `alembic upgrade head` → uvicorn with 2 workers and
-`--proxy-headers`. The Dockerfile `CMD` additionally runs
-`bootstrap_admin --if-configured` and `seed_demo --if-enabled`; Compose
-overrides the command and skips both.
+Backend start sequence — the Dockerfile `CMD`, the only one; Compose does not
+override it (`tests/test_start_sequence.py`): `wait_for_db.py` (polls, proceeds
+the instant the database answers) → `alembic upgrade head` →
+`bootstrap_admin --if-configured` (creates the configured initial
+administrator, or with none configured seeds the role templates on a fresh
+database) → `seed_demo --if-enabled` → uvicorn with `--proxy-headers`.
 
 Firebase web values must be build-time args because Vite inlines
 `import.meta.env.*` at compile time. `frontend/.env` is excluded by
@@ -440,19 +441,14 @@ performed.**
 
 ## 12. Current architectural risks and weaknesses
 
-1. **Document bytes are not access-controlled.** `GET /documents/{id}/download`
-   correctly calls `assert_document_readable` — and then returns a URL into the
-   `/uploads` `StaticFiles` mount, which has no authentication. The
-   deny-by-default `DocumentPartyShare` model therefore protects metadata and
-   discovery, but anyone holding or guessing a URL can fetch the file. IFC and
-   voice already demonstrate the correct pattern (`private_storage` plus an
-   authenticated `FileResponse`); documents and attachments do not use it.
+1. **~~Document bytes are not access-controlled.~~ Resolved.** Documents and
+   attachments live in `private_storage` and stream through authenticated
+   download endpoints; only `/uploads/avatars` is still a static mount.
 2. **~~Two role models are live at once.~~ Resolved.** The retired enum and its
    columns are gone; every decision goes through `effective_permissions`.
-3. **Vector search does not scale.** Cosine similarity is computed in Python over
-   JSONB rows, brute force per query. Fine at the current corpus size, but linear
-   in documents and single-threaded. `RAG.md` §10 documents the pgvector
-   migration; it has not been performed.
+3. **~~Vector search does not scale.~~ Resolved.** Embeddings are a pgvector
+   `vector(1536)` column with an HNSW cosine index (`c63fa2b5e819`); retrieval
+   ranks in the database.
 4. **Heavy work runs in the API process.** IFC parse and geometry fork
    subprocesses from the web container; agent analysis runs *inline inside the
    emitting transaction*. There is no queue, no worker tier and no backpressure —
@@ -466,9 +462,9 @@ performed.**
 6. **Tokens in `localStorage`.** Both access and refresh tokens are stored where
    any XSS can read them; refresh rotation limits the window but does not close
    it.
-7. **Startup diverges between environments.** The Dockerfile `CMD` bootstraps an
-   admin and seeds demo data; Compose overrides the command and does neither. Two
-   start paths means the one exercised locally is not the one shipped.
+7. **~~Startup diverges between environments.~~ Resolved.** Compose no longer
+   overrides the Dockerfile `CMD`, so every environment runs one start sequence,
+   and it seeds the role templates even when no administrator is configured.
 8. **Compose defaults are development-grade.** A default database password is
    baked into `docker-compose.yml`, and 5432 is published to the host.
 9. **Thin client-side test coverage.** 11 test files across 245 frontend sources;
@@ -490,12 +486,12 @@ Ordered by risk reduced per unit of work.
 
 | # | Recommendation | Addresses |
 |---|---|---|
-| 1 | Serve documents and attachments through an authenticated streaming endpoint (or signed, expiring URLs), and unmount `/uploads` from `StaticFiles`. Reuse the `private_storage` pattern already proven by IFC. | Risk 1 |
+| 1 | ~~Serve documents and attachments through an authenticated endpoint.~~ Done. | Risk 1 |
 | 2 | ~~Close the RBAC migration window.~~ Done: role-based helpers removed, retired schema dropped (`e1a9c3d5f720`). | Risk 2 |
 | 3 | Move IFC processing and agent analysis out of the request path onto a real job runner. Given the deliberate no-broker stance, a database-backed queue table using the advisory-lock worker pattern already in `scheduler.py` would fit the existing architecture without new infrastructure. | Risk 4 |
-| 4 | Execute the documented pgvector migration (`pgvector/pgvector:pg15`, a `vector` column, an IVFFlat index) behind the existing `VectorStore` Protocol. | Risk 3 |
+| 4 | ~~Execute the pgvector migration.~~ Done (`c63fa2b5e819`). | Risk 3 |
 | 5 | Write the S3/R2 `PrivateStorage` implementation and give public uploads the same abstraction, so the backend becomes stateless. | Risk 5 |
-| 6 | Make one start sequence authoritative — keep the Dockerfile `CMD` and delete the Compose `command` override, or move bootstrap and seed into an explicit one-shot service. | Risk 7 |
+| 6 | ~~Make one start sequence authoritative.~~ Done: the Compose override is gone. | Risk 7 |
 | 7 | Move the refresh token to an `HttpOnly`, `Secure`, `SameSite` cookie and keep only the access token in memory. | Risk 6 |
 | 8 | Add a `kid` claim and support two active signing keys so `SECRET_KEY` can be rotated without a fleet-wide logout. | Risk 11 |
 | 9 | Remove dead configuration: the `/ws` proxy, the `TELEGRAM` channel value (or implement the provider), the committed crash dump and `dist/`. | Risk 10 |

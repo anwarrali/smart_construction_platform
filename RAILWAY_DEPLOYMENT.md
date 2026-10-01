@@ -205,7 +205,9 @@ BOOTSTRAP_ADMIN_RECOVER_PASSWORD=false
 ```
 
 The Docker startup runs `python -m app.db.bootstrap_admin --if-configured`
-after Alembic. The bootstrap creates one initial Administrator only when the
+after Alembic. With no bootstrap variables set it only seeds the role
+templates on a fresh database, so roles exist before the first administrator
+does. The bootstrap creates one initial Administrator only when the
 users table is empty, verifies credentials on an identical rerun, and refuses
 to alter privileges or passwords in a populated database. The temporary
 password must contain 12-128 characters with uppercase, lowercase, and digits.

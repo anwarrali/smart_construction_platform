@@ -114,6 +114,29 @@ def test_archived_role_semantics_are_seeded_unchanged(fresh_db):
 
 # --- idempotence -----------------------------------------------------------------
 
+def test_the_start_sequence_seeds_roles_with_no_administrator_configured(fresh_db):
+    """`bootstrap_admin --if-configured` with nothing configured: roles, no account."""
+    from app.db.bootstrap_admin import initialize_rbac
+
+    assert "Seeded" in initialize_rbac(fresh_db)
+    assert {role.code for role in fresh_db.query(Role).all()} == EXPECTED_ROLE_CODES
+    assert _count(fresh_db, User) == 0
+
+    before = (_count(fresh_db, Role), _count(fresh_db, RolePermission))
+    assert "nothing to seed" in initialize_rbac(fresh_db)
+    assert (_count(fresh_db, Role), _count(fresh_db, RolePermission)) == before
+
+
+def test_an_administrator_configured_later_still_gets_org_admin(fresh_db):
+    """Roles seeded first, the administrator on a later deploy: the normal order."""
+    from app.db.bootstrap_admin import initialize_rbac
+
+    initialize_rbac(fresh_db)
+    bootstrap_admin(fresh_db, ADMIN)
+    org_admin = fresh_db.query(Role).filter(Role.code == "org_admin", Role.organization_id.is_(None)).one()
+    assert _administrator(fresh_db).org_role_id == org_admin.id
+
+
 def test_initialization_is_idempotent(fresh_db):
     bootstrap_admin(fresh_db, ADMIN)
     before = (_count(fresh_db, Role), _count(fresh_db, RolePermission), _count(fresh_db, Discipline))

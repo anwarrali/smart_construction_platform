@@ -96,12 +96,11 @@ services:
       PYTHONUNBUFFERED: 1
     networks:
       - app-network
-    # `depends_on: service_healthy` gates only the FIRST start. After any
-    # crash, `restart: always` restarts this container immediately with no
-    # health gate and no dependency ordering — so one transient blip becomes a
-    # permanent crash loop that never self-heals. wait_for_db polls the real
-    # connection and proceeds the moment it succeeds.
-    command: sh -c "python scripts/wait_for_db.py && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers"
+    # No `command:` here. The image's CMD (backend/Dockerfile) is the one start
+    # sequence for every environment — wait for the database, migrate,
+    # initialize RBAC, optional demo seed, serve. An override here once skipped
+    # the RBAC step, so a fresh Compose database had no roles and no
+    # administrator. tests/test_start_sequence.py keeps it from coming back.
 
   frontend:
     build:
