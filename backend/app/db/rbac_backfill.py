@@ -50,6 +50,7 @@ from app.core.role_templates import (
     template_for_legacy,
 )
 from app.db.database import SessionLocal
+from app.db.legacy_rbac import LEGACY_INHERITS
 from app.models.company import Company
 from app.models.document import Document
 from app.models.enums import UserRole
@@ -117,18 +118,23 @@ class BackfillReport:
         return "\n".join(lines)
 
 
-def _legacy_role_overrides(db: Session) -> dict[UserRole, dict[str, bool]]:
-    """Whatever an administrator had configured, keyed by the legacy role.
+def _legacy_role_overrides(db: Session) -> dict[str, dict[str, bool]]:
+    """Whatever an administrator had configured, keyed by template code.
 
-    Folded into every template that inherits from that role, so a permission an
-    office had switched on or off before the redesign is still on or off after
-    it. Without this the equivalence gate would fail on any installation that
-    had ever used Access Control.
+    The retired table is keyed by legacy role; each decision is folded into
+    every template that took its permissions from that role, so a permission
+    an office had switched on or off before the redesign is still on or off
+    after it. Without this the equivalence gate would fail on any installation
+    that had ever used Access Control.
     """
-    result: dict[UserRole, dict[str, bool]] = defaultdict(dict)
+    by_legacy: dict[str, dict[str, bool]] = defaultdict(dict)
     for row in db.query(RolePermissionOverride).all():
-        result[row.role][row.permission_code] = row.allowed
-    return result
+        by_legacy[row.role.name][row.permission_code] = row.allowed
+    return {
+        template: dict(by_legacy[legacy])
+        for template, legacy in LEGACY_INHERITS.items()
+        if legacy is not None and by_legacy.get(legacy)
+    }
 
 
 def _classify_organizations(db: Session, tenant: Company, report: BackfillReport) -> None:

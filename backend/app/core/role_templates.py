@@ -6,15 +6,15 @@ and which an administrator can then rename, re-permission or delete. The
 authority is always the `roles` / `role_permissions` tables — this module only
 says what to put in them the first time.
 
-## Why the permission sets are expressed as "inherits from a legacy role"
+## Where the permission sets come from
 
-The redesign must not change who can do what as a side effect of becoming
-configurable. Every template that existing accounts are migrated onto therefore
-derives its permission set from `permission_catalogue.role_defaults(...)` for
-the role those accounts hold today, rather than from a fresh opinion about what
-a Site Engineer ought to be allowed to do. Seeding from the catalogue is what
-makes the old-vs-new equivalence gate in `app.db.rbac_equivalence` come out
-empty; a hand-written set would have made it a negotiation.
+Each template starts from one of a handful of named base sets — office
+administration, project leadership, engineering, the client — adjusted by the
+codes it adds or withholds. The sets are written out here, code by code; they
+are the platform's own statement of what each kind of role does, not a
+derivation from the retired role enum. (They were frozen from that enum's
+catalogue defaults when the configurable model replaced it, so no account's
+access changed in the move.)
 
 Templates nobody is migrated onto (Site Engineer, BIM Engineer, Surveyor,
 Document Controller…) are seeded as *available* and start out unassigned. They
@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.core.permission_catalogue import BY_CODE, role_defaults
+from app.core.permission_catalogue import BY_CODE
 from app.models.enums import UserRole
 
 # Role scope. A role may be held at the office level, on a project, or both.
@@ -67,6 +67,75 @@ ORG_CLIENT = "CLIENT"
 ORG_OTHER = "OTHER"
 
 
+# ---------------------------------------------------------------------------
+# Base permission sets
+# ---------------------------------------------------------------------------
+# What each kind of role does before a template adds or withholds anything.
+
+OFFICE_ADMINISTRATION: frozenset[str] = frozenset({
+    "platform.manage_users", "platform.manage_permissions",
+    "platform.create_project", "platform.view_all_projects",
+    "project.manage_members", "project.edit", "project.manage_reminders",
+    "project.delete", "task.view", "task.create", "task.edit",
+    "task.update_progress", "task.view_all", "task.review", "schedule.view",
+    "schedule.edit", "site_visit.schedule", "issue.create", "issue.resolve",
+    "owner_request.create", "owner_request.review", "design_change.propose",
+    "cost_validation.review", "ifc.view", "ifc.upload", "ifc.manage_version",
+    "document.upload", "ai.view_insights", "ai.review_insight",
+    "ai.promote_insight", "org.manage_roles", "org.manage_disciplines",
+    "org.manage_settings", "project.manage_parties", "project.invite_external",
+    "document.share_external", "project.view_all_disciplines", "ifc.compare",
+    "ifc.review_finding", "ifc.review_suggestion", "ifc.download",
+    "ifc.manage_link", "document.view", "site_report.view", "issue.view",
+    "design_change.view", "client_portal.view", "task.add_note", "task.comment",
+    "message.send", "message.send_client", "message.broadcast",
+})
+
+PROJECT_LEADERSHIP: frozenset[str] = frozenset({
+    "project.manage_members", "project.manage_reminders", "task.view",
+    "task.create", "task.edit", "task.update_progress", "task.view_all",
+    "task.review", "schedule.view", "schedule.edit", "site_visit.schedule",
+    "site_report.submit", "site_report.verify", "issue.create", "issue.resolve",
+    "owner_request.create", "owner_request.review", "design_change.propose",
+    "cost_validation.review", "ifc.view", "ifc.upload", "ifc.manage_version",
+    "document.upload", "ai.view_insights", "ai.review_insight",
+    "ai.promote_insight", "project.manage_parties", "project.invite_external",
+    "document.share_external", "project.view_all_disciplines",
+    "field_evidence.submit", "field_evidence.verify", "ifc.compare",
+    "ifc.review_finding", "ifc.review_suggestion", "ifc.download",
+    "ifc.manage_link", "document.view", "site_report.view", "issue.view",
+    "design_change.view", "task.add_note", "task.comment", "message.send",
+    "message.send_client", "message.broadcast",
+})
+
+ENGINEERING: frozenset[str] = frozenset({
+    "task.view", "task.update_progress", "task.review", "site_visit.schedule",
+    "site_report.submit", "issue.create", "owner_request.review",
+    "design_change.propose", "cost_validation.review", "design_change.approve",
+    "ifc.view", "ifc.upload", "document.upload", "ai.view_insights",
+    "ai.review_insight", "ai.promote_insight", "project.view_all_disciplines",
+    "field_evidence.submit", "field_evidence.verify", "ifc.compare",
+    "ifc.review_finding", "ifc.review_suggestion", "ifc.download",
+    "ifc.manage_link", "document.view", "site_report.view", "issue.view",
+    "design_change.view", "task.add_note", "task.comment", "message.send",
+    "message.send_client",
+})
+
+CLIENT: frozenset[str] = frozenset({
+    "task.view", "task.view_all", "schedule.view", "owner_request.create",
+    "ifc.view", "ai.view_insights", "document.view", "site_report.view",
+    "issue.view", "design_change.view", "client_portal.view",
+})
+
+#: Accounts migrated from the retired Consultant role. Review and rename.
+LEGACY_CONSULTANT_GRANTS: frozenset[str] = frozenset({
+    "task.view", "task.view_all", "task.review", "schedule.view", "issue.create",
+    "ifc.view", "ai.view_insights", "ai.review_insight", "ifc.compare",
+    "ifc.review_finding", "ifc.download", "document.view", "site_report.view",
+    "issue.view", "design_change.view", "message.send",
+})
+
+
 @dataclass(frozen=True)
 class RoleTemplate:
     """One seeded role."""
@@ -76,10 +145,9 @@ class RoleTemplate:
     name_ar: str
     scope: str
     is_internal_only: bool
-    #: Legacy role whose catalogue defaults this template starts from.
-    #: `None` means "no permissions at all" — used by the archived field-staff
-    #: template that removed worker accounts are parked on.
-    inherits: UserRole | None
+    #: The base set this template starts from (one of the sets above). Empty
+    #: means "no permissions at all" — the archived field-staff template.
+    base: frozenset[str]
     #: Added on top of the inherited set.
     extra: frozenset[str] = field(default_factory=frozenset)
     #: Removed from the inherited set.
@@ -141,16 +209,16 @@ class RoleTemplate:
 
     def permissions(self) -> set[str]:
         """The codes this template grants when it is first created."""
-        base = set(role_defaults(self.inherits)) if self.inherits is not None else set()
-        base |= {code for code in self.extra if code in BY_CODE}
-        base -= self.without
-        return base
+        granted = {code for code in self.base if code in BY_CODE}
+        granted |= {code for code in self.extra if code in BY_CODE}
+        granted -= self.without
+        return granted
 
 
-def _t(code, name_en, name_ar, scope, internal, inherits, *, extra=(), without=(),
+def _t(code, name_en, name_ar, scope, internal, base, *, extra=(), without=(),
        rank=100, undeletable=False, is_archived=False, description=""):
     return RoleTemplate(
-        code, name_en, name_ar, scope, internal, inherits,
+        code, name_en, name_ar, scope, internal, frozenset(base or ()),
         frozenset(extra), frozenset(without), rank, undeletable, is_archived,
         description,
     )
@@ -166,10 +234,10 @@ _NO_REVIEW_AUTHORITY = ("task.review", "design_change.approve")
 TEMPLATES: tuple[RoleTemplate, ...] = (
     # --- office administration ---------------------------------------------
     _t("org_admin", "Office Administrator", "مدير النظام", SCOPE_ORG, True,
-       UserRole.ADMIN, rank=10, undeletable=True,
+       OFFICE_ADMINISTRATION, rank=10, undeletable=True,
        description="Runs the platform for the office: accounts, roles and permissions."),
     _t("office_director", "General Manager", "المدير العام", SCOPE_BOTH, True,
-       UserRole.ADMIN, rank=20,
+       OFFICE_ADMINISTRATION, rank=20,
        description="Office-level authority across every project."),
     # `project.delete` is declined explicitly. This template inherits the
     # administrator's catalogue defaults but provisions accounts whose retired
@@ -181,14 +249,14 @@ TEMPLATES: tuple[RoleTemplate, ...] = (
     # Whether a technical director *should* be able to delete a project is a
     # product question; this preserves the current answer until it is asked.
     _t("technical_director", "Technical Director", "المدير الفني", SCOPE_BOTH, True,
-       UserRole.ADMIN,
+       OFFICE_ADMINISTRATION,
        without=("platform.manage_users", "platform.manage_permissions", "project.delete"),
        rank=30,
        description="Technical authority across projects, without account administration."),
 
     # --- project leadership -------------------------------------------------
     _t("project_manager", "Project Manager", "مدير المشروع", SCOPE_BOTH, True,
-       UserRole.PROJECT_MANAGER, rank=40,
+       PROJECT_LEADERSHIP, rank=40,
        description="Runs a project: team, schedule, tasks and reviews."),
 
     # --- engineering --------------------------------------------------------
@@ -199,47 +267,47 @@ TEMPLATES: tuple[RoleTemplate, ...] = (
     # their actual access is unchanged, the rule that produces it is simply
     # written down now instead of being inferred from an affiliation string.
     _t("senior_engineer", "Senior Engineer", "مهندس أول", SCOPE_BOTH, True,
-       UserRole.ENGINEER, without=("project.view_all_disciplines",), rank=50,
+       ENGINEERING, without=("project.view_all_disciplines",), rank=50,
        description="Design and review authority within their disciplines."),
     _t("engineer", "Engineer", "مهندس", SCOPE_BOTH, True,
-       UserRole.ENGINEER, rank=60,
+       ENGINEERING, rank=60,
        description="Design, coordination and technical work."),
     _t("site_engineer", "Site Engineer", "مهندس موقع", SCOPE_PROJECT, True,
-       UserRole.ENGINEER, extra=("field_evidence.submit", "site_report.submit"), rank=70,
+       ENGINEERING, extra=("field_evidence.submit", "site_report.submit"), rank=70,
        description="Supervises work on site: reports, evidence and observations."),
     _t("bim_engineer", "BIM Engineer", "مهندس نمذجة", SCOPE_BOTH, True,
-       UserRole.ENGINEER, extra=("ifc.upload", "ifc.manage_version"), rank=80,
+       ENGINEERING, extra=("ifc.upload", "ifc.manage_version"), rank=80,
        description="Owns the model: revisions, coordination and clash review."),
     _t("cad_technician", "CAD Technician", "فني رسم", SCOPE_BOTH, True,
-       UserRole.ENGINEER, without=_NO_REVIEW_AUTHORITY, rank=90,
+       ENGINEERING, without=_NO_REVIEW_AUTHORITY, rank=90,
        description="Drawing production and technical drafting."),
     _t("surveyor", "Surveyor", "مساح", SCOPE_BOTH, True,
-       UserRole.ENGINEER, extra=("field_evidence.submit",), without=_NO_REVIEW_AUTHORITY,
+       ENGINEERING, extra=("field_evidence.submit",), without=_NO_REVIEW_AUTHORITY,
        rank=95,
        description="Setting out, measurement and survey records."),
     _t("document_controller", "Document Controller", "مسؤول الوثائق", SCOPE_BOTH, True,
-       UserRole.ENGINEER,
+       ENGINEERING,
        extra=("project.view_all_disciplines", "document.share_external", "document.upload"),
        without=_NO_REVIEW_AUTHORITY, rank=100,
        description="Custody of project documents, revisions and distribution."),
     _t("office_staff", "Administrative Staff", "موظف إداري", SCOPE_ORG, True,
-       None, extra=("task.view",), rank=110,
+       frozenset(), extra=("task.view",), rank=110,
        description="Office administration. Starts with read access only."),
 
     # --- external project participants --------------------------------------
     # Every one of these is project-scoped and non-internal. `is_internal_only`
     # is False, which is what lets them be attached to a ProjectParty.
     _t("client_representative", "Client Representative", "ممثل العميل",
-       SCOPE_PROJECT, False, UserRole.OWNER, rank=200,
+       SCOPE_PROJECT, False, CLIENT, rank=200,
        description="The client's contact on this project."),
     _t("contractor_representative", "Main Contractor", "المقاول الرئيسي",
-       SCOPE_PROJECT, False, UserRole.ENGINEER, rank=210,
+       SCOPE_PROJECT, False, ENGINEERING, rank=210,
        description="The main contractor's engineer on this project."),
     _t("subcontractor_representative", "Subcontractor", "مقاول من الباطن",
-       SCOPE_PROJECT, False, UserRole.ENGINEER, rank=220,
+       SCOPE_PROJECT, False, ENGINEERING, rank=220,
        description="A subcontractor's engineer on this project."),
     _t("external_reviewer", "External Reviewer", "مراجع خارجي",
-       SCOPE_PROJECT, False, UserRole.ENGINEER, rank=230,
+       SCOPE_PROJECT, False, ENGINEERING, rank=230,
        description="An outside consultant reviewing work on this project."),
 
     # --- migration target ---------------------------------------------------
@@ -247,7 +315,7 @@ TEMPLATES: tuple[RoleTemplate, ...] = (
     # account survives so its field evidence stays attributable, and it can
     # do nothing. See docs/CONSULTING_OFFICE_REDESIGN.md §7.
     _t("archived_field_staff", "Field Staff (archived)", "عامل ميداني (مؤرشف)",
-       SCOPE_ORG, True, None, rank=900, is_archived=True,
+       SCOPE_ORG, True, frozenset(), rank=900, is_archived=True,
        description="Retained for historical evidence only. Holds no permissions."),
 )
 
@@ -324,7 +392,7 @@ LEGACY_ROLE_MAP: dict[tuple[UserRole, str | None], str] = {
 #: so a migration of such a row is still exactly equivalent.
 LEGACY_CONSULTANT_TEMPLATE = _t(
     "legacy_consultant", "Consultant (legacy)", "استشاري (سابق)",
-    SCOPE_PROJECT, False, UserRole.CONSULTANT, rank=910,
+    SCOPE_PROJECT, False, LEGACY_CONSULTANT_GRANTS, rank=910,
     description="Migrated from the retired Consultant role. Review and rename it.",
 )
 

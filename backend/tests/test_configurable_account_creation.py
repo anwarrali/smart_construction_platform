@@ -29,6 +29,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.role_templates import (
     BY_CODE_TEMPLATE,
+    OFFICE_ADMINISTRATION,
     PROVISIONING_LEGACY_AFFILIATION,
     PROVISIONING_LEGACY_ROLE,
     TEMPLATES,
@@ -140,7 +141,7 @@ def test_a_provisioning_value_is_never_inferred_from_inherited_permissions():
     `inherits.name`, this fails.
     """
     template = BY_CODE_TEMPLATE["technical_director"]
-    assert template.inherits is UserRole.ADMIN
+    assert template.base is OFFICE_ADMINISTRATION
     assert template.legacy_role == UserRole.PROJECT_MANAGER.name
 
 

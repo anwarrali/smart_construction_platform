@@ -466,16 +466,14 @@ def seed_roles(
     *,
     organization_id: uuid.UUID | None = None,
     include_legacy_consultant: bool = False,
-    role_overrides: dict[UserRole, dict[str, bool]] | None = None,
+    role_overrides: dict[str, dict[str, bool]] | None = None,
 ) -> dict[str, Role]:
     """Create the role templates and their permissions. Idempotent.
 
-    `role_overrides` carries whatever an administrator had configured on the
-    retired `RolePermissionOverride` table, keyed by the legacy role. Those
-    decisions are folded into every template that inherits from that role, so
-    configuration made before the redesign survives it — which is also what
-    keeps the equivalence gate empty for an office that had customised its
-    permissions.
+    `role_overrides`, keyed by template code, adjusts a template's set as it is
+    seeded. Only the legacy backfill passes it: it carries decisions an
+    administrator made on the retired role-keyed override table, so they
+    survive the move (see `app.db.legacy_rbac.LEGACY_INHERITS`).
     """
     overrides = role_overrides or {}
     # `legacy_consultant` is seeded unconditionally. It used to be opt-in, and
@@ -529,7 +527,7 @@ def seed_roles(
         result[template.code] = role
 
         codes = template.permissions()
-        for code, allowed in overrides.get(template.inherits, {}).items():
+        for code, allowed in overrides.get(template.code, {}).items():
             if code not in BY_CODE:
                 continue
             codes.add(code) if allowed else codes.discard(code)

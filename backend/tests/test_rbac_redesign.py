@@ -288,7 +288,7 @@ def test_every_migration_target_template_matches_its_legacy_defaults(db, migrate
 
     for (legacy_role, _affiliation), code in LEGACY_ROLE_MAP.items():
         template = BY_CODE_TEMPLATE[code]
-        if template.inherits is None:
+        if not template.base:
             # The archived field-staff template. Empty on purpose.
             assert template.permissions() == set()
             continue
