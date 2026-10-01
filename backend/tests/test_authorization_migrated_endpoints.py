@@ -22,8 +22,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.projects import add_project_member, update_project
 from app.api.users import list_users
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
-from app.models.permission import RolePermissionOverride, UserPermissionOverride
+from app.models.enums import ProjectStatus, UserStatus
+from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.project import ProjectMemberAssignExisting, ProjectUpdate
@@ -50,25 +50,24 @@ def db():
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
+    def user(name, role):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                                           engineer_affiliation=affiliation))
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("MigAdmin", UserRole.ADMIN),
-        "manager": user("MigPm", UserRole.PROJECT_MANAGER),
-        "other_manager": user("MigOtherPm", UserRole.PROJECT_MANAGER),
-        "owner": user("MigOwner", UserRole.OWNER),
+        "admin": user("MigAdmin", "org_admin"),
+        "manager": user("MigPm", "project_manager"),
+        "other_manager": user("MigOtherPm", "project_manager"),
+        "owner": user("MigOwner", "client_representative"),
         # Office staff. `project.manage_members` is `never_external`, so the
         # contractor-side engineer below can never hold it however it is
         # granted — which is the point of `test_a_grant_cannot_reach_an_external_member`.
-        "engineer": user("MigEngineer", UserRole.ENGINEER, "internal_engineer"),
-        "contractor": user("MigContractor", UserRole.ENGINEER, "main_contractor"),
-        "outsider": user("MigOutsider", UserRole.ENGINEER, "main_contractor"),
-        "candidate": user("MigCandidate", UserRole.ENGINEER, "main_contractor"),
+        "engineer": user("MigEngineer", "engineer"),
+        "contractor": user("MigContractor", "contractor_representative"),
+        "outsider": user("MigOutsider", "contractor_representative"),
+        "candidate": user("MigCandidate", "contractor_representative"),
     }
     db.flush()
 
@@ -79,8 +78,7 @@ def world(db):
     db.add_all([project, other])
     db.flush()
     for person in (people["manager"], people["engineer"], people["contractor"]):
-        db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=person.role, is_active=True))
+        db.add(ProjectMember(project_id=project.id, user_id=person.id, is_active=True))
     db.flush()
     people["project"] = project
     people["other_project"] = other
@@ -104,22 +102,6 @@ def _purge(db, project_ids, user_ids):
     for statement in (
         "DELETE FROM consultant_engineer_scopes WHERE project_id = ANY(:projects) OR consultant_user_id = ANY(:users)",
         "DELETE FROM user_permission_overrides WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
-        "DELETE FROM role_permission_overrides WHERE updated_by_id = ANY(:users)",
-        # `PUT /access-control/roles` writes through to every configured role
-        # that provisions the legacy value being edited, and commits. A test
-        # that exercises it therefore changes *seeded templates* shared by every
-        # office and every later test in the run. This restores them, mirroring
-        # the write-through's own target set (`Role.legacy_role`) rather than a
-        # hand-listed set of codes, so the two cannot drift.
-        """DELETE FROM role_permissions
-            WHERE permission_code IN ('schedule.edit', 'project.edit')
-              AND role_id IN (
-                  SELECT id FROM roles
-                   WHERE organization_id IS NULL
-                     AND legacy_role IN ('ENGINEER', 'ADMIN', 'PROJECT_MANAGER')
-                     AND code NOT IN ('org_admin', 'office_director',
-                                      'technical_director', 'project_manager')
-              )""",
         "DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ANY(:projects))",
         "DELETE FROM tasks WHERE project_id = ANY(:projects) OR created_by_id = ANY(:users)",
         "DELETE FROM ai_insights WHERE project_id = ANY(:projects)",
@@ -146,11 +128,6 @@ def _grant(db, user, code, allowed=True, project_id=None):
 def _configure_role(db, user, code, allowed):
     """Change what the role this person holds may do, on the live mechanism.
 
-    `RolePermissionOverride` used to be how a role was configured, and these
-    tests used it directly. `effective_permissions` read that table only while
-    an account had no `org_role_id`; the contract step removed that branch, so
-    writing to it now changes nothing.
-
     The role is **copied first**, into a row belonging to this test alone, and
     the copy is what gets edited. Editing the seeded template in place would
     outlive the test — the templates are shared by every office and by every
@@ -170,8 +147,7 @@ def _configure_role(db, user, code, allowed):
         organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
         name_en=source.name_en, scope=source.scope,
         is_internal_only=source.is_internal_only, is_system=False,
-        rank=source.rank, legacy_role=source.legacy_role,
-        legacy_affiliation=source.legacy_affiliation,
+        rank=source.rank,
     )
     db.add(copy)
     db.flush()
@@ -206,9 +182,9 @@ def test_an_administrator_cannot_lose_manage_users(db, world):
 def test_the_assigned_manager_can_still_staff_their_project(db, world):
     member = add_project_member(
         world["project"].id,
-        ProjectMemberAssignExisting(user_id=world["candidate"].id, role_on_project=UserRole.ENGINEER),
+        ProjectMemberAssignExisting(user_id=world["candidate"].id),
         db=db, current_user=world["manager"])
-    assert member.role_on_project == UserRole.ENGINEER
+    assert member.user_id == world["candidate"].id and member.is_active
 
 
 def test_revoking_manage_members_from_the_role_blocks_the_endpoint(db, world):
@@ -216,7 +192,7 @@ def test_revoking_manage_members_from_the_role_blocks_the_endpoint(db, world):
     with pytest.raises(HTTPException) as error:
         add_project_member(
             world["project"].id,
-            ProjectMemberAssignExisting(user_id=world["candidate"].id, role_on_project=UserRole.ENGINEER),
+            ProjectMemberAssignExisting(user_id=world["candidate"].id),
             db=db, current_user=world["manager"])
     assert error.value.status_code == 403
 
@@ -277,32 +253,25 @@ def test_a_deactivated_account_holds_none_of_the_migrated_permissions(db, world)
 
 # --- the codes the migration relies on exist --------------------------------
 
-def test_migrated_defaults_match_the_behaviour_the_endpoints_had(db, world):
+def test_the_migrated_codes_are_held_by_the_roles_that_had_the_behaviour(db, world):
     """Making a check configurable must not widen it.
 
-    Each of these was verified against the guard the endpoint used before the
-    migration: project setup was administrator-only, filing a site report was
-    the manager and contractor-side engineers, and approving a design change was
-    the assigned consultant alone.
+    Office authority — setting up projects, staffing them, administering
+    accounts — stays with office administration and project leadership. An
+    external role that lists `design_change.approve` never exercises it: the
+    external ceiling strips it at resolution (test_work_scope_and_routing.py).
     """
-    from app.core.permission_catalogue import BY_CODE
+    from app.core.role_templates import LEGACY_CONSULTANT_TEMPLATE, TEMPLATES
 
-    assert BY_CODE["project.edit"].default_roles == frozenset({UserRole.ADMIN})
-    assert BY_CODE["site_report.submit"].default_roles == frozenset(
-        {UserRole.PROJECT_MANAGER, UserRole.ENGINEER})
-    # Corrected, not widened: a Consultant Engineer's `User.role` is ENGINEER
-    # (with `engineer_affiliation="external_consultant"`) — CONSULTANT can
-    # never be a real stored role, `UserCreateByAdmin` persists any request
-    # for it as unified Engineer — so `{CONSULTANT}` alone was never actually
-    # reachable by any account that could exist. Default is now ENGINEER;
-    # `approve_design_change`/`reject_design_change` hold the real
-    # "assigned consultant alone" gate via `is_consultant_engineer`, so a
-    # Main Contractor Engineer still cannot approve
-    # (test_consultant_engineer_dead_role_fix.py pins both directions).
-    assert BY_CODE["design_change.approve"].default_roles == frozenset({UserRole.ENGINEER})
-    assert BY_CODE["project.manage_members"].default_roles == frozenset(
-        {UserRole.ADMIN, UserRole.PROJECT_MANAGER})
-    assert BY_CODE["platform.manage_users"].default_roles == frozenset({UserRole.ADMIN})
+    def holders(code):
+        return {t.code for t in (*TEMPLATES, LEGACY_CONSULTANT_TEMPLATE) if code in t.permissions()}
+
+    assert holders("project.edit") == {"org_admin", "office_director", "technical_director"}
+    assert holders("project.manage_members") == {
+        "org_admin", "office_director", "technical_director", "project_manager"}
+    assert holders("platform.manage_users") == {"org_admin", "office_director"}
+    assert "client_representative" not in holders("site_report.submit")
+    assert not {"client_representative", "office_staff"} & holders("design_change.approve")
 
 
 def test_every_migrated_code_is_in_the_catalogue(db, world):

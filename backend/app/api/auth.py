@@ -99,7 +99,9 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         user.invitation_accepted = True
     db.commit()
 
-    access_token = create_access_token(data={"sub": str(user.id), "email": user.email, "role": user.role.value})
+    # The token identifies the person and nothing more. What they may do is
+    # resolved from their office role on every request, never read from here.
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
     return {
@@ -107,7 +109,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "user_id": user.id,
-        "role": user.role.value,
     }
 
 
@@ -140,7 +141,7 @@ def refresh(data: Dict[str, str], db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Account is not active")
 
     new_access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email, "role": user.role.value}
+        data={"sub": str(user.id), "email": user.email}
     )
     db.add(RevokedToken(token_hash=hash_token(refresh_token_str),
                         expires_at=datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)))
@@ -164,7 +165,6 @@ def refresh(data: Dict[str, str], db: Session = Depends(get_db)):
         "refresh_token": new_refresh_token,
         "token_type": "bearer",
         "user_id": user.id,
-        "role": user.role.value,
     }
 
 

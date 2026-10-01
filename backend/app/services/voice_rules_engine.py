@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import user_has_project_access
-from app.models.enums import TaskStatus, UserRole, UserStatus, VoiceAnalysisStatus
+from app.models.enums import TaskStatus, UserStatus, VoiceAnalysisStatus
 from app.models.task import Task
 from app.models.attachment import Attachment
 from app.ai.action_payload_contract import allowed_fields, rejection_detail

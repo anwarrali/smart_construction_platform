@@ -13,23 +13,12 @@ first half of its answer here. Everything after that — administrator overrides
 the inactive-account rule, the project-access rule — still happens there, in
 the order it always did.
 
-## The transition, stated plainly
+## Where permissions come from
 
-Permissions used to come from a role *enum* through
-`permission_catalogue.role_defaults`. They now come from the `roles` /
-`role_permissions` tables. Both paths exist while the backfill runs, and the
-rule for choosing between them is deliberately not a feature flag:
-
-    a user with `org_role_id` set is resolved from the database;
-    a user without one falls back to the catalogue defaults for their
-    legacy `User.role`.
-
-A flag would have made the cutover a moment when every unmigrated account
-silently lost all access. Keying off the column instead means an account is
-migrated exactly when its row says it is, and a half-finished backfill leaves
-nobody locked out. `settings.RBAC_REQUIRE_DB_ROLES` turns the fallback into a
-hard failure once an operator is satisfied the backfill is complete, and the
-contract migration removes the fallback entirely.
+Only from the database: `users.org_role_id → roles → role_permissions`,
+unioned with the project role a membership carries. `users.org_role_id` is
+NOT NULL, so every account has an office role; the retired six-value enum and
+its catalogue defaults no longer exist anywhere at runtime.
 
 ## Two rules that configuration cannot override
 
@@ -49,8 +38,7 @@ from dataclasses import dataclass
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.permission_catalogue import BY_CODE, CATALOGUE, role_defaults
+from app.core.permission_catalogue import BY_CODE, CATALOGUE
 from app.core.role_templates import (
     DISCIPLINES,
     LEGACY_CONSULTANT_TEMPLATE,
@@ -58,10 +46,9 @@ from app.core.role_templates import (
     TEMPLATES,
     RoleTemplate,
     discipline_code_for_legacy,
-    template_for_legacy,
 )
 from app.models.company import Company
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.project import ProjectMember
 from app.models.rbac import (
     Discipline,
@@ -242,13 +229,9 @@ def is_client_participant(db: Session, user: User, project_id: uuid.UUID | None)
     project and nothing on another, and a client is an external party whose
     access hangs off `ProjectParty` like any other.
 
-    Two sources, and the order matters — the same order and the same reason as
-    `is_external_participant`. A membership pointing at a `ProjectParty` of
-    kind CLIENT is decisive: it is a statement about this project. Failing
-    that, an account the backfill has not reached carries only its retired
-    role, so that answers until the row is migrated. `rbac_backfill` creates
-    the client party and attaches the owner's membership to it, so the bridge
-    is for the migration window only and goes with the contract step.
+    One source: a membership pointing at a `ProjectParty` of kind CLIENT. It is
+    a statement about this project, so the same person can be the client on
+    one job and nothing on another.
 
     Deliberately *not* a permission. What the client may see is
     `client_portal.view` and the document scope; this is which *rows* the
@@ -260,19 +243,14 @@ def is_client_participant(db: Session, user: User, project_id: uuid.UUID | None)
         if context.is_external and context.party is not None:
             return context.party.kind == PARTY_CLIENT
         if context.member is not None:
-            # On the project as office staff. Whatever the retired column says,
-            # they are not the client here.
+            # On the project as office staff: not the client here.
             return False
     return False
 
 
 #: Roles that exist to hold history rather than to be worked under.
 #:
-#: This used to read `legacy_role IS NULL`. The predicate was correct but the
-#: column was the wrong one to ask: `legacy_role` is a migration-window
-#: translation for `users.role`, and dropping it — which is the point of the
-#: migration — would have deleted this rule silently along with it. `is_archived`
-#: says the same thing about the same rows and outlives the bridge.
+#: Asked through `Role.is_archived`, a property of the role itself.
 def _archived_role_ids(db: Session):
     return db.query(Role.id).filter(Role.is_archived.is_(True)).scalar_subquery()
 
@@ -325,14 +303,9 @@ def resolved_permissions(
     `UserPermissionOverride`, which `app.services.authorization` applies.
     """
     if user.org_role_id is None:
-        # No fallback any more. An account without a role is a bug — every
-        # creation path assigns one before writing, and the backfill reached
-        # everything that predates them — so resolving one
-        # through the retired enum would be guessing at authority rather than
-        # reading it. Failing loudly is the point of the contract step.
-        raise UnmigratedUser(
-            f"User {user.id} has no org_role_id. Run app.db.rbac_backfill."
-        )
+        # `users.org_role_id` is NOT NULL, so only an unsaved, hand-built
+        # account can get here. Refuse rather than guess at its authority.
+        raise UnmigratedUser(f"User {user.id} has no org_role_id")
     granted = role_permission_codes(db, user.org_role_id)
 
     context = membership_context(db, user.id, project_id)
@@ -476,17 +449,10 @@ def seed_roles(
     survive the move (see `app.db.legacy_rbac.LEGACY_INHERITS`).
     """
     overrides = role_overrides or {}
-    # `legacy_consultant` is seeded unconditionally. It used to be opt-in, and
-    # that was a hole: `template_for_legacy` maps `UserRole.CONSULTANT` onto it,
-    # so without the row there is no role for such an account to migrate to —
-    # `template_role_for_legacy_user` returns None, the backfill skips it, and
-    # under `RBAC_REQUIRE_DB_ROLES` the account cannot resolve at all. No *new*
-    # account is ever CONSULTANT (`UserCreateByAdmin` rewrites it), but rows
-    # from before the redesign exist, and a mapping that only works when the
-    # caller remembers a keyword argument is not a mapping.
-    #
+    # `legacy_consultant` is seeded unconditionally, so the legacy backfill
+    # always has a role to move a retired Consultant account onto.
     # `include_legacy_consultant` is kept so existing callers do not break; it
-    # no longer changes anything.
+    # changes nothing.
     templates: list[RoleTemplate] = [*TEMPLATES, LEGACY_CONSULTANT_TEMPLATE]
 
     query = db.query(Role)
@@ -512,18 +478,10 @@ def seed_roles(
                 is_system=True,
                 undeletable=template.undeletable,
                 rank=template.rank,
-                legacy_role=template.legacy_role,
-                legacy_affiliation=template.legacy_affiliation,
                 is_archived=template.is_archived,
             )
             db.add(role)
             db.flush()
-        elif role.legacy_role is None and template.legacy_role is not None:
-            # A row seeded before the provisioning columns existed. Filling it
-            # here means a deployment that re-seeds gets the same answer the
-            # migration wrote, so the two can never disagree.
-            role.legacy_role = template.legacy_role
-            role.legacy_affiliation = template.legacy_affiliation
         result[template.code] = role
 
         codes = template.permissions()
@@ -554,26 +512,17 @@ def seed_roles(
 def seed_fresh_database(db: Session) -> bool:
     """Seed the shared disciplines and role templates on a brand-new database.
 
-    Role rows used to reach a database only through `python -m
-    app.db.rbac_backfill`, which is run by hand and is in no start sequence —
-    so on a fresh deployment the initial administrator found no `org_admin`
-    and was created without an office role, and every permission check then
-    refused them. This closes that gap with the same `seed_disciplines` and
-    `seed_roles` the backfill uses; it is not a second definition of any role.
+    Migrations create schema only; this is where a fresh deployment's initial
+    RBAC data comes from, ahead of `bootstrap_admin` assigning `org_admin`.
 
     It acts only on a database that holds **no system roles and no accounts**,
     and returns whether it did. That condition is what makes it safe to call
     from a start sequence:
 
-    * On an initialized database it does nothing at all. `seed_roles` refreshes
-      an existing role's template permissions, which would re-grant a
-      permission an administrator switched off on a shared template (the older
-      Access Control screen writes those denials there); never touching an
-      existing role is what keeps that customization intact.
-    * On a legacy database — accounts, but no roles yet — it also does
-      nothing. Those accounts need `rbac_backfill`, which folds the retired
-      `RolePermissionOverride` decisions into the roles as it seeds them;
-      seeding plain templates first would lose them.
+    * On an initialized database it does nothing at all, so an office's
+      customizations of its roles are never touched.
+    * A database with accounts but no roles cannot exist at head:
+      `users.org_role_id` is NOT NULL. It does nothing there either.
     """
     has_roles = db.query(Role.id).filter(Role.organization_id.is_(None)).first() is not None
     has_accounts = db.query(User.id).first() is not None
@@ -706,26 +655,17 @@ def resolve_discipline(
     return query.order_by(Discipline.organization_id.nullslast()).first()
 
 
-def template_role_for_legacy_user(db: Session, user: User) -> Role | None:
-    """The seeded role an existing account migrates onto."""
-    template = template_for_legacy(user.role, user.engineer_affiliation)
-    return role_by_code(db, template.code, user.company_id)
+def apply_template_role(db: Session, user: User, code: str) -> Role | None:
+    """Give an account, before it is written, the office role with this code.
 
-
-def apply_legacy_template_role(db: Session, user: User) -> Role | None:
-    """Give an account the seeded role its retired enum maps to, before it is written.
-
-    For the creation paths that still describe a person by `users.role` — the
-    initial administrator, the demo seed — so that the account reaches the
-    database already holding the role `resolved_permissions` requires. Nothing
-    fills the column during a flush any more: a path that skips this writes an
-    account with no role, which permission resolution then refuses. The mapping
-    is `template_role_for_legacy_user`'s, not a second one.
-
-    Returns None, and leaves the account untouched, when that template has not
-    been seeded; callers decide whether that is an error.
+    For the creation paths that name a seeded role directly — the initial
+    administrator (`org_admin`), the demo seed. The office's own copy of the
+    role is preferred over the shared template, so `user.company_id` must be
+    set first. Returns None, and leaves the account untouched, when no such
+    role exists; callers decide whether that is an error — an account cannot
+    be written without one, `users.org_role_id` being NOT NULL.
     """
-    role = template_role_for_legacy_user(db, user)
+    role = role_by_code(db, code, user.company_id)
     if role is not None:
         apply_org_role(user, role)
     return role
@@ -740,8 +680,6 @@ def role_label_for(db: Session, user: User) -> str:
     language model than a stable identifier it has never seen, and the office
     chose that word for a reason.
 
-    Falls back to the retired enum for an account the backfill has not reached.
-
     Reads its inputs with `getattr` because this is a *label*, not a decision:
     it is called from prompt assembly and logging, where being handed a partial
     object should produce a duller string rather than an exception. Nothing in
@@ -749,16 +687,22 @@ def role_label_for(db: Session, user: User) -> str:
     shrugged at a missing column would be exactly the wrong kind of tolerant.
     """
     role = get_role(db, getattr(user, "org_role_id", None))
-    if role is not None:
-        return role.name_en
-    legacy = getattr(user, "role", None)
-    return legacy.value if legacy is not None else "unknown"
+    return role.name_en if role is not None else "unknown"
 
 
-def active_users_missing_roles(db: Session) -> int:
-    """How many live accounts the backfill has not reached. Zero means done."""
-    return (
-        db.query(User)
-        .filter(User.org_role_id.is_(None), User.status == UserStatus.ACTIVE)
-        .count()
-    )
+def role_code(db: Session, user: User) -> str | None:
+    """The stable code of this person's office role, for audit records and payloads.
+
+    A label, like `role_label_for`: what an audit row or an API payload records
+    about who somebody was. Never an input to an authorization decision.
+    """
+    role = get_role(db, getattr(user, "org_role_id", None))
+    return role.code if role is not None else None
+
+
+def member_role_code(db: Session, member) -> str | None:
+    """The role a project member acts under here: their project role, else their office role."""
+    role = get_role(db, getattr(member, "project_role_id", None))
+    if role is None and getattr(member, "user", None) is not None:
+        role = get_role(db, member.user.org_role_id)
+    return role.code if role is not None else None

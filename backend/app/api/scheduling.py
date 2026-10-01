@@ -8,7 +8,6 @@ from app.models.enums import TaskStatus
 
 from app.db.database import get_db
 from app.core.deps import get_current_user
-from app.models.enums import UserRole
 from app.models.project import Project
 from app.models.user import User
 from app.models.task import Task, TaskDependency, TaskRescheduleLog
@@ -19,6 +18,7 @@ from app.services.audit_service import record_audit
 from app.services.authorization import require
 from app.services.cpm_service import calculate_dependency_cpm
 from app.core.schedule_dates import inclusive_duration_days
+from app.services import rbac
 
 router = APIRouter(tags=["scheduling"])
 
@@ -179,7 +179,7 @@ def get_delay_analysis(project_id: uuid.UUID, db: Session = Depends(get_db), cur
     details = [{"taskId": str(task.id), "name": task.name,
                 "delayDays": (date.today() - task.planned_end_date).days,
                 "critical": task.is_critical_path,
-                "assignees": [{"id": str(user.id), "fullName": user.full_name, "role": user.role.value}
+                "assignees": [{"id": str(user.id), "fullName": user.full_name, "role": rbac.role_code(db, user)}
                               for user in task.assignees]}
                for task in overdue]
     return {"overdueTasks": details, "overdueCount": len(overdue), "impactedTaskIds": [str(x) for x in impacted],

@@ -1,107 +1,44 @@
-"""A brand-new deployment gets its roles, and its first administrator gets one.
+"""A deployment's RBAC data, from nothing and from the retired model.
 
-Role rows used to reach a database only through `python -m
-app.db.rbac_backfill`, a hand-run script in no start sequence. On a fresh
-deployment `bootstrap_admin` therefore found no `org_admin`, wrote the initial
-administrator without an office role, and every permission check refused them.
+**Fresh.** Migrations create schema only. `bootstrap_admin` seeds the role
+templates (`rbac.seed_fresh_database`) and gives the first administrator
+`org_admin` before writing it, with no manual step in between.
 
-These tests run against a **genuinely fresh database**: a throwaway database on
-the same server, migrated to head with Alembic exactly as a new deployment is,
-and dropped afterwards. The shared development database is never written to —
-a fresh database cannot be simulated there, because it already holds roles.
+**Legacy.** A database still describing people by the retired `users.role` /
+`engineer_affiliation` columns is carried across by `app.db.rbac_backfill`, run
+at the last revision that has those columns; the migration that removes them
+refuses until every account holds an office role.
 
-Migrating takes a while, so it is done once into a template database; every
-test gets its own copy of that template (`CREATE DATABASE ... TEMPLATE`), so no
-test sees another's changes.
+These tests run against **genuinely fresh databases**: throwaway databases on
+the same server, migrated with Alembic exactly as a deployment is, and dropped
+afterwards. The shared development database is never written to.
+
+The databases come from `tests/isolated_databases.py` through the `fresh_db`
+and `legacy_db` fixtures in `conftest.py`.
 """
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
-from pathlib import Path
-from uuid import uuid4
-
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import make_url
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import sessionmaker
 
 from app.core.role_templates import BY_CODE_TEMPLATE, DISCIPLINES, LEGACY_CONSULTANT_TEMPLATE, TEMPLATES
 from app.db.bootstrap_admin import BootstrapConfig, bootstrap_admin
 from app.db.database import SessionLocal
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.rbac import Discipline, Role, RolePermission
 from app.models.user import User
 from app.services import rbac
 from app.services.authorization import effective_permissions
+from tests.isolated_databases import alembic_upgrade, insert_legacy_account
 
-BACKEND = Path(__file__).resolve().parents[1]
 ADMIN = BootstrapConfig(
     email="first.admin@example.com", password="FreshDeploy!2345", full_name="First Administrator",
 )
 #: Every role a fresh database should hold: the templates, plus the one kept
 #: for pre-redesign CONSULTANT accounts, which `seed_roles` seeds unconditionally.
 EXPECTED_ROLE_CODES = {template.code for template in TEMPLATES} | {LEGACY_CONSULTANT_TEMPLATE.code}
-
-
-def _server_url():
-    return make_url(os.environ.get("DATABASE_URL") or str(SessionLocal.kw["bind"].url))
-
-
-def _admin_engine():
-    # Any database will do for CREATE/DROP DATABASE; AUTOCOMMIT because neither
-    # may run inside a transaction.
-    return create_engine(_server_url(), isolation_level="AUTOCOMMIT")
-
-
-def _drop(admin, name):
-    admin.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
-
-
-@pytest.fixture(scope="module")
-def migrated_template():
-    """A database migrated to head from nothing, used only as a template."""
-    name = f"cps_fresh_template_{uuid4().hex[:10]}"
-    try:
-        admin = _admin_engine().connect()
-        # From template0, not the default template1: an image upgrade can leave
-        # template1's recorded collation version behind the OS's, and Postgres
-        # then refuses to copy it. template0 carries nothing to disagree about.
-        admin.execute(text(f'CREATE DATABASE "{name}" TEMPLATE template0'))
-    except SQLAlchemyError as exc:  # pragma: no cover - only without a server or privilege
-        pytest.skip(f"cannot create an isolated database: {exc}")
-    try:
-        url = _server_url().set(database=name).render_as_string(hide_password=False)
-        migrated = subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
-            cwd=BACKEND, env={**os.environ, "DATABASE_URL": url},
-            capture_output=True, text=True, timeout=600,
-        )
-        assert migrated.returncode == 0, migrated.stderr[-4000:]
-        yield name
-    finally:
-        _drop(admin, name)
-        admin.close()
-
-
-@pytest.fixture()
-def fresh_db(migrated_template):
-    """A session on a private copy of the freshly migrated database."""
-    name = f"cps_fresh_{uuid4().hex[:10]}"
-    admin = _admin_engine().connect()
-    admin.execute(text(f'CREATE DATABASE "{name}" TEMPLATE "{migrated_template}"'))
-    engine = create_engine(_server_url().set(database=name))
-    session = sessionmaker(bind=engine, autoflush=True)()
-    try:
-        yield session
-    finally:
-        session.close()
-        engine.dispose()
-        _drop(admin, name)
-        admin.close()
 
 
 def _count(db, model):
@@ -149,7 +86,6 @@ def test_bootstrap_gives_the_administrator_org_admin_before_writing_it(fresh_db)
     org_admin = fresh_db.query(Role).filter(Role.code == "org_admin", Role.organization_id.is_(None)).one()
     assert admin.org_role_id == org_admin.id
     assert admin.is_internal is True
-    assert admin.role == UserRole.ADMIN, "the legacy column is still written"
 
 
 def test_the_bootstrapped_administrator_can_actually_be_authorized(fresh_db):
@@ -196,9 +132,9 @@ def test_an_initialized_database_keeps_its_role_customizations(fresh_db):
     """Roles that already exist are never re-seeded, so nothing is re-granted.
 
     `seed_roles` refreshes an existing role's template permissions. The older
-    Access Control screen writes denials onto the shared templates, so calling
-    it on an initialized database would switch those back on; bootstrap must
-    not, even though it runs with the roles already there.
+    An office's edits to a role would be switched back on by calling it on an
+    initialized database; bootstrap must not, even though it runs with the
+    roles already there.
     """
     roles = rbac.seed_roles(fresh_db)
     engineer = roles["engineer"]
@@ -222,16 +158,41 @@ def test_an_initialized_database_keeps_its_role_customizations(fresh_db):
     assert _administrator(fresh_db).org_role_id == roles["org_admin"].id
 
 
-def test_a_legacy_database_with_accounts_but_no_roles_is_not_seeded(fresh_db):
-    """Those accounts need `rbac_backfill`, which folds their retired overrides
-    into the roles as it seeds them. Seeding plain templates first would lose them."""
-    fresh_db.add(User(
-        full_name="Legacy Account", email="legacy@example.com", hashed_password="x",
-        role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE,
-    ))
-    fresh_db.flush()
+def test_no_account_can_exist_without_an_office_role(fresh_db):
+    """`users.org_role_id` is NOT NULL: the invariant belongs to the schema."""
+    from sqlalchemy.exc import IntegrityError
 
-    assert rbac.seed_fresh_database(fresh_db) is False
+    fresh_db.add(User(
+        full_name="Roleless", email="roleless@example.com", hashed_password="x", status=UserStatus.ACTIVE,
+    ))
+    with pytest.raises(IntegrityError):
+        fresh_db.flush()
+    fresh_db.rollback()
+
+
+def test_a_fresh_database_carries_none_of_the_retired_schema(fresh_db):
+    columns = {
+        (row.table_name, row.column_name) for row in fresh_db.execute(text(
+            "SELECT table_name, column_name FROM information_schema.columns "
+            "WHERE table_schema = current_schema()"
+        ))
+    }
+    for retired in (("users", "role"), ("users", "engineer_affiliation"),
+                    ("project_members", "role_on_project"),
+                    ("roles", "legacy_role"), ("roles", "legacy_affiliation")):
+        assert retired not in columns, retired
+    tables = {row[0] for row in fresh_db.execute(text(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()"
+    ))}
+    assert "role_permission_overrides" not in tables
+    assert fresh_db.execute(text("SELECT 1 FROM pg_type WHERE typname = 'user_role'")).first() is None
+
+
+def test_the_legacy_backfill_refuses_a_fresh_database(fresh_db):
+    from app.db.rbac_backfill import NothingToBackfill, run
+
+    with pytest.raises(NothingToBackfill):
+        run(fresh_db)
     assert _count(fresh_db, Role) == 0
 
 
@@ -262,3 +223,79 @@ def test_the_shared_development_database_is_already_initialized():
     finally:
         db.rollback()
         db.close()
+
+
+# --- a legacy database ----------------------------------------------------------
+
+#: (email, users.role, engineer_affiliation, the office role it must land on)
+LEGACY_PEOPLE = (
+    ("admin@legacy.test", "ADMIN", None, "org_admin"),
+    ("pm@legacy.test", "PROJECT_MANAGER", None, "project_manager"),
+    ("office@legacy.test", "ENGINEER", "internal_engineer", "engineer"),
+    ("contractor@legacy.test", "ENGINEER", "main_contractor", "contractor_representative"),
+    ("consultant@legacy.test", "ENGINEER", "external_consultant", "senior_engineer"),
+    ("client@legacy.test", "OWNER", None, "client_representative"),
+    ("worker@legacy.test", "WORKER", None, "archived_field_staff"),
+)
+
+
+def _insert_legacy_account(db, email, role, affiliation):
+    insert_legacy_account(db, email=email, role=role, affiliation=affiliation)
+
+
+def test_a_legacy_database_reaches_head_only_through_the_backfill(legacy_db):
+    from app.db.rbac_backfill import run
+
+    db, url = legacy_db
+    for email, role, affiliation, _ in LEGACY_PEOPLE:
+        _insert_legacy_account(db, email, role, affiliation)
+    db.commit()
+
+    # The contract migration refuses while the legacy columns are the only
+    # record of what these people may do.
+    refused = alembic_upgrade(url, "head")
+    assert refused.returncode != 0
+    assert "have no office role" in refused.stderr
+
+    run(db)
+    assert run_again_is_harmless(db)
+    # End the session's transaction: the contract migration alters `roles`
+    # and `users`, and an open read would hold the locks it waits for.
+    db.rollback()
+
+    upgraded = alembic_upgrade(url, "head")
+    assert upgraded.returncode == 0, upgraded.stderr[-4000:]
+
+    db.expire_all()
+    landed = {
+        email: code for email, code in db.execute(text(
+            "SELECT u.email, r.code FROM users u JOIN roles r ON r.id = u.org_role_id"
+        ))
+    }
+    assert landed == {email: expected for email, _, _, expected in LEGACY_PEOPLE}
+
+
+def run_again_is_harmless(db):
+    from app.db.rbac_backfill import run
+
+    before = (_count(db, Role), _count(db, RolePermission))
+    report = run(db)
+    return report.users_mapped == 0 and (_count(db, Role), _count(db, RolePermission)) == before
+
+
+def test_an_unknown_affiliation_fails_the_backfill_and_changes_nothing(legacy_db):
+    """Fail closed: no guessed role, and the whole run rolls back."""
+    from app.db.legacy_rbac import UnknownAffiliation
+    from app.db.rbac_backfill import run
+
+    db, _ = legacy_db
+    _insert_legacy_account(db, "fine@legacy.test", "ENGINEER", "internal_engineer")
+    _insert_legacy_account(db, "odd@legacy.test", "ENGINEER", "visiting_inspector")
+    db.commit()
+
+    with pytest.raises(UnknownAffiliation):
+        run(db)
+    db.rollback()
+
+    assert db.execute(text("SELECT count(*) FROM users WHERE org_role_id IS NOT NULL")).scalar() == 0
+    assert _count(db, Role) == 0

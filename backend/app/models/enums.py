@@ -2,15 +2,6 @@
 import enum
 
 
-class UserRole(str, enum.Enum):
-    ADMIN = "admin"  # Company Administrator
-    OWNER = "owner"
-    PROJECT_MANAGER = "project_manager"
-    ENGINEER = "engineer"
-    CONSULTANT = "consultant"
-    WORKER = "worker"
-
-
 class EngineerDiscipline(str, enum.Enum):
     ARCHITECTURAL = "architectural"
     CIVIL = "civil"

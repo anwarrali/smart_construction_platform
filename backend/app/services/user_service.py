@@ -1,15 +1,9 @@
 """User provisioning for invite-only enterprise auth.
 
-An account is created under one of the **office's own configured roles**, not
-under a fixed enum. `org_role` is the input that matters: it decides the
-permissions the account holds, whether the person is office staff, and — for
-as long as `users.role` exists — which legacy value that column is written
-with (`Role.legacy_role`, recorded on the role rather than guessed here).
-
-The legacy `role` argument is still accepted, because the contract migration
-has not run and several callers still speak that vocabulary. When both are
-given the configured role wins; when only the legacy one is given the account
-is created exactly as before and the pre-backfill fallback resolves it.
+An account is created under one of the **office's own configured roles**.
+`org_role` decides everything about the account's authority: the permissions
+it holds and whether the person is office staff. There is no other way to say
+what somebody is — the retired six-value role enum is gone.
 """
 
 import secrets
@@ -19,8 +13,7 @@ from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.core.permissions import ROLE_LABELS
-from app.models.enums import EngineerDiscipline, UserRole, UserStatus
+from app.models.enums import EngineerDiscipline, UserStatus
 from app.models.project import ProjectMember
 from app.models.rbac import Role
 from app.models.user import EngineerProfile, User
@@ -42,103 +35,34 @@ def generate_temporary_password(length: int = 12) -> str:
             return password
 
 
-def _resolve_engineer_discipline(role: UserRole, discipline: Optional[EngineerDiscipline]) -> EngineerDiscipline:
-    if discipline:
-        return discipline
-    mapping = {UserRole.ENGINEER: EngineerDiscipline.CIVIL, UserRole.CONSULTANT: EngineerDiscipline.CIVIL}
-    return mapping.get(role, EngineerDiscipline.CIVIL)
-
-
-def legacy_role_for(org_role: Role) -> UserRole:
-    """The retired enum value an account under this configured role is written with.
-
-    Read from the role, never inferred from its permissions: an office that
-    re-permissions a role must not thereby change what kind of account it
-    creates.
-
-    **Translation only.** This used to double as the archived-role provisioning
-    guard, because the one template with no `legacy_role` was also the one
-    nobody may be created under. That coincidence has been separated:
-    `create_provisioned_user` refuses `Role.is_archived` before reaching here.
-    The raise below remains as a defence for a role that is untranslatable for
-    some other reason — it is no longer the rule, it is the backstop.
-    """
-    if not org_role.legacy_role:
-        raise ValueError(
-            f"Role '{org_role.code}' cannot be used to create accounts"
-        )
-    try:
-        return UserRole[org_role.legacy_role]
-    except KeyError as exc:  # pragma: no cover - guarded by a test
-        raise ValueError(
-            f"Role '{org_role.code}' records an unknown legacy role "
-            f"'{org_role.legacy_role}'"
-        ) from exc
-
-
 def create_provisioned_user(
     db: Session,
     *,
     creator: User,
     email: str,
     full_name: str,
-    role: Optional[UserRole] = None,
-    org_role: Optional[Role] = None,
+    org_role: Role,
     discipline_ids: Optional[list[uuid.UUID]] = None,
     phone_number: Optional[str] = None,
     organization: Optional[str] = None,
-    engineer_affiliation: Optional[str] = None,
     company_id: Optional[uuid.UUID] = None,
     engineer_discipline: Optional[EngineerDiscipline] = None,
     employee_id: Optional[str] = None,
     password: Optional[str] = None,
     send_email: bool = True,
 ) -> Tuple[User, str]:
-    """Create a user with either an administrator-supplied or generated password.
+    """Create an account under `org_role`, with an administrator-supplied or generated password.
 
-    Pass `org_role` to create under one of the office's configured roles — the
-    path the administrator UI uses. `role` alone is the legacy path, kept
-    working until the contract migration.
+    Refuses an archived role: those exist only to keep history attributable,
+    and no account may be minted on one. That is an invariant, not a
+    permission — an office cannot make it provisionable by granting something.
     """
-    # Provisioning authority is one question with one answer on both paths.
-    # The legacy path used to ask `can_create_team_role(creator.role, role)`,
-    # which read the retired enum on both sides and admitted nobody but an
-    # ADMIN — so an office that granted `platform.manage_users` to a role of its
-    # own still could not create accounts through it. Both paths now require the
-    # permission the office can actually administer, which is what the
-    # `org_role_id` path already required at the endpoint.
     require(db, creator, "platform.manage_users")
 
-    if org_role is not None:
-        # The configured role decides everything the legacy arguments used to.
-        if org_role.is_archived:
-            # The policy, stated against the flag that means it. This used to
-            # fall out of `legacy_role_for` failing to translate a role with no
-            # `legacy_role`, which was correct only for as long as that column
-            # exists. Checked before translation so the refusal is about what
-            # the role *is*, not about what could not be derived from it.
-            raise ValueError(
-                f"Role '{org_role.code}' cannot be used to create accounts"
-            )
-        role = legacy_role_for(org_role)
-        engineer_affiliation = org_role.legacy_affiliation
-    elif role is None:
+    if org_role is None:
         raise ValueError("An office role is required to create an account")
-    elif role == UserRole.WORKER:
-        # The other half of what `can_create_team_role` did. It refused WORKER
-        # by leaving it out of a set, which is a rule nobody can see and which
-        # disappears the moment the function does. Workers stopped being
-        # platform users in the redesign; existing accounts were moved onto the
-        # archived role above and no new one may be minted.
-        #
-        # Deliberately not a permission: an office must not be able to make this
-        # provisionable by granting something, so it is an invariant rather than
-        # a capability.
-        raise ValueError("Worker accounts can no longer be created")
-
-    if role == UserRole.CONSULTANT:
-        role = UserRole.ENGINEER
-        engineer_affiliation = "external_consultant"
+    if org_role.is_archived:
+        raise ValueError(f"Role '{org_role.code}' cannot be used to create accounts")
 
     existing = db.query(User).filter(User.email == email.lower().strip()).first()
     if existing:
@@ -152,46 +76,40 @@ def create_provisioned_user(
         full_name=full_name.strip(),
         email=email.lower().strip(),
         hashed_password=hash_password(account_password),
-        role=role,
         phone_number=phone_number,
         organization=organization,
-        engineer_affiliation=(engineer_affiliation or "internal_engineer") if role == UserRole.ENGINEER else None,
         company_id=resolved_company_id,
         status=UserStatus.ACTIVE if direct_account else UserStatus.PENDING,
         must_change_password=not direct_account,
         invitation_accepted=direct_account,
         is_email_verified=direct_account,
     )
-
-    # Every account gets a database role, including one created through the
-    # legacy path, and it gets it *before* the row is written. The legacy path
-    # resolves the seeded role its enum maps to. Nothing fills `org_role_id`
-    # during the flush, so this is the only place this path's role comes from.
-    effective_role = org_role or rbac.template_role_for_legacy_user(db, user)
-    if effective_role is not None:
-        rbac.apply_org_role(user, effective_role)
+    # The role goes on before the row is written: `users.org_role_id` is NOT
+    # NULL, and `apply_org_role` moves `is_internal` with it.
+    rbac.apply_org_role(user, org_role)
     db.add(user)
     db.flush()
 
-    if effective_role is not None:
-        # The membership behind the role needs the account's id, so it is
-        # recorded after the flush. `assign_org_role` re-applies the same role.
-        rbac.assign_org_role(
-            db, user=user, role=effective_role,
-            organization_id=resolved_company_id or rbac.ensure_tenant_organization(db).id,
+    # The membership behind the role needs the account's id.
+    rbac.assign_org_role(
+        db, user=user, role=org_role,
+        organization_id=resolved_company_id or rbac.ensure_tenant_organization(db).id,
+    )
+    if discipline_ids:
+        rbac.set_user_disciplines(
+            db, user=user, discipline_ids=list(discipline_ids),
+            primary_id=discipline_ids[0],
         )
-        if discipline_ids:
-            rbac.set_user_disciplines(
-                db, user=user, discipline_ids=list(discipline_ids),
-                primary_id=discipline_ids[0],
-            )
 
-    if role == UserRole.ENGINEER:
-        discipline = _resolve_engineer_discipline(role, engineer_discipline)
+    # An engineering profile is recorded when the request describes one. It
+    # used to be created for every account whose legacy role was ENGINEER,
+    # defaulting the discipline to CIVIL when none was given — a value nobody
+    # had chosen.
+    if engineer_discipline is not None:
         db.add(
             EngineerProfile(
                 user_id=user.id,
-                discipline=discipline,
+                discipline=engineer_discipline,
                 employee_id=employee_id,
                 can_act_as_project_manager=False,
             )
@@ -205,7 +123,7 @@ def create_provisioned_user(
             to_email=user.email,
             full_name=user.full_name,
             temporary_password=account_password,
-            role_label=ROLE_LABELS.get(role, role.value),
+            role_label=org_role.name_en,
             invited_by=creator.full_name,
         )
 
@@ -217,8 +135,13 @@ def add_user_to_project(
     *,
     project_id: uuid.UUID,
     user_id: uuid.UUID,
-    role_on_project: UserRole,
 ) -> ProjectMember:
+    """Make this person an active member of the project.
+
+    The membership states only that they are on the project. What they may do
+    there is their office role, plus the project role and party set on the
+    membership by the caller.
+    """
     existing = (
         db.query(ProjectMember)
         .filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id)
@@ -226,7 +149,6 @@ def add_user_to_project(
     )
     if existing:
         existing.is_active = True
-        existing.role_on_project = role_on_project
         db.commit()
         db.refresh(existing)
         return existing
@@ -234,7 +156,6 @@ def add_user_to_project(
     member = ProjectMember(
         project_id=project_id,
         user_id=user_id,
-        role_on_project=role_on_project,
         is_active=True,
     )
     db.add(member)

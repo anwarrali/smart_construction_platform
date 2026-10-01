@@ -23,7 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.projects import get_project_by_id
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.user import User
@@ -55,7 +55,7 @@ def world(db):
     def user(name, role_code, legacy):
         person = User(
             full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-            hashed_password="x", role=legacy, status=UserStatus.ACTIVE,
+            hashed_password="x", status=UserStatus.ACTIVE,
             company_id=office.id, org_role_id=roles[role_code].id,
             is_internal=roles[role_code].is_internal_only,
         )
@@ -63,12 +63,12 @@ def world(db):
         db.flush()
         return person
 
-    manager = user("ProjPm", "project_manager", UserRole.PROJECT_MANAGER)
+    manager = user("ProjPm", "project_manager", "project_manager")
     # Administrative staff: on the project, and deliberately without
     # `cost_validation.review`. An ordinary Engineer holds that code by
     # default, so they are the wrong subject for "money is hidden from
     # somebody whose role does not carry it".
-    staffer = user("ProjStaff", "office_staff", UserRole.ENGINEER)
+    staffer = user("ProjStaff", "office_staff", "engineer")
     project = Project(
         name=f"Read Project {suffix}", status=ProjectStatus.ACTIVE,
         company_id=office.id, project_manager_id=manager.id,
@@ -76,8 +76,7 @@ def world(db):
     )
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=staffer.id,
-                         role_on_project=UserRole.ENGINEER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=staffer.id, is_active=True))
     db.flush()
     return {"project": project, "manager": manager, "staffer": staffer}
 

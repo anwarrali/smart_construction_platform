@@ -22,7 +22,7 @@ from app.api.organization import (
 )
 from app.db.database import SessionLocal
 from app.models.company import Company
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.rbac import ProjectParty, Role
 from app.models.user import User
@@ -62,12 +62,12 @@ def office(db):
 
     admin = User(
         full_name="Office Admin", email=f"admin-{suffix}@test.local",
-        hashed_password="x", role=UserRole.ADMIN, status=UserStatus.ACTIVE,
+        hashed_password="x", status=UserStatus.ACTIVE,
         company_id=company.id, org_role_id=roles["org_admin"].id, is_internal=True,
     )
     engineer = User(
         full_name="Engineer", email=f"eng-{suffix}@test.local",
-        hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+        hashed_password="x", status=UserStatus.ACTIVE,
         company_id=company.id, org_role_id=roles["engineer"].id, is_internal=True,
     )
     db.add_all([admin, engineer])
@@ -80,7 +80,7 @@ def office(db):
     db.add(project)
     db.flush()
     db.add(ProjectMember(
-        project_id=project.id, user_id=admin.id, role_on_project=UserRole.ADMIN,
+        project_id=project.id, user_id=admin.id,
         project_role_id=roles["org_admin"].id, is_active=True,
     ))
     # Committed on purpose. These tests drive the real endpoints, and those
@@ -126,7 +126,6 @@ def _purge(db, *, company_id, project_id, user_ids):
         "DELETE FROM organization_memberships WHERE user_id = ANY(:users) "
         "OR organization_id = :company",
         "DELETE FROM user_permission_overrides WHERE user_id = ANY(:users)",
-        "UPDATE users SET org_role_id = NULL WHERE id = ANY(:users)",
         "DELETE FROM users WHERE id = ANY(:users)",
         "DELETE FROM role_permissions WHERE role_id IN "
         "(SELECT id FROM roles WHERE organization_id = :company)",
@@ -166,8 +165,7 @@ def test_an_administrator_creates_a_role_and_it_grants_immediately(db, office):
         "not a project member yet — the permission is real but the project is not theirs"
     )
     db.add(ProjectMember(
-        project_id=office["project"].id, user_id=person.id,
-        role_on_project=UserRole.ENGINEER, is_active=True,
+        project_id=office["project"].id, user_id=person.id, is_active=True,
     ))
     db.flush()
     assert has_permission(db, person, "field_evidence.submit", office["project"].id)

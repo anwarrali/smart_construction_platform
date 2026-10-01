@@ -35,7 +35,7 @@ from app.db.database import SessionLocal
 from app.models.company import Company
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
-from app.models.enums import DocumentType, ProjectStatus, UserRole, UserStatus
+from app.models.enums import DocumentType, ProjectStatus, UserStatus
 from app.models.ingestion import IngestedFile
 from app.models.project import Project, ProjectMember
 from app.models.rbac import ProjectParty
@@ -115,11 +115,11 @@ def world(db, monkeypatch):
     db.add(office)
     db.flush()
 
-    def user(name, role_code, legacy=UserRole.ENGINEER):
+    def user(name, role_code):
         role = roles[role_code]
         person = User(
             full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-            hashed_password="x", role=legacy, status=UserStatus.ACTIVE,
+            hashed_password="x", status=UserStatus.ACTIVE,
             company_id=office.id, org_role_id=role.id,
             is_internal=role.is_internal_only,
         )
@@ -127,10 +127,10 @@ def world(db, monkeypatch):
         db.flush()
         return person
 
-    manager_a = user("RetPmA", "project_manager", UserRole.PROJECT_MANAGER)
-    manager_b = user("RetPmB", "project_manager", UserRole.PROJECT_MANAGER)
+    manager_a = user("RetPmA", "project_manager")
+    manager_b = user("RetPmB", "project_manager")
     contractor = user("RetContractor", "contractor_representative")
-    stranger = user("RetStranger", "project_manager", UserRole.PROJECT_MANAGER)
+    stranger = user("RetStranger", "project_manager")
 
     def project(name, manager):
         row = Project(name=f"{name} {suffix}", status=ProjectStatus.ACTIVE,
@@ -150,13 +150,10 @@ def world(db, monkeypatch):
 
     db.add_all([
         ProjectMember(project_id=project_a.id, user_id=manager_a.id,
-                      role_on_project=manager_a.role,
                       project_role_id=roles["project_manager"].id, is_active=True),
         ProjectMember(project_id=project_b.id, user_id=manager_b.id,
-                      role_on_project=manager_b.role,
                       project_role_id=roles["project_manager"].id, is_active=True),
         ProjectMember(project_id=project_a.id, user_id=contractor.id,
-                      role_on_project=contractor.role,
                       project_role_id=roles["contractor_representative"].id,
                       party_id=party.id, is_active=True),
     ])

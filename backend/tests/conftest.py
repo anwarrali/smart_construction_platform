@@ -50,3 +50,42 @@ def _no_outbound_push():
     settings.PUSH_ENABLED = False
     yield
     settings.PUSH_ENABLED = previous
+
+
+# --- isolated databases ------------------------------------------------------
+# Migrated once per session, on first use; see tests/isolated_databases.py.
+
+@pytest.fixture(scope="session")
+def fresh_template():
+    """A database migrated to head from nothing."""
+    from tests.isolated_databases import migrated_template
+
+    with migrated_template("cps_fresh_template", "head") as name:
+        yield name
+
+
+@pytest.fixture(scope="session")
+def legacy_template():
+    """A database at the last revision with the retired role columns."""
+    from tests.isolated_databases import PRE_CONTRACT, migrated_template
+
+    with migrated_template("cps_legacy_template", PRE_CONTRACT) as name:
+        yield name
+
+
+@pytest.fixture()
+def fresh_db(fresh_template):
+    """A session on a private copy of the freshly migrated database."""
+    from tests.isolated_databases import copy_of
+
+    with copy_of(fresh_template, "cps_fresh") as (session, _url):
+        yield session
+
+
+@pytest.fixture()
+def legacy_db(legacy_template):
+    """A private copy of the pre-contract database: (session, url)."""
+    from tests.isolated_databases import copy_of
+
+    with copy_of(legacy_template, "cps_legacy") as pair:
+        yield pair

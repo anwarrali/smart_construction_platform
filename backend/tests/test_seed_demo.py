@@ -9,7 +9,8 @@ from app.db.seed_demo import (
     stable_id,
 )
 from app.models.company import Company
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
+from app.models.rbac import Role
 from app.models.user import User
 
 
@@ -58,13 +59,15 @@ def _demo_user(password="OriginalDemoPass123"):
         email="worker.one.demo@smartconstruction-demo.com",
         full_name="Ahmad Barakat",
         hashed_password=hash_password(password),
-        role=UserRole.WORKER,
         status=UserStatus.ACTIVE,
         is_email_verified=True,
         is_superuser=False,
         must_change_password=False,
         invitation_accepted=True,
         company_id=company.id,
+        # The role the seed writes this account under; the rerun check compares it.
+        org_role=Role(id=uuid.uuid4(), code="archived_field_staff", name_en="Field Staff (archived)",
+                      scope="ORG", is_internal_only=True, is_archived=True),
     )
 
 
@@ -137,7 +140,7 @@ def test_rerun_does_not_reset_a_demo_users_password(monkeypatch):
         key="worker1",
         email=user.email,
         full_name=user.full_name,
-        role=UserRole.WORKER,
+        role_code="archived_field_staff",
         company=_company(),
         password="DifferentDemoPass123",
     )
@@ -155,14 +158,15 @@ def test_email_collision_never_modifies_a_real_user(monkeypatch):
         email="worker.one.demo@smartconstruction-demo.com",
         full_name="Existing Real User",
         hashed_password=hash_password("ExistingRealPass123"),
-        role=UserRole.OWNER,
         status=UserStatus.ACTIVE,
         is_email_verified=True,
         is_superuser=False,
         must_change_password=False,
         invitation_accepted=True,
         company_id=company.id,
+        org_role_id=uuid.uuid4(),
     )
+    original_role = real_user.org_role_id
     original_hash = real_user.hashed_password
     db = UserSession(real_user)
     monkeypatch.setattr(
@@ -176,10 +180,10 @@ def test_email_collision_never_modifies_a_real_user(monkeypatch):
             key="worker1",
             email=real_user.email,
             full_name="Ahmad Barakat",
-            role=UserRole.WORKER,
+            role_code="archived_field_staff",
             company=company,
             password="DifferentDemoPass123",
         )
 
-    assert real_user.role == UserRole.OWNER
+    assert real_user.org_role_id == original_role
     assert real_user.hashed_password == original_hash

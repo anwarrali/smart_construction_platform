@@ -23,7 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.cost_validations import get_cost_validation_by_id
 from app.db.database import SessionLocal
 from app.models.cost_validation import CostValidation
-from app.models.enums import CostValidationStatus, ProjectStatus, UserRole, UserStatus
+from app.models.enums import CostValidationStatus, ProjectStatus, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from tests.office_roles import with_office_role
@@ -63,18 +63,18 @@ def world(db):
 
     def user(name, role):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                                           hashed_password="x", role=role, status=UserStatus.ACTIVE))
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("CostAdmin", UserRole.ADMIN),
-        "manager": user("CostPm", UserRole.PROJECT_MANAGER),
-        "owner": user("CostOwner", UserRole.OWNER),
-        "engineer": user("CostEngineer", UserRole.ENGINEER),
+        "admin": user("CostAdmin", "org_admin"),
+        "manager": user("CostPm", "project_manager"),
+        "owner": user("CostOwner", "client_representative"),
+        "engineer": user("CostEngineer", "engineer"),
         # Belongs to a different project entirely - no membership, no ownership,
         # no PM assignment on the project the claim lives under.
-        "outsider": user("CostOutsider", UserRole.ENGINEER),
+        "outsider": user("CostOutsider", "engineer"),
     }
     db.flush()
 
@@ -84,10 +84,8 @@ def world(db):
                             owner_id=people["owner"].id, project_manager_id=people["manager"].id)
     db.add_all([project, other_project])
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=people["engineer"].id,
-                         role_on_project=UserRole.ENGINEER, is_active=True))
-    db.add(ProjectMember(project_id=other_project.id, user_id=people["outsider"].id,
-                         role_on_project=UserRole.ENGINEER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=people["engineer"].id, is_active=True))
+    db.add(ProjectMember(project_id=other_project.id, user_id=people["outsider"].id, is_active=True))
     db.flush()
 
     claim = CostValidation(

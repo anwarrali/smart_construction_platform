@@ -6,10 +6,10 @@ from app.core.deps import accessible_project_ids, get_current_user, user_has_pro
 from app.services import work_scope
 from app.services.authorization import require
 from app.db.database import get_db
-from app.models.enums import UserRole
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.field_assistant import ActionProposal, ActionProposalValidationOut
+from app.services import rbac
 
 router = APIRouter(prefix="/field", tags=["Field & Future AI Foundation"])
 
@@ -21,7 +21,7 @@ def get_mobile_field_context(db: Session = Depends(get_db), current_user: User =
     assignments = db.query(ProjectMember).filter(ProjectMember.user_id == current_user.id,
         ProjectMember.project_id.in_(project_ids), ProjectMember.is_active == True).all()
     by_project = {item.project_id: item for item in assignments}
-    return {"userId": current_user.id, "role": current_user.role.value,
+    return {"userId": current_user.id, "role": rbac.role_code(db, current_user),
             "discipline": current_user.engineer_profile.discipline.value if current_user.engineer_profile else None,
             "projects": [{"id": project.id, "name": project.name,
                 "assignmentTitle": by_project.get(project.id).assignment_title if by_project.get(project.id) else None,

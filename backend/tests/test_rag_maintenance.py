@@ -30,7 +30,7 @@ from app.core.config import settings
 from app.db.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
-from app.models.enums import DocumentType, ProjectStatus, UserRole, UserStatus
+from app.models.enums import DocumentType, ProjectStatus, UserStatus
 from app.models.ingestion import IngestedFile
 from app.models.project import Project, ProjectMember
 from app.models.rag_job import (
@@ -93,11 +93,11 @@ def world(db, monkeypatch):
     monkeypatch.setattr(settings, "OPENAI_EMBEDDING_MODEL", STUB_MODEL)
 
     manager = with_office_role(db, User(full_name="MaintPm", email=f"maintpm-{suffix}@example.com",
-                                        hashed_password="x", role=UserRole.PROJECT_MANAGER,
-                                        status=UserStatus.ACTIVE))
+                                        hashed_password="x",
+                                        status=UserStatus.ACTIVE), "project_manager")
     stranger = with_office_role(db, User(full_name="MaintOther", email=f"maintother-{suffix}@example.com",
-                                         hashed_password="x", role=UserRole.PROJECT_MANAGER,
-                                         status=UserStatus.ACTIVE))
+                                         hashed_password="x",
+                                         status=UserStatus.ACTIVE), "project_manager")
     db.add_all([manager, stranger])
     db.flush()
 
@@ -106,8 +106,7 @@ def world(db, monkeypatch):
                       owner_id=owner.id, project_manager_id=owner.id)
         db.add(row)
         db.flush()
-        db.add(ProjectMember(project_id=row.id, user_id=owner.id,
-                             role_on_project=owner.role, is_active=True))
+        db.add(ProjectMember(project_id=row.id, user_id=owner.id, is_active=True))
         return row
 
     project_a = project("Maint A", manager)

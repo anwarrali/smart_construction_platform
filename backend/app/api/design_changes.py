@@ -13,7 +13,7 @@ from app.schemas.design_change import DesignChangeOut, DesignChangeCreate
 from app.core.deps import get_current_user, user_has_project_access, accessible_project_ids
 from app.services import rbac, work_scope
 from app.services.authorization import has_permission
-from app.models.enums import DesignChangeStatus, UserRole
+from app.models.enums import DesignChangeStatus
 from app.models.attachment import Attachment
 from app.models.project import Project, ProjectMember
 from app.models.notification import Notification
@@ -273,12 +273,6 @@ def approve_design_change(
     # The capability is configurable. Project access is re-checked inside
     # `require`, and the discipline restriction below still applies on top.
     require(db, current_user, "design_change.approve", change.project_id)
-    # "Official approval rests with the assigned consultant alone" (see the
-    # catalogue entry): the catalogue default now covers ENGINEER broadly, the
-    # same shape as `ifc.upload`/`ifc.view`, because a Consultant Engineer's
-    # `User.role` is ENGINEER, not the retired UserRole.CONSULTANT value — so
-    # this hard gate is what actually keeps a non-consultant (e.g. Main
-    # Contractor) Engineer from approving, matching `reject_design_change`.
     # Approving is `design_change.approve`, which an office grants to whichever
     # role reviews design work. The discipline boundary is unchanged, and now
     # reads the configurable assignment rather than one enum value.

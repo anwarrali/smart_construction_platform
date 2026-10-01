@@ -11,7 +11,6 @@ from app.db.database import get_db
 from app.models.enums import (
     TaskStatus,
     TaskPriority,
-    UserRole,
     UserStatus,
     NotificationType,
     IssueSeverity,

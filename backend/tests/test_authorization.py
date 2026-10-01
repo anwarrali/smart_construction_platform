@@ -15,12 +15,11 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.permission_catalogue import BY_CODE, CATALOGUE, role_defaults
+from app.core.permission_catalogue import BY_CODE, CATALOGUE
+from app.core.role_templates import LEGACY_CONSULTANT_TEMPLATE, TEMPLATES
 from app.db.database import SessionLocal
-from app.models.enums import ConsultantApprovalMode, ProjectStatus, UserRole, UserStatus
-from app.models.permission import (
-    ConsultantEngineerScope, RolePermissionOverride, UserPermissionOverride,
-)
+from app.models.enums import ConsultantApprovalMode, ProjectStatus, UserStatus
+from app.models.permission import ConsultantEngineerScope, UserPermissionOverride
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
 from app.models.task import Task
 from app.models.step_up import StepUpGrant
@@ -52,24 +51,23 @@ def world(db):
     """One project, two consultants with different remits, two engineers."""
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
+    def user(name, role):
         return with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                                         hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                                         engineer_affiliation=affiliation))
+                                         hashed_password="x", status=UserStatus.ACTIVE), role)
 
-    admin = user("Admin", UserRole.ADMIN)
-    manager = user("Manager", UserRole.PROJECT_MANAGER)
+    admin = user("Admin", "org_admin")
+    manager = user("Manager", "project_manager")
     # Office staff, for the role-configuration tests. `civil` below is
     # contractor-side, so an `office_only` code granted to its role is stripped
     # at resolution — correct, and the wrong subject for "can an administrator
     # configure a role".
-    office_engineer = user("OfficeEng", UserRole.ENGINEER, "internal_engineer")
-    civil = user("CivilEng", UserRole.ENGINEER, "main_contractor")
-    electrical = user("ElecEng", UserRole.ENGINEER, "main_contractor")
-    consultant_a = user("ConsultantA", UserRole.ENGINEER, "external_consultant")
-    consultant_b = user("ConsultantB", UserRole.ENGINEER, "external_consultant")
-    owner = user("Client", UserRole.OWNER)
-    outsider = user("Outsider", UserRole.ENGINEER, "main_contractor")
+    office_engineer = user("OfficeEng", "engineer")
+    civil = user("CivilEng", "contractor_representative")
+    electrical = user("ElecEng", "contractor_representative")
+    consultant_a = user("ConsultantA", "senior_engineer")
+    consultant_b = user("ConsultantB", "senior_engineer")
+    owner = user("Client", "client_representative")
+    outsider = user("Outsider", "contractor_representative")
     people = [admin, manager, office_engineer, civil, electrical, consultant_a, consultant_b, owner, outsider]
     db.add_all(people)
     db.flush()
@@ -80,15 +78,14 @@ def world(db):
     db.add(project)
     db.flush()
 
-    for person, role_on_project, discipline in (
-        (office_engineer, UserRole.ENGINEER, "civil"),
-        (civil, UserRole.ENGINEER, "civil"),
-        (electrical, UserRole.ENGINEER, "electrical"),
-        (consultant_a, UserRole.CONSULTANT, "civil"),
-        (consultant_b, UserRole.CONSULTANT, "electrical"),
+    for person, discipline in (
+        (office_engineer, "civil"),
+        (civil, "civil"),
+        (electrical, "electrical"),
+        (consultant_a, "civil"),
+        (consultant_b, "electrical"),
     ):
-        db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=role_on_project, project_discipline=discipline,
+        db.add(ProjectMember(project_id=project.id, user_id=person.id, project_discipline=discipline,
                              is_active=True))
     db.flush()
 
@@ -112,22 +109,6 @@ def _purge(db, project_id, user_ids):
     for statement in (
         "DELETE FROM consultant_engineer_scopes WHERE project_id = :project",
         "DELETE FROM user_permission_overrides WHERE project_id = :project OR user_id = ANY(:users)",
-        "DELETE FROM role_permission_overrides WHERE updated_by_id = ANY(:users)",
-        # `PUT /access-control/roles` writes through to every configured role
-        # that provisions the legacy value being edited, and commits. A test
-        # that exercises it therefore changes *seeded templates* shared by every
-        # office and every later test in the run. This restores them, mirroring
-        # the write-through's own target set (`Role.legacy_role`) rather than a
-        # hand-listed set of codes, so the two cannot drift.
-        """DELETE FROM role_permissions
-            WHERE permission_code IN ('schedule.edit', 'project.edit')
-              AND role_id IN (
-                  SELECT id FROM roles
-                   WHERE organization_id IS NULL
-                     AND legacy_role IN ('ENGINEER', 'ADMIN', 'PROJECT_MANAGER')
-                     AND code NOT IN ('org_admin', 'office_director',
-                                      'technical_director', 'project_manager')
-              )""",
         "DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE project_id = :project)",
         "DELETE FROM tasks WHERE project_id = :project",
         "DELETE FROM project_consultant_reviewers WHERE project_id = :project",
@@ -189,11 +170,6 @@ def test_an_unknown_permission_code_is_denied_rather_than_ignored(world):
 def _configure_role(db, user, code, allowed):
     """Change what the role this person holds may do, on the live mechanism.
 
-    `RolePermissionOverride` used to be how a role was configured, and these
-    tests used it directly. `effective_permissions` read that table only while
-    an account had no `org_role_id`; the contract step removed that branch, so
-    writing to it now changes nothing.
-
     The role is **copied first**, into a row belonging to this test alone, and
     the copy is what gets edited. Editing the seeded template in place would
     outlive the test — the templates are shared by every office and by every
@@ -213,8 +189,7 @@ def _configure_role(db, user, code, allowed):
         organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
         name_en=source.name_en, scope=source.scope,
         is_internal_only=source.is_internal_only, is_system=False,
-        rank=source.rank, legacy_role=source.legacy_role,
-        legacy_affiliation=source.legacy_affiliation,
+        rank=source.rank,
     )
     db.add(copy)
     db.flush()
@@ -287,8 +262,10 @@ def test_a_granted_permission_still_requires_access_to_the_project(world):
 
 
 def test_an_administrator_cannot_be_stripped_of_administration(world):
-    world["db"].add(RolePermissionOverride(
-        role=UserRole.ADMIN, permission_code="platform.manage_permissions", allowed=False))
+    """Neither through the role's own rows nor through a per-person override."""
+    from app.services import rbac
+    admin_role = rbac.get_role(world["db"], world["admin"].org_role_id)
+    rbac.set_role_permission(world["db"], role=admin_role, code="platform.manage_permissions", allowed=None)
     world["db"].add(UserPermissionOverride(
         user_id=world["admin"].id, permission_code="platform.manage_users", allowed=False))
     world["db"].flush()
@@ -350,8 +327,7 @@ def test_no_engineer_scope_means_no_engineer_restriction(world):
 def test_a_consultant_who_is_not_a_project_member_reviews_nothing(world):
     stranger = with_office_role(world["db"], User(
         full_name="Stranger", email=f"stranger-{uuid4().hex[:6]}@test.local",
-        hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-        engineer_affiliation="external_consultant"))
+        hashed_password="x", status=UserStatus.ACTIVE), "senior_engineer")
     world["db"].add(stranger)
     world["db"].flush()
     assert not can_consultant_review_task(
@@ -368,12 +344,14 @@ def test_every_permission_code_is_unique_and_grouped():
     assert set(BY_CODE) == set(codes)
 
 
-def test_no_role_other_than_admin_holds_platform_administration():
-    for role in UserRole:
-        if role == UserRole.ADMIN:
-            continue
-        assert "platform.manage_permissions" not in role_defaults(role)
-        assert "platform.manage_users" not in role_defaults(role)
+def test_only_office_administration_roles_hold_platform_administration():
+    """Administering accounts and permissions belongs to the two office-administration templates."""
+    for code in ("platform.manage_permissions", "platform.manage_users"):
+        holders = {
+            template.code for template in (*TEMPLATES, LEGACY_CONSULTANT_TEMPLATE)
+            if code in template.permissions()
+        }
+        assert holders == {"org_admin", "office_director"}, (code, holders)
 
 
 # --- direct API access ------------------------------------------------------
@@ -387,16 +365,10 @@ def test_a_manager_cannot_read_the_permission_catalogue(world):
     assert raised.value.status_code == 403
 
 
-def test_an_engineer_cannot_change_role_permissions(world):
-    from app.api.permissions import set_role_permission
-    from app.schemas.permission import RolePermissionUpdate
-    payload = RolePermissionUpdate(role="engineer", permissionCode="platform.manage_users", allowed=True)
-    with pytest.raises(HTTPException) as raised:
-        set_role_permission(payload, db=world["db"], current_user=world["civil"])
-    assert raised.value.status_code == 403
-    # and nothing was written
-    assert world["db"].query(RolePermissionOverride).filter(
-        RolePermissionOverride.permission_code == "platform.manage_users").count() == 0
+# Changing what a *role* may do is the organization API's job
+# (`PUT /organization/roles/{id}/permissions`), and who may do it is covered in
+# test_organization_api.py. The retired role-by-permission matrix that lived at
+# `/access-control/roles` is gone.
 
 
 def test_an_owner_cannot_grant_themselves_a_permission(world):
@@ -408,35 +380,13 @@ def test_an_owner_cannot_grant_themselves_a_permission(world):
     assert raised.value.status_code == 403
 
 
-def test_an_administrator_can_read_and_change_permissions(world):
-    from app.api.permissions import list_permissions, role_matrix, set_role_permission
-    from app.schemas.permission import RolePermissionUpdate
-    assert len(list_permissions(db=world["db"], current_user=world["admin"])) == len(CATALOGUE)
-    assert len(role_matrix(db=world["db"], current_user=world["admin"])) == len(UserRole) * len(CATALOGUE)
-
-    # Changing the permission matrix requires step-up verification (Task 4).
-    # This test is about the permission API itself, so it satisfies the gate
-    # directly; the OTP mechanics have their own suite, which includes a test
-    # that this endpoint refuses without a grant.
-    world["db"].add(StepUpGrant(
-        user_id=world["admin"].id, purpose="admin.change_permissions",
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5)))
-    world["db"].flush()
-    result = set_role_permission(
-        RolePermissionUpdate(role="engineer", permissionCode="schedule.edit", allowed=True),
-        db=world["db"], current_user=world["admin"])
-    assert result["effective_allowed"] is True
-    assert has_permission(world["db"], world["office_engineer"], "schedule.edit", world["project"].id)
-
-
-def test_an_administrator_cannot_revoke_their_own_administration_through_the_api(world):
-    from app.api.permissions import set_role_permission
-    from app.schemas.permission import RolePermissionUpdate
-    with pytest.raises(HTTPException) as raised:
-        set_role_permission(
-            RolePermissionUpdate(role="admin", permissionCode="platform.manage_permissions", allowed=False),
-            db=world["db"], current_user=world["admin"])
-    assert raised.value.status_code == 409
+def test_an_administrator_can_read_the_permission_catalogue(world):
+    from app.api.permissions import list_permissions
+    listed = list_permissions(db=world["db"], current_user=world["admin"])
+    assert len(listed) == len(CATALOGUE)
+    broadcast = next(item for item in listed if item["code"] == "message.broadcast")
+    assert broadcast["office_only"] is True and broadcast["never_external"] is False
+    assert all("default_roles" not in item for item in listed)
 
 
 def test_scheduling_a_site_visit_is_refused_once_the_permission_is_revoked(world):

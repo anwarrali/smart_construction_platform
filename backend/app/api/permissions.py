@@ -13,20 +13,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
-from app.core.permission_catalogue import BY_CODE, CATALOGUE, role_defaults
+from app.core.permission_catalogue import BY_CODE, CATALOGUE
 from app.db.database import get_db
-from app.models.enums import UserRole, UserStatus
-from app.models.permission import (
-    ConsultantEngineerScope,
-    RolePermissionOverride,
-    UserPermissionOverride,
-)
+from app.models.enums import UserStatus
+from app.models.permission import ConsultantEngineerScope, UserPermissionOverride
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
 from app.models.rbac import Role
 from app.models.user import User
 from app.schemas.permission import (
-    ConsultantScopeOut, ConsultantScopeUpdate, PermissionOut, RolePermissionState,
-    RolePermissionUpdate, UserPermissionSummary, UserPermissionUpdate,
+    ConsultantScopeOut, ConsultantScopeUpdate, PermissionOut, UserPermissionSummary,
+    UserPermissionUpdate,
 )
 from app.services import rbac
 from app.services.audit_service import record_audit
@@ -40,13 +36,6 @@ MANAGE = "platform.manage_permissions"
 
 def _gate(db: Session, user: User) -> None:
     require(db, user, MANAGE)
-
-
-def _role(value: str) -> UserRole:
-    try:
-        return UserRole(value.lower())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Unknown role")
 
 
 def _permission(code: str):
@@ -63,107 +52,15 @@ def list_permissions(db: Session = Depends(get_db), current_user: User = Depends
     return [{
         "code": item.code, "group": item.group, "label": item.label,
         "description": item.description,
-        "default_roles": sorted(role.value for role in item.default_roles),
         "project_scoped": item.project_scoped, "admin_locked": item.admin_locked,
+        "office_only": item.office_only, "never_external": item.never_external,
     } for item in CATALOGUE]
 
 
-@router.get("/roles", response_model=list[RolePermissionState])
-def role_matrix(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Every role against every permission, with defaults and current state."""
-    _gate(db, current_user)
-    overrides = {
-        (row.role, row.permission_code): row.allowed
-        for row in db.query(RolePermissionOverride).all()
-    }
-    rows = []
-    for role in UserRole:
-        defaults = role_defaults(role)
-        for item in CATALOGUE:
-            default_allowed = item.code in defaults
-            override = overrides.get((role, item.code))
-            effective = default_allowed if override is None else override
-            if role == UserRole.ADMIN and item.admin_locked:
-                effective = True
-            rows.append({
-                "role": role.value, "permission_code": item.code,
-                "default_allowed": default_allowed, "effective_allowed": effective,
-                "overridden": override is not None,
-            })
-    return rows
-
-
-@router.put("/roles", response_model=RolePermissionState)
-def set_role_permission(payload: RolePermissionUpdate, db: Session = Depends(get_db),
-                        current_user: User = Depends(get_current_user)):
-    _gate(db, current_user)
-    role = _role(payload.role)
-    item = _permission(payload.permission_code)
-
-    if role == UserRole.ADMIN and item.admin_locked and payload.allowed is False:
-        raise HTTPException(
-            status_code=409,
-            detail="This permission keeps the platform administrable and cannot be removed from an administrator",
-        )
-
-    # Rewriting the permission matrix can hand any capability to any role, so
-    # it is the single most powerful thing an administrator session can do.
-    # Challenged only after the request is known to be well-formed and legal:
-    # making someone fetch a code for an operation that is going to be refused
-    # anyway wastes their time and burns a send against their rate limit.
-    require_step_up(db, current_user, "admin.change_permissions")
-
-    # Write through to the configurable roles.
-    #
-    # This endpoint's own table, `RolePermissionOverride`, is keyed on the
-    # retired `UserRole` enum, and `effective_permissions` stopped reading it at
-    # the contract step. Left as it was, this screen would still return 200 and
-    # change nothing — the worst kind of broken.
-    #
-    # So the change is applied to every configured role that provisions the
-    # legacy value being edited: "give Engineers `schedule.edit`" reaches
-    # Engineer, Site Engineer, Surveyor and any role the office copied from
-    # them. That is the same breadth the retired table had, since one override
-    # row governed everyone carrying that enum value.
-    #
-    # The row is still written, because `legacy_effective_permissions` reads it
-    # and that is what the equivalence gate compares against. It is evidence
-    # now, not configuration.
-    targets = db.query(Role).filter(Role.legacy_role == role.name, Role.is_active.is_(True)).all()
-    for target in targets:
-        rbac.set_role_permission(db, role=target, code=item.code, allowed=payload.allowed)
-
-    row = db.query(RolePermissionOverride).filter(
-        RolePermissionOverride.role == role,
-        RolePermissionOverride.permission_code == item.code,
-    ).first()
-
-    if payload.allowed is None:
-        if row:
-            db.delete(row)
-    elif row:
-        row.allowed = payload.allowed
-        row.reason = payload.reason
-        row.updated_by_id = current_user.id
-    else:
-        db.add(RolePermissionOverride(
-            role=role, permission_code=item.code, allowed=payload.allowed,
-            reason=payload.reason, updated_by_id=current_user.id,
-        ))
-
-    record_audit(db, actor_id=current_user.id, action="role_permission_changed",
-                 entity_type="role_permission", entity_id=None, project_id=None,
-                 details={"role": role.value, "permission": item.code, "allowed": payload.allowed,
-                          "configured_roles": sorted(target.code for target in targets)})
-    db.commit()
-
-    default_allowed = item.code in role_defaults(role)
-    effective = default_allowed if payload.allowed is None else payload.allowed
-    if role == UserRole.ADMIN and item.admin_locked:
-        effective = True
-    return {"role": role.value, "permission_code": item.code,
-            "default_allowed": default_allowed, "effective_allowed": effective,
-            "overridden": payload.allowed is not None}
+# `GET` / `PUT /access-control/roles` stood here: a matrix of the retired
+# six-value enum against the catalogue, stored in `role_permission_overrides`.
+# What a role may do is now edited on the role itself —
+# `PUT /organization/roles/{id}/permissions` — and that table is gone.
 
 
 @router.get("/users/{user_id}", response_model=UserPermissionSummary)
@@ -178,7 +75,9 @@ def user_permissions(user_id: uuid.UUID, project_id: uuid.UUID | None = Query(de
         UserPermissionOverride.user_id == user_id).all()
     return {
         "user_id": target.id, "full_name": target.full_name, "email": target.email,
-        "role": target.role.value, "status": target.status.value, "project_id": project_id,
+        "role_code": target.org_role.code if target.org_role else None,
+        "role_name": target.org_role.name_en if target.org_role else None,
+        "status": target.status.value, "project_id": project_id,
         "effective_permissions": sorted(effective_permissions(db, target, project_id)),
         "overrides": overrides,
     }

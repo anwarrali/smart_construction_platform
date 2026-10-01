@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.deps import user_has_project_access
-from app.models.enums import NotificationType, TaskStatus, UserRole
+from app.models.enums import NotificationType, TaskStatus
 from app.models.notification import Notification
 from app.models.project import Project
 from app.models.task import Task, TaskComment, TaskDependency

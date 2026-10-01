@@ -1,30 +1,41 @@
-"""Move existing accounts and projects onto the configurable role model.
+"""Move a database from the retired role model onto the configurable one.
+
+**For a legacy database only.** A fresh deployment never needs this:
+`bootstrap_admin` seeds the role templates before it creates the first
+administrator (`rbac.seed_fresh_database`). This exists for one situation — a
+database whose accounts still describe people by the retired six-value
+`users.role` enum and `engineer_affiliation` strings, and have no office role.
+
+It must run **before** the migration that removes those columns
+(`e1a9c3d5f720`), which refuses to proceed while any account lacks an office
+role. The order for such a database is:
+
+    alembic upgrade c84d6e2f1a37        # the last revision with the legacy columns
+    python -m app.db.rbac_backfill      # this
+    alembic upgrade head                # removes the legacy schema
+
+The legacy values are read with raw SQL — the ORM no longer maps the columns —
+and the run refuses, without changing anything, on a database that has no such
+columns (already migrated) or no accounts at all (fresh).
 
 Idempotent and re-runnable: every step looks for what it would create before
-creating it, so an interrupted run is resumed by running it again rather than
-by cleaning up after it.
-
-Nothing is deleted. The retired `User.role`, `ProjectMember.role_on_project`
-and `engineer_affiliation` columns are left exactly as they are — this fills in
-the new columns beside them. That is what makes the run reversible in practice
-as well as on paper: until the contract migration drops those columns, the
-legacy resolution still works and `app.db.rbac_equivalence` can compare the two.
+creating it. Everything happens in one transaction; any failure rolls the
+whole run back. An `engineer_affiliation` the platform does not recognise
+fails the run (`UnknownAffiliation`) rather than guessing a role: guessing
+high would hand an outsider internal access, guessing low would silently strip
+a legitimate account. Fix the row and run again.
 
 ## The two places this deliberately does not do the literal thing
 
 **External consultants become office staff.** An `external_consultant` account
-is the reviewing side of the old owner/contractor/consultant triangle, and in
-the new product the consulting office *is* the reviewer. Migrating them to an
-outside party would have put the office's own reviewers behind deny-by-default
-external document scoping. See `LEGACY_ROLE_MAP` in `app.core.role_templates`.
+is the reviewing side of the old owner/contractor/consultant triangle, and the
+consulting office *is* the reviewer. See `app.db.legacy_rbac.LEGACY_ROLE_MAP`.
 
 **Contractor access is preserved explicitly rather than by default.** Main
 contractor engineers become external participants, and external participants
 only read documents that were explicitly shared with their party. Applied
-naively that would silently revoke document access those people have today, so
-this backfill writes the shares that reproduce it. New documents are
-deny-by-default from here on; existing access is carried over as visible,
-auditable rows rather than as an invisible rule.
+naively that would silently revoke document access those people had, so this
+backfill writes the shares that reproduce it.
 
 Run it with:
 
@@ -36,25 +47,28 @@ from __future__ import annotations
 
 import argparse
 import sys
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import app.models  # noqa: F401  - configure all SQLAlchemy relationships
 from app.core.role_templates import (
-    discipline_code_for_legacy,
     PARTY_CLIENT,
     PARTY_CONSULTANT,
     PARTY_MAIN_CONTRACTOR,
-    template_for_legacy,
+    discipline_code_for_legacy,
 )
 from app.db.database import SessionLocal
-from app.db.legacy_rbac import LEGACY_INHERITS
+from app.db.legacy_rbac import (
+    CONTRACTOR_AFFILIATIONS,
+    LEGACY_INHERITS,
+    template_for_legacy,
+)
 from app.models.company import Company
 from app.models.document import Document
-from app.models.enums import UserRole
-from app.models.permission import RolePermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.rbac import (
     Discipline,
@@ -67,9 +81,25 @@ from app.models.rbac import (
 from app.models.user import EngineerProfile, User
 from app.services import rbac
 
-#: Affiliations that describe somebody working for the main contractor. These
-#: are the accounts that become external project participants.
-CONTRACTOR_AFFILIATIONS = frozenset({"main_contractor"})
+
+class NothingToBackfill(Exception):
+    """The database holds nothing in the retired model; no change was made."""
+
+
+@dataclass(frozen=True)
+class LegacyAccount:
+    role: str
+    affiliation: str | None
+
+
+@dataclass
+class LegacySnapshot:
+    """The retired columns, read once with raw SQL."""
+
+    accounts: dict[uuid.UUID, LegacyAccount]
+    member_roles: dict[uuid.UUID, str]
+    #: Retired role-keyed overrides, already translated to template codes.
+    role_overrides: dict[str, dict[str, bool]]
 
 
 @dataclass
@@ -92,7 +122,7 @@ class BackfillReport:
 
     def render(self) -> str:
         lines = [
-            "RBAC backfill",
+            "RBAC backfill (legacy database)",
             f"  consulting office        : {self.tenant_name}",
             f"  organizations classified : {self.organizations_classified}",
             f"  roles seeded             : {self.roles_seeded}",
@@ -118,33 +148,52 @@ class BackfillReport:
         return "\n".join(lines)
 
 
-def _legacy_role_overrides(db: Session) -> dict[str, dict[str, bool]]:
-    """Whatever an administrator had configured, keyed by template code.
+# ---------------------------------------------------------------------------
+# Reading the retired model
+# ---------------------------------------------------------------------------
 
-    The retired table is keyed by legacy role; each decision is folded into
-    every template that took its permissions from that role, so a permission
-    an office had switched on or off before the redesign is still on or off
-    after it. Without this the equivalence gate would fail on any installation
-    that had ever used Access Control.
-    """
+def legacy_schema_present(db: Session) -> bool:
+    """Whether `users.role` still exists — that is, the legacy columns are present."""
+    return db.execute(text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'role'"
+    )).first() is not None
+
+
+def read_legacy_snapshot(db: Session) -> LegacySnapshot:
+    accounts = {
+        row.id: LegacyAccount(role=row.role, affiliation=row.engineer_affiliation)
+        for row in db.execute(text(
+            "SELECT id, role::text AS role, engineer_affiliation FROM users"
+        ))
+    }
+    member_roles = {
+        row.id: row.role
+        for row in db.execute(text(
+            "SELECT id, role_on_project::text AS role FROM project_members"
+        ))
+    }
     by_legacy: dict[str, dict[str, bool]] = defaultdict(dict)
-    for row in db.query(RolePermissionOverride).all():
-        by_legacy[row.role.name][row.permission_code] = row.allowed
-    return {
+    for row in db.execute(text(
+        "SELECT role::text AS role, permission_code, allowed FROM role_permission_overrides"
+    )):
+        by_legacy[row.role][row.permission_code] = row.allowed
+    role_overrides = {
         template: dict(by_legacy[legacy])
         for template, legacy in LEGACY_INHERITS.items()
         if legacy is not None and by_legacy.get(legacy)
     }
+    return LegacySnapshot(accounts, member_roles, role_overrides)
 
 
-def _classify_organizations(db: Session, tenant: Company, report: BackfillReport) -> None:
-    """Give every pre-redesign company row a kind.
+# ---------------------------------------------------------------------------
+# Steps
+# ---------------------------------------------------------------------------
 
-    A company is classified by what its people did, because that is the only
-    evidence the old model left. This is a label, not a hierarchy: nothing
-    joins one organization to another, and a contractor row here is never how
-    a contractor takes part in a project.
-    """
+def _classify_organizations(
+    db: Session, tenant: Company, legacy: LegacySnapshot, report: BackfillReport
+) -> None:
+    """Give every pre-redesign company row a kind, from what its people did."""
     for company in db.query(Company).all():
         if company.id == tenant.id:
             if company.kind != "CONSULTING_OFFICE" or not company.is_tenant:
@@ -154,17 +203,16 @@ def _classify_organizations(db: Session, tenant: Company, report: BackfillReport
             continue
         if company.kind != "OTHER":
             continue  # already classified by an earlier run
-        affiliations = {
-            value for (value,) in db.query(User.engineer_affiliation)
-            .filter(User.company_id == company.id).all()
-        }
-        roles = {
-            value for (value,) in db.query(User.role)
-            .filter(User.company_id == company.id).all()
-        }
-        if affiliations & CONTRACTOR_AFFILIATIONS or UserRole.WORKER in roles:
+        people = [
+            legacy.accounts[user_id]
+            for (user_id,) in db.query(User.id).filter(User.company_id == company.id).all()
+            if user_id in legacy.accounts
+        ]
+        affiliations = {person.affiliation for person in people}
+        roles = {person.role for person in people}
+        if affiliations & CONTRACTOR_AFFILIATIONS or "WORKER" in roles:
             company.kind = "CONTRACTOR"
-        elif roles == {UserRole.OWNER}:
+        elif roles == {"OWNER"}:
             company.kind = "CLIENT"
         else:
             company.kind = "OTHER"
@@ -172,19 +220,20 @@ def _classify_organizations(db: Session, tenant: Company, report: BackfillReport
 
 
 def _map_users(
-    db: Session, tenant: Company, roles: dict[str, Role], report: BackfillReport
+    db: Session, tenant: Company, roles: dict[str, Role], legacy: LegacySnapshot,
+    report: BackfillReport,
 ) -> None:
     for user in db.query(User).all():
         if user.org_role_id is not None:
             continue
-        template = template_for_legacy(user.role, user.engineer_affiliation)
-        role = roles.get(template.code)
+        account = legacy.accounts[user.id]
+        # Raises `UnknownAffiliation` for an unrecognised value: the run stops
+        # and rolls back rather than guessing a role.
+        code = template_for_legacy(account.role, account.affiliation)
+        role = roles.get(code)
         if role is None:
-            report.unmapped_users.append(f"{user.email} ({user.role}/{user.engineer_affiliation})")
+            report.unmapped_users.append(f"{user.email} ({account.role}/{account.affiliation})")
             continue
-        # The person's office. `company_id` is where the old model recorded
-        # who they worked for; when it is missing they join the tenant, which
-        # is the only office this deployment has.
         organization_id = user.company_id or tenant.id
         rbac.assign_org_role(
             db, user=user, role=role, organization_id=organization_id,
@@ -192,21 +241,15 @@ def _map_users(
         )
         report.users_mapped += 1
         report.memberships += 1
-        report.users_by_role[template.code] += 1
-        if user.role == UserRole.WORKER:
+        report.users_by_role[code] += 1
+        if account.role == "WORKER":
             report.workers_archived += 1
 
 
 def _map_user_disciplines(
     db: Session, disciplines: dict[str, Discipline], report: BackfillReport
 ) -> None:
-    """`EngineerProfile.discipline` becomes a row in the many-to-many table.
-
-    Read from the profile rather than from a normalized alias, because the
-    alias map was lossy — it folded `structural` into `civil` and `hvac` into
-    `mechanical` — and a backfill that inherited that loss would make the new
-    model no better than the enum it replaces.
-    """
+    """`EngineerProfile.discipline` becomes a row in the many-to-many table."""
     for profile in db.query(EngineerProfile).all():
         if profile.discipline is None:
             continue
@@ -250,13 +293,17 @@ def _ensure_party(
     return party
 
 
+def _is_contractor_side(account: LegacyAccount | None) -> bool:
+    return bool(account) and (
+        account.affiliation in CONTRACTOR_AFFILIATIONS or account.role == "WORKER"
+    )
+
+
 def _map_projects(
     db: Session, tenant: Company, roles: dict[str, Role],
-    disciplines: dict[str, Discipline], report: BackfillReport,
+    disciplines: dict[str, Discipline], legacy: LegacySnapshot, report: BackfillReport,
 ) -> None:
     for project in db.query(Project).all():
-        # Every project belongs to the office. A project with no company was
-        # possible before; it is not a meaningful state now.
         if project.company_id is None:
             project.company_id = tenant.id
 
@@ -276,91 +323,59 @@ def _map_projects(
                 )
 
         # --- contractors, grouped by the firm each person names -------------
+        # Worker accounts belonged to the contractor; they are archived and hold
+        # nothing, but attaching them keeps the project's history honest.
         contractor_parties: dict[str, ProjectParty] = {}
         consultant_parties: dict[str, ProjectParty] = {}
         for member in members:
             user = db.get(User, member.user_id)
-            if user is None:
+            if user is None or not _is_contractor_side(legacy.accounts.get(user.id)):
                 continue
-            if user.engineer_affiliation in CONTRACTOR_AFFILIATIONS:
-                name = _party_name_for(user, "Main Contractor")
-                if name not in contractor_parties:
-                    contractor_parties[name] = _ensure_party(
-                        db, project=project, kind=PARTY_MAIN_CONTRACTOR, name=name,
-                        report=report, is_primary=not contractor_parties,
-                    )
-            elif user.role == UserRole.WORKER:
-                # Worker accounts belonged to the contractor. They are archived
-                # and hold nothing, but attaching them to the party keeps the
-                # historical picture of the project honest.
-                name = _party_name_for(user, "Main Contractor")
-                if name not in contractor_parties:
-                    contractor_parties[name] = _ensure_party(
-                        db, project=project, kind=PARTY_MAIN_CONTRACTOR, name=name,
-                        report=report, is_primary=not contractor_parties,
-                    )
+            name = _party_name_for(user, "Main Contractor")
+            if name not in contractor_parties:
+                contractor_parties[name] = _ensure_party(
+                    db, project=project, kind=PARTY_MAIN_CONTRACTOR, name=name,
+                    report=report, is_primary=not contractor_parties,
+                )
 
         # --- project roles, parties and disciplines per member --------------
         for member in members:
             user = db.get(User, member.user_id)
             if user is None:
                 continue
+            account = legacy.accounts.get(user.id)
 
-            if member.project_role_id is None:
-                # Derived from the *person*, not from `role_on_project`.
-                #
-                # `role_on_project` looks like the obvious source and is the
-                # wrong one. The old `add_project_member` required it to equal
-                # the user's global role, so it never carried authority of its
-                # own — with a single exception: an external-consultant
-                # Engineer was stored as `role_on_project=CONSULTANT`. Mapping
-                # that value literally would hand them the retired CONSULTANT
-                # role's defaults, which include `schedule.view` — a permission
-                # an Engineer does not hold. The migration would then have
-                # granted portfolio schedule access to every consultant
-                # engineer on every project, silently.
-                #
-                # Deriving from the person instead guarantees the project role
-                # is a subset of the office role, so the union in
-                # `rbac.resolved_permissions` cannot widen anybody. The
-                # site-engineer flag is the one genuine project-level
-                # distinction, and it maps to a template with the same
-                # permissions plus the field-evidence codes it already had.
-                if member.is_site_engineer and user.role == UserRole.ENGINEER:
+            if member.project_role_id is None and account is not None:
+                # Derived from the *person*, not from `role_on_project`, which
+                # never carried authority of its own (it had to equal the
+                # account's role), except that an external-consultant Engineer
+                # was stored as CONSULTANT — and mapping that literally would
+                # hand them the retired Consultant defaults. Deriving from the
+                # person keeps the project role a subset of the office role.
+                if member.is_site_engineer and account.role == "ENGINEER":
                     template_code = "site_engineer"
                 else:
-                    template_code = template_for_legacy(
-                        user.role, user.engineer_affiliation
-                    ).code
+                    template_code = template_for_legacy(account.role, account.affiliation)
                 role = roles.get(template_code)
                 if role is not None:
                     member.project_role_id = role.id
                     report.project_roles += 1
 
-            # Office staff are never attached to an external party, whatever
-            # else is true of them. A project manager who also happens to be
-            # recorded as the project's `owner_id` is still office staff, and
-            # attaching them to the client party would make them external —
-            # stripping the review and management authority their job needs.
+            # Office staff are never attached to an external party.
             role_is_internal = bool(
                 db.get(Role, user.org_role_id).is_internal_only
                 if user.org_role_id else True
             )
             if member.party_id is not None and role_is_internal:
-                # Repair a row an earlier run attached before this rule existed.
                 member.party_id = None
 
             if member.party_id is None and not role_is_internal:
-                if user.id == project.owner_id or member.role_on_project == UserRole.OWNER:
+                if user.id == project.owner_id or legacy.member_roles.get(member.id) == "OWNER":
                     if client_party is not None:
                         member.party_id = client_party.id
                         report.members_attached_to_party += 1
-                elif (
-                    user.engineer_affiliation in CONTRACTOR_AFFILIATIONS
-                    or user.role == UserRole.WORKER
-                ):
-                    name = _party_name_for(user, "Main Contractor")
-                    party = contractor_parties.get(name)
+                elif _is_contractor_side(account):
+                    party = contractor_parties.get(_party_name_for(user, "Main Contractor"))
                     if party is not None:
                         member.party_id = party.id
                         report.members_attached_to_party += 1
@@ -380,9 +395,6 @@ def _map_projects(
                         report.member_disciplines += 1
 
         # --- preserve the document access contractors already had -----------
-        # Deny-by-default is the rule from here on. Applying it retroactively
-        # would revoke access silently, so what they could read today is
-        # written down as explicit shares instead.
         if contractor_parties or consultant_parties:
             document_ids = [
                 row[0] for row in db.query(Document.id).filter(
@@ -407,35 +419,47 @@ def _map_projects(
     db.flush()
 
 
+# ---------------------------------------------------------------------------
+# Entry points
+# ---------------------------------------------------------------------------
+
 def run(db: Session, *, dry_run: bool = False, commit: bool = True) -> BackfillReport:
-    """Apply the backfill.
+    """Apply the backfill to a legacy database.
+
+    Raises `NothingToBackfill`, without changing anything, on a database that
+    no longer has the legacy columns or has no accounts at all.
 
     `commit=False` leaves the work in the caller's open transaction instead of
-    writing it. Tests use it to build a world, migrate it and assert on the
-    result without touching the shared development database.
+    writing it.
     """
+    if not legacy_schema_present(db):
+        raise NothingToBackfill(
+            "This database has no legacy role columns: it was created after the "
+            "configurable role model, or has already been migrated. Nothing to backfill."
+        )
+    if db.query(User.id).first() is None:
+        raise NothingToBackfill(
+            "This database has no accounts. A fresh deployment is initialized by "
+            "`python -m app.db.bootstrap_admin`, which seeds the roles; it does not "
+            "need the backfill."
+        )
+
+    legacy = read_legacy_snapshot(db)
     report = BackfillReport()
 
     tenant = rbac.ensure_tenant_organization(db)
     report.tenant_name = tenant.name
-    _classify_organizations(db, tenant, report)
+    _classify_organizations(db, tenant, legacy, report)
 
     disciplines = rbac.seed_disciplines(db)
     report.disciplines_seeded = len(disciplines)
 
-    needs_legacy_consultant = db.query(User).filter(
-        User.role == UserRole.CONSULTANT
-    ).first() is not None
-    roles = rbac.seed_roles(
-        db,
-        include_legacy_consultant=needs_legacy_consultant,
-        role_overrides=_legacy_role_overrides(db),
-    )
+    roles = rbac.seed_roles(db, role_overrides=legacy.role_overrides)
     report.roles_seeded = len(roles)
 
-    _map_users(db, tenant, roles, report)
+    _map_users(db, tenant, roles, legacy, report)
     _map_user_disciplines(db, disciplines, report)
-    _map_projects(db, tenant, roles, disciplines, report)
+    _map_projects(db, tenant, roles, disciplines, legacy, report)
 
     if dry_run:
         db.rollback()
@@ -445,7 +469,7 @@ def run(db: Session, *, dry_run: bool = False, commit: bool = True) -> BackfillR
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Backfill the configurable RBAC model.")
+    parser = argparse.ArgumentParser(description="Backfill a legacy database onto configurable roles.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Report what would change and roll back.")
     args = parser.parse_args(argv)
@@ -453,6 +477,10 @@ def main(argv: list[str] | None = None) -> int:
     db = SessionLocal()
     try:
         report = run(db, dry_run=args.dry_run)
+    except NothingToBackfill as reason:
+        db.rollback()
+        print(reason)
+        return 0
     except Exception:
         db.rollback()
         raise

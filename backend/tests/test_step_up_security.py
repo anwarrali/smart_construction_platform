@@ -19,7 +19,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import SessionLocal
 from app.models.audit_log import AuditLog
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.step_up import OtpChallenge, StepUpGrant
 from app.models.user import User
 from app.services import rate_limit_service, step_up_service
@@ -50,15 +50,14 @@ def people(db):
 
     def user(name, role):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}.{suffix}@constro.io",
-                                           hashed_password=hash_password("Correct#12345"),
-                                           role=role, status=UserStatus.ACTIVE))
+                                           hashed_password=hash_password("Correct#12345"), status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     made = {
-        "admin": user("SuAdmin", UserRole.ADMIN),
-        "engineer": user("SuEngineer", UserRole.ENGINEER),
-        "other": user("SuOther", UserRole.ADMIN),
+        "admin": user("SuAdmin", "org_admin"),
+        "engineer": user("SuEngineer", "engineer"),
+        "other": user("SuOther", "org_admin"),
     }
     db.flush()
     made["db"] = db
@@ -371,8 +370,11 @@ def test_a_valid_grant_does_not_let_a_non_admin_deactivate_a_user(db, people):
     from fastapi.testclient import TestClient
     from app.main import app
 
+    from app.services import rbac
+
     engineer, victim = people["engineer"], people["other"]
-    victim.role = UserRole.ENGINEER
+    # An ordinary target, so the only reason left to refuse is the caller.
+    assert rbac.apply_template_role(db, victim, "engineer") is not None
     db.add(StepUpGrant(
         user_id=engineer.id, purpose="admin.deactivate_user",
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),

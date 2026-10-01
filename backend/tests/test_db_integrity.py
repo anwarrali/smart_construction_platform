@@ -125,7 +125,14 @@ def test_the_migration_chain_has_exactly_one_head():
     # backfills it from `legacy_role IS NULL` — separating the archived-role
     # policy from the migration-window translation column that was carrying it
     # by coincidence.
-    assert heads == ["b73f5c8a2e91"], f"expected exactly one head, found: {heads}"
+    # Bumped by `c84d6e2f1a37`, which grants the new `message.broadcast`
+    # permission to the roles that could already broadcast. Data only.
+    # Bumped by `e1a9c3d5f720`, the RBAC contract step: drops the retired role
+    # model (`users.role`, `users.engineer_affiliation`,
+    # `project_members.role_on_project`, `roles.legacy_role`,
+    # `roles.legacy_affiliation`, `role_permission_overrides`, the `user_role`
+    # type) and makes `users.org_role_id` NOT NULL.
+    assert heads == ["e1a9c3d5f720"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.

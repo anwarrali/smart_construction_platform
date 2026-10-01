@@ -21,7 +21,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import SessionLocal
 from app.models.device_token import DeviceToken
-from app.models.enums import NotificationType, UserRole, UserStatus
+from app.models.enums import NotificationType, UserStatus
 from app.models.notification import Notification
 from app.models.user import User
 from app.services import notification_service
@@ -55,9 +55,8 @@ def people(db):
             full_name=name,
             email=f"{name.lower()}.{suffix}@constro.io",
             hashed_password=hash_password(PASSWORD),
-            role=UserRole.PROJECT_MANAGER,
             status=UserStatus.ACTIVE,
-        ))
+        ), "project_manager")
         db.add(person)
         return person
 

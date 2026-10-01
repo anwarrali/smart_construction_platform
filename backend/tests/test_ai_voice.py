@@ -33,7 +33,7 @@ from app.schemas.voice_analysis import (
 from app.services.voice_action_service import permission_for_action
 from app.services.voice_action_service import _execute_one
 from app.services.voice_analysis_authorization import can_create_voice_analysis
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 
 
 def valid_m4a() -> bytes:
@@ -105,7 +105,7 @@ class ActionFoundationTests(TestCase):
         proposal, result = validate_proposed_action(
             action,
             selected_project_id=project_id,
-            user_role="engineer",
+            may=lambda code: True,
         )
         self.assertEqual(proposal.project_id, project_id)
         self.assertTrue(proposal.requires_clarification)
@@ -302,8 +302,8 @@ class VoiceSiteReportDraftTests(TestCase):
 
     def test_engineer_confirmation_calls_normal_progress_service(self):
         user = SimpleNamespace(
-            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-            engineer_affiliation="main_contractor", full_name="Engineer",
+            id=uuid4(), status=UserStatus.ACTIVE,
+            full_name="Engineer",
             org_role_id=None, is_internal=True,
         )
         project_id, task_id, analysis_id = uuid4(), uuid4(), uuid4()
@@ -338,7 +338,7 @@ class VoiceSiteReportDraftTests(TestCase):
         they hold the permission the capability names, on that project.
         """
         user = SimpleNamespace(
-            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+            id=uuid4(), status=UserStatus.ACTIVE,
             full_name="Speaker", org_role_id=None, is_internal=True,
         )
         action = SuggestedAction(
@@ -364,7 +364,7 @@ class VoiceSiteReportDraftTests(TestCase):
             uuid4(), uuid4(), uuid4(), uuid4(),
         )
         user = SimpleNamespace(
-            id=user_id, role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+            id=user_id, status=UserStatus.ACTIVE,
             full_name="Site Engineer", org_role_id=None, is_internal=True,
         )
         analysis = SimpleNamespace(
@@ -400,8 +400,8 @@ class VoiceSiteReportDraftTests(TestCase):
 
     def test_engineer_can_start_analysis_for_assigned_task(self):
         user = SimpleNamespace(
-            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-            engineer_affiliation="main_contractor", org_role_id=None, is_internal=True,
+            id=uuid4(), status=UserStatus.ACTIVE,
+            org_role_id=None, is_internal=True,
         )
         task = SimpleNamespace(project_id=uuid4(), assignees=[user])
         with (
@@ -425,7 +425,7 @@ class VoiceSiteReportDraftTests(TestCase):
         about the rest of the project.
         """
         outsider = SimpleNamespace(
-            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+            id=uuid4(), status=UserStatus.ACTIVE,
             org_role_id=None, is_internal=False,
         )
         mine = SimpleNamespace(project_id=uuid4(), assignees=[outsider])
@@ -449,7 +449,7 @@ class VoiceSiteReportDraftTests(TestCase):
 
     def test_inaccessible_project_cannot_start_analysis(self):
         user = SimpleNamespace(
-            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+            id=uuid4(), status=UserStatus.ACTIVE,
             org_role_id=None, is_internal=True,
         )
         with patch(
@@ -462,8 +462,8 @@ class VoiceSiteReportDraftTests(TestCase):
 
     def test_issue_confirmation_uses_existing_issue_domain_fields(self):
         user = SimpleNamespace(
-            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-            engineer_affiliation="main_contractor", full_name="Engineer",
+            id=uuid4(), status=UserStatus.ACTIVE,
+            full_name="Engineer",
             org_role_id=None, is_internal=True,
         )
         analysis = SimpleNamespace(id=uuid4(), project_id=uuid4())
@@ -499,8 +499,8 @@ class VoiceSiteReportDraftTests(TestCase):
 
     def test_site_report_confirmation_always_creates_draft(self):
         user = SimpleNamespace(
-            id=uuid4(), role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-            engineer_affiliation="main_contractor", full_name="Engineer",
+            id=uuid4(), status=UserStatus.ACTIVE,
+            full_name="Engineer",
             org_role_id=None, is_internal=True,
         )
         analysis = SimpleNamespace(id=uuid4(), project_id=uuid4())

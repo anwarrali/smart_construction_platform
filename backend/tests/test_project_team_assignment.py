@@ -1,19 +1,13 @@
-"""Assigning consultants to a project.
+"""Staffing a project, consultants included.
 
 The reported defect: configuring one consultant to review every discipline
-produced `POST /projects/{id}/members` 400. Two separate causes were found, and
-both are pinned here.
+produced `POST /projects/{id}/members` 400. The candidate list could not find
+consultant accounts, and offered accounts the endpoint then refused.
 
-  1. The eligible-user list never returned an account whose global role is
-     Consultant — it only listed Engineers and Workers — so a Consultant account
-     an administrator had created could not be picked at all, even though the
-     assignment endpoint accepts one.
-  2. The same list offered Workers who carry the external-consultant affiliation
-     under the "Consultant" filter. The UI derives the project role from that
-     affiliation, so assigning one was rejected as a role mismatch.
-
-The validation itself is correct and is left in place: these tests also pin that
-a genuine mismatch and a site-engineer assignment on a non-engineer still fail.
+Both now answer to the same configured data: the picker filters by the office
+role an account holds, and who may be staffed at all is one predicate
+(`rbac.staffable_filter` / `rbac.is_staffable`) shared by the list and the
+endpoint, so they cannot disagree.
 """
 
 from uuid import uuid4
@@ -25,7 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.projects import add_project_member, get_available_team_members
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.rbac import ProjectParty
 from app.models.user import User
@@ -52,23 +46,22 @@ def db():
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
+    def user(name, role):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                                           engineer_affiliation=affiliation))
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("TeamAdmin", UserRole.ADMIN),
-        "manager": user("TeamPm", UserRole.PROJECT_MANAGER),
-        "owner": user("TeamOwner", UserRole.OWNER),
+        "admin": user("TeamAdmin", "org_admin"),
+        "manager": user("TeamPm", "project_manager"),
+        "owner": user("TeamOwner", "client_representative"),
         # The two shapes a consultant can take.
-        "pure_consultant": user("PureConsultant", UserRole.CONSULTANT),
-        "external_engineer": user("ExternalConsultant", UserRole.ENGINEER, "external_consultant"),
-        # A contractor-side engineer, and a worker wearing the same affiliation.
-        "engineer": user("SiteEngineer", UserRole.ENGINEER, "main_contractor"),
-        "worker": user("ExternalWorker", UserRole.WORKER, "external_consultant"),
+        "pure_consultant": user("PureConsultant", "legacy_consultant"),
+        "external_engineer": user("ExternalConsultant", "senior_engineer"),
+        # A contractor-side engineer, and a retired worker account.
+        "engineer": user("SiteEngineer", "contractor_representative"),
+        "worker": user("ExternalWorker", "archived_field_staff"),
     }
     db.flush()
 
@@ -76,8 +69,7 @@ def world(db):
                       owner_id=people["owner"].id, project_manager_id=people["manager"].id)
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=people["manager"].id,
-                         role_on_project=UserRole.PROJECT_MANAGER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=people["manager"].id, is_active=True))
     # An outside firm on this project, so the one structural rule about site
     # responsibility has something to be asserted against.
     party = ProjectParty(project_id=project.id, kind="MAIN_CONTRACTOR",
@@ -106,7 +98,6 @@ def _purge(db, project_ids, user_ids):
     for statement in (
         "DELETE FROM consultant_engineer_scopes WHERE project_id = ANY(:projects) OR consultant_user_id = ANY(:users)",
         "DELETE FROM user_permission_overrides WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
-        "DELETE FROM role_permission_overrides WHERE updated_by_id = ANY(:users)",
         "DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ANY(:projects))",
         "DELETE FROM tasks WHERE project_id = ANY(:projects) OR created_by_id = ANY(:users)",
         "DELETE FROM ai_insights WHERE project_id = ANY(:projects)",
@@ -131,18 +122,22 @@ def _offered(db, world, **kwargs):
     return {row.id for row in rows if world["suffix"] in row.email}
 
 
-def _assign(db, world, person, role_on_project, *, site_engineer=False, actor="admin"):
-    payload = ProjectMemberAssignExisting(user_id=world[person].id, role_on_project=role_on_project,
+def _role_id(world, person):
+    return world[person].org_role_id
+
+
+def _assign(db, world, person, *, site_engineer=False, actor="admin"):
+    payload = ProjectMemberAssignExisting(user_id=world[person].id,
                                           is_site_engineer=site_engineer)
     return add_project_member(world["project"].id, payload, db=db, current_user=world[actor])
 
 
 # --- Who the administrator is offered --------------------------------------
 
-def test_consultant_role_accounts_are_offered_as_consultants(db, world):
-    offered = _offered(db, world, role=UserRole.CONSULTANT)
-    assert world["pure_consultant"].id in offered
-    assert world["external_engineer"].id in offered
+def test_consultant_role_accounts_are_offered_under_their_role(db, world):
+    """Both consultant shapes are found by filtering on the role each holds."""
+    assert world["pure_consultant"].id in _offered(db, world, role_id=_role_id(world, "pure_consultant"))
+    assert world["external_engineer"].id in _offered(db, world, role_id=_role_id(world, "external_engineer"))
 
 
 def test_a_retired_worker_account_is_not_offered_at_all(db, world):
@@ -152,14 +147,14 @@ def test_a_retired_worker_account_is_not_offered_at_all(db, world):
     and it holds no permissions — so offering it as a candidate would invite an
     assignment that grants nothing.
     """
-    assert world["worker"].id not in _offered(db, world, role=UserRole.CONSULTANT)
+    assert world["worker"].id not in _offered(db, world, role_id=_role_id(world, "worker"))
     assert world["worker"].id not in _offered(db, world)
 
 
 def test_contractor_engineers_are_not_offered_as_consultants(db, world):
-    offered = _offered(db, world, role=UserRole.CONSULTANT)
+    offered = _offered(db, world, role_id=_role_id(world, "external_engineer"))
     assert world["engineer"].id not in offered
-    assert world["engineer"].id in _offered(db, world, role=UserRole.ENGINEER)
+    assert world["engineer"].id in _offered(db, world, role_id=_role_id(world, "engineer"))
 
 
 def test_unfiltered_list_includes_every_assignable_account(db, world):
@@ -171,30 +166,29 @@ def test_unfiltered_list_includes_every_assignable_account(db, world):
 # --- What the assignment endpoint accepts -----------------------------------
 
 def test_project_wide_consultant_can_be_assigned(db, world):
-    member = _assign(db, world, "pure_consultant", UserRole.CONSULTANT)
-    assert member.role_on_project == UserRole.CONSULTANT
+    member = _assign(db, world, "pure_consultant")
+    assert member.is_active is True
     assert member.is_site_engineer is False
 
 
 def test_external_consultant_engineer_can_be_assigned(db, world):
-    member = _assign(db, world, "external_engineer", UserRole.CONSULTANT)
-    assert member.role_on_project == UserRole.CONSULTANT
+    member = _assign(db, world, "external_engineer")
+    assert member.user_id == world["external_engineer"].id and member.is_active
 
 
 def test_multiple_consultants_can_serve_on_one_project(db, world):
-    _assign(db, world, "pure_consultant", UserRole.CONSULTANT)
-    _assign(db, world, "external_engineer", UserRole.CONSULTANT)
+    _assign(db, world, "pure_consultant")
+    _assign(db, world, "external_engineer")
     consultants = db.query(ProjectMember).filter(
         ProjectMember.project_id == world["project"].id,
-        ProjectMember.role_on_project == UserRole.CONSULTANT,
+        ProjectMember.user_id.in_([world["pure_consultant"].id, world["external_engineer"].id]),
         ProjectMember.is_active == True,  # noqa: E712
     ).count()
     assert consultants == 2
 
 
 def test_engineer_scoped_assignment_keeps_the_site_engineer_flag(db, world):
-    member = _assign(db, world, "engineer", UserRole.ENGINEER, site_engineer=True)
-    assert member.role_on_project == UserRole.ENGINEER
+    member = _assign(db, world, "engineer", site_engineer=True)
     assert member.is_site_engineer is True
 
 
@@ -216,7 +210,7 @@ def test_a_retired_account_cannot_be_staffed_onto_a_project(db, world):
     endpoint and the list that feeds it cannot drift apart.
     """
     with pytest.raises(HTTPException) as error:
-        _assign(db, world, "worker", UserRole.CONSULTANT)
+        _assign(db, world, "worker")
     assert error.value.status_code == 400
     assert "cannot be assigned" in error.value.detail
 
@@ -227,22 +221,22 @@ def test_a_consultant_side_account_may_carry_site_responsibility(db, world):
     This used to be refused. The rule read `is_external_consultant`, which
     treated an account carrying the retired affiliation as an outside party —
     the one reading of the old model the confirmed product direction reverses.
-    A consultant-side user is consulting-office staff, `rbac_backfill` migrates
-    them onto the internal `senior_engineer` role, and nothing about carrying
-    the site on the office's own project is closed to them.
+    A consultant-side user is consulting-office staff on the internal
+    `senior_engineer` role, and nothing about carrying the site on the office's
+    own project is closed to them.
 
     What survives is the rule that was always the real one, asserted below:
     site responsibility follows the *membership*, and a membership that points
     at an outside party does not carry it.
     """
-    member = _assign(db, world, "external_engineer", UserRole.CONSULTANT, site_engineer=True)
+    member = _assign(db, world, "external_engineer", site_engineer=True)
     assert member.is_site_engineer is True
 
 
 def test_site_responsibility_is_refused_for_an_outside_party(db, world):
     """The one structural rule, and it reads the assignment, not the account."""
     payload = ProjectMemberAssignExisting(
-        user_id=world["engineer"].id, role_on_project=UserRole.ENGINEER,
+        user_id=world["engineer"].id,
         is_site_engineer=True, party_id=world["party"].id,
     )
     with pytest.raises(HTTPException) as error:
@@ -252,32 +246,32 @@ def test_site_responsibility_is_refused_for_an_outside_party(db, world):
 
 
 def test_assigning_the_same_consultant_twice_conflicts(db, world):
-    _assign(db, world, "pure_consultant", UserRole.CONSULTANT)
+    _assign(db, world, "pure_consultant")
     with pytest.raises(HTTPException) as error:
-        _assign(db, world, "pure_consultant", UserRole.CONSULTANT)
+        _assign(db, world, "pure_consultant")
     assert error.value.status_code == 409
 
 
 def test_already_assigned_people_drop_out_of_the_offered_list(db, world):
-    _assign(db, world, "pure_consultant", UserRole.CONSULTANT)
-    assert world["pure_consultant"].id not in _offered(db, world, role=UserRole.CONSULTANT)
+    _assign(db, world, "pure_consultant")
+    assert world["pure_consultant"].id not in _offered(db, world, role_id=_role_id(world, "pure_consultant"))
 
 
 def test_a_project_manager_cannot_staff_someone_elses_project(db, world):
     outsider = with_office_role(db, User(full_name="OtherPm", email=f"otherpm-{world['suffix']}@test.local",
-                                         hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+                                         hashed_password="x", status=UserStatus.ACTIVE), "project_manager")
     db.add(outsider)
     db.flush()
     world["outsider"] = outsider
     with pytest.raises(HTTPException) as error:
-        _assign(db, world, "pure_consultant", UserRole.CONSULTANT, actor="outsider")
+        _assign(db, world, "pure_consultant", actor="outsider")
     assert error.value.status_code == 403
 
 
 def test_inactive_accounts_are_neither_offered_nor_assignable(db, world):
     world["pure_consultant"].status = UserStatus.INACTIVE
     db.flush()
-    assert world["pure_consultant"].id not in _offered(db, world, role=UserRole.CONSULTANT)
+    assert world["pure_consultant"].id not in _offered(db, world, role_id=_role_id(world, "pure_consultant"))
     with pytest.raises(HTTPException) as error:
-        _assign(db, world, "pure_consultant", UserRole.CONSULTANT)
+        _assign(db, world, "pure_consultant")
     assert error.value.status_code == 400

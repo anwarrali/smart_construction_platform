@@ -44,7 +44,7 @@ from app.core.security import hash_password
 from app.db.database import SessionLocal
 from app.models.audit_log import AuditLog
 from app.models.company import Company
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.ifc import (
     IFCCoordinationFinding, IFCElement, IFCEntityLink, IFCModelGroup,
     IFCModelVersion, IFCSpatialNode, IFCSuggestion,
@@ -109,23 +109,23 @@ def world(db):
     db.add(office)
     db.flush()
 
-    def user(name, role_code, legacy=UserRole.ENGINEER, status=UserStatus.ACTIVE):
+    def user(name, role_code, legacy="engineer", status=UserStatus.ACTIVE):
         role = roles[role_code]
         person = User(
             full_name=f"{name}{suffix}", email=f"{name.lower()}.{suffix}@constro.io",
-            hashed_password=hash_password(PASSWORD), role=legacy, status=status,
+            hashed_password=hash_password(PASSWORD), status=status,
             company_id=office.id, org_role_id=role.id, is_internal=role.is_internal_only,
         )
         db.add(person)
         db.flush()
         return person
 
-    manager = user("Manager", "project_manager", UserRole.PROJECT_MANAGER)
+    manager = user("Manager", "project_manager", "project_manager")
     bim = user("Bim", "bim_engineer")
     engineer = user("Engineer", "engineer")
-    client_rep = user("ClientRep", "client_representative", UserRole.OWNER)
+    client_rep = user("ClientRep", "client_representative", "client_representative")
     staff = user("Staff", "office_staff")
-    outsider = user("Outsider", "project_manager", UserRole.PROJECT_MANAGER)
+    outsider = user("Outsider", "project_manager", "project_manager")
 
     def project(name, pm):
         item = Project(
@@ -147,7 +147,7 @@ def world(db):
 
     def member(person, project_item, role_code, party=None):
         row = ProjectMember(
-            project_id=project_item.id, user_id=person.id, role_on_project=person.role,
+            project_id=project_item.id, user_id=person.id,
             project_role_id=roles[role_code].id, is_active=True,
             party_id=party.id if party else None,
         )

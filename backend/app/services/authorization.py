@@ -4,11 +4,9 @@ Resolution order, most specific last:
 
   1. the office role's permissions, unioned with the project role's
      — configurable rows in `roles` / `role_permissions`, resolved by
-     `app.services.rbac`; the retired six-value enum is only a fallback for an
-     account the RBAC backfill has not reached
-  2. an administrator's override for that whole role
-  3. an administrator's override for that person, everywhere
-  4. an administrator's override for that person on this project
+     `app.services.rbac` (a role is changed by editing those rows)
+  2. an administrator's override for that person, everywhere
+  3. an administrator's override for that person on this project
 
 Every step can grant or revoke, so an administrator can both widen and narrow
 access without the code needing a special case for either direction.
@@ -38,62 +36,19 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, user_has_project_access
-from app.core.permission_catalogue import BY_CODE, CATALOGUE, role_defaults
+from app.core.permission_catalogue import BY_CODE, CATALOGUE
 from app.db.database import get_db
-from app.models.enums import UserRole, UserStatus
-from app.models.permission import (
-    ConsultantEngineerScope,
-    RolePermissionOverride,
-    UserPermissionOverride,
-)
+from app.models.enums import UserStatus
+from app.models.permission import ConsultantEngineerScope, UserPermissionOverride
 from app.models.project import Project
 from app.models.user import User
 from app.services import rbac
-
-
-def _role_overrides(db: Session, role: UserRole) -> dict[str, bool]:
-    return {
-        row.permission_code: row.allowed
-        for row in db.query(RolePermissionOverride).filter(
-            RolePermissionOverride.role == role
-        ).all()
-    }
 
 
 def _user_overrides(db: Session, user_id: uuid.UUID) -> list[UserPermissionOverride]:
     return db.query(UserPermissionOverride).filter(
         UserPermissionOverride.user_id == user_id
     ).all()
-
-
-def legacy_effective_permissions(
-    db: Session, user: User, project_id: uuid.UUID | None = None
-) -> set[str]:
-    """The retired resolution, preserved verbatim.
-
-    Nothing in the application calls this. It exists so
-    `app.db.rbac_equivalence` can compare the configurable model's answer
-    against the one the platform used to give, for every real account, and
-    prove the migration changed nobody's access except where a behaviour change
-    was declared on purpose. Deleting it before that gate has run in production
-    would remove the only evidence that the redesign was safe.
-    """
-    if user.status != UserStatus.ACTIVE:
-        return set()
-
-    granted = role_defaults(user.role)
-
-    for code, allowed in _role_overrides(db, user.role).items():
-        if code not in BY_CODE:
-            continue
-        granted.add(code) if allowed else granted.discard(code)
-
-    granted = _apply_user_overrides(db, user, project_id, granted)
-
-    if user.role == UserRole.ADMIN:
-        granted |= {item.code for item in CATALOGUE if item.admin_locked}
-
-    return granted
 
 
 def _apply_user_overrides(
@@ -116,17 +71,12 @@ def effective_permissions(
 ) -> set[str]:
     """Every permission code this person holds, in this context.
 
-    The one authoritative calculation. Resolution order is unchanged from the
-    enum-based model — only the first step now reads configurable roles
-    instead of a hardcoded table:
+    The one authoritative calculation:
 
       1. the office role's permissions, unioned with the project role's
          (`app.services.rbac.resolved_permissions`)
-      2. an administrator's override for that whole role, on the pre-backfill
-         fallback path only — once a user has a database role, those decisions
-         live in `role_permissions` and re-applying them would double-count
-      3. an administrator's override for that person, everywhere
-      4. an administrator's override for that person on this project
+      2. an administrator's override for that person, everywhere
+      3. an administrator's override for that person on this project
 
     Then the ceilings. A deactivated account holds nothing. An external
     participant never holds a permission that is not project-scoped. And an
@@ -168,17 +118,14 @@ def effective_permissions(
 
     granted = _apply_user_overrides(db, user, project_id, granted)
 
-    # Admin-locked codes are restored *after* the overrides, on both paths.
+    # Admin-locked codes are restored *after* the overrides.
     #
     # `resolved_permissions` also adds them for an undeletable role, but that
     # happens before this line, so a per-person override could strip one back
     # off — and `platform.manage_users` being revocable from the office
     # administrator is precisely the lockout the flag exists to prevent. The
-    # legacy branch below always re-applied them here; the migrated branch did
-    # not, and the asymmetry was invisible until every account had a role.
-    # The office administrator role is the undeletable one, which is how the
-    # platform names "somebody must always be able to administer". A branch
-    # here also recognised an unmigrated ADMIN account; there are none.
+    # office administrator role is the undeletable one, which is how the
+    # platform names "somebody must always be able to administer".
     if rbac.holds_office_admin_role(db, user):
         granted |= {item.code for item in CATALOGUE if item.admin_locked}
 
@@ -328,9 +275,6 @@ def manageable_project(
     act on it whatever their role says; somebody who *is* on it, and whom the
     office has given `project.manage_members`, is precisely who the office meant
     to let manage it.
-
-    Declared as `project_manager_scope_from_membership` in
-    `app.db.rbac_equivalence`.
     """
     project = db.query(Project).filter(Project.id == project_id).first()
     if project is None:

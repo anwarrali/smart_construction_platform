@@ -34,8 +34,8 @@ from app.api.projects import list_projects
 from app.core.deps import accessible_project_ids, user_has_project_access
 from app.core.permission_catalogue import BY_CODE
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
-from app.models.permission import RolePermissionOverride, UserPermissionOverride
+from app.models.enums import ProjectStatus, UserStatus
+from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.services.authorization import can_view_all_projects_effective, has_permission
@@ -62,7 +62,6 @@ def _purge(db, project_ids, user_ids):
     params = {"projects": list(project_ids), "users": list(user_ids)}
     for statement in (
         "DELETE FROM user_permission_overrides WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
-        "DELETE FROM role_permission_overrides WHERE updated_by_id = ANY(:users)",
         "DELETE FROM project_members WHERE project_id = ANY(:projects) OR user_id = ANY(:users)",
         "DELETE FROM projects WHERE id = ANY(:projects)",
         "DELETE FROM users WHERE id = ANY(:users)",
@@ -75,26 +74,25 @@ def _purge(db, project_ids, user_ids):
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
+    def user(name, role):
         # example.com (not test.local): this fixture also exercises
         # list_projects, which builds ProjectsListResponse itself and runs its
         # nested UserOut.email through Pydantic's EmailStr validator, which
         # rejects the reserved .local TLD.
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                                           engineer_affiliation=affiliation))
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("VapAdmin", UserRole.ADMIN),
-        "owner": user("VapOwner", UserRole.OWNER),
-        "pm_a": user("VapPmA", UserRole.PROJECT_MANAGER),
-        "pm_b": user("VapPmB", UserRole.PROJECT_MANAGER),
-        "consultant": user("VapConsultant", UserRole.CONSULTANT),
-        "engineer": user("VapEngineer", UserRole.ENGINEER, "main_contractor"),
-        "worker": user("VapWorker", UserRole.WORKER, "main_contractor"),
-        "outsider": user("VapOutsider", UserRole.WORKER, "main_contractor"),
+        "admin": user("VapAdmin", "org_admin"),
+        "owner": user("VapOwner", "client_representative"),
+        "pm_a": user("VapPmA", "project_manager"),
+        "pm_b": user("VapPmB", "project_manager"),
+        "consultant": user("VapConsultant", "legacy_consultant"),
+        "engineer": user("VapEngineer", "contractor_representative"),
+        "worker": user("VapWorker", "archived_field_staff"),
+        "outsider": user("VapOutsider", "archived_field_staff"),
     }
     db.flush()
 
@@ -105,10 +103,8 @@ def world(db):
     db.add_all([project_a, project_b])
     db.flush()
     for key in ("pm_a", "consultant", "engineer", "worker"):
-        db.add(ProjectMember(project_id=project_a.id, user_id=people[key].id,
-                             role_on_project=people[key].role, is_active=True))
-    db.add(ProjectMember(project_id=project_b.id, user_id=people["pm_b"].id,
-                         role_on_project=UserRole.PROJECT_MANAGER, is_active=True))
+        db.add(ProjectMember(project_id=project_a.id, user_id=people[key].id, is_active=True))
+    db.add(ProjectMember(project_id=project_b.id, user_id=people["pm_b"].id, is_active=True))
     db.flush()
 
     people["project_a"] = project_a
@@ -127,11 +123,6 @@ def _grant(db, user, code, allowed=True, project_id=None):
 
 def _configure_role(db, user, code, allowed):
     """Change what the role this person holds may do, on the live mechanism.
-
-    `RolePermissionOverride` used to be how a role was configured, and these
-    tests used it directly. `effective_permissions` read that table only while
-    an account had no `org_role_id`; the contract step removed that branch, so
-    writing to it now changes nothing.
 
     The role is **copied first**, into a row belonging to this test alone, and
     the copy is what gets edited. Editing the seeded template in place would
@@ -152,8 +143,7 @@ def _configure_role(db, user, code, allowed):
         organization_id=source.organization_id, code=f"{source.code}-{_uuid4().hex[:8]}",
         name_en=source.name_en, scope=source.scope,
         is_internal_only=source.is_internal_only, is_system=False,
-        rank=source.rank, legacy_role=source.legacy_role,
-        legacy_affiliation=source.legacy_affiliation,
+        rank=source.rank,
     )
     db.add(copy)
     db.flush()
@@ -273,7 +263,7 @@ def _as_fresh_object(user: User) -> User:
     # omitted them would raise `UnmigratedUser` instead of exercising the cache
     # behaviour this helper exists to test.
     return User(
-        id=user.id, role=user.role, status=user.status,
+        id=user.id, status=user.status,
         org_role_id=user.org_role_id, is_internal=user.is_internal,
     )
 

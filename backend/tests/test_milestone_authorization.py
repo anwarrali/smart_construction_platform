@@ -33,7 +33,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.milestones import create_milestone, delete_milestone, update_milestone
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, TaskStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, TaskStatus, UserStatus
 from app.models.milestone import Milestone
 from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
@@ -66,23 +66,22 @@ def world(db):
     """One project with a full cast, and a second project nobody here is on."""
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
+    def user(name, role):
         person = with_office_role(db, User(
             full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-            hashed_password="x", role=role, status=UserStatus.ACTIVE,
-            engineer_affiliation=affiliation,
-        ))
+            hashed_password="x", status=UserStatus.ACTIVE,
+        ), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("MsAdmin", UserRole.ADMIN),
-        "manager": user("MsPm", UserRole.PROJECT_MANAGER),
-        "engineer": user("MsEngineer", UserRole.ENGINEER, "internal_engineer"),
-        "consultant": user("MsConsultant", UserRole.ENGINEER, "external_consultant"),
-        "owner": user("MsOwner", UserRole.OWNER),
-        "contractor": user("MsContractor", UserRole.ENGINEER, "main_contractor"),
-        "stranger": user("MsStranger", UserRole.PROJECT_MANAGER),
+        "admin": user("MsAdmin", "org_admin"),
+        "manager": user("MsPm", "project_manager"),
+        "engineer": user("MsEngineer", "engineer"),
+        "consultant": user("MsConsultant", "senior_engineer"),
+        "owner": user("MsOwner", "client_representative"),
+        "contractor": user("MsContractor", "contractor_representative"),
+        "stranger": user("MsStranger", "project_manager"),
     }
     db.flush()
 
@@ -101,12 +100,10 @@ def world(db):
     db.flush()
     for person in ("manager", "engineer", "consultant", "contractor"):
         db.add(ProjectMember(
-            project_id=project.id, user_id=people[person].id,
-            role_on_project=people[person].role, is_active=True,
+            project_id=project.id, user_id=people[person].id, is_active=True,
         ))
     db.add(ProjectMember(
-        project_id=elsewhere.id, user_id=people["stranger"].id,
-        role_on_project=people["stranger"].role, is_active=True,
+        project_id=elsewhere.id, user_id=people["stranger"].id, is_active=True,
     ))
     db.flush()
 

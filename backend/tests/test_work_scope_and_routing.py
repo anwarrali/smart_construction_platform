@@ -1,4 +1,4 @@
-"""The three concepts the affiliation helpers used to encode, and their tests.
+"""The three concepts the retired affiliation helpers encoded, and their tests.
 
 Stage 1 of the redesign replaced `is_main_contractor_engineer` and
 `is_consultant_engineer` — 78 call sites across 19 files — with three ideas in
@@ -29,7 +29,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.database import SessionLocal
 from app.models.company import Company
 from app.models.enums import (
-    ConsultantApprovalMode, ProjectStatus, TaskStatus, UserRole, UserStatus,
+    ConsultantApprovalMode, ProjectStatus, TaskStatus, UserStatus,
 )
 from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectConsultantReviewer, ProjectMember
@@ -69,11 +69,11 @@ def office(db):
     db.add(company)
     db.flush()
 
-    def user(name, role_code, legacy=UserRole.ENGINEER):
+    def user(name, role_code):
         role = roles[role_code]
         person = User(
             full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-            hashed_password="x", role=legacy, status=UserStatus.ACTIVE,
+            hashed_password="x", status=UserStatus.ACTIVE,
             company_id=company.id, org_role_id=role.id,
             is_internal=role.is_internal_only,
         )
@@ -81,7 +81,7 @@ def office(db):
         db.flush()
         return person
 
-    manager = user("Manager", "project_manager", UserRole.PROJECT_MANAGER)
+    manager = user("Manager", "project_manager")
     reviewer = user("Reviewer", "senior_engineer")
     site_civil = user("SiteCivil", "site_engineer")
     site_elec = user("SiteElec", "site_engineer")
@@ -105,7 +105,7 @@ def office(db):
 
     def member(person, role_code, *, party=None, site=False):
         row = ProjectMember(
-            project_id=project.id, user_id=person.id, role_on_project=person.role,
+            project_id=project.id, user_id=person.id,
             project_role_id=roles[role_code].id, is_active=True,
             is_site_engineer=site, party_id=party.id if party else None,
         )
@@ -253,43 +253,31 @@ def test_office_staff_keep_that_authority(db, office):
     assert "project.manage_members" in granted
 
 
-def test_a_pre_backfill_contractor_account_is_already_external(db, office):
-    """The migration window is not a hole.
+def test_an_external_office_role_makes_the_account_external(db, office):
+    """Externality is the role's, and with it goes the office's authority.
 
-    An account the backfill has not reached has no role row, so the retired
-    affiliation is the only externality signal it carries. If that were ignored
-    there would be a period in which a contractor's engineer could approve the
-    office's design changes — which is exactly what the retired guards
-    prevented.
+    A contractor's engineer must never approve the office's design changes —
+    what the retired affiliation guards existed to prevent.
     """
-    # The role is given explicitly, as `user_role_backstop` used to give it
-    # during the flush. Since the contract step an account with no role cannot
-    # be resolved at all (`test_an_account_without_a_role_is_refused`), so the
-    # "pre-backfill" state described above no longer exists: what this pins now
-    # is that the role a main-contractor engineer maps to is an external one.
-    unmigrated = with_office_role(db, User(
-        full_name="Unmigrated", email=f"unmigrated-{office['suffix']}@test.local",
-        hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-        engineer_affiliation="main_contractor",
-    ))
-    db.add(unmigrated)
+    contractor = with_office_role(db, User(
+        full_name="Contractor", email=f"contractor-{office['suffix']}@test.local",
+        hashed_password="x", status=UserStatus.ACTIVE,
+    ), "contractor_representative")
+    db.add(contractor)
     db.flush()
-    assert rbac.is_external_participant(db, unmigrated, None) is True
-    assert "design_change.approve" not in effective_permissions(db, unmigrated)
+    assert rbac.is_external_participant(db, contractor, None) is True
+    assert "design_change.approve" not in effective_permissions(db, contractor)
 
 
-def test_a_pre_backfill_office_account_is_not_external(db, office):
-    """And the bridge does not sweep up the office's own people."""
-    # As above: the role is explicit, and the office-staff role is what is pinned.
-    for affiliation in (None, "internal_engineer"):
-        person = with_office_role(db, User(
-            full_name="Staff", email=f"staff-{affiliation}-{office['suffix']}@test.local",
-            hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-            engineer_affiliation=affiliation,
-        ))
-        db.add(person)
-        db.flush()
-        assert rbac.is_external_participant(db, person, None) is False, affiliation
+def test_an_internal_office_role_is_not_external(db, office):
+    """And the office's own people are not swept up with them."""
+    person = with_office_role(db, User(
+        full_name="Staff", email=f"staff-{office['suffix']}@test.local",
+        hashed_password="x", status=UserStatus.ACTIVE,
+    ), "engineer")
+    db.add(person)
+    db.flush()
+    assert rbac.is_external_participant(db, person, None) is False
 
 
 # ---------------------------------------------------------------------------

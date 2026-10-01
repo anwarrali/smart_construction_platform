@@ -17,7 +17,6 @@ from app.models.revoked_token import RevokedToken
 from app.core.security import hash_token
 
 MAIN_CONTRACTOR_AFFILIATION = "main_contractor"
-CONSULTANT_AFFILIATION = "external_consultant"
 
 # --- Moved here from app.api.auth to break the circular import ---
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -168,8 +167,7 @@ def user_has_project_access(
     # thereby said "and nothing else, anywhere".
     #
     # Everyone now falls through to the same union: owner, assigned manager, or
-    # active member. Declared as `project_manager_membership_honoured` in
-    # `app.db.rbac_equivalence`.
+    # active member.
     if user.id == project.owner_id:
         return True
 

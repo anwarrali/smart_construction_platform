@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 import app.models  # noqa: F401 - configure all SQLAlchemy relationships
 from app.core.security import hash_password, verify_password
 from app.db.database import SessionLocal
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
+from app.models.rbac import Role
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.services import rbac
@@ -111,30 +112,55 @@ def _assign_administrator_role(db: Session, user: User) -> None:
 
     On a fresh deployment nothing has seeded the roles yet — this is the first
     account the database will hold — so `rbac.seed_fresh_database` seeds them
-    here, and does nothing on a database that already has them. The role is
-    then resolved through the same legacy mapping every other creation path
-    uses, and set with its `is_internal` flag, before the account is written.
+    here, and does nothing on a database that already has them. The account is
+    then given `org_admin`, with its `is_internal` flag, before it is written.
 
     Refuses rather than creating an administrator with no role: permission
     resolution rejects such an account outright, so it could sign in and do
     nothing — a broken deployment that looks like a working one.
     """
     rbac.seed_fresh_database(db)
-    if rbac.apply_legacy_template_role(db, user) is None:
+    if rbac.apply_template_role(db, user, "org_admin") is None:
         raise RuntimeError(
             "No 'org_admin' role exists, so the administrator could not be given "
-            "an office role. Run `python -m app.db.rbac_backfill` to seed the roles."
+            "an office role. The database has roles but not that template; "
+            "restore it before bootstrapping."
         )
 
 
+#: Serializes concurrent bootstraps (one per starting replica). Distinct from
+#: the demo seed's key, which serializes the step after this one.
+BOOTSTRAP_LOCK_KEY = 5747330290
+
+
+def _serialize(db: Session) -> None:
+    """Wait for any other bootstrap of this database to finish first.
+
+    Held until this transaction ends. Two replicas starting on a fresh
+    database would otherwise both see "no users", both seed and both try to
+    create the administrator; with the lock, the second waits, then finds the
+    administrator the first one created and verifies it instead.
+    """
+    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": BOOTSTRAP_LOCK_KEY})
+
+
 def bootstrap_admin(db: Session, config: BootstrapConfig) -> str:
+    _serialize(db)
     migration = _require_alembic_head(db)
     existing = db.query(User).filter(func.lower(User.email) == config.email).one_or_none()
-    admins = db.query(User).filter(User.role == UserRole.ADMIN).all()
+    # An administrator is whoever holds the office administrator role — the
+    # undeletable one — not a value of the retired role enum.
+    admin_role_ids = {
+        role_id for (role_id,) in db.query(Role.id).filter(Role.undeletable.is_(True)).all()
+    }
+    admins = (
+        db.query(User).filter(User.org_role_id.in_(admin_role_ids)).all()
+        if admin_role_ids else []
+    )
 
     if existing:
         if (
-            existing.role != UserRole.ADMIN
+            existing.org_role_id not in admin_role_ids
             or not existing.is_superuser
             or existing.status not in {UserStatus.ACTIVE, UserStatus.PENDING}
         ):
@@ -208,7 +234,6 @@ def bootstrap_admin(db: Session, config: BootstrapConfig) -> str:
         email=config.email,
         full_name=config.full_name,
         hashed_password=hash_password(config.password),
-        role=UserRole.ADMIN,
         status=UserStatus.PENDING,
         is_email_verified=True,
         is_superuser=True,

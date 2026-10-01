@@ -34,7 +34,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.core.permission_catalogue import BY_CODE
-from app.models.enums import UserRole
 
 # Role scope. A role may be held at the office level, on a project, or both.
 SCOPE_ORG = "ORG"
@@ -159,53 +158,9 @@ class RoleTemplate:
     #: because deleting it would leave nobody able to administer.
     undeletable: bool = False
     #: Exists to preserve historical attribution: no account may be created
-    #: under it and nobody on it may be staffed onto a project. Previously
-    #: inferred from `legacy_role is None`; stated here so the rule survives
-    #: `legacy_role` being dropped.
+    #: under it and nobody on it may be staffed onto a project.
     is_archived: bool = False
     description: str = ""
-
-    @property
-    def legacy_role(self) -> str | None:
-        """Which retired enum value an account created under this role gets.
-
-        Migration-window only; it lands in `Role.legacy_role` and is dropped
-        with `users.role`. It is deliberately **not** `inherits.name`, because
-        the two answer different questions:
-
-          * `inherits` is where the role's *permissions* start from;
-          * this is what the retired `users.role` column is *written with*,
-            and that column is still read by a handful of hardcoded checks
-            during the migration window.
-
-        Technical Director is the case that makes the difference concrete. Its
-        permissions inherit from ADMIN (minus account administration), but
-        writing `role=ADMIN` would make every surviving `role == UserRole.ADMIN`
-        check treat it as a full administrator — the exact authority the
-        template exists to withhold. PROJECT_MANAGER is the closest legacy
-        shadow that does not lie.
-
-        `None` means no account may be created under the role. That is exactly
-        one template — the archived field-staff role retired worker accounts
-        sit on — and refusing there is what keeps Worker unreachable through
-        the new provisioning path.
-        """
-        return PROVISIONING_LEGACY_ROLE.get(self.code)
-
-    @property
-    def legacy_affiliation(self) -> str | None:
-        """The office side an ENGINEER-backed account is written with.
-
-        Records only the *deviation*. `None` means the account falls through to
-        `internal_engineer`, which `create_provisioned_user` applies — so the
-        one thing this table says is "these two are the contractor side".
-
-        No template produces `external_consultant`. Under the confirmed product
-        direction a consultant-side reviewer is office staff, not an outside
-        party; the value survives only on accounts created before the redesign,
-        where the pre-backfill bridges still read it.
-        """
-        return PROVISIONING_LEGACY_AFFILIATION.get(self.code)
 
     def permissions(self) -> set[str]:
         """The codes this template grants when it is first created."""
@@ -319,137 +274,15 @@ TEMPLATES: tuple[RoleTemplate, ...] = (
        description="Retained for historical evidence only. Holds no permissions."),
 )
 
-#: What `users.role` is written with for an account created under each seeded
-#: role. Mirrored verbatim by the `e48c1b6d3f27` migration, which cannot import
-#: this module; `test_provisioning_legacy_roles_match_the_migration` asserts the
-#: two agree, so they cannot drift.
-#:
-#: Every entry is the least-privileged legacy value that still resolves
-#: correctly — see `RoleTemplate.legacy_role` for why that is not the same as
-#: the role the permissions inherit from. `archived_field_staff` is absent on
-#: purpose: no account may be created under it.
-PROVISIONING_LEGACY_ROLE: dict[str, str] = {
-    "org_admin": "ADMIN",
-    "office_director": "ADMIN",
-    "technical_director": "PROJECT_MANAGER",
-    "project_manager": "PROJECT_MANAGER",
-    "senior_engineer": "ENGINEER",
-    "engineer": "ENGINEER",
-    "site_engineer": "ENGINEER",
-    "bim_engineer": "ENGINEER",
-    "cad_technician": "ENGINEER",
-    "surveyor": "ENGINEER",
-    "document_controller": "ENGINEER",
-    "office_staff": "ENGINEER",
-    "client_representative": "OWNER",
-    "contractor_representative": "ENGINEER",
-    "subcontractor_representative": "ENGINEER",
-    "external_reviewer": "ENGINEER",
-    "legacy_consultant": "CONSULTANT",
-}
-
-#: Mirrored by `TEMPLATE_AFFILIATION` in the `e48c1b6d3f27` migration, and
-#: asserted equal by the same test. Only deviations are listed; everything else
-#: falls through to `internal_engineer`.
-PROVISIONING_LEGACY_AFFILIATION: dict[str, str] = {
-    "contractor_representative": "main_contractor",
-    "subcontractor_representative": "main_contractor",
-}
-
 BY_CODE_TEMPLATE: dict[str, RoleTemplate] = {item.code: item for item in TEMPLATES}
 
-#: Where an existing account's authority moves to. Keyed by
-#: `(UserRole, engineer_affiliation)`; the affiliation is ignored for roles
-#: that never carried one. Every mapping except WORKER inherits the same
-#: catalogue defaults the account holds today, which is what keeps the
-#: equivalence gate empty.
-LEGACY_ROLE_MAP: dict[tuple[UserRole, str | None], str] = {
-    (UserRole.ADMIN, None): "org_admin",
-    (UserRole.PROJECT_MANAGER, None): "project_manager",
-    (UserRole.ENGINEER, "internal_engineer"): "engineer",
-    (UserRole.ENGINEER, "main_contractor"): "contractor_representative",
-    # An `external_consultant` account is the *reviewing* side of the old
-    # owner/contractor/consultant triangle — and in the new product the
-    # consulting office is itself the reviewer. These accounts therefore become
-    # office staff with review authority, not an outside party. Mapping them to
-    # `external_reviewer` would have been the literal reading of the old
-    # affiliation string and the wrong one: it would put the office's own
-    # reviewers behind deny-by-default external document scoping and revoke the
-    # discipline-scoped access they have today.
-    #
-    # `external_reviewer` still exists, for an office that genuinely brings in
-    # an outside consultant. Nobody is migrated onto it.
-    (UserRole.ENGINEER, "external_consultant"): "senior_engineer",
-    (UserRole.ENGINEER, None): "engineer",
-    (UserRole.OWNER, None): "client_representative",
-    (UserRole.WORKER, None): "archived_field_staff",
-}
-
-#: `UserRole.CONSULTANT` is unreachable on `User.role` today —
-#: `UserCreateByAdmin` rewrites it — but it is a live value on
-#: `ProjectMember.role_on_project`, and an old database may still hold one on a
-#: user. It gets its own template seeded from the CONSULTANT catalogue defaults
-#: so a migration of such a row is still exactly equivalent.
+#: Seeded for accounts migrated from the retired Consultant role by the legacy
+#: backfill (`app.db.rbac_backfill`). Review and rename it.
 LEGACY_CONSULTANT_TEMPLATE = _t(
     "legacy_consultant", "Consultant (legacy)", "استشاري (سابق)",
     SCOPE_PROJECT, False, LEGACY_CONSULTANT_GRANTS, rank=910,
     description="Migrated from the retired Consultant role. Review and rename it.",
 )
-
-
-#: The affiliation strings this map is written in terms of. Derived from the
-#: map itself rather than restated, so the two cannot disagree, and identical
-#: to the closed set `UserCreateByAdmin` validates against in
-#: `app/schemas/user.py` — that validator is the only place a new affiliation
-#: can enter through the API, and this is the only place one is interpreted.
-SUPPORTED_AFFILIATIONS: frozenset[str] = frozenset(
-    affiliation for _role, affiliation in LEGACY_ROLE_MAP if affiliation is not None
-)
-
-
-class UnknownAffiliation(ValueError):
-    """An `engineer_affiliation` that is not one the platform recognises.
-
-    A `ValueError` because that is what the account-creation path already
-    translates into a 400 (`app/api/users.py`), and because the value really is
-    a bad argument rather than a failure of the system. Narrow rather than
-    generic so a caller can tell this apart from the other reasons provisioning
-    refuses.
-    """
-
-
-def template_for_legacy(role: UserRole, affiliation: str | None) -> RoleTemplate:
-    """The template an existing account or membership migrates onto.
-
-    Raises `UnknownAffiliation` if `affiliation` is supplied but is not one of
-    `SUPPORTED_AFFILIATIONS`. It must not fall through to the role-only
-    mapping, and the reason is specific rather than defensive: an ENGINEER's
-    affiliation is what separates office staff from an outside party, so
-    `main_contracter` falling through to `(ENGINEER, None)` produced the
-    `engineer` template — `is_internal_only=True` — and silently turned an
-    external contractor into internal office staff. That is the same failure
-    the `rbac.apply_org_role` docstring records having already been made once,
-    arrived at from the other direction.
-
-    `None` is not a typo and keeps its meaning: the roles that never carried an
-    affiliation resolve through the `(role, None)` entry as before.
-    """
-    if affiliation is not None and affiliation not in SUPPORTED_AFFILIATIONS:
-        raise UnknownAffiliation(
-            f"Unrecognised engineer_affiliation {affiliation!r} for role "
-            f"{getattr(role, 'value', role)}. Supported values are "
-            f"{sorted(SUPPORTED_AFFILIATIONS)}."
-        )
-    if role == UserRole.CONSULTANT:
-        return LEGACY_CONSULTANT_TEMPLATE
-    code = LEGACY_ROLE_MAP.get((role, affiliation)) or LEGACY_ROLE_MAP.get((role, None))
-    if code is None:
-        # An unknown legacy *role* must not silently become a powerful one.
-        # Unreachable while every `UserRole` has a `(role, None)` entry; kept
-        # because the thing it guards against is a value added to the enum
-        # without one, and that is exactly the change nobody notices.
-        return BY_CODE_TEMPLATE["archived_field_staff"]
-    return BY_CODE_TEMPLATE[code]
 
 
 # ---------------------------------------------------------------------------

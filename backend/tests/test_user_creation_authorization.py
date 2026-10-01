@@ -1,26 +1,14 @@
 """Who may provision an account, and what may never be provisioned.
 
-`can_create_team_role(creator_role, target_role)` did two unrelated jobs in one
-predicate, and only one of them was an authorization question:
-
-  * **who** — it returned True only for `UserRole.ADMIN`, so an office that
-    granted `platform.manage_users` to a role of its own still could not create
-    accounts through the legacy path. That is the configurability the redesign
-    exists to provide, and it is now `platform.manage_users` on both branches of
-    `POST /users`.
-  * **what** — it refused `UserRole.WORKER` by leaving it out of a set. That is
-    not a permission and must never become one: an office must not be able to
-    make worker accounts provisionable by granting something. It is an invariant
-    in `create_provisioned_user`.
-
-Separately, the rule "no account may be created under an archived role" used to
-fall out of `legacy_role_for` failing to translate a role whose `legacy_role` was
-NULL. It is now `Role.is_archived`, checked before translation is attempted.
-
-These tests exercise the endpoint and the service. The RBAC equivalence gate
-cannot see any of this — it compares permission *resolution* for existing
-accounts and never invokes a creation path — so it is not evidence for this
-change and is not treated as such here.
+  * **Who** — anybody holding `platform.manage_users`, a permission the office
+    administers. It used to be "the retired enum says ADMIN", which no grant an
+    office could make would ever satisfy.
+  * **What** — never an account under an archived role, such as the field-staff
+    role retired worker accounts sit on. That is an invariant in
+    `create_provisioned_user`, not a permission: an office cannot grant its way
+    to it.
+  * **How** — always under an office role, assigned before the account is
+    written; `users.org_role_id` is NOT NULL, so there is no other way.
 """
 
 from __future__ import annotations
@@ -34,14 +22,14 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.users import create_user
 from app.db.database import SessionLocal
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.permission import UserPermissionOverride
 from app.models.rbac import Discipline, Role
 from app.models.user import User
 from app.schemas.user import EngineerProfileCreate, UserCreateByAdmin
 from app.services import rbac
 from app.services.authorization import effective_permissions
-from app.services.user_service import create_provisioned_user, legacy_role_for
+from app.services.user_service import create_provisioned_user
 
 PASSWORD = "Str0ngPassw0rd!"
 
@@ -82,20 +70,20 @@ def office(db):
     organization = rbac.ensure_tenant_organization(db)
     suffix = uuid4().hex[:8]
 
-    def person(label, role_code, legacy):
+    def person(label, role_code):
         row = User(
             full_name=label, email=f"{label.lower()}-{suffix}@example.com",
-            hashed_password="x", role=legacy, status=UserStatus.ACTIVE,
+            hashed_password="x", status=UserStatus.ACTIVE,
             company_id=organization.id, org_role_id=roles[role_code].id,
             is_internal=True,
         )
         db.add(row)
         return row
 
-    admin = person("UcaAdmin", "org_admin", UserRole.ADMIN)
+    admin = person("UcaAdmin", "org_admin")
     # An ordinary office engineer: holds no provisioning authority by default,
     # and is the account the grant is later given to.
-    engineer = person("UcaEngineer", "engineer", UserRole.ENGINEER)
+    engineer = person("UcaEngineer", "engineer")
     db.add_all([admin, engineer])
     db.flush()
 
@@ -129,16 +117,14 @@ def _grant_manage_users(db, user):
 
 # --- who may provision -------------------------------------------------------
 
-def test_an_administrator_can_create_through_the_legacy_role_path(office):
-    """The behaviour the retired check allowed, preserved."""
+def test_an_administrator_can_create_an_account(office):
     db = office["db"]
     user, _ = create_provisioned_user(
-        db, creator=office["admin"], email=_new_email(office, "legacyadmin"),
-        full_name="Legacy Admin Made", role=UserRole.ENGINEER,
-        engineer_affiliation="internal_engineer", password=PASSWORD, send_email=False,
+        db, creator=office["admin"], email=_new_email(office, "adminmade"),
+        full_name="Admin Made", org_role=office["roles"]["engineer"],
+        password=PASSWORD, send_email=False,
     )
-    assert user.role == UserRole.ENGINEER
-    assert user.org_role_id is not None
+    assert user.org_role_id == office["roles"]["engineer"].id
 
 
 def test_someone_without_the_permission_is_refused(office):
@@ -147,60 +133,46 @@ def test_someone_without_the_permission_is_refused(office):
     with pytest.raises(HTTPException) as refusal:
         create_provisioned_user(
             db, creator=office["engineer"], email=_new_email(office, "denied"),
-            full_name="Denied", role=UserRole.ENGINEER,
-            engineer_affiliation="internal_engineer", password=PASSWORD, send_email=False,
+            full_name="Denied", org_role=office["roles"]["engineer"],
+            password=PASSWORD, send_email=False,
         )
     assert refusal.value.status_code == 403
 
 
 def test_a_non_administrator_granted_the_permission_can_create(office):
-    """The intended widening, and the whole point of the change.
-
-    Under `can_create_team_role` this was impossible: the check asked whether
-    the creator's retired enum was ADMIN, so no grant an office could make would
-    ever admit this person.
-    """
+    """The configurability the redesign exists to provide."""
     db = office["db"]
     engineer = office["engineer"]
     _grant_manage_users(db, engineer)
 
     user, _ = create_provisioned_user(
         db, creator=engineer, email=_new_email(office, "grantedcreate"),
-        full_name="Made By Grant", role=UserRole.ENGINEER,
-        engineer_affiliation="internal_engineer", password=PASSWORD, send_email=False,
+        full_name="Made By Grant", org_role=office["roles"]["engineer"],
+        password=PASSWORD, send_email=False,
     )
     assert user.email.startswith("grantedcreate")
 
 
-def test_both_endpoint_branches_answer_to_the_same_permission(office):
-    """`POST /users` used to gate its two branches on two different authorities."""
+def test_the_endpoint_answers_to_the_same_permission(office):
+    """`POST /users` is gated on `platform.manage_users`, granted or not."""
     db = office["db"]
     engineer = office["engineer"]
     _grant_manage_users(db, engineer)
-
-    # Modern branch: org_role_id.
-    modern = create_user(
+    created = create_user(
         user_data=UserCreateByAdmin(
-            email=_new_email(office, "modern"), full_name="Modern Path",
+            email=_new_email(office, "endpoint"), full_name="Endpoint Path",
             password=PASSWORD, org_role_id=office["roles"]["engineer"].id,
         ),
         db=db, current_user=engineer,
     )
-    assert modern.email.startswith("modern")
+    assert created.email.startswith("endpoint")
 
-    # Legacy branch: bare role enum.
-    legacy = create_user(
-        user_data=UserCreateByAdmin(
-            email=_new_email(office, "legacy"), full_name="Legacy Path",
-            password=PASSWORD, role=UserRole.ENGINEER,
-            engineer_profile=EngineerProfileCreate(
-                discipline=office["disciplines"]["civil"].code
-                if "civil" in office["disciplines"] else "civil",
-            ),
-        ),
-        db=db, current_user=engineer,
-    )
-    assert legacy.email.startswith("legacy")
+
+def test_the_endpoint_requires_an_office_role():
+    """There is no request shape that creates an account without one."""
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        UserCreateByAdmin(email="norole@example.com", full_name="No Role", password=PASSWORD)
 
 
 def test_the_endpoint_refuses_a_caller_without_the_permission(office):
@@ -218,41 +190,23 @@ def test_the_endpoint_refuses_a_caller_without_the_permission(office):
 
 # --- what may never be provisioned -------------------------------------------
 
-def test_a_worker_account_cannot_be_created_even_with_the_permission(office):
-    """The invariant, not a permission.
-
-    `can_create_team_role` refused WORKER by omitting it from a set. Holding
-    `platform.manage_users` must not make it reachable — an office cannot grant
-    its way to a worker account.
-    """
+def test_no_account_can_be_created_under_the_archived_role_even_with_the_permission(office):
+    """The invariant, not a permission: holding `platform.manage_users` does not reach it."""
     db = office["db"]
     engineer = office["engineer"]
     _grant_manage_users(db, engineer)
-
-    with pytest.raises(ValueError, match="Worker accounts can no longer be created"):
+    with pytest.raises(ValueError, match="cannot be used to create accounts"):
         create_provisioned_user(
             db, creator=engineer, email=_new_email(office, "worker"),
-            full_name="Should Not Exist", role=UserRole.WORKER,
+            full_name="Should Not Exist", org_role=office["roles"]["archived_field_staff"],
             password=PASSWORD, send_email=False,
         )
 
 
-def test_an_administrator_cannot_create_a_worker_either(office):
-    db = office["db"]
-    with pytest.raises(ValueError, match="Worker accounts can no longer be created"):
-        create_provisioned_user(
-            db, creator=office["admin"], email=_new_email(office, "adminworker"),
-            full_name="Should Not Exist", role=UserRole.WORKER,
-            password=PASSWORD, send_email=False,
-        )
-
-
-def test_no_account_can_be_created_under_an_archived_role(office):
-    """Now refused for being archived, not for being untranslatable."""
+def test_an_administrator_cannot_create_one_either(office):
     db = office["db"]
     archived = office["roles"]["archived_field_staff"]
     assert archived.is_archived is True
-
     with pytest.raises(ValueError, match="cannot be used to create accounts"):
         create_provisioned_user(
             db, creator=office["admin"], email=_new_email(office, "archived"),
@@ -260,27 +214,17 @@ def test_no_account_can_be_created_under_an_archived_role(office):
         )
 
 
-def test_the_archived_refusal_does_not_depend_on_legacy_role(office):
-    """The separation this change exists to make.
-
-    A role that is archived *and* translatable must still be refused. Under the
-    old rule it would have been created, because the refusal came from
-    `legacy_role_for` failing rather than from any statement about the role.
-    """
+def test_an_office_role_marked_archived_is_refused_too(office):
+    """The refusal is about the flag, so it covers a role an office archives itself."""
     db = office["db"]
     role = Role(
         organization_id=office["organization"].id,
-        code=f"archived_but_translatable_{uuid4().hex[:6]}",
-        name_en="Archived But Translatable", scope="ORG", is_internal_only=True,
-        is_system=False, rank=901, legacy_role=UserRole.ENGINEER.name,
-        is_archived=True,
+        code=f"archived_office_role_{uuid4().hex[:6]}",
+        name_en="Archived Office Role", scope="ORG", is_internal_only=True,
+        is_system=False, rank=901, is_archived=True,
     )
     db.add(role)
     db.flush()
-
-    # It translates fine — so nothing about `legacy_role` would stop this.
-    assert legacy_role_for(role) == UserRole.ENGINEER
-
     with pytest.raises(ValueError, match="cannot be used to create accounts"):
         create_provisioned_user(
             db, creator=office["admin"], email=_new_email(office, "archtrans"),
@@ -291,7 +235,7 @@ def test_the_archived_refusal_does_not_depend_on_legacy_role(office):
 
 # --- behaviour that must survive ---------------------------------------------
 
-def test_creation_under_a_normal_org_role_still_works(office):
+def test_creation_under_a_normal_org_role_works(office):
     db = office["db"]
     user, _ = create_provisioned_user(
         db, creator=office["admin"], email=_new_email(office, "normal"),
@@ -299,62 +243,35 @@ def test_creation_under_a_normal_org_role_still_works(office):
         password=PASSWORD, send_email=False,
     )
     assert user.org_role_id == office["roles"]["senior_engineer"].id
-    assert user.role == UserRole.ENGINEER
-
-
-def test_the_consultant_compatibility_rewrite_is_unchanged(office):
-    """A legacy CONSULTANT request still persists as an external-consultant Engineer."""
-    db = office["db"]
-    user, _ = create_provisioned_user(
-        db, creator=office["admin"], email=_new_email(office, "consultant"),
-        full_name="Consultant Compat", role=UserRole.CONSULTANT,
-        organization="Outside Firm", password=PASSWORD, send_email=False,
-    )
-    assert user.role == UserRole.ENGINEER
-    assert user.engineer_affiliation == "external_consultant"
-
-
-def test_every_created_account_still_gets_a_database_role(office):
-    """Provisioning assigns the role itself; nothing fills it in afterwards."""
-    db = office["db"]
-    user, _ = create_provisioned_user(
-        db, creator=office["admin"], email=_new_email(office, "hasrole"),
-        full_name="Has Role", role=UserRole.ENGINEER,
-        engineer_affiliation="internal_engineer", password=PASSWORD, send_email=False,
-    )
-    assert user.org_role_id is not None
     assert user.is_internal is True
 
 
-def test_a_bare_user_row_gets_no_role_and_cannot_be_authorized(office):
+def test_a_bare_user_row_is_refused_by_the_database(office):
     """What writing an account outside the creation paths now produces.
 
     `user_role_backstop` used to fill `org_role_id` during the flush for any
-    `User` written without one. It is gone: every creation path assigns the
-    role before writing, so a row that skips that is a bug, and it surfaces as
-    a refusal at the first permission check rather than as a guessed role.
+    `User` written without one. It is gone, and `users.org_role_id` is NOT
+    NULL: a row that skips the creation paths never reaches the table.
     """
+    from sqlalchemy.exc import IntegrityError
     db = office["db"]
     row = User(
-        full_name="Bare Row", email=_new_email(office, "bare"), hashed_password="x",
-        role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-        engineer_affiliation="internal_engineer",
+        full_name="Bare Row", email=_new_email(office, "bare"), hashed_password="x", status=UserStatus.ACTIVE,
     )
     db.add(row)
-    db.flush()
-    assert row.org_role_id is None, "something is still filling the role during the flush"
-    with pytest.raises(rbac.UnmigratedUser):
-        effective_permissions(db, row)
+    with pytest.raises(IntegrityError):
+        db.flush()
+    db.rollback()
 
 
 # --- every creation path assigns the role itself -----------------------------
 
-def test_the_legacy_creation_path_assigns_its_role_before_writing(office):
+def test_an_external_role_is_written_external(office):
     db = office["db"]
     user, _ = create_provisioned_user(
-        db, creator=office["admin"], email=_new_email(office, "legacypath"),
-        full_name="Legacy Path", role=UserRole.ENGINEER,
-        engineer_affiliation="main_contractor", password=PASSWORD, send_email=False,
+        db, creator=office["admin"], email=_new_email(office, "external"),
+        full_name="External Path", org_role=office["roles"]["contractor_representative"],
+        password=PASSWORD, send_email=False,
     )
     assert user.org_role_id == office["roles"]["contractor_representative"].id
     assert user.is_internal is False, "a contractor must not be written as internal"
@@ -377,7 +294,7 @@ def test_the_demo_seed_assigns_its_role_before_writing(office):
     db = office["db"]
     user = _ensure_user(
         db, key=f"seedpath-{uuid4().hex[:10]}", email=_new_email(office, "seed"),
-        full_name="Seeded Owner", role=UserRole.OWNER,
+        full_name="Seeded Owner", role_code="client_representative",
         company=office["organization"], password=PASSWORD,
     )
     db.flush()
@@ -390,8 +307,7 @@ def test_the_demo_seed_assigns_its_role_before_writing(office):
 def test_an_account_on_an_archived_role_is_not_staffable(office):
     db = office["db"]
     parked = User(
-        full_name="Parked", email=_new_email(office, "parked"), hashed_password="x",
-        role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
+        full_name="Parked", email=_new_email(office, "parked"), hashed_password="x", status=UserStatus.ACTIVE,
         company_id=office["organization"].id,
         org_role_id=office["roles"]["archived_field_staff"].id, is_internal=True,
     )

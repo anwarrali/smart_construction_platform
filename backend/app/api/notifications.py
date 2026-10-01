@@ -15,7 +15,7 @@ from app.schemas.device_token import (
 )
 from app.schemas.notification import NotificationOut, NotificationResponse
 from app.core.deps import get_current_user, user_has_project_access
-from app.models.enums import NotificationStatus, NotificationType, UserRole
+from app.models.enums import NotificationStatus, NotificationType
 from app.services import device_token_service, notification_service
 from app.services.authorization import has_permission
 from app.services.realtime import EventType, publish_event

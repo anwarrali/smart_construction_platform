@@ -1,28 +1,15 @@
 """The canonical list of things a person can be allowed to do.
 
-This catalogue does not invent a second authorization system. It names the
-checks the application already performs and records, for each one, the roles
-that hold it today. `app.services.authorization` resolves an effective answer by
-starting from these defaults and then applying whatever the administrator has
-configured on top.
-
-Keeping the defaults identical to the previous hardcoded behaviour is
-deliberate: installing this layer must not change who can do what until an
-administrator actually changes something.
+It names every check the application performs and the rules that bound who
+may ever hold each one (project scope, the administrator lock, the office-only
+default, the never-external wall). It does not say which roles hold what: that
+is `roles` / `role_permissions` in the database, seeded from the templates in
+`app.core.role_templates` and then configured by each office.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
-from app.models.enums import UserRole
-
-ADMIN = UserRole.ADMIN
-PM = UserRole.PROJECT_MANAGER
-ENGINEER = UserRole.ENGINEER
-CONSULTANT = UserRole.CONSULTANT
-OWNER = UserRole.OWNER
-WORKER = UserRole.WORKER
 
 
 @dataclass(frozen=True)
@@ -31,8 +18,6 @@ class Permission:
     group: str
     label: str
     description: str
-    #: Roles that hold this permission when nothing has been configured.
-    default_roles: frozenset[UserRole]
     #: True when the permission is meaningful inside a single project, so an
     #: administrator can grant it for one project rather than everywhere.
     project_scoped: bool = True
@@ -84,9 +69,9 @@ class Permission:
     aliases: tuple[str, ...] = field(default=())
 
 
-def _p(code, group, label, description, roles, *, project_scoped=True,
+def _p(code, group, label, description, *, project_scoped=True,
        admin_locked=False, office_only=False, never_external=False):
-    return Permission(code, group, label, description, frozenset(roles),
+    return Permission(code, group, label, description,
                       project_scoped=project_scoped, admin_locked=admin_locked,
                       office_only=office_only,
                       # Certification and access governance are always both.
@@ -98,13 +83,13 @@ def _p(code, group, label, description, roles, *, project_scoped=True,
 CATALOGUE: tuple[Permission, ...] = (
     # --- Platform administration -------------------------------------------
     _p("platform.manage_users", "platform", "Manage user accounts",
-       "Create, edit, activate and deactivate accounts.", {ADMIN},
+       "Create, edit, activate and deactivate accounts.",
        project_scoped=False, admin_locked=True),
     _p("platform.manage_permissions", "platform", "Manage permissions",
-       "Change what roles and people are allowed to do.", {ADMIN},
+       "Change what roles and people are allowed to do.",
        project_scoped=False, admin_locked=True),
     _p("platform.create_project", "platform", "Create projects",
-       "Open a new project on the platform.", {ADMIN}, project_scoped=False),
+       "Open a new project on the platform.", project_scoped=False),
     # Wired, but not through a plain `require(...)` call like most of this
     # catalogue: `app.core.deps.user_has_project_access` / `accessible_project_ids`
     # (which `require`/`has_permission` themselves use to enforce every
@@ -120,19 +105,19 @@ CATALOGUE: tuple[Permission, ...] = (
     # / `platform.manage_permissions`, both locked), only their bypass of
     # project membership — which they can always restore via Access Control.
     _p("platform.view_all_projects", "platform", "See every project",
-       "Read any project without being a member of it.", {ADMIN}, project_scoped=False),
+       "Read any project without being a member of it.", project_scoped=False),
 
     # --- Project setup ------------------------------------------------------
     _p("project.manage_members", "project", "Manage the project team",
-       "Add or remove people from a project and set their role on it.", {ADMIN, PM},
+       "Add or remove people from a project and set their role on it.",
        office_only=True, never_external=True),
     # Editing project setup was administrator-only at the endpoint. The default
     # records that, rather than widening access as a side effect of making the
     # check configurable; an administrator can grant it to managers in one click.
     _p("project.edit", "project", "Edit project details",
-       "Change project information, dates and settings.", {ADMIN}, office_only=True, never_external=True),
+       "Change project information, dates and settings.", office_only=True, never_external=True),
     _p("project.manage_reminders", "project", "Configure reminders",
-       "Set reminder intervals, quiet hours and escalation.", {ADMIN, PM}),
+       "Set reminder intervals, quiet hours and escalation."),
     # Deletion is its own code because it is its own act. `delete_project` was
     # gated on `is_admin(user.role)`, and the tempting migration was to reuse a
     # code that happened to resolve identically — `project.edit` measures 0
@@ -152,8 +137,7 @@ CATALOGUE: tuple[Permission, ...] = (
     # itself. Defaulting to {ADMIN} alone keeps today's answer — see
     # `role_templates`, where `technical_director` explicitly declines it.
     _p("project.delete", "project", "Delete a project",
-       "Permanently delete a project and everything recorded against it.",
-       {ADMIN}, office_only=True, never_external=True),
+       "Permanently delete a project and everything recorded against it.", office_only=True, never_external=True),
 
     # --- Tasks and scheduling ----------------------------------------------
     # Descriptive entry: `list_tasks` / `get_tasks_by_project` in app.api.tasks
@@ -165,11 +149,10 @@ CATALOGUE: tuple[Permission, ...] = (
     # all", which every one of these roles already can; it cannot express which
     # rows they get back, so migrating it would just add a redundant check on
     # top of the filtering that actually does the work.
-    _p("task.view", "tasks", "View tasks", "See the project task list.",
-       {ADMIN, PM, ENGINEER, CONSULTANT, OWNER, WORKER}),
-    _p("task.create", "tasks", "Create tasks", "Add new tasks to a project.", {ADMIN, PM},
+    _p("task.view", "tasks", "View tasks", "See the project task list."),
+    _p("task.create", "tasks", "Create tasks", "Add new tasks to a project.",
        office_only=True),
-    _p("task.edit", "tasks", "Edit tasks", "Change task details and assignment.", {ADMIN, PM},
+    _p("task.edit", "tasks", "Edit tasks", "Change task details and assignment.",
        office_only=True),
     # Descriptive entry: `update_task_progress` in app.api.tasks gates on
     # "the assigned PM of this project OR the assignee of this specific task",
@@ -178,7 +161,7 @@ CATALOGUE: tuple[Permission, ...] = (
     # assigned to — a real widening, not a neutral refactor — so the ownership
     # check stays the enforcement and this entry stays descriptive.
     _p("task.update_progress", "tasks", "Update task progress",
-       "Record progress and submit work for review.", {ADMIN, PM, ENGINEER, WORKER}),
+       "Record progress and submit work for review."),
     # "See the whole task list", as opposed to seeing the work you hold or
     # review. The default is exactly the set that got no filter before: an
     # administrator, a project manager, the legacy consultant role and the
@@ -186,11 +169,9 @@ CATALOGUE: tuple[Permission, ...] = (
     # and what they are narrowed *to* is decided by data, not by a role: the
     # work assigned to them, plus the work they are the named reviewer for.
     _p("task.view_all", "tasks", "See every task",
-       "See the project's whole task list, not only your own work.",
-       {ADMIN, PM, CONSULTANT, OWNER}),
+       "See the project's whole task list, not only your own work."),
     _p("task.review", "tasks", "Review submitted work",
-       "Approve, reject or request rework on submitted task work.",
-       {ADMIN, PM, CONSULTANT, ENGINEER}, office_only=True, never_external=True),
+       "Approve, reject or request rework on submitted task work.", office_only=True, never_external=True),
     # Investigated (not assumed) whether excluding ENGINEER here — and so a
     # real Consultant Engineer, whose `User.role` is ENGINEER — is a leftover
     # of the legacy CONSULTANT-role migration or the actual intended
@@ -212,18 +193,18 @@ CATALOGUE: tuple[Permission, ...] = (
     # for the full evidence chain. Still configurable per person/project
     # through Access Control if a specific case ever needs it.
     _p("schedule.view", "schedule", "View the schedule",
-       "Open the Gantt, critical path and delay analysis.", {ADMIN, PM, CONSULTANT, OWNER}),
+       "Open the Gantt, critical path and delay analysis."),
     _p("schedule.edit", "schedule", "Change the schedule",
-       "Shift planned dates and cascade the effect downstream.", {ADMIN, PM},
+       "Shift planned dates and cascade the effect downstream.",
        office_only=True),
 
     # --- Site work ----------------------------------------------------------
     _p("site_visit.schedule", "field", "Schedule site visits",
-       "Book a site visit and notify its participants.", {ADMIN, PM, ENGINEER}),
+       "Book a site visit and notify its participants."),
     # Filing a report is field work: the endpoint accepted the Project Manager
     # and contractor-side Engineers, and not administrators.
     _p("site_report.submit", "field", "Submit site reports",
-       "File a daily or visit site report.", {PM, ENGINEER}),
+       "File a daily or visit site report."),
     # Verification rests with the assigned Project Manager alone, same shape as
     # `design_change.approve` resting with the assigned consultant: the
     # catalogue default covers the whole PM role (matching the dashboard's
@@ -232,15 +213,13 @@ CATALOGUE: tuple[Permission, ...] = (
     # assigned project" restriction on top inside the endpoint — a grant here
     # can never let a PM verify a report on a project they do not manage.
     _p("site_report.verify", "field", "Verify site reports",
-       "Approve or reject a submitted site report.", {PM}, office_only=True, never_external=True),
-    _p("issue.create", "field", "Raise issues", "Open a project issue.",
-       {ADMIN, PM, ENGINEER, CONSULTANT}),
-    _p("issue.resolve", "field", "Resolve issues", "Close or resolve a project issue.",
-       {ADMIN, PM}, office_only=True),
+       "Approve or reject a submitted site report.", office_only=True, never_external=True),
+    _p("issue.create", "field", "Raise issues", "Open a project issue."),
+    _p("issue.resolve", "field", "Resolve issues", "Close or resolve a project issue.", office_only=True),
 
     # --- Client communication ----------------------------------------------
     _p("owner_request.create", "requests", "Submit client requests",
-       "Raise a request on behalf of the client.", {ADMIN, PM, OWNER}),
+       "Raise a request on behalf of the client."),
     # Descriptive entry: `update_owner_request` in app.api.collaboration checks
     # "is admin/the project's PM" or "is the request's assigned engineer" (plus
     # a narrower requester-only path for re-opening from NEEDS_CLARIFICATION),
@@ -249,29 +228,21 @@ CATALOGUE: tuple[Permission, ...] = (
     # Engineer on the project answer a request assigned to a different
     # Engineer, which the assignment check exists specifically to prevent.
     _p("owner_request.review", "requests", "Answer client requests",
-       "Respond to, accept or reject a client request.", {ADMIN, PM, ENGINEER}),
+       "Respond to, accept or reject a client request."),
     _p("design_change.propose", "requests", "Propose design changes",
-       "Turn an accepted request into a proposed design change.", {ADMIN, PM, ENGINEER}),
-    # Official approval of a design change rests with the assigned consultant
-    # alone. A Consultant Engineer's `User.role` is ENGINEER (with
-    # `engineer_affiliation="external_consultant"`) — `UserCreateByAdmin`
-    # persists any request for the legacy CONSULTANT role that way — so
-    # `CONSULTANT` can never be a real `User.role` and was never actually
-    # reachable as a default here. Default is ENGINEER, matching
-    # `design_change.propose` and the `ifc.view`/`ifc.upload` shape below:
-    # `approve_design_change`/`reject_design_change` (app.api.design_changes)
-    # hold the real gate via `is_consultant_engineer` plus a discipline check,
-    # same reason those two entries stay descriptive rather than routing the
-    # finer-than-role restriction through `require` alone.
-    # Reviewing a client-facing cost validation. `app.api.cost_validations`
-    # gated this on `is_consultant_engineer`; the authority it was reaching for
-    # is the same one that approves a design change, so it gets a code of its
-    # own and the same default.
+       "Turn an accepted request into a proposed design change."),
+    # Official approval of a design change belongs to whichever role an office
+    # grants it to (the consultant templates hold it). `approve_design_change`
+    # and `reject_design_change` (app.api.design_changes) add the discipline
+    # boundary on top, which is finer than any role.
+    # Reviewing a client-facing cost validation is the same authority as
+    # approving a design change, so it has a code of its own held by the same
+    # templates.
     _p("cost_validation.review", "requests", "Review cost validations",
-       "Approve or reject a submitted cost validation.", {ADMIN, PM, ENGINEER},
+       "Approve or reject a submitted cost validation.",
        office_only=True, never_external=True),
     _p("design_change.approve", "requests", "Approve design changes",
-       "Give a design change its official approval.", {ENGINEER}, office_only=True, never_external=True),
+       "Give a design change its official approval.", office_only=True, never_external=True),
 
     # --- Models and documents ----------------------------------------------
     # ifc.view / ifc.upload / ifc.manage_version are descriptive entries.
@@ -283,14 +254,11 @@ CATALOGUE: tuple[Permission, ...] = (
     # flag. Routing these through `require` would silently drop that
     # granularity down to a plain role check. Keep `can_ifc` as the source of
     # truth; these entries exist so the roles are visible in the admin matrix.
-    _p("ifc.view", "models", "View IFC models", "Open models, hierarchy and properties.",
-       {ADMIN, PM, ENGINEER, CONSULTANT, OWNER, WORKER}),
-    _p("ifc.upload", "models", "Upload IFC models", "Add a new model revision.",
-       {ADMIN, PM, ENGINEER}),
+    _p("ifc.view", "models", "View IFC models", "Open models, hierarchy and properties."),
+    _p("ifc.upload", "models", "Upload IFC models", "Add a new model revision."),
     _p("ifc.manage_version", "models", "Manage model versions",
-       "Activate, supersede or remove a model revision.", {ADMIN, PM}),
-    _p("document.upload", "models", "Upload documents", "Add drawings and documents.",
-       {ADMIN, PM, ENGINEER}),
+       "Activate, supersede or remove a model revision."),
+    _p("document.upload", "models", "Upload documents", "Add drawings and documents."),
 
     # --- AI decision support ------------------------------------------------
     # The frontend has always routed Owner to the AI Intelligence page
@@ -298,13 +266,12 @@ CATALOGUE: tuple[Permission, ...] = (
     # endpoint has always allowed it via the IFC "VIEW" verb; the catalogue entry
     # just never listed it. Recorded here to match what was already shipped, not
     # to grant anything new. Worker holds no route to this page today.
-    _p("ai.view_insights", "ai", "View AI insights", "Read AI findings and suggestions.",
-       {ADMIN, PM, ENGINEER, CONSULTANT, OWNER}),
+    _p("ai.view_insights", "ai", "View AI insights", "Read AI findings and suggestions."),
     _p("ai.review_insight", "ai", "Act on AI insights",
-       "Acknowledge, dismiss or resolve an AI insight.", {ADMIN, PM, ENGINEER, CONSULTANT},
+       "Acknowledge, dismiss or resolve an AI insight.",
        office_only=True, never_external=True),
     _p("ai.promote_insight", "ai", "Turn an AI insight into work",
-       "Create a formal issue or task from an AI insight.", {ADMIN, PM, ENGINEER},
+       "Create a formal issue or task from an AI insight.",
        office_only=True, never_external=True),
 
     # --- Office administration (RBAC v2) ------------------------------------
@@ -312,13 +279,12 @@ CATALOGUE: tuple[Permission, ...] = (
     # settings. Defaults reproduce what the endpoints these replace already
     # required — `/company/settings` was `require_admin`, so is this.
     _p("org.manage_roles", "platform", "Manage roles",
-       "Create, rename and delete roles, and choose what each one may do.",
-       {ADMIN}, project_scoped=False, admin_locked=True),
+       "Create, rename and delete roles, and choose what each one may do.", project_scoped=False, admin_locked=True),
     _p("org.manage_disciplines", "platform", "Manage disciplines",
-       "Maintain the office's list of engineering disciplines.", {ADMIN},
+       "Maintain the office's list of engineering disciplines.",
        project_scoped=False),
     _p("org.manage_settings", "platform", "Manage office settings",
-       "Change office details, branding and report templates.", {ADMIN},
+       "Change office details, branding and report templates.",
        project_scoped=False),
 
     # --- External parties (RBAC v2) -----------------------------------------
@@ -326,14 +292,12 @@ CATALOGUE: tuple[Permission, ...] = (
     # the project, not in the office's staff directory. Managing them is the
     # same authority that already manages the project team.
     _p("project.manage_parties", "project", "Manage project parties",
-       "Record the client, contractors and other external parties on a project.",
-       {ADMIN, PM}, office_only=True, never_external=True),
+       "Record the client, contractors and other external parties on a project.", office_only=True, never_external=True),
     _p("project.invite_external", "project", "Give external people access",
-       "Grant someone outside the office access to this project.", {ADMIN, PM},
+       "Grant someone outside the office access to this project.",
        office_only=True, never_external=True),
     _p("document.share_external", "models", "Share documents externally",
-       "Make a document readable by an external party on this project.",
-       {ADMIN, PM}, office_only=True, never_external=True),
+       "Make a document readable by an external party on this project.", office_only=True, never_external=True),
     # One permission for one idea: "your view of this project is not narrowed
     # to your own disciplines". It governs documents, site reports and issues,
     # because the platform applied the *same* rule to all three and expressed
@@ -351,8 +315,7 @@ CATALOGUE: tuple[Permission, ...] = (
     # decided by what was shared with their party, checked first, so this can
     # never widen one.
     _p("project.view_all_disciplines", "models", "See work in every discipline",
-       "Read the project's documents, reports and issues without discipline narrowing.",
-       {ADMIN, PM, ENGINEER}),
+       "Read the project's documents, reports and issues without discipline narrowing."),
 
     # --- Field evidence (RBAC v2) -------------------------------------------
     # These replace `is_worker()` and the main-contractor-engineer reviewer
@@ -361,9 +324,9 @@ CATALOGUE: tuple[Permission, ...] = (
     # defaults name the roles that inherit the work rather than reproducing
     # the old ones. See docs/CONSULTING_OFFICE_REDESIGN.md §7.
     _p("field_evidence.submit", "field", "Submit field evidence",
-       "Record photos, notes and voice observations from site.", {PM, ENGINEER}),
+       "Record photos, notes and voice observations from site."),
     _p("field_evidence.verify", "field", "Verify field evidence",
-       "Confirm or reject a submitted field evidence package.", {PM, ENGINEER},
+       "Confirm or reject a submitted field evidence package.",
        office_only=True, never_external=True),
 
     # --- IFC verbs that had no catalogue entry ------------------------------
@@ -371,22 +334,19 @@ CATALOGUE: tuple[Permission, ...] = (
     # are copied from that dict verbatim so switching the gate over changes
     # nobody's access; an administrator can then configure them.
     _p("ifc.compare", "models", "Compare model versions",
-       "Open a comparison between two revisions of a model.",
-       {ADMIN, PM, ENGINEER, CONSULTANT}),
+       "Open a comparison between two revisions of a model."),
     _p("ifc.review_finding", "models", "Review coordination findings",
-       "Act on a clash or coordination finding.", {ADMIN, PM, ENGINEER, CONSULTANT}),
+       "Act on a clash or coordination finding."),
     _p("ifc.review_suggestion", "models", "Review model suggestions",
-       "Accept or dismiss a suggestion raised against the model.",
-       {ADMIN, PM, ENGINEER}),
+       "Accept or dismiss a suggestion raised against the model."),
     _p("ifc.download", "models", "Download model files",
-       "Download the original IFC file.", {ADMIN, PM, ENGINEER, CONSULTANT}),
+       "Download the original IFC file."),
     # Its own code rather than an alias for `ifc.manage_version`: the retired
     # dict gave MANAGE_LINK to engineers and MANAGE_VERSION only to
     # administrators and managers, so folding them together would have
     # narrowed what engineers can do.
     _p("ifc.manage_link", "models", "Link model elements to work",
-       "Connect a model element to a task, issue or document.",
-       {ADMIN, PM, ENGINEER}),
+       "Connect a model element to a task, issue or document."),
 
     # --- Opening a project module (RBAC v2) ---------------------------------
     # Four codes that name a question the platform never wrote down: "may this
@@ -411,17 +371,13 @@ CATALOGUE: tuple[Permission, ...] = (
     # party, and nothing else — `document_access` decides that, first, before
     # any permission is consulted.
     _p("document.view", "models", "Open project documents",
-       "See the project's document library, scoped to what you may read.",
-       {ADMIN, PM, ENGINEER, CONSULTANT, OWNER}),
+       "See the project's document library, scoped to what you may read."),
     _p("site_report.view", "field", "Open site reports",
-       "See the project's site reports, scoped to what you may read.",
-       {ADMIN, PM, ENGINEER, CONSULTANT, OWNER}),
+       "See the project's site reports, scoped to what you may read."),
     _p("issue.view", "field", "Open project issues",
-       "See the project's issue register, scoped to what you may read.",
-       {ADMIN, PM, ENGINEER, CONSULTANT, OWNER}),
+       "See the project's issue register, scoped to what you may read."),
     _p("design_change.view", "requests", "Open design changes",
-       "See the project's design changes, scoped to what you may read.",
-       {ADMIN, PM, ENGINEER, CONSULTANT, OWNER}),
+       "See the project's design changes, scoped to what you may read."),
 
     # The client portal — the executive project view the owner dashboard
     # renders. `get_owner_dashboard` gated it on `role in {OWNER, ADMIN}`; this
@@ -430,8 +386,7 @@ CATALOGUE: tuple[Permission, ...] = (
     # that exists for them, so the ceiling that strips the office's own
     # authority must not strip this too.
     _p("client_portal.view", "requests", "Open the client portal",
-       "See the executive project overview prepared for the client.",
-       {ADMIN, OWNER}),
+       "See the executive project overview prepared for the client."),
 
     # --- Operations Voice performed with no catalogue permission ------------
     # Four voice capabilities carried `permission_code=None` and were gated by
@@ -439,28 +394,22 @@ CATALOGUE: tuple[Permission, ...] = (
     # redesign removes. Defaults mirror the role sets they replace
     # (`_ALL_ENGINEERS` = project manager + engineer).
     _p("task.add_note", "tasks", "Add notes to tasks",
-       "Record a note against a task.", {ADMIN, PM, ENGINEER}),
+       "Record a note against a task."),
     _p("task.comment", "tasks", "Post on a task discussion",
-       "Write in a task's discussion thread.", {ADMIN, PM, ENGINEER}),
+       "Write in a task's discussion thread."),
     _p("message.send", "requests", "Send project messages",
-       "Message another participant on the project.", {ADMIN, PM, ENGINEER, CONSULTANT}),
+       "Message another participant on the project."),
     _p("message.send_client", "requests", "Send client updates",
-       "Send an update to the project's client.", {ADMIN, PM, ENGINEER}),
+       "Send an update to the project's client."),
     # Was `role in {"admin", "project_manager"}` in `messaging_policy`. A
     # code of its own rather than a borrowed one, so an office can decide who
     # speaks to a whole project separately from who staffs it.
     _p("message.broadcast", "requests", "Message the whole project",
-       "Start project group conversations and send announcements to the project.",
-       {ADMIN, PM}, office_only=True),
+       "Start project group conversations and send announcements to the project.", office_only=True),
 )
 
 BY_CODE: dict[str, Permission] = {item.code: item for item in CATALOGUE}
 GROUPS: tuple[str, ...] = tuple(dict.fromkeys(item.group for item in CATALOGUE))
-
-
-def role_defaults(role: UserRole) -> set[str]:
-    """Every permission the role holds before any configuration is applied."""
-    return {item.code for item in CATALOGUE if role in item.default_roles}
 
 
 def is_known(code: str) -> bool:

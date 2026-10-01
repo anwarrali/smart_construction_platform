@@ -12,7 +12,6 @@ from app.models.enums import (
     IssueSeverity,
     IssueStatus,
     TaskPriority,
-    UserRole,
     VoiceConfirmationStatus,
     NotificationType,
     DesignChangeStatus,

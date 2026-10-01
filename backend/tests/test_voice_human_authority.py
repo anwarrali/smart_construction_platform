@@ -12,16 +12,17 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from app.models.enums import DesignChangeStatus, TaskStatus, UserRole, UserStatus
+from app.models.enums import DesignChangeStatus, TaskStatus, UserStatus
 from app.schemas.voice_analysis import SuggestedActionType
 from app.services.collaboration_policy import assert_human_authority
 from app.services.voice_rules_engine import VoiceRulesEngine
 
 
-def actor(role: UserRole, *, affiliation=None, status=UserStatus.ACTIVE):
+def actor(label: str, *, status=UserStatus.ACTIVE):
+    """A speaker. `label` is only a name: what they may do comes from the
+    permission check each case patches, never from who they are called."""
     return SimpleNamespace(
-        id=uuid4(), role=role, status=status, engineer_affiliation=affiliation,
-        org_role_id=None, is_internal=True,
+        id=uuid4(), full_name=label, status=status, org_role_id=None, is_internal=True,
     )
 
 
@@ -66,7 +67,7 @@ class VoiceActsForTheSpeaker(TestCase):
             )
 
     def test_engineer_progress_update_is_accepted_under_their_own_authority(self):
-        person = actor(UserRole.ENGINEER)
+        person = actor("engineer")
         task = fake_task(progress=10)
         result = self._validate(person, draft("UPDATE_TASK_PROGRESS", {"progressPercentage": 30},
                                               target_id=task.id), task=task)
@@ -74,7 +75,7 @@ class VoiceActsForTheSpeaker(TestCase):
         self.assertEqual(result.payload_dict()["progressPercentage"], 30)
 
     def test_engineer_issue_creation_is_accepted(self):
-        person = actor(UserRole.ENGINEER)
+        person = actor("engineer")
         result = self._validate(person, draft("CREATE_ISSUE", {
             "title": "Water leakage in Zone B",
             "description": "Standing water found along the Zone B retaining wall.",
@@ -82,7 +83,7 @@ class VoiceActsForTheSpeaker(TestCase):
         self.assertEqual(result.type, SuggestedActionType.CREATE_ISSUE)
 
     def test_engineer_may_propose_a_design_change_by_voice(self):
-        person = actor(UserRole.ENGINEER)
+        person = actor("engineer")
         result = self._validate(person, draft("CREATE_DESIGN_CHANGE_REPORT", {
             "title": "Relocate the partition wall",
             "description": "Owner asked for a wider corridor on the ground floor.",
@@ -90,21 +91,21 @@ class VoiceActsForTheSpeaker(TestCase):
         self.assertEqual(result.type, SuggestedActionType.CREATE_DESIGN_CHANGE_REPORT)
 
     def test_a_suspended_account_cannot_act_by_voice(self):
-        person = actor(UserRole.ENGINEER, status=UserStatus.SUSPENDED)
+        person = actor("engineer", status=UserStatus.SUSPENDED)
         with self.assertRaises(HTTPException) as raised:
             self._validate(person, draft("ADD_TASK_NOTE", {"content": "note"}))
         self.assertEqual(raised.exception.status_code, 403)
 
     def test_a_command_cannot_be_executed_by_someone_else(self):
-        speaker = actor(UserRole.ENGINEER)
-        bystander = actor(UserRole.ENGINEER)
+        speaker = actor("engineer")
+        bystander = actor("engineer")
         with self.assertRaises(HTTPException) as raised:
             self._validate(bystander, draft("ADD_TASK_NOTE", {"content": "note"}),
                            command=command_for(speaker))
         self.assertEqual(raised.exception.status_code, 403)
 
     def test_losing_project_access_blocks_execution(self):
-        person = actor(UserRole.ENGINEER)
+        person = actor("engineer")
         with self.assertRaises(HTTPException) as raised:
             self._validate(person, draft("ADD_TASK_NOTE", {"content": "note"}), access=False)
         self.assertEqual(raised.exception.status_code, 403)
@@ -122,7 +123,7 @@ class VoiceRefusesWhatThePermissionRefuses(TestCase):
     """
 
     def _expect_forbidden(self, action_type, payload=None):
-        person = actor(UserRole.ENGINEER)
+        person = actor("engineer")
         with patch("app.services.voice_rules_engine.user_has_project_access", return_value=True), \
              patch("app.services.voice_rules_engine.is_available", return_value=False), \
              patch.object(VoiceRulesEngine, "_validated_task", return_value=None):
@@ -151,7 +152,7 @@ class VoiceRefusesWhatThePermissionRefuses(TestCase):
         record a Worker used to, and it still lands as evidence awaiting
         confirmation rather than as official progress.
         """
-        person = actor(UserRole.ENGINEER)
+        person = actor("engineer")
         task = fake_task()
         with patch("app.services.voice_rules_engine.user_has_project_access", return_value=True), \
              patch("app.services.voice_rules_engine.is_available", return_value=True), \
@@ -182,14 +183,14 @@ class RoleBoundariesAreNotWidenedByVoice(TestCase):
         not here.
         """
         with self.assertRaises(HTTPException) as raised:
-            self._validate(actor(UserRole.ENGINEER), draft("CREATE_TASK", {
+            self._validate(actor("engineer"), draft("CREATE_TASK", {
                 "title": "Inspect basement waterproofing", "sourceDiscipline": "civil",
             }), capable=False)
         self.assertEqual(raised.exception.status_code, 403)
         self.assertIn("run this project", raised.exception.detail)
 
     def test_project_manager_may_create_a_task_by_voice(self):
-        result = self._validate(actor(UserRole.PROJECT_MANAGER), draft("CREATE_TASK", {
+        result = self._validate(actor("project_manager"), draft("CREATE_TASK", {
             "title": "Inspect basement waterproofing", "sourceDiscipline": "civil",
         }))
         self.assertEqual(result.type, SuggestedActionType.CREATE_TASK)
@@ -203,7 +204,7 @@ class RoleBoundariesAreNotWidenedByVoice(TestCase):
         it: somebody whose permissions cover recording a review, and not
         posting progress, can do the first and not the second.
         """
-        reviewer = actor(UserRole.ENGINEER)
+        reviewer = actor("engineer")
         review_task = fake_task()
         allowed = self._validate(reviewer, draft("PREPARE_CONSULTANT_REVIEW", {
             "decision": "APPROVE", "comments": "Reinforcement matches the drawing.",
@@ -219,13 +220,13 @@ class RoleBoundariesAreNotWidenedByVoice(TestCase):
 
     def test_an_ambiguous_command_is_blocked_until_the_human_clarifies(self):
         with self.assertRaises(HTTPException) as raised:
-            self._validate(actor(UserRole.ENGINEER),
+            self._validate(actor("engineer"),
                            draft("UPDATE_TASK_PROGRESS", {"progressPercentage": 30}, missing=["taskId"]))
         self.assertEqual(raised.exception.status_code, 409)
 
     def test_a_low_confidence_reading_must_be_reviewed_before_it_executes(self):
         with self.assertRaises(HTTPException) as raised:
-            self._validate(actor(UserRole.ENGINEER),
+            self._validate(actor("engineer"),
                            draft("ADD_TASK_NOTE", None, confidence=.2))
         self.assertEqual(raised.exception.status_code, 409)
 

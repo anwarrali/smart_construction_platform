@@ -16,7 +16,7 @@ from app.core.deps import (
     accessible_project_ids,
 )
 from app.services import work_scope
-from app.models.enums import IssueStatus, IssueSeverity, UserRole
+from app.models.enums import IssueStatus, IssueSeverity
 from app.models.project import Project, ProjectMember
 from app.models.notification import Notification
 from app.services.realtime import EventType, publish_event

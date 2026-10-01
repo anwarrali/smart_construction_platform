@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.site_reports import review_site_report
 from app.db.database import SessionLocal
 from app.models.audit_log import AuditLog
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.notification import Notification
 from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
@@ -47,17 +47,17 @@ def world(db):
 
     def user(name, role, status=UserStatus.ACTIVE):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                                           hashed_password="x", role=role, status=status))
+                                           hashed_password="x", status=status), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("SrvAdmin", UserRole.ADMIN),
-        "manager": user("SrvPm", UserRole.PROJECT_MANAGER),
-        "other_manager": user("SrvOtherPm", UserRole.PROJECT_MANAGER),
-        "engineer": user("SrvEngineer", UserRole.ENGINEER),
-        "worker": user("SrvWorker", UserRole.WORKER),
-        "submitter": user("SrvSubmitter", UserRole.ENGINEER),
+        "admin": user("SrvAdmin", "org_admin"),
+        "manager": user("SrvPm", "project_manager"),
+        "other_manager": user("SrvOtherPm", "project_manager"),
+        "engineer": user("SrvEngineer", "engineer"),
+        "worker": user("SrvWorker", "archived_field_staff"),
+        "submitter": user("SrvSubmitter", "engineer"),
     }
     db.flush()
 
@@ -65,8 +65,7 @@ def world(db):
                       owner_id=people["manager"].id, project_manager_id=people["manager"].id)
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=people["submitter"].id,
-                         role_on_project=UserRole.ENGINEER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=people["submitter"].id, is_active=True))
     db.flush()
     people["project"] = project
 

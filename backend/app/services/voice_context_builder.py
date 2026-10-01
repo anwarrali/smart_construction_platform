@@ -11,6 +11,7 @@ from app.models.user import User
 from app.services.voice_analysis_authorization import authorized_voice_tasks
 from app.services.voice_capabilities import available_capabilities, render_catalogue
 from app.services.voice_entity_resolution import authorized_issues
+from app.services import rbac
 
 
 class VoiceContextBuilder:
@@ -61,7 +62,7 @@ class VoiceContextBuilder:
         recipients = [{
             "id": str(item.user_id),
             "name": item.user.full_name,
-            "role": item.role_on_project.value,
+            "role": rbac.member_role_code(db, item),
             "discipline": item.project_discipline,
             "assignmentTitle": item.assignment_title,
         } for item in members if item.user_id != user.id]
@@ -98,7 +99,7 @@ class VoiceContextBuilder:
             },
             "actor": {
                 "id": str(user.id),
-                "role": user.role.value,
+                "role": rbac.role_code(db, user),
                 "discipline": (
                     getattr(getattr(user, "engineer_profile", None), "discipline", None).value
                     if getattr(getattr(user, "engineer_profile", None), "discipline", None)

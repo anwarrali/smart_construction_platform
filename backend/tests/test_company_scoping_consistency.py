@@ -30,7 +30,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.projects import list_projects
 from app.db.database import SessionLocal
 from app.models.company import Company
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from tests.office_roles import with_office_role
@@ -74,28 +74,27 @@ def world(db):
     db.add_all([owner_co, contractor_co, unrelated_co])
     db.flush()
 
-    def user(name, role, company=None, affiliation=None):
+    def user(name, role, company=None):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                                           company_id=company.id if company else None,
-                                           engineer_affiliation=affiliation))
+                                           hashed_password="x", status=UserStatus.ACTIVE,
+                                           company_id=company.id if company else None), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("CoAdmin", UserRole.ADMIN, owner_co),
-        "owner": user("CoOwner", UserRole.OWNER, owner_co),
+        "admin": user("CoAdmin", "org_admin", owner_co),
+        "owner": user("CoOwner", "client_representative", owner_co),
         # Same-company contractor engineer: the case that already worked.
-        "same_company_engineer": user("CoSameEngineer", UserRole.ENGINEER, owner_co, "main_contractor"),
+        "same_company_engineer": user("CoSameEngineer", "contractor_representative", owner_co),
         # Cross-company contractor engineer, exactly the seeded-demo shape:
         # project member, but a different company than the project's owner.
-        "cross_company_engineer": user("CoCrossEngineer", UserRole.ENGINEER, contractor_co, "main_contractor"),
+        "cross_company_engineer": user("CoCrossEngineer", "contractor_representative", contractor_co),
         # No company at all — company_id is nullable; must not crash or be
         # treated as "belongs to every company".
-        "no_company_engineer": user("CoNoCompanyEngineer", UserRole.ENGINEER, None, "main_contractor"),
+        "no_company_engineer": user("CoNoCompanyEngineer", "contractor_representative", None),
         # A different company's engineer who is NOT a member of this project —
         # must still be excluded, by membership, same as before this fix.
-        "unrelated_outsider": user("CoOutsider", UserRole.ENGINEER, unrelated_co, "main_contractor"),
+        "unrelated_outsider": user("CoOutsider", "contractor_representative", unrelated_co),
     }
     db.flush()
 
@@ -104,8 +103,7 @@ def world(db):
     db.add(project)
     db.flush()
     for key in ("same_company_engineer", "cross_company_engineer", "no_company_engineer"):
-        db.add(ProjectMember(project_id=project.id, user_id=people[key].id,
-                             role_on_project=UserRole.ENGINEER, is_active=True))
+        db.add(ProjectMember(project_id=project.id, user_id=people[key].id, is_active=True))
     db.flush()
 
     people["project"] = project

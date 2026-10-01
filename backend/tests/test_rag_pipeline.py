@@ -22,7 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
-from app.models.enums import DocumentType, ProjectStatus, UserRole, UserStatus
+from app.models.enums import DocumentType, ProjectStatus, UserStatus
 from app.models.project import Project
 from app.models.user import User
 from app.services.rag import answering, chunking, ingestion
@@ -294,9 +294,8 @@ def world(db):
         full_name=f"RagUser{suffix}",
         email=f"raguser.{suffix}@constro.io",
         hashed_password="x",
-        role=UserRole.PROJECT_MANAGER,
         status=UserStatus.ACTIVE,
-    ))
+    ), "project_manager")
     db.add(user)
     db.flush()
 

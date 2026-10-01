@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import user_has_project_access
 from app.services.authorization import has_permission
-from app.models.enums import ConversationType, UserRole, UserStatus
+from app.models.enums import ConversationType, UserStatus
 from app.models.issue import Issue
 from app.models.design_change import DesignChange
 from app.models.document import Document
@@ -21,7 +21,7 @@ from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.user import User
 from app.services.messaging_policy import (
-    PROJECT_GROUPS,
+    PROJECT_GROUPS,
 )
 
 

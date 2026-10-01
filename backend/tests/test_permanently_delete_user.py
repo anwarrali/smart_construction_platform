@@ -50,7 +50,6 @@ from app.models.enums import (
     ConversationType,
     EngineerDiscipline,
     ProjectStatus,
-    UserRole,
     UserStatus,
 )
 from app.models.message import Conversation, Message
@@ -105,16 +104,15 @@ def _purge(db, project_ids, user_ids):
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role=UserRole.ENGINEER, affiliation="main_contractor"):
+    def user(name, role="engineer"):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@example.com",
-                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                                           engineer_affiliation=affiliation if role == UserRole.ENGINEER else None))
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("DeleteAdmin", UserRole.ADMIN, None),
-        "other_admin": user("DeleteOtherAdmin", UserRole.ADMIN, None),
+        "admin": user("DeleteAdmin", "org_admin"),
+        "other_admin": user("DeleteOtherAdmin", "org_admin"),
         # One dependent record per category the endpoint has to get right.
         "clean": user("DeleteClean"),
         "messenger": user("DeleteMessenger"),
@@ -156,8 +154,7 @@ def world(db):
     db.add(Notification(user_id=people["notified"].id, title="Hi", message="body"))
 
     # project_members.user_id -> CASCADE (not a blocker)
-    db.add(ProjectMember(project_id=project.id, user_id=people["member"].id,
-                         role_on_project=UserRole.ENGINEER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=people["member"].id, is_active=True))
 
     # engineer_profiles.user_id -> CASCADE (not a blocker)
     db.add(EngineerProfile(user_id=people["has_profile"].id, discipline=EngineerDiscipline.CIVIL))

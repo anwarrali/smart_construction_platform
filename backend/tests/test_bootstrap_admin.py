@@ -11,8 +11,9 @@ from app.core.deps import get_current_user
 from app.core.security import verify_password
 from app.db.bootstrap_admin import BootstrapConfig, bootstrap_admin
 from app.models.audit_log import AuditLog
-from app.models.enums import UserRole, UserStatus
+from app.models.enums import UserStatus
 from app.models.rate_limit import RateLimitHit
+from app.models.rbac import Role
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 
@@ -49,6 +50,10 @@ class QueryResult:
         return 0
 
 
+#: The undeletable office administrator role, as the stub session reports it.
+ADMIN_ROLE_ID = uuid.uuid4()
+
+
 class BootstrapSession:
     def __init__(self, *, existing=None, admins=None, user_count=0):
         self.existing = existing
@@ -58,12 +63,18 @@ class BootstrapSession:
         self.added = []
         self.commits = 0
 
+    def execute(self, *args, **kwargs):
+        # The advisory lock `bootstrap_admin` takes first; a stub has nobody to wait for.
+        return None
+
     def query(self, entity):
         if entity is User:
             self.user_queries += 1
             if self.user_queries == 1:
                 return QueryResult(one=self.existing)
             return QueryResult(all_items=self.admins)
+        if entity is Role.id:
+            return QueryResult(all_items=[(ADMIN_ROLE_ID,)])
         return QueryResult(scalar_value=self.user_count)
 
     def add(self, entity):
@@ -112,7 +123,7 @@ def stand_in_office_role(monkeypatch):
     handed a role id so the credential flow runs as it would after that step.
     """
     def assign(_db, user):
-        user.org_role_id = uuid.uuid4()
+        user.org_role_id = ADMIN_ROLE_ID
         user.is_internal = True
 
     monkeypatch.setattr("app.db.bootstrap_admin._assign_administrator_role", assign)
@@ -143,12 +154,13 @@ def pending_admin(password="OriginalPass12345"):
         email="admin@example.com",
         full_name="Stage Administrator",
         hashed_password=hash_password(password),
-        role=UserRole.ADMIN,
         status=UserStatus.PENDING,
         is_email_verified=True,
         is_superuser=True,
         must_change_password=True,
         invitation_accepted=False,
+        org_role_id=ADMIN_ROLE_ID,
+        is_internal=True,
     )
 
 
@@ -162,7 +174,9 @@ def test_fresh_bootstrap_hash_authenticates_and_wrong_password_is_rejected(migra
         SimpleNamespace(username=user.email, password="SafeStagePass12345"),
         AuthSession(user),
     )
-    assert token["role"] == "admin"
+    # Authorization is resolved from the role on every request, never carried
+    # in the token.
+    assert "role" not in token
     assert user.must_change_password is True
 
     with pytest.raises(HTTPException) as exc:
@@ -224,7 +238,7 @@ def test_explicit_recovery_resets_only_pending_bootstrap_admin_and_audits(migrat
 
 def test_recovery_cannot_reset_an_ordinary_user(migration_head):
     user = pending_admin()
-    user.role = UserRole.OWNER
+    user.org_role_id = uuid.uuid4()  # some office role other than administration
     user.is_superuser = False
     db = BootstrapSession(existing=user, admins=[], user_count=1)
 

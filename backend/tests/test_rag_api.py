@@ -30,7 +30,7 @@ from app.db.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.enums import (
-    DocumentType, EngineerDiscipline, ProjectStatus, TaskStatus, UserRole, UserStatus,
+    DocumentType, EngineerDiscipline, ProjectStatus, TaskStatus, UserStatus,
 )
 from app.models.project import Project, ProjectMember
 from app.models.rbac import ProjectParty
@@ -152,10 +152,8 @@ def world(db, tmp_path):
             full_name=f"{name}{suffix}",
             email=f"{name.lower()}.{suffix}@constro.io",
             hashed_password=hash_password(PASSWORD),
-            role=role,
             status=UserStatus.ACTIVE,
-            engineer_affiliation="external_consultant" if discipline else None,
-        ))
+        ), role)
         db.add(person)
         db.flush()
         if discipline:
@@ -163,10 +161,10 @@ def world(db, tmp_path):
             db.flush()
         return person
 
-    manager = user("Manager", UserRole.PROJECT_MANAGER)
-    owner = user("Owner", UserRole.OWNER)
-    outsider = user("Outsider", UserRole.PROJECT_MANAGER)
-    consultant = user("Consult", UserRole.ENGINEER, EngineerDiscipline.ELECTRICAL)
+    manager = user("Manager", "project_manager")
+    owner = user("Owner", "client_representative")
+    outsider = user("Outsider", "project_manager")
+    consultant = user("Consult", "senior_engineer", EngineerDiscipline.ELECTRICAL)
 
     def project(name, manager_user):
         item = Project(
@@ -180,8 +178,7 @@ def world(db, tmp_path):
     project_a = project("Alpha", manager)
     project_b = project("Beta", outsider)
     db.add(ProjectMember(
-        project_id=project_a.id, user_id=consultant.id,
-        role_on_project=UserRole.ENGINEER, is_active=True,
+        project_id=project_a.id, user_id=consultant.id, is_active=True,
     ))
     # The client, recorded as the external party they are. Without this the
     # owner is an external participant with no party, which `document_access`
@@ -195,8 +192,7 @@ def world(db, tmp_path):
     db.add(client_party)
     db.flush()
     db.add(ProjectMember(
-        project_id=project_a.id, user_id=owner.id,
-        role_on_project=UserRole.OWNER, is_active=True, party_id=client_party.id,
+        project_id=project_a.id, user_id=owner.id, is_active=True, party_id=client_party.id,
     ))
     db.flush()
 

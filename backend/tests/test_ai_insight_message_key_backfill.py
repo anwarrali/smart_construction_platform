@@ -21,7 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.ifc import AIInsight, IFCModelGroup, IFCModelVersion
 from app.models.project import Project
 from app.models.user import User
@@ -121,12 +121,12 @@ def world(db):
 
     def user(name, role):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-                                           hashed_password="x", role=role, status=UserStatus.ACTIVE))
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
-    manager = user("BackfillPm", UserRole.PROJECT_MANAGER)
-    owner = user("BackfillOwner", UserRole.OWNER)
+    manager = user("BackfillPm", "project_manager")
+    owner = user("BackfillOwner", "client_representative")
     db.flush()
 
     project = Project(name=f"Backfill Project {suffix}", status=ProjectStatus.ACTIVE,

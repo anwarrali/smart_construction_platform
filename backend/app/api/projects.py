@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from app.db.database import get_db
 from app.models.user import User, EngineerProfile
 from app.models.enums import (
-    UserRole, UserStatus, EngineerDiscipline, CostValidationStatus, MediaType,
+    UserStatus, EngineerDiscipline, CostValidationStatus, MediaType,
     TaskStatus, TaskPriority, IssueStatus, IssueSeverity, ProjectStatus,
     DesignChangeStatus,
 )
@@ -36,7 +36,6 @@ from app.schemas.project import (
 )
 from app.schemas.user import UserCreateResponse, UserOut
 from app.core.deps import (
-    CONSULTANT_AFFILIATION,
     get_current_user,
     get_project_or_403,
     user_has_project_access,
@@ -51,6 +50,7 @@ from app.services.authorization import (
 from app.models.notification import Notification
 from app.models.enums import NotificationType
 from app.services.consultant_approval_service import normalize_discipline
+from app.services.task_assignment import NOT_A_REVIEWER, assignee_refusal, reviewer_refusal
 from app.services.project_view_service import record_visit, visit_boundary
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -340,7 +340,6 @@ def create_project(
             db,
             project_id=new_project.id,
             user_id=new_project.owner_id,
-            role_on_project=UserRole.OWNER,
         )
 
     if new_project.project_manager_id:
@@ -348,7 +347,6 @@ def create_project(
             db,
             project_id=new_project.id,
             user_id=new_project.project_manager_id,
-            role_on_project=UserRole.PROJECT_MANAGER,
         )
 
     recipients = {new_project.owner_id, new_project.project_manager_id} - {None, current_user.id}
@@ -405,7 +403,6 @@ def update_project(
             db,
             project_id=project.id,
             user_id=project_data.owner_id,
-            role_on_project=UserRole.OWNER,
         )
 
     if project_data.project_manager_id is not None:
@@ -419,7 +416,6 @@ def update_project(
                     db,
                     project_id=project.id,
                     user_id=project_data.project_manager_id,
-                    role_on_project=UserRole.PROJECT_MANAGER,
                 )
                 db.add(Notification(user_id=project_data.project_manager_id, title="Project Assignment",
                     message=f"You have been assigned to {project.name}.", type=NotificationType.SYSTEM,
@@ -486,29 +482,16 @@ def update_project_approval_workflow(
         desired.update((reviewer_id, discipline) for reviewer_id in reviewer_ids)
 
     reviewer_ids = {user_id for user_id, _ in desired}
-    eligible_ids = {
-        row[0] for row in db.query(ProjectMember.user_id).join(
-            User, User.id == ProjectMember.user_id
-        ).filter(
+    memberships = {
+        member.user_id: member for member in db.query(ProjectMember).filter(
             ProjectMember.project_id == project_id,
             ProjectMember.user_id.in_(reviewer_ids),
             ProjectMember.is_active == True,
-            User.status == UserStatus.ACTIVE,
-            # Office staff, and nobody else: naming a reviewer is naming who
-            # carries the office's review authority on this project. Was
-            # "role is ENGINEER and affiliation is external_consultant", which
-            # is the retired Consultant Engineer identity — under the confirmed
-            # direction the office *is* the consultant, so its own people are
-            # the candidates and `task.review` (never_external) is what they
-            # must hold.
-            User.is_internal.is_(True),
         ).all()
-    } if reviewer_ids else set()
-    if eligible_ids != reviewer_ids:
-        raise HTTPException(
-            status_code=422,
-            detail="Every reviewer must be an active Consultant Engineer member of this project",
-        )
+    } if reviewer_ids else {}
+    for reviewer_id in reviewer_ids:
+        if reviewer_refusal(db, project_id, memberships.get(reviewer_id), db.get(User, reviewer_id)):
+            raise HTTPException(status_code=422, detail=NOT_A_REVIEWER)
 
     existing_rows = list(project.consultant_reviewer_assignments)
     existing = {(item.user_id, item.discipline) for item in existing_rows}
@@ -607,34 +590,27 @@ def get_available_engineers(
 def get_available_team_members(
     project_id: uuid.UUID,
     search: Optional[str] = None,
-    role: Optional[UserRole] = None,
+    role_id: Optional[uuid.UUID] = None,
     discipline: Optional[EngineerDiscipline] = None,
-    affiliation: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Backend-filtered active Engineers and Consultants eligible for a project."""
+    """Active people who may be staffed onto this project, filtered server-side.
+
+    Who may be staffed is `rbac.staffable_filter` — active, and not parked on a
+    role that exists only to hold history. The filters narrow that list by the
+    office role (`role_id`), the specialist discipline, and a search over name,
+    email, firm, office role name and discipline. They used to be the retired
+    enum and affiliation strings, which knew nothing of a role an office made.
+    """
     # Same staffing picker, same gate as `available-engineers` above.
     manageable_project(db, current_user, project_id, "project.manage_members")
-    if role is not None and role not in {UserRole.ENGINEER, UserRole.CONSULTANT}:
-        raise HTTPException(status_code=400, detail="Eligible team roles are Engineer and Consultant")
     assigned_ids = db.query(ProjectMember.user_id).filter(
         ProjectMember.project_id == project_id, ProjectMember.is_active == True
     )
-    # A consultant is either an account whose global role is Consultant, or an
-    # Engineer account marked as an external consultant. Only the second form was
-    # listed here, so a Consultant account an administrator had created could
-    # never be picked for a project even though the assignment endpoint accepts it.
-    consultant_user = or_(
-        User.role == UserRole.CONSULTANT,
-        and_(User.role == UserRole.ENGINEER, User.engineer_affiliation == CONSULTANT_AFFILIATION),
-    )
-    # Who may be staffed onto a project, asked once and in the new model:
-    # active, and not parked on a role that exists only to hold history. This
-    # used to read `User.role.in_([ENGINEER, CONSULTANT])`, which meant an
-    # office could not put its own General Manager or Document Controller on a
-    # project — the candidate list only knew two of six retired enum values.
-    query = db.query(User).outerjoin(EngineerProfile).filter(
+    query = db.query(User).outerjoin(EngineerProfile).outerjoin(
+        Role, Role.id == User.org_role_id
+    ).filter(
         rbac.staffable_filter(db),
         ~User.id.in_(assigned_ids),
     )
@@ -644,22 +620,45 @@ def get_available_team_members(
             User.full_name.ilike(term),
             User.email.ilike(term),
             User.organization.ilike(term),
-            User.engineer_affiliation.ilike(term),
-            cast(User.role, String).ilike(term),
+            Role.name_en.ilike(term),
+            Role.name_ar.ilike(term),
             cast(EngineerProfile.discipline, String).ilike(term),
         ))
-    if role == UserRole.CONSULTANT:
-        # Selecting on affiliation alone also matched Workers who carry the
-        # external-consultant affiliation. Assigning one of those as a Consultant
-        # was then rejected as a role mismatch by POST /members.
-        query = query.filter(consultant_user)
-    elif role == UserRole.ENGINEER:
-        query = query.filter(User.role == UserRole.ENGINEER, User.engineer_affiliation != CONSULTANT_AFFILIATION)
+    if role_id:
+        query = query.filter(User.org_role_id == role_id)
     if discipline:
         query = query.filter(EngineerProfile.discipline == discipline)
-    if affiliation:
-        query = query.filter(User.engineer_affiliation == affiliation)
     return query.order_by(User.full_name).limit(100).all()
+
+
+@router.get("/{project_id}/eligible-members", response_model=List[uuid.UUID])
+def get_eligible_members(
+    project_id: uuid.UUID,
+    purpose: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The members of this project who qualify for `purpose`, as user ids.
+
+    `task_assignee` — may be given a task (`assignee_refusal`); `reviewer` —
+    may be named a reviewer (`reviewer_refusal`). The same rules the assigning
+    endpoints apply, so a picker built from this never offers somebody the
+    server then refuses. The interface used to approximate these from role
+    names, which said nothing about a role an office had created.
+    """
+    rules = {"task_assignee": assignee_refusal, "reviewer": reviewer_refusal}
+    rule = rules.get(purpose)
+    if rule is None:
+        raise HTTPException(status_code=400, detail="purpose must be task_assignee or reviewer")
+    if not user_has_project_access(db, current_user, project_id):
+        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    members = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id, ProjectMember.is_active == True,
+    ).all()
+    return [
+        member.user_id for member in members
+        if rule(db, project_id, member, db.get(User, member.user_id)) is None
+    ]
 
 
 @router.post("/{project_id}/members", response_model=ProjectMemberOut)
@@ -683,55 +682,20 @@ def add_project_member(
             status_code=400,
             detail="This account cannot be assigned to a project",
         )
-    # The configurable role, when the client sent one. Everything below still
-    # writes `role_on_project` so the legacy column stays truthful until the
-    # contract migration drops it.
+    # The configurable role, when the client sent one. Who may staff a project
+    # is `project.manage_members`, already checked by `manageable_project`;
+    # `_validated_project_role` enforces the rule that matters here — an
+    # internal-only role cannot be given to somebody taking part for an outside
+    # party.
     project_role = _validated_project_role(db, data.project_role_id, data.party_id, project_id)
-    # `role_on_project` is the retired column. It is still NOT NULL, so it is
-    # still written — derived from the account rather than asked for, because
-    # nothing reads it to make a decision any more.
-    #
-    # What used to stand here was two branches on the *actor's* legacy role: a
-    # project manager could add only Engineers and Consultants and only to the
-    # project they managed, an administrator could add one of four fixed enum
-    # values, and both demanded the requested value match the account's global
-    # role. Every one of those is the retired model. Who may staff a project is
-    # `project.manage_members`, already checked by `manageable_project` above;
-    # what somebody may be *on* the project is `_validated_project_role`, which
-    # enforces the rule that actually matters — an internal-only role cannot be
-    # given to somebody taking part for an outside party.
-    expected_project_role = (
-        UserRole.CONSULTANT
-        if user.role == UserRole.ENGINEER
-        and user.engineer_affiliation == "external_consultant"
-        else user.role
-    )
-    data.role_on_project = expected_project_role
 
     active_member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id,
         ProjectMember.user_id == user.id, ProjectMember.is_active == True).first()
     if active_member:
         raise HTTPException(status_code=409, detail="User is already an active member of this project")
-    # Site responsibility is a project assignment, not a job title. What used
-    # to stand here was `user.role != UserRole.ENGINEER or is_external_consultant`,
-    # and its first half was the retired model: it read the legacy enum on the
-    # *account*, so an office's own manager, architect or surveyor could not
-    # carry the site on a project the office itself runs — which is the whole
-    # point of a configurable role model. That half is gone.
-    #
-    # What replaces it is structural and reads the *membership*: somebody
-    # taking part for an outside party does not carry the office's site
-    # responsibility. That is the rule `update_member_assignment` has always
-    # enforced, and the rule the write below already applied — this guard
-    # simply stopped disagreeing with it.
-    #
-    # The `external_consultant` half is gone too, now that the product
-    # direction is settled: a consultant-side user is consulting-office staff.
-    # The office *is* the consultant, so an account carrying that retired
-    # affiliation is internal, and there is no reason it cannot carry the site
-    # on a project the office runs. `rbac_backfill` already migrates those
-    # accounts onto `senior_engineer`, an internal role, so the guard was the
-    # last place still treating them as outsiders.
+    # Site responsibility is a project assignment, not a job title, and it reads
+    # the *membership*: somebody taking part for an outside party does not carry
+    # the office's site responsibility. Any of the office's own people may.
     if data.is_site_engineer and data.party_id is not None:
         raise HTTPException(
             status_code=400,
@@ -742,7 +706,6 @@ def add_project_member(
         db,
         project_id=project_id,
         user_id=data.user_id,
-        role_on_project=data.role_on_project,
     )
     member.assignment_title = data.assignment_title
     member.project_discipline = data.project_discipline.value if data.project_discipline else (
@@ -971,12 +934,10 @@ def transfer_project_member(
         target_member = ProjectMember(
             project_id=data.target_project_id,
             user_id=user_id,
-            role_on_project=source_member.role_on_project,
         )
         db.add(target_member)
 
     target_member.is_active = True
-    target_member.role_on_project = source_member.role_on_project
     target_member.assignment_title = source_member.assignment_title
     target_member.project_discipline = source_member.project_discipline
     target_member.project_notes = source_member.project_notes

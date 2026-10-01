@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.database import SessionLocal, engine
 from app.models.audit_log import AuditLog
 from app.models.collaboration import OwnerRequest, ReminderEvent, ReminderRule
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.notification import Notification
 from app.models.project import Project
 from app.models.user import User
@@ -55,9 +55,9 @@ def scenario(db):
     """
     suffix = uuid4().hex[:10]
     owner = with_office_role(db, User(full_name="Reminder Owner", email=f"owner-{suffix}@test.local",
-                                      hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE))
+                                      hashed_password="x", status=UserStatus.ACTIVE), "client_representative")
     engineer = with_office_role(db, User(full_name="Reminder Engineer", email=f"eng-{suffix}@test.local",
-                                         hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE))
+                                         hashed_password="x", status=UserStatus.ACTIVE), "engineer")
     db.add_all([owner, engineer])
     db.flush()
     project = Project(name=f"Reminder Test Project {suffix}", status=ProjectStatus.ACTIVE,

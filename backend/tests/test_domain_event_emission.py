@@ -37,7 +37,7 @@ from app.models.ai_governance import DomainEvent
 from app.models.company import Company
 from app.models.design_change import DesignChange
 from app.models.enums import (
-    FieldSubmissionStatus, ProjectStatus, TaskStatus, UserRole, UserStatus,
+    FieldSubmissionStatus, ProjectStatus, TaskStatus, UserStatus,
 )
 from app.models.field_submission import FieldSubmission
 from app.models.issue import Issue
@@ -135,7 +135,7 @@ def world(db):
 
     manager = User(
         full_name=f"EventPm{suffix}", email=f"eventpm.{suffix}@constro.io",
-        hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE,
+        hashed_password="x", status=UserStatus.ACTIVE,
         company_id=office.id, org_role_id=role.id, is_internal=role.is_internal_only,
     )
     db.add(manager)
@@ -148,7 +148,7 @@ def world(db):
     db.add(project)
     db.flush()
     db.add(ProjectMember(
-        project_id=project.id, user_id=manager.id, role_on_project=manager.role,
+        project_id=project.id, user_id=manager.id,
         project_role_id=role.id, is_active=True,
     ))
     db.flush()
@@ -214,8 +214,8 @@ def test_a_rejected_issue_emits_nothing(db, world):
     from fastapi import HTTPException
     stranger = with_office_role(db, User(
         full_name="EventStranger", email=f"stranger.{uuid.uuid4().hex[:8]}@constro.io",
-        hashed_password="x", role=UserRole.ENGINEER, status=UserStatus.ACTIVE,
-    ))
+        hashed_password="x", status=UserStatus.ACTIVE,
+    ), "engineer")
     db.add(stranger)
     db.flush()
 

@@ -10,7 +10,7 @@ from app.models.project import Project
 from app.schemas.cost_validation import CostValidationOut, CostValidationCreate, CostValidationReview
 from app.core.deps import get_current_user, user_has_project_access, accessible_project_ids
 from app.services.authorization import has_permission, require
-from app.models.enums import CostValidationStatus, UserRole
+from app.models.enums import CostValidationStatus
 
 router = APIRouter(prefix="/cost-validations", tags=["Cost Validations"])
 
@@ -107,10 +107,7 @@ def review_cost_validation(
     if not val:
         raise HTTPException(status_code=404, detail="Cost validation request not found")
         
-    # `User.role` is never literally CONSULTANT — a Consultant Engineer is
-    # persisted as ENGINEER with `engineer_affiliation="external_consultant"`
-    # (see app.schemas.user.UserCreateByAdmin) — so this must check
-    # `is_consultant_engineer`, matching app.api.design_changes.
+    # Certifying is `cost_validation.review` on this project, plus access to it.
     if not has_permission(
         db, current_user, "cost_validation.review", val.project_id
     ) or not user_has_project_access(db, current_user, val.project_id):

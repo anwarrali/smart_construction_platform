@@ -23,7 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.ifc import IFCElement, IFCModelGroup, IFCModelVersion
 from app.models.project import Project, ProjectMember
 from app.models.user import User
@@ -68,17 +68,16 @@ def uploaded(db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "IFC_GEOMETRY_ENABLED", True)
 
     manager = with_office_role(db, User(full_name="GeomPm", email=f"geompm-{suffix}@test.local",
-                                        hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+                                        hashed_password="x", status=UserStatus.ACTIVE), "project_manager")
     owner = with_office_role(db, User(full_name="GeomOwner", email=f"geomowner-{suffix}@test.local",
-                                      hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE))
+                                      hashed_password="x", status=UserStatus.ACTIVE), "client_representative")
     db.add_all([manager, owner])
     db.flush()
     project = Project(name=f"Geometry Guard {suffix}", status=ProjectStatus.ACTIVE,
                       owner_id=owner.id, project_manager_id=manager.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMember(project_id=project.id, user_id=manager.id,
-                         role_on_project=UserRole.PROJECT_MANAGER, is_active=True))
+    db.add(ProjectMember(project_id=project.id, user_id=manager.id, is_active=True))
     group = IFCModelGroup(project_id=project.id, name=f"Group {suffix}", created_by_id=manager.id)
     db.add(group)
     db.flush()

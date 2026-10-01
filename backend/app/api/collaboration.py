@@ -16,7 +16,7 @@ from app.models.collaboration import (
     ReminderRule, SiteVisit, SiteVisitParticipant,
 )
 from app.models.design_change import DesignChange, DesignChangeAffectedDiscipline
-from app.models.enums import DesignChangeStatus, IssueStatus, NotificationType, TaskStatus, UserRole
+from app.models.enums import DesignChangeStatus, IssueStatus, NotificationType, TaskStatus
 from app.models.ifc import AIInsight
 from app.models.issue import Issue
 from app.models.message import Conversation, Message
@@ -130,7 +130,7 @@ def _route_owner_request(db: Session, item: OwnerRequest) -> uuid.UUID | None:
         ProjectMember.project_id == item.project_id, ProjectMember.is_active == True,
     ).all()
     candidates = [{
-        "id": member.user_id, "role": member.role_on_project.value,
+        "id": member.user_id, "role": rbac.member_role_code(db, member),
         "discipline": member.project_discipline or (
             member.user.engineer_profile.discipline.value if member.user.engineer_profile else None
         ), "active": member.is_active,

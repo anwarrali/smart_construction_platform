@@ -38,7 +38,7 @@ from app.core.config import settings
 from app.db.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
-from app.models.enums import DocumentType, ProjectStatus, UserRole, UserStatus
+from app.models.enums import DocumentType, ProjectStatus, UserStatus
 from app.models.ingestion import IngestedFile
 from app.models.project import Project, ProjectMember
 from app.models.user import User
@@ -98,11 +98,11 @@ def world(db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "RAG_ENABLED", True)
 
     manager = with_office_role(db, User(full_name="RagPm", email=f"ragpm-{suffix}@example.com",
-                                        hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+                                        hashed_password="x", status=UserStatus.ACTIVE), "project_manager")
     outsider = with_office_role(db, User(full_name="RagOther", email=f"ragother-{suffix}@example.com",
-                                         hashed_password="x", role=UserRole.PROJECT_MANAGER, status=UserStatus.ACTIVE))
+                                         hashed_password="x", status=UserStatus.ACTIVE), "project_manager")
     owner = with_office_role(db, User(full_name="RagOwner", email=f"ragowner-{suffix}@example.com",
-                                      hashed_password="x", role=UserRole.OWNER, status=UserStatus.ACTIVE))
+                                      hashed_password="x", status=UserStatus.ACTIVE), "client_representative")
     db.add_all([manager, outsider, owner])
     db.flush()
 
@@ -113,10 +113,8 @@ def world(db, tmp_path, monkeypatch):
     db.add_all([project, other])
     db.flush()
     db.add_all([
-        ProjectMember(project_id=project.id, user_id=manager.id,
-                      role_on_project=UserRole.PROJECT_MANAGER, is_active=True),
-        ProjectMember(project_id=other.id, user_id=outsider.id,
-                      role_on_project=UserRole.PROJECT_MANAGER, is_active=True),
+        ProjectMember(project_id=project.id, user_id=manager.id, is_active=True),
+        ProjectMember(project_id=other.id, user_id=outsider.id, is_active=True),
     ])
     db.commit()
     try:

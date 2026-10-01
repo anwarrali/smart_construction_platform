@@ -29,7 +29,7 @@ from app.api.projects import delete_project
 from app.core.permission_catalogue import BY_CODE
 from app.core.role_templates import TEMPLATES
 from app.db.database import SessionLocal
-from app.models.enums import ProjectStatus, UserRole, UserStatus
+from app.models.enums import ProjectStatus, UserStatus
 from app.models.permission import UserPermissionOverride
 from app.models.project import Project, ProjectMember
 from app.models.user import User
@@ -58,21 +58,20 @@ def db():
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
+    def user(name, role):
         person = with_office_role(db, User(
             full_name=name, email=f"{name.lower()}-{suffix}@test.local",
-            hashed_password="x", role=role, status=UserStatus.ACTIVE,
-            engineer_affiliation=affiliation,
-        ))
+            hashed_password="x", status=UserStatus.ACTIVE,
+        ), role)
         db.add(person)
         return person
 
     people = {
-        "admin": user("DelAdmin", UserRole.ADMIN),
-        "manager": user("DelPm", UserRole.PROJECT_MANAGER),
-        "engineer": user("DelEngineer", UserRole.ENGINEER, "internal_engineer"),
-        "contractor": user("DelContractor", UserRole.ENGINEER, "main_contractor"),
-        "owner": user("DelOwner", UserRole.OWNER),
+        "admin": user("DelAdmin", "org_admin"),
+        "manager": user("DelPm", "project_manager"),
+        "engineer": user("DelEngineer", "engineer"),
+        "contractor": user("DelContractor", "contractor_representative"),
+        "owner": user("DelOwner", "client_representative"),
     }
     db.flush()
 
@@ -88,8 +87,7 @@ def world(db):
     db.flush()
     for person in (people["manager"], people["engineer"], people["contractor"]):
         db.add(ProjectMember(
-            project_id=project.id, user_id=person.id,
-            role_on_project=person.role, is_active=True,
+            project_id=project.id, user_id=person.id, is_active=True,
         ))
     db.flush()
     people["project"] = project
@@ -152,26 +150,15 @@ def test_deletion_is_project_scoped_office_only_and_never_external(db):
 
 # --- who holds it ------------------------------------------------------------
 
-def test_only_roles_that_could_already_delete_hold_it(db):
-    """The regression the dataset could not catch.
+def test_only_the_office_administration_templates_hold_it(db):
+    """Deleting a project belongs to office administration, by name.
 
-    `technical_director` inherits the administrator's catalogue defaults but
-    provisions accounts whose retired role is PROJECT_MANAGER, so
-    `is_admin(user.role)` has always answered False for it. No account holds
-    that template, so an equivalence run over real data would have reported zero
-    differences while the template silently gained the ability to delete every
-    project in the office.
+    `technical_director` starts from office administration and declines
+    `project.delete` explicitly; no account holding it could ever delete a
+    project, and a template edit must not quietly hand it that power.
     """
     granting = {t.code for t in TEMPLATES if CODE in t.permissions()}
-    assert granting, "no template grants project.delete"
-    for template in TEMPLATES:
-        if CODE in template.permissions():
-            assert template.legacy_role == "ADMIN", (
-                f"{template.code} grants {CODE} but provisions accounts whose "
-                f"retired role is {template.legacy_role}, which could not delete "
-                "a project before this change"
-            )
-    assert "technical_director" not in granting
+    assert granting == {"org_admin", "office_director"}
 
 
 # --- the endpoint ------------------------------------------------------------

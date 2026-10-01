@@ -27,7 +27,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.database import SessionLocal
 from app.models.device_token import DeviceToken
 from app.models.enums import (
-    DevicePlatform, NotificationType, ProjectStatus, UserRole, UserStatus,
+    DevicePlatform, NotificationType, ProjectStatus, UserStatus,
 )
 from app.models.notification import Notification
 from app.models.project import Project, ProjectMember
@@ -67,9 +67,8 @@ def people(db):
             full_name=name,
             email=f"{name.lower()}.{suffix}@constro.io",
             hashed_password="x",
-            role=UserRole.PROJECT_MANAGER,
             status=UserStatus.ACTIVE,
-        ))
+        ), "project_manager")
         db.add(person)
         return person
 
@@ -439,9 +438,6 @@ def test_project_notification_reaches_the_team_but_not_the_actor(db, people):
     db.add(ProjectMember(
         project_id=project.id,
         user_id=member.id,
-        # NOT NULL, and there is no default: a membership without a role on the
-        # project is not a membership.
-        role_on_project=UserRole.PROJECT_MANAGER,
         is_active=True,
     ))
     db.flush()
@@ -498,9 +494,8 @@ def committed_user(db):
         full_name="PushBoundary",
         email=f"pushboundary.{uuid.uuid4().hex[:10]}@constro.io",
         hashed_password="x",
-        role=UserRole.PROJECT_MANAGER,
         status=UserStatus.ACTIVE,
-    ))
+    ), "project_manager")
     db.add(person)
     db.commit()
     try:

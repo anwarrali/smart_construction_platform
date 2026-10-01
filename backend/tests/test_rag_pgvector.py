@@ -26,7 +26,7 @@ from app.core.config import settings
 from app.db.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
-from app.models.enums import DocumentType, ProjectStatus, UserRole, UserStatus
+from app.models.enums import DocumentType, ProjectStatus, UserStatus
 from app.models.project import Project
 from app.models.user import User
 from app.services.rag import store as store_module
@@ -60,8 +60,8 @@ def world(db):
     """Flush-only. The `db` fixture's rollback is the whole teardown."""
     suffix = uuid4().hex[:10]
     user = with_office_role(db, User(full_name="VecPm", email=f"vecpm-{suffix}@example.com",
-                                     hashed_password="x", role=UserRole.PROJECT_MANAGER,
-                                     status=UserStatus.ACTIVE))
+                                     hashed_password="x",
+                                     status=UserStatus.ACTIVE), "project_manager")
     db.add(user)
     db.flush()
     project = Project(name=f"Vector {suffix}", status=ProjectStatus.ACTIVE,

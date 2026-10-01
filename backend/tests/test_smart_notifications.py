@@ -17,7 +17,7 @@ from app.db.database import SessionLocal
 from app.models.collaboration import ReminderEvent
 from app.models.enums import (
     IssueSeverity, IssueStatus, NotificationType, ProjectStatus,
-    TaskStatus, UserRole, UserStatus,
+    TaskStatus, UserStatus,
 )
 from app.models.issue import Issue
 from app.models.notification import Notification
@@ -54,17 +54,16 @@ def db():
 def world(db):
     suffix = uuid4().hex[:10]
 
-    def user(name, role, affiliation=None):
+    def user(name, role):
         person = with_office_role(db, User(full_name=name, email=f"{name.lower()}.{suffix}@constro.io",
-                                           hashed_password="x", role=role, status=UserStatus.ACTIVE,
-                                           engineer_affiliation=affiliation))
+                                           hashed_password="x", status=UserStatus.ACTIVE), role)
         db.add(person)
         return person
 
     people = {
-        "manager": user("SnPm", UserRole.PROJECT_MANAGER),
-        "engineer": user("SnEngineer", UserRole.ENGINEER, "main_contractor"),
-        "other": user("SnOther", UserRole.ENGINEER, "main_contractor"),
+        "manager": user("SnPm", "project_manager"),
+        "engineer": user("SnEngineer", "contractor_representative"),
+        "other": user("SnOther", "contractor_representative"),
     }
     db.flush()
     project = Project(name=f"Smart Notify {suffix}", status=ProjectStatus.ACTIVE,
@@ -74,8 +73,7 @@ def world(db):
     db.add_all([project, other_project])
     db.flush()
     for person in (people["engineer"], people["other"]):
-        db.add(ProjectMember(project_id=project.id, user_id=person.id,
-                             role_on_project=UserRole.ENGINEER, is_active=True))
+        db.add(ProjectMember(project_id=project.id, user_id=person.id, is_active=True))
     db.flush()
     people["project"] = project
     people["other_project"] = other_project

@@ -8,7 +8,6 @@ This ensures Alembic detects all tables during autogeneration.
 from app.db.database import Base
 
 from app.models.enums import (
-    UserRole,
     EngineerDiscipline,
     UserStatus,
     ProjectStatus,
@@ -44,7 +43,7 @@ from app.models.company import Company
 from app.models.password_reset import PasswordResetToken
 from app.models.user import User, EngineerProfile
 from app.models.project import Project, ProjectMember, ProjectConsultantReviewer, ProjectViewState
-from app.models.permission import ConsultantEngineerScope, RolePermissionOverride, UserPermissionOverride
+from app.models.permission import ConsultantEngineerScope, UserPermissionOverride
 from app.models.rbac import (
     Role,
     RolePermission,
