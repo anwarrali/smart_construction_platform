@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from collections import Counter
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ from app.api.tasks import _is_project_manager, _next_task_code
 from app.api.milestones import _next_code as _next_milestone_code
 from app.core.config import settings
 from app.core.deps import get_current_user
-from app.db.database import SessionLocal, get_db
+from app.db.database import get_db
 from app.models.enums import IssueSeverity, IssueStatus, TaskPriority, TaskStatus
 from app.models.ifc import (
     IFCChangeRecord, IFCComparison, IFCCoordinationFinding, IFCElement, IFCEntityLink,
@@ -42,17 +42,10 @@ from app.services.file_storage import save_private_upload
 from app.services.private_storage import private_storage
 from app.services.ifc_parser import content_hash
 from app.services.ifc_policy import can_ifc, friendly_ifc_error
-from app.services.ifc_processing_service import INTERFERENCE_FINDING_TYPE, compare_versions, process_version, run_interference_analysis
-from app.services.ifc_geometry_service import generate_geometry
+from app.services.ifc_processing_service import INTERFERENCE_FINDING_TYPE, compare_versions, process_version
 from app.services.authorization import require
 from app.services.ingestion import ifc_bridge
-# The bounded processing pool moved to `app.services.processing_pool` when the
-# unified ingestion pipeline needed the same ceiling. Imported rather than
-# re-created, because two pools would silently double the memory bound the one
-# exists to enforce; re-exported under the names this module has always used,
-# so callers and tests are unaffected. The full reasoning is in that module.
-from app.services.processing_pool import processing_pool, reset_processing_pool
-from app.services.processing_pool import submit as _submit
+from app.services.jobs import enqueue
 
 router = APIRouter(prefix="/projects/{project_id}/ifc", tags=["IFC Intelligence"])
 
@@ -77,34 +70,20 @@ def _version(db: Session, project_id: uuid.UUID, version_id: uuid.UUID) -> IFCMo
         raise HTTPException(status_code=404, detail="IFC version not found")
     return item
 
-def _process_job(version_id: uuid.UUID, actor_id: uuid.UUID) -> None:
-    db = SessionLocal()
-    try:
-        process_version(db, version_id, actor_id)
-    finally:
-        db.close()
+def _background_process(db: Session, version_id: uuid.UUID, actor_id: uuid.UUID, project_id: uuid.UUID) -> None:
+    """Queue metadata extraction in the caller's transaction.
+
+    The job exists only if the upload commits. A second request while one is
+    still queued or running joins it rather than parsing the model twice.
+    """
+    enqueue(db, "ifc.process_version", {"version_id": version_id, "actor_id": actor_id},
+            dedupe_key=f"ifc.process:{version_id}", project_id=project_id)
 
 
-def _geometry_job(version_id: uuid.UUID) -> None:
-    db = SessionLocal()
-    try:
-        generate_geometry(db, version_id)
-        # Regenerating geometry produces fresh element extents, so the
-        # interference findings derived from them are rebuilt to match.
-        # Reviewed pairs keep their decision; see run_interference_analysis.
-        run_interference_analysis(db, version_id)
-    finally:
-        db.close()
-
-
-def _background_process(version_id: uuid.UUID, actor_id: uuid.UUID) -> None:
-    """Queue metadata extraction. Kept as the entry point the routes name."""
-    _submit(_process_job, version_id, actor_id)
-
-
-def _background_geometry(version_id: uuid.UUID) -> None:
+def _background_geometry(db: Session, version_id: uuid.UUID, project_id: uuid.UUID) -> None:
     """Queue tessellation and the interference pass that depends on it."""
-    _submit(_geometry_job, version_id)
+    enqueue(db, "ifc.generate_geometry", {"version_id": version_id},
+            dedupe_key=f"ifc.geometry:{version_id}", project_id=project_id)
 
 
 # `Content-Disposition` composition and object streaming moved to
@@ -195,7 +174,7 @@ def list_versions(project_id: uuid.UUID, model_id: uuid.UUID, db: Session = Depe
 
 @router.post("/models/{model_id}/versions", response_model=IFCVersionOut, status_code=202)
 async def upload_version(
-    project_id: uuid.UUID, model_id: uuid.UUID, background_tasks: BackgroundTasks,
+    project_id: uuid.UUID, model_id: uuid.UUID,
     file: UploadFile = File(...), title: str = Form(...), revision_code: str | None = Form(None),
     version_type: str = Form("DESIGN"), description: str | None = Form(None), discipline: str | None = Form(None),
     authoring_source: str | None = Form(None), parent_version_id: uuid.UUID | None = Form(None),
@@ -235,10 +214,10 @@ async def upload_version(
     # `services/ingestion/ifc_bridge.py` for why it cannot raise.
     ifc_bridge.register_version(db, item)
     record_audit(db, actor_id=current_user.id, action="ifc_version_uploaded", entity_type="ifc_model_version", entity_id=item.id, project_id=project_id, details={"hash": digest, "size": size, "version": next_number})
-    db.commit(); db.refresh(item)
     if settings.IFC_BACKGROUND_PROCESSING_ENABLED:
-        background_tasks.add_task(_background_process, item.id, current_user.id)
-    else:
+        _background_process(db, item.id, current_user.id, project_id)
+    db.commit(); db.refresh(item)
+    if not settings.IFC_BACKGROUND_PROCESSING_ENABLED:
         process_version(db, item.id, current_user.id); db.refresh(item)
     return item
 
@@ -289,10 +268,10 @@ def set_baseline_version(project_id: uuid.UUID, version_id: uuid.UUID, db: Sessi
 
 
 @router.post("/versions/{version_id}/retry", response_model=IFCVersionOut, status_code=202)
-def retry_version(project_id: uuid.UUID, version_id: uuid.UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def retry_version(project_id: uuid.UUID, version_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require(db, current_user, project_id, "MANAGE_VERSION"); item = _version(db, project_id, version_id)
     if item.processing_status != "FAILED": raise HTTPException(status_code=409, detail="Only failed IFC processing jobs can be retried")
-    background_tasks.add_task(_background_process, item.id, current_user.id); return item
+    _background_process(db, item.id, current_user.id, project_id); db.commit(); db.refresh(item); return item
 
 
 @router.get("/versions/{version_id}/download")
@@ -323,14 +302,14 @@ def geometry_status(project_id: uuid.UUID, version_id: uuid.UUID, db: Session = 
 
 
 @router.post("/versions/{version_id}/geometry/generate", status_code=202)
-def generate_version_geometry(project_id: uuid.UUID, version_id: uuid.UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def generate_version_geometry(project_id: uuid.UUID, version_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require(db, current_user, project_id, "UPLOAD"); item = _version(db, project_id, version_id)
     if item.processing_status not in {"READY", "READY_WITH_WARNINGS"}:
         raise HTTPException(status_code=409, detail="Metadata processing must finish before geometry generation")
     if item.geometry_status == "GEOMETRY_PROCESSING":
         return {"status": item.geometry_status, "message": "Geometry is already processing."}
-    item.geometry_status = "GEOMETRY_PROCESSING"; item.geometry_error = None; db.commit()
-    background_tasks.add_task(_background_geometry, item.id)
+    item.geometry_status = "GEOMETRY_PROCESSING"; item.geometry_error = None
+    _background_geometry(db, item.id, project_id); db.commit()
     return {"status": item.geometry_status, "message": "Geometry generation started."}
 
 

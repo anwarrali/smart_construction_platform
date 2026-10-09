@@ -131,8 +131,8 @@ def list_subscriptions(
     """Which domain events would wake which agents, and whether they will.
 
     The docstring here used to say nothing was wired to the dispatcher. That
-    stopped being true: `domain_event_dispatcher.process_event` calls
-    `agents.event_subscriber.safe_handle_event`, and every declared event type
+    stopped being true: `domain_event_dispatcher.process_event` queues an
+    `agents.handle_event` job, and every declared event type
     now has an emission site. What remains between "declared" and "running" is
     one operator switch, so that is what this reports — a client showing the
     subscription map needs to be able to say whether it describes what happens

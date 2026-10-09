@@ -51,7 +51,7 @@ POST /projects/{id}/files
        │  refused → 415/413/400,       ingested_files     ingestion_jobs
        │  nothing stored                    row               row
        │                                                       │
-   ┌───────────────────── on the shared bounded pool ──────────▼──────────┐
+   ┌───────────────────── on the durable job queue ────────────▼──────────┐
    │  ProcessorRegistry.select(file)                                      │
    │        │                                                             │
    │        ├─ validate()  ─ may this processor touch it?                 │
@@ -75,7 +75,7 @@ POST /projects/{id}/files
 | `services/ingestion/processors/` | pdf, office, ifc, zip_package, misc |
 | `services/ingestion/pipeline.py` | orchestration, transactions, background dispatch |
 | `services/ingestion/ifc_bridge.py` | IFC revisions made visible without being owned |
-| `services/processing_pool.py` | the bounded pool, **moved out of `api/ifc.py` and shared** |
+| `services/jobs/` | the durable job queue every heavy job runs on (see [JOBS.md](JOBS.md)) |
 | `api/downloads.py` | streaming + RFC 6266 headers, **moved out of `api/ifc.py` and shared** |
 
 ## 3. The record
@@ -203,8 +203,9 @@ INGESTION_ZIP_MAX_DEPTH=1
 ```
 
 There is deliberately **no** `INGESTION_MAX_CONCURRENT_PROCESSING`.
-`IFC_MAX_CONCURRENT_PROCESSING` governs the one shared pool; a second ceiling
-would silently double the memory bound the first exists to enforce.
+`IFC_MAX_CONCURRENT_PROCESSING` governs the one shared job queue, fleet-wide; a
+second ceiling would silently double the memory bound the first exists to
+enforce.
 
 ## 10. Migration
 

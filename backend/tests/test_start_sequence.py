@@ -113,3 +113,17 @@ def test_a_configured_administrator_takes_the_full_path(monkeypatch):
     monkeypatch.setattr(bootstrap, "bootstrap_admin", lambda db, config: calls.append(config.email) or "ok")
     assert bootstrap.main(["--if-configured"]) == 0
     assert calls == ["first.admin@example.com"]
+
+
+def test_compose_runs_a_dedicated_worker_and_keeps_jobs_off_the_api():
+    """Heavy work belongs to the `worker` service; the API must not also run it."""
+    compose = next((path for path in COMPOSE_CANDIDATES if path.exists()), None)
+    if compose is None:
+        pytest.skip("docker-compose.yml is not visible; mount the repository root at /repo")
+    text = compose.read_text(encoding="utf-8")
+    worker = re.search(r"^  worker:\n(.*?)(?=^  \S)", text, flags=re.M | re.S)
+    assert worker, "docker-compose.yml has no worker service"
+    assert "python -m app.worker" in worker.group(1)
+    assert "<<: *backend-env" in worker.group(1), "the worker must share the API's environment"
+    backend = re.search(r"^  backend:\n(.*?)(?=^  \S)", text, flags=re.M | re.S).group(1)
+    assert re.search(r"JOB_RUNNER_EMBEDDED: \$\{JOB_RUNNER_EMBEDDED:-false\}", backend)

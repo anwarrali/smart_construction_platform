@@ -168,9 +168,20 @@ IngestedFile
 ```
 
 1. A file is uploaded through `POST /projects/{id}/files`, which classifies it
-   and records what it extracted. Nothing is indexed automatically.
-2. `POST /rag/files/{id}/index` is called explicitly. It returns **202**: the
-   work is queued, not done.
+   and records what it extracted.
+2. Indexing is queued as a `rag.index_file` job (see [JOBS.md](JOBS.md)):
+   - **automatically**, when the ingestion pipeline settles the file READY or
+     PARTIAL with extracted text — enqueued in the same transaction that
+     commits that status, so a worker can never see the job before the file
+     (`pipeline._queue_indexing`, rule `rag.ingestion.should_auto_index`).
+     Not for a failed file, a file with no text, or a byte-identical copy of
+     an earlier file in the project. Off with `RAG_AUTO_INDEX_ENABLED=false`;
+   - **on request**, through `POST /rag/files/{id}/index`, which returns
+     **202**: the work is queued, not done. The manual retry for a file that
+     failed, or one the automatic rule skipped.
+
+   Both go through `submit_ingested_file_index`, so they share one job kind
+   and one dedupe key — a second request while one is live joins it.
 3. Permission — project access, then `document.view`, the same codes the
    unified file endpoints enforce. A file outside every project the caller can
    reach is a **404**, because confirming an id exists is itself information.
@@ -179,9 +190,10 @@ IngestedFile
    is refused *without the file being opened*. That refusal happens before the
    row is claimed, so an unindexable file keeps `NOT_INDEXED` and gets no
    error — a permanent property must not look like a retryable failure.
-5. The work runs on `services/processing_pool.py`, the **same bounded pool**
-   IFC parsing and file processing already share. `IFC_MAX_CONCURRENT_PROCESSING`
-   therefore remains one ceiling over all heavy work rather than one of several.
+5. The work runs on the durable job queue (`services/jobs/`, see
+   [JOBS.md](JOBS.md)), the **same queue** IFC parsing and file processing use.
+   `IFC_MAX_CONCURRENT_PROCESSING` therefore remains one ceiling over all heavy
+   work rather than one of several.
 6. Text is read back through `services/rag/text_source.py`, which **delegates
    to the ingestion processors** rather than reimplementing extraction. A PDF
    yields real pages; a Word or text file yields a single page 1, which is
@@ -595,10 +607,10 @@ Three scopes: `STALE` (default — only outdated vectors, the cheapest),
 `NOT_INDEXED` source is in none of them: re-indexing means indexing *again*,
 and doing it implicitly would spend credits on every file that ever landed.
 
-The endpoint returns as soon as the job row exists. The work runs on
-`services/processing_pool.py` — the *same* bounded pool IFC parsing, file
-processing and single-file indexing use, so `IFC_MAX_CONCURRENT_PROCESSING`
-remains one ceiling over all heavy work.
+The endpoint returns as soon as the job row exists. The work runs on the
+durable job queue — the *same* queue IFC parsing, file processing and
+single-file indexing use, so `IFC_MAX_CONCURRENT_PROCESSING` remains one
+ceiling over all heavy work.
 
 **No transaction spans the run.** Each source is committed as it finishes, so
 a crash at source 73 leaves 1–72 genuinely indexed. The job's counters are
@@ -686,13 +698,14 @@ PDFs, so extraction is genuinely exercised.
 - **No conversational memory.** Each question is independent.
 - **Document indexing is synchronous**; `POST /rag/documents/{id}/index` holds
   the request open for the duration. Ingested-file indexing is not — it runs on
-  the shared bounded pool.
+  the durable job queue.
 - **A process that dies mid-index** leaves the row in `INDEXING` until the
   reaper takes it back — within `RAG_INDEX_STALE_MINUTES`, or immediately with
   `?force=true`. See §13.
-- **No re-index on replacement.** Uploading a new version does not re-index
-  automatically; indexing is explicit by design, so nobody spends embedding
-  credits on every file that lands in a project.
+- **Library documents are not indexed automatically.** Files from the unified
+  ingestion pipeline are (`RAG_AUTO_INDEX_ENABLED`); a document uploaded to the
+  Documents library is still indexed on request through
+  `POST /rag/documents/{id}/index`.
 - **A re-index is per project.** There is no cross-project or platform-wide
   sweep, so a model change has to be actioned project by project.
 - **A run is not resumable mid-source.** An interrupted run keeps every source

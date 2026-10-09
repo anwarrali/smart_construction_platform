@@ -18,7 +18,7 @@ import zipfile
 from uuid import uuid4
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -130,7 +130,6 @@ def upload(db, world, *, filename, content, mime, project=None, user=None):
                         headers={"content-type": mime})
     return asyncio.run(ingestion_api.ingest_file(
         project_id=(project or world["project"]).id,
-        background_tasks=BackgroundTasks(),
         file=handle,
         db=db,
         current_user=user or world["manager"],
@@ -475,7 +474,7 @@ def test_a_retry_reuses_the_job_row_and_counts_the_attempt(db, world):
     assert result.status == state.PARTIAL
     retried = ingestion_api.retry_file(
         project_id=world["project"].id, file_id=result.id,
-        background_tasks=BackgroundTasks(), db=db, current_user=world["manager"],
+        db=db, current_user=world["manager"],
     )
     assert retried.queued is False
     assert retried.file.status == state.PARTIAL
@@ -489,7 +488,7 @@ def test_a_stranger_cannot_retry(db, world):
     with pytest.raises(HTTPException) as refusal:
         ingestion_api.retry_file(
             project_id=world["project"].id, file_id=result.id,
-            background_tasks=BackgroundTasks(), db=db, current_user=world["outsider"],
+            db=db, current_user=world["outsider"],
         )
     assert refusal.value.status_code == 403
 
@@ -546,7 +545,7 @@ def test_a_failed_file_can_be_retried_back_to_ready(db, world, monkeypatch):
     state_flag["fail"] = False
     retried = ingestion_api.retry_file(
         project_id=world["project"].id, file_id=result.id,
-        background_tasks=BackgroundTasks(), db=db, current_user=world["manager"],
+        db=db, current_user=world["manager"],
     )
     assert retried.file.status == state.READY
     assert retried.file.error is None

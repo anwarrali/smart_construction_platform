@@ -42,7 +42,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.database import SessionLocal
 from app.models.ingestion import IngestedFile, IngestionJob
-from app.services import processing_pool
+from app.services.jobs import enqueue
 from app.services.file_intelligence import text_sample
 from app.services.ingestion import state
 from app.services.ingestion.categories import FileCategory, classify_file
@@ -343,7 +343,25 @@ def run(db: Session, file: IngestedFile, *, depth: int = 0) -> IngestedFile:
         )
 
     _settle(db, file, job, outcome, started)
+    _queue_indexing(db, file)
     return file
+
+
+def _queue_indexing(db: Session, file: IngestedFile) -> None:
+    """Hand a file that now has text to RAG indexing, in this transaction.
+
+    Called once the run is settled and before the caller commits, so the job
+    becomes visible to a worker in the same commit as the READY status it
+    depends on — never before it. A failed or text-less file queues nothing;
+    the rule is `rag.ingestion.should_auto_index`.
+
+    Deferred import: the RAG package imports the ingestion processors to read
+    text back, and a module-level import here would close that cycle.
+    """
+    from app.services.rag import ingestion as rag_ingestion
+
+    if rag_ingestion.should_auto_index(file):
+        rag_ingestion.submit_ingested_file_index(db, file)
 
 
 def process_file(file_id: uuid.UUID) -> None:
@@ -367,9 +385,10 @@ def process_file(file_id: uuid.UUID) -> None:
         db.close()
 
 
-def submit(file_id: uuid.UUID) -> None:
-    """Hand the file to the shared bounded pool."""
-    processing_pool.submit(process_file, file_id)
+def submit(db: Session, file: IngestedFile) -> None:
+    """Queue the file's processing in the caller's transaction."""
+    enqueue(db, "ingestion.process_file", {"file_id": file.id},
+            dedupe_key=f"ingestion:{file.id}", project_id=file.project_id)
 
 
 def dispatch(db: Session, file: IngestedFile) -> IngestedFile:

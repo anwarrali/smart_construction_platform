@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.downloads import stored_file_response
@@ -119,7 +119,6 @@ def upload_constraints(
 @router.post("", response_model=IngestedFileOut, status_code=202)
 async def ingest_file(
     project_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -159,12 +158,11 @@ async def ingest_file(
         details={"category": item.file_category, "size": item.file_size_bytes,
                  "filename": item.original_filename},
     )
+    if settings.INGESTION_BACKGROUND_PROCESSING_ENABLED:
+        # Queued in this transaction: the job exists only if the upload does.
+        pipeline.submit(db, item)
     db.commit()
     db.refresh(item)
-    if settings.INGESTION_BACKGROUND_PROCESSING_ENABLED:
-        # Queued only after the commit: a background session opens its own
-        # transaction and would not see a row this one has not committed.
-        background_tasks.add_task(pipeline.submit, item.id)
     return _serialize(item)
 
 
@@ -262,7 +260,6 @@ def download_file(
 def retry_file(
     project_id: uuid.UUID,
     file_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -288,9 +285,9 @@ def retry_file(
         db, actor_id=current_user.id, action="file_reprocessed", entity_type="ingested_file",
         entity_id=item.id, project_id=project_id,
     )
-    db.commit()
-    db.refresh(item)
     queued = settings.INGESTION_BACKGROUND_PROCESSING_ENABLED
     if queued:
-        background_tasks.add_task(pipeline.submit, item.id)
+        pipeline.submit(db, item)
+    db.commit()
+    db.refresh(item)
     return IngestionRetryOut(file=_serialize(item), queued=queued)

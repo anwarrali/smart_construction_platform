@@ -53,7 +53,7 @@ from app.models.rag_job import (
     ACTIVE_STATUSES, STATUS_COMPLETED, STATUS_FAILED, STATUS_PARTIAL,
     STATUS_QUEUED, STATUS_RUNNING, RagIndexJob,
 )
-from app.services import processing_pool
+from app.services.jobs import enqueue
 from app.services.rag import ingestion
 from app.services.rag.ingestion import (
     STATUS_INDEXING, STATUS_READY,
@@ -453,15 +453,15 @@ def _settle(db: Session, job: RagIndexJob, status: str, started: float,
     db.commit()
 
 
-def submit_project_reindex(job_id: uuid.UUID) -> None:
-    """Hand the run to the shared bounded pool.
+def submit_project_reindex(db: Session, job: RagIndexJob) -> None:
+    """Queue the run on the durable job queue, in the caller's transaction.
 
-    The *same* pool IFC parsing, file processing and single-file indexing use,
-    so `IFC_MAX_CONCURRENT_PROCESSING` stays one ceiling over all heavy work
-    rather than one of several. A re-index that embedded hundreds of chunks in
-    the request path is exactly what this avoids.
+    The same queue IFC parsing, file processing and single-file indexing use,
+    so `IFC_MAX_CONCURRENT_PROCESSING` stays one ceiling over all heavy work.
+    The caller commits.
     """
-    processing_pool.submit(run_project_reindex, job_id)
+    enqueue(db, "rag.project_reindex", {"job_id": job.id},
+            dedupe_key=f"rag.reindex:{job.id}", project_id=job.project_id)
 
 
 # --- Stale recovery ---------------------------------------------------------
@@ -566,6 +566,7 @@ def recover_stale_jobs(db: Session) -> RecoveryReport:
             job.started_at = None
             job.failure_code = None
             job.failure_message = None
+            submit_project_reindex(db, job)
         report.jobs += 1
         report.details.append(f"ragindexjob:{job.id}")
 
@@ -577,11 +578,6 @@ def recover_stale_jobs(db: Session) -> RecoveryReport:
             "[RAG] recovered %s stranded indexing run(s) older than %s minutes: %s",
             report.total, settings.RAG_INDEX_STALE_MINUTES, ", ".join(report.details[:50]),
         )
-    # Re-queued jobs are handed back to the pool after the commit, so the pool
-    # worker sees a QUEUED row rather than one this transaction still holds.
-    for job in stale_jobs:
-        if job.status == STATUS_QUEUED:
-            submit_project_reindex(job.id)
     return report
 
 

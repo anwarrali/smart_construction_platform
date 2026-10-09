@@ -21,12 +21,14 @@ from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.user import User
 from app.services.agents.event_subscriber import (
-    SETTLED_STATUSES, _analysis_principal, handle_event, safe_handle_event,
+    SETTLED_STATUSES, _analysis_principal, handle_event,
 )
 from app.services.agents.notification_policy import (
     REVIEW_CONFIDENCE, URGENT_CONFIDENCE, decide_notification,
 )
 from app.services.domain_event_dispatcher import emit_domain_event
+from app.services.jobs.runner import run_pending
+from app.models.background_job import BackgroundJob
 from tests.office_roles import with_office_role
 
 
@@ -79,6 +81,7 @@ def _purge(db, project_id, user_ids):
     db.rollback()
     params = {"projects": [project_id], "users": list(user_ids)}
     for statement in (
+        "DELETE FROM background_jobs WHERE project_id = ANY(:projects)",
         "DELETE FROM agent_runs WHERE project_id = ANY(:projects)",
         "DELETE FROM ai_insight_sources WHERE project_id = ANY(:projects)",
         "DELETE FROM ai_insights WHERE project_id = ANY(:projects)",
@@ -99,13 +102,31 @@ def _purge(db, project_id, user_ids):
     db.commit()
 
 
-def emit(db, world, event_type="TASK_PROGRESS_CHANGED", actor=None):
-    return emit_domain_event(
+def emit(db, world, event_type="TASK_PROGRESS_CHANGED", actor=None, *, run_jobs=True):
+    """Emit an event, commit it, and run the analysis it queued.
+
+    Analysis is a background job now: the event commits with a queued
+    `agents.handle_event` job, and a worker runs it. `run_pending` is that
+    worker, in this thread, on this session's private queue.
+    """
+    event = emit_domain_event(
         db, project_id=world["project"].id, event_type=event_type,
         entity_type="TASK", entity_id=world["task"].id,
         actor_user_id=(actor or world["site_engineer"]).id,
         idempotency_key=f"{event_type}:{uuid4().hex}",
     )
+    db.commit()
+    if run_jobs:
+        run_pending()
+        db.expire_all()
+    return event
+
+
+def analysis_jobs(db, event):
+    return db.query(BackgroundJob).filter(
+        BackgroundJob.kind == "agents.handle_event",
+        BackgroundJob.payload["event_id"].astext == str(event.id),
+    ).all()
 
 
 def notifications(db, world):
@@ -148,10 +169,24 @@ def test_only_subscribed_agents_are_woken(db, world):
 def test_nothing_runs_when_the_feature_is_off(db, world, monkeypatch):
     """Off by default; this proves the switch actually gates it."""
     monkeypatch.setattr(settings, "AGENT_AUTO_ANALYSIS_ENABLED", False)
-    emit(db, world)
-    db.commit()
+    event = emit(db, world)
     assert db.query(AgentRunRecord).filter(
         AgentRunRecord.project_id == world["project"].id).count() == 0
+    assert analysis_jobs(db, event) == [], "nothing is even queued while the feature is off"
+
+
+def test_the_event_commits_with_its_analysis_queued_not_run(db, world):
+    """Analysis no longer runs inside the transaction that emitted the event."""
+    event = emit(db, world, run_jobs=False)
+    jobs = analysis_jobs(db, event)
+    assert [job.status for job in jobs] == ["QUEUED"]
+    assert db.query(AgentRunRecord).filter(
+        AgentRunRecord.project_id == world["project"].id).count() == 0
+    run_pending()
+    db.expire_all()
+    assert [job.status for job in analysis_jobs(db, event)] == ["SUCCEEDED"]
+    assert db.query(AgentRunRecord).filter(
+        AgentRunRecord.project_id == world["project"].id).count() > 0
 
 
 def test_the_feature_is_off_by_default():
@@ -213,17 +248,12 @@ def test_an_analysis_failure_does_not_fail_the_originating_operation(db, world, 
 
     monkeypatch.setattr(subscriber, "handle_event", explode)
     event = emit(db, world)
-    db.commit()
-    # The event still processed; the exception was contained.
+    # The event processed and committed; the analysis failed on its own, as a
+    # job, and is queued again with the error recorded.
     assert event.status == "PROCESSED_RULES_ONLY"
-
-
-def test_safe_handle_event_never_raises(db, world, monkeypatch):
-    import app.services.agents.event_subscriber as subscriber
-
-    monkeypatch.setattr(subscriber, "handle_event",
-                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
-    safe_handle_event(db, emit(db, world))  # must not raise
+    [job] = analysis_jobs(db, event)
+    assert job.status == "QUEUED" and job.attempts == 1
+    assert "analysis exploded" in job.last_error
 
 
 # --- Notification policy ----------------------------------------------------

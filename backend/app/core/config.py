@@ -80,11 +80,30 @@ class Settings(BaseSettings):
     IFC_AI_ANALYSIS_ENABLED: bool = os.getenv("IFC_AI_ANALYSIS_ENABLED", "false").lower() == "true"
     IFC_AI_MODEL: str = os.getenv("IFC_AI_MODEL", os.getenv("OPENAI_ANALYSIS_MODEL", "gpt-5.6-luna"))
     IFC_BACKGROUND_PROCESSING_ENABLED: bool = os.getenv("IFC_BACKGROUND_PROCESSING_ENABLED", "true").lower() == "true"
-    #: How many IFC parse/tessellation jobs may run at once. Each one spawns an
-    #: isolated child process holding a whole model in memory, so this is a
-    #: memory ceiling rather than a throughput dial; see `app.api.ifc`.
+    #: How many background jobs may run at once across every worker process —
+    #: IFC parsing and tessellation, ingestion, indexing, agent analysis. An IFC
+    #: job spawns a child holding a whole model in memory, so this is a memory
+    #: ceiling rather than a throughput dial; see `app.services.jobs.queue`.
     IFC_MAX_CONCURRENT_PROCESSING: int = int(os.getenv("IFC_MAX_CONCURRENT_PROCESSING", "2"))
     IFC_ENGINEER_UPLOAD_ENABLED: bool = os.getenv("IFC_ENGINEER_UPLOAD_ENABLED", "false").lower() == "true"
+    # --- Background jobs ----------------------------------------------------
+    # The durable queue heavy work runs on (app/services/jobs/). How many jobs
+    # run at once is IFC_MAX_CONCURRENT_PROCESSING, enforced across every
+    # worker process together rather than per process.
+    #: Which queue this process produces to and consumes from. A test session
+    #: or a separate tier sets its own so it never takes another's work.
+    JOB_QUEUE: str = os.getenv("JOB_QUEUE", "default")
+    #: Run the job runner inside the API process. Right for a single-container
+    #: deployment; set false where a dedicated worker (`python -m app.worker`)
+    #: runs instead, which is what docker-compose.yml does.
+    JOB_RUNNER_EMBEDDED: bool = os.getenv("JOB_RUNNER_EMBEDDED", "true").lower() == "true"
+    #: How long an idle runner waits before looking for work again.
+    JOB_POLL_INTERVAL_SECONDS: float = float(os.getenv("JOB_POLL_INTERVAL_SECONDS", "2"))
+    #: How often a running job's heartbeat is refreshed, and how old one may get
+    #: before the job is presumed abandoned and handed back to the queue.
+    JOB_HEARTBEAT_SECONDS: int = int(os.getenv("JOB_HEARTBEAT_SECONDS", "15"))
+    JOB_STALE_SECONDS: int = int(os.getenv("JOB_STALE_SECONDS", "120"))
+    JOB_MAX_ATTEMPTS: int = int(os.getenv("JOB_MAX_ATTEMPTS", "3"))
     # Private artefact storage (IFC sources, geometry, voice audio). "local" is the
     # development default; an S3/R2 backend plugs in behind the same interface.
     PRIVATE_STORAGE_BACKEND: str = os.getenv("PRIVATE_STORAGE_BACKEND", "local")
@@ -94,9 +113,9 @@ class Settings(BaseSettings):
     # packages. See app/services/ingestion/ and docs/FILE_INGESTION.md.
     #
     # There is deliberately no INGESTION_MAX_CONCURRENT_PROCESSING: ingestion
-    # runs on the same bounded pool as IFC (app/services/processing_pool.py),
-    # because a second ceiling would silently double the memory bound the first
-    # one exists to enforce. IFC_MAX_CONCURRENT_PROCESSING governs both.
+    # runs on the same job queue as IFC (app/services/jobs/), because a second
+    # ceiling would silently double the memory bound the first one exists to
+    # enforce. IFC_MAX_CONCURRENT_PROCESSING governs both.
     INGESTION_ENABLED: bool = os.getenv("INGESTION_ENABLED", "true").lower() == "true"
     #: Larger than the 25 MB document limit because a design package is many
     #: drawings at once, and well under IFC_MAX_FILE_MB because nothing here
@@ -171,6 +190,11 @@ class Settings(BaseSettings):
     # every RAG route reports itself unavailable rather than erroring, and no
     # other feature observes any difference.
     RAG_ENABLED: bool = os.getenv("RAG_ENABLED", "false").lower() == "true"
+    #: Queue indexing automatically when the ingestion pipeline finishes a file
+    #: that has text. Only takes effect with RAG_ENABLED. Every indexed file is
+    #: an embedding call, so an operator who wants indexing on request only —
+    #: the manual "index" action, or a project re-index — turns this off.
+    RAG_AUTO_INDEX_ENABLED: bool = os.getenv("RAG_AUTO_INDEX_ENABLED", "true").lower() == "true"
     OPENAI_EMBEDDING_MODEL: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     #: The answering model. Deliberately its own setting rather than reusing
     #: OPENAI_ANALYSIS_MODEL, which names a voice-analysis model — the two
@@ -333,6 +357,12 @@ class Settings(BaseSettings):
             raise ValueError("IFC_GEOMETRY_WORKERS must be between 1 and 8")
         if not 1 <= self.IFC_MAX_CONCURRENT_PROCESSING <= 16:
             raise ValueError("IFC_MAX_CONCURRENT_PROCESSING must be between 1 and 16")
+        if not self.JOB_HEARTBEAT_SECONDS * 3 <= self.JOB_STALE_SECONDS:
+            # Shorter and a slow heartbeat write gets a live job taken away
+            # and run twice.
+            raise ValueError("JOB_STALE_SECONDS must be at least three heartbeats")
+        if not 1 <= self.JOB_MAX_ATTEMPTS <= 10:
+            raise ValueError("JOB_MAX_ATTEMPTS must be between 1 and 10")
         # Refuse to boot on a step-up configuration that would be insecure,
         # rather than silently accepting it: a one-digit code or a step-up
         # window measured in hours defeats the point of the whole feature.

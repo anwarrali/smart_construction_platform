@@ -66,19 +66,15 @@ def db():
 def no_background_pool(monkeypatch):
     """Nothing in this module wants real background execution.
 
-    `recover_stale_jobs` re-submits a recovered run to the shared pool, and a
-    pool worker opens its *own* session. Against a test whose transaction is
-    still open and holding row locks, that worker blocks until the test ends —
-    which turned an eighteen-second module into a twenty-six-minute one.
-
-    Stubbing the pool keeps the assertions about *what would be submitted*,
-    which is the part worth testing; that the pool then runs it is
-    `processing_pool`'s own contract, covered in its own tests.
+    `recover_stale_jobs` re-queues a recovered run on the job queue. Stubbing
+    `enqueue` keeps the assertions about *what would be queued*, which is the
+    part worth testing here; that a worker then runs it is the job runner's own
+    contract, covered in test_job_runner.py.
     """
     submitted: list[tuple] = []
     monkeypatch.setattr(
-        maintenance.processing_pool, "submit",
-        lambda job, *args, **kwargs: submitted.append((job, args, kwargs)),
+        maintenance, "enqueue",
+        lambda db, kind, payload=None, **kwargs: submitted.append((kind, payload)),
     )
     return submitted
 
@@ -528,7 +524,7 @@ def test_a_stranded_project_job_is_requeued_and_resubmitted(
     db.refresh(job)
     assert job.status == STATUS_QUEUED
     assert job.attempt == 2
-    assert any(args == (job.id,) for _, args, _ in no_background_pool)
+    assert ("rag.project_reindex", {"job_id": job.id}) in no_background_pool
 
 
 def test_a_job_that_keeps_dying_is_given_up_on(db, world, monkeypatch):
@@ -588,7 +584,7 @@ def no_pool(monkeypatch):
     """The endpoint must enqueue, not execute. Captures what it submitted."""
     submitted = []
     monkeypatch.setattr(maintenance, "submit_project_reindex",
-                        lambda job_id: submitted.append(job_id))
+                        lambda db, job: submitted.append(job.id))
     return submitted
 
 
@@ -789,11 +785,13 @@ def test_a_failing_source_is_reported_and_leaves_the_session_usable(db, world):
 
 # --- Concurrency ------------------------------------------------------------
 
-def test_the_run_is_submitted_to_the_shared_bounded_pool(no_background_pool):
+def test_the_run_is_queued_on_the_shared_job_queue(no_background_pool):
     """Not a new executor. `IFC_MAX_CONCURRENT_PROCESSING` stays one ceiling."""
-    job_id = uuid4()
-    maintenance.submit_project_reindex(job_id)
-    assert no_background_pool == [(maintenance.run_project_reindex, (job_id,), {})]
+    from types import SimpleNamespace
+
+    job = SimpleNamespace(id=uuid4(), project_id=uuid4())
+    maintenance.submit_project_reindex(None, job)
+    assert no_background_pool == [("rag.project_reindex", {"job_id": job.id})]
 
 
 def test_the_reaper_tick_uses_its_own_advisory_lock():

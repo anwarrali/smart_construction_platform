@@ -226,6 +226,13 @@ changes, and records `bootstrap_password_recovery` in `audit_logs`. Remove all
 four bootstrap variables immediately after recovery and the required password
 change.
 
+Background work (IFC processing, file ingestion, indexing, agent analysis)
+runs on the job queue described in `docs/JOBS.md`. On a single backend service
+it runs inside the API process (`JOB_RUNNER_EMBEDDED=true`, the default). To
+move it off the web service, add a fourth service from the same image with the
+start command `python scripts/wait_for_db.py && python -m app.worker` and set
+`JOB_RUNNER_EMBEDDED=false` on the backend.
+
 There is no general project/demo data seed. `backend/scripts/cleanup_core_database.sql`
 is a destructive local cleanup utility and must **not** be used on staging.
 Never copy real customer/project data or expose Administrator credentials.

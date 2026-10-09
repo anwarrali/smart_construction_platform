@@ -1,11 +1,12 @@
 """Analysis that starts because something happened, not because someone asked.
 
-This is the hook Phase 7 built the architecture for. `emit_domain_event` calls
-`process_event` synchronously, so there is no worker, no queue and no scheduler
-here — analysis runs inline, inside the transaction that emitted the event, and
-is wrapped so that a failure in it can never fail the upload or the task update
-that triggered it. Secondary products do not get to break primary ones; the IFC
-geometry pass established that rule in Phase 1 and it holds here.
+This is the hook Phase 7 built the architecture for. `process_event` queues an
+`agents.handle_event` job in the transaction that emitted the event, and a
+worker runs `handle_event` in a transaction of its own. Analysis therefore
+never holds the user's write open, and a failure in it can never fail the
+upload or task update that triggered it — it fails, and retries, as a job.
+Secondary products do not get to break primary ones; the IFC geometry pass
+established that rule in Phase 1 and it holds here.
 
 ## Whose authority does an automatic run use?
 
@@ -45,8 +46,6 @@ proactive analysis on is a deliberate operator decision.
 
 from __future__ import annotations
 
-import logging
-
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -60,8 +59,6 @@ from app.services.agents.notification_policy import compose_message, decide_noti
 from app.services.agents.orchestrator import orchestrate_for_event
 from app.services.agents.subscriptions import agents_for_event
 from app.services.notification_service import notify_users
-
-logger = logging.getLogger(__name__)
 
 #: Statuses that mean a person has already dealt with a finding. Re-analysis
 #: must never notify about one of these again — being told twice about
@@ -83,8 +80,9 @@ def _analysis_principal(db: Session, project_id) -> User | None:
 def handle_event(db: Session, event: DomainEvent) -> dict:
     """Run the agents that subscribe to this event, and notify where warranted.
 
-    Returns a summary rather than raising. The caller is `process_event`, which
-    is inside the transaction of whatever the user was actually doing.
+    Returns a summary for the ordinary outcomes (feature off, nobody
+    subscribed, no accountable principal). It runs as a background job, so an
+    unexpected error raises and the job runner records and retries it.
     """
     if not settings.AGENT_AUTO_ANALYSIS_ENABLED:
         return {"ran": False, "reason": "AGENT_AUTO_ANALYSIS_ENABLED is off"}
@@ -178,18 +176,3 @@ def notify_for_findings(db: Session, *, project_id, report, recipient: User) -> 
             )
             sent += len(created or [])
     return sent
-
-
-def safe_handle_event(db: Session, event: DomainEvent) -> None:
-    """`handle_event`, wrapped so it can never break what triggered it.
-
-    An upload that succeeded must not fail because analysis of it did. The
-    failure is logged and the originating operation continues.
-    """
-    try:
-        handle_event(db, event)
-    except Exception:
-        logger.exception(
-            "[Agents] automatic analysis failed for %s on project %s",
-            event.event_type, event.project_id,
-        )

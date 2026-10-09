@@ -89,3 +89,34 @@ def legacy_db(legacy_template):
 
     with copy_of(legacy_template, "cps_legacy") as pair:
         yield pair
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _private_job_queue():
+    """Jobs this session enqueues go to a queue nobody else consumes.
+
+    The suite shares its database with the running development stack, whose
+    worker would otherwise claim — and run — jobs the tests enqueue against
+    rows that are about to be rolled back. A test that wants its jobs run calls
+    `app.services.jobs.runner.run_pending()`, which drains this queue in the
+    test's own thread. The embedded runner stays off for the same reason.
+    """
+    from uuid import uuid4
+
+    from sqlalchemy import text
+
+    from app.db.database import SessionLocal
+
+    previous = settings.JOB_QUEUE, settings.JOB_RUNNER_EMBEDDED
+    settings.JOB_QUEUE = f"test-{uuid4().hex[:12]}"
+    settings.JOB_RUNNER_EMBEDDED = False
+    yield settings.JOB_QUEUE
+    db = SessionLocal()
+    try:
+        db.execute(text("DELETE FROM background_jobs WHERE queue = :queue"), {"queue": settings.JOB_QUEUE})
+        db.commit()
+    except Exception:  # pragma: no cover - a database that went away mid-run
+        db.rollback()
+    finally:
+        db.close()
+    settings.JOB_QUEUE, settings.JOB_RUNNER_EMBEDDED = previous

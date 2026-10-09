@@ -312,15 +312,15 @@ def _upload_files():
 def no_background_processing(monkeypatch):
     """Accept the upload, skip the parse.
 
-    A successful upload queues `_background_process`, which `TestClient` runs
-    for real once the response is returned. That is the parsing pipeline's
+    A successful upload queues `_background_process`, which would put a real
+    parse job on the queue. That is the parsing pipeline's
     subject, covered by `test_ifc_interference_pipeline.py`; here it would only
     add a minute and a pile of rows to a test about who may post the file.
     """
     calls: list = []
     monkeypatch.setattr(
         "app.api.ifc._background_process",
-        lambda version_id, actor_id: calls.append((version_id, actor_id)),
+        lambda db, version_id, actor_id, project_id: calls.append((version_id, actor_id)),
     )
     return calls
 
