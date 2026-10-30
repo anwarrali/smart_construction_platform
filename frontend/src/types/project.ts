@@ -22,6 +22,11 @@ export interface Project {
   budgetSpent?: number;
   completionPercentage: number;
   openIssueCount: number;
+  /** False when the caller sees this project's record (team, parties) but
+   *  not its work — the office administrator on a project they are not on. */
+  canOpenWork?: boolean;
+  /** The caller holds `project.delete` on this project (per project). */
+  canDelete?: boolean;
   ownerId: string;
   projectManagerId?: string;
   consultantApprovalMode: ApprovalMode;

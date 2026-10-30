@@ -1,0 +1,42 @@
+@startuml
+!include _style.iuml
+interface VectorStore <<Protocol>> {
+  +add_chunks(db, source, chunks)
+  +delete_source(db, source)
+  +search(db, project_id, readable_document_ids,
+    readable_ingested_file_ids, query_embedding, k)
+}
+class PgVectorStore {
+  +search(...) : list of ScoredChunk
+  -apply_iterative_scan(db)
+}
+class EmbeddingService {
+  +embed_one(text) : vector
+}
+class AnswerService {
+  +answer(question, chunks) : Answer
+}
+class RetrievedChunk {
+  source, page_number
+  content, similarity, title
+}
+class Answer {
+  text : str
+  found : bool
+  citations : list of Citation
+}
+class Citation {
+  index, source_type, source_id
+  title, page_number, snippet
+}
+class Retrieval <<module function retrieve()>> {
+  +retrieve(db, project_id, readable ids, query, k)
+}
+PgVectorStore ..|> VectorStore
+Retrieval --> EmbeddingService : uses
+Retrieval --> VectorStore : uses
+Retrieval --> RetrievedChunk : returns
+AnswerService --> RetrievedChunk : consumes
+AnswerService --> Answer : produces
+Answer *-- Citation
+@enduml

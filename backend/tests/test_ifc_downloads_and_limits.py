@@ -236,14 +236,14 @@ def test_the_download_survives_a_backend_whose_local_path_disappears(
     assert ephemeral_storage.materialised == []
 
 
-def test_the_viewer_asset_survives_the_same_backend(client, world, ephemeral_storage):
+def test_the_removed_viewer_asset_is_no_longer_served(client, world):
+    # The stored mesh in this fixture stays on disk — removing the viewer
+    # deleted no data — but no route hands it out any more.
     response = client.get(
         ifc_url(world["project"].id, f"/versions/{world['version'].id}/geometry/asset"),
         headers=_auth(client, world["manager"]),
     )
-    assert response.status_code == 200
-    assert response.content == b"BIMGEO1\x00mock-geometry-payload"
-    assert ephemeral_storage.materialised == []
+    assert response.status_code in {404, 405}
 
 
 def test_the_response_names_the_file_in_both_header_forms(client, world):
@@ -332,162 +332,5 @@ def test_an_anonymous_caller_gets_no_bytes(client, world):
     assert response.content != IFC_FIXTURE.read_bytes()
 
 
-# --- the processing limit ---------------------------------------------------
-
-
-@pytest.fixture()
-def bounded_pool(monkeypatch):
-    """A pool sized for the test, torn down afterwards."""
-    def build(limit: int):
-        monkeypatch.setattr(settings, "IFC_MAX_CONCURRENT_PROCESSING", limit)
-        ifc_api.reset_processing_pool()
-        return ifc_api.processing_pool()
-
-    yield build
-    ifc_api.reset_processing_pool()
-
-
-def _burst(job, count: int) -> None:
-    for _ in range(count):
-        ifc_api._submit(job)
-
-
-def test_the_pool_never_runs_more_jobs_than_the_configured_limit(bounded_pool):
-    bounded_pool(2)
-    gate = threading.Event()
-    lock = threading.Lock()
-    state = {"running": 0, "peak": 0, "completed": 0}
-
-    def job():
-        with lock:
-            state["running"] += 1
-            state["peak"] = max(state["peak"], state["running"])
-        gate.wait(timeout=10)
-        with lock:
-            state["running"] -= 1
-            state["completed"] += 1
-
-    _burst(job, 8)
-    # Wait for the pool to reach its ceiling, then give any extra worker a
-    # generous chance to start before concluding that none can.
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline and state["peak"] < 2:
-        time.sleep(0.02)
-    time.sleep(0.3)
-
-    assert state["peak"] == 2, f"{state['peak']} jobs ran at once against a limit of 2"
-
-    gate.set()
-    ifc_api.processing_pool().shutdown(wait=True)
-    assert state["completed"] == 8, "every queued job must still run"
-
-
-def test_raising_the_limit_lets_more_run(bounded_pool):
-    # The counterpart: the cap is the setting, not an accident of the machine.
-    bounded_pool(4)
-    gate = threading.Event()
-    lock = threading.Lock()
-    state = {"running": 0, "peak": 0}
-
-    def job():
-        with lock:
-            state["running"] += 1
-            state["peak"] = max(state["peak"], state["running"])
-        gate.wait(timeout=10)
-        with lock:
-            state["running"] -= 1
-
-    _burst(job, 8)
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline and state["peak"] < 4:
-        time.sleep(0.02)
-    time.sleep(0.2)
-    assert state["peak"] == 4
-
-    gate.set()
-    ifc_api.processing_pool().shutdown(wait=True)
-
-
-def test_a_failing_job_neither_kills_the_pool_nor_holds_its_slot(bounded_pool):
-    bounded_pool(1)
-    done = threading.Event()
-    seen: list[str] = []
-
-    def failing():
-        seen.append("failed")
-        raise RuntimeError("parser exploded")
-
-    def following():
-        seen.append("ran after")
-        done.set()
-
-    ifc_api._submit(failing)
-    ifc_api._submit(following)
-
-    assert done.wait(timeout=10), "a raising job left the single slot occupied"
-    assert seen == ["failed", "ran after"]
-
-
-def test_submitting_returns_without_waiting_for_the_job(bounded_pool):
-    """The caller must not block: the wait belongs to the pool, not to the
-    Starlette threadpool the background task is running on."""
-    bounded_pool(1)
-    gate = threading.Event()
-    started = threading.Event()
-
-    def blocker():
-        started.set()
-        gate.wait(timeout=10)
-
-    ifc_api._submit(blocker)
-    assert started.wait(timeout=5)
-
-    began = time.monotonic()
-    ifc_api._submit(lambda: None)  # queued behind the blocker
-    assert time.monotonic() - began < 1.0, "submitting waited for a free slot"
-
-    gate.set()
-    ifc_api.processing_pool().shutdown(wait=True)
-
-
-def test_the_pool_is_rebuilt_from_the_current_setting(bounded_pool):
-    first = bounded_pool(1)
-    assert first._max_workers == 1
-    second = bounded_pool(3)
-    assert second is not first
-    assert second._max_workers == 3
-
-
-def test_the_background_entry_points_go_through_the_pool(bounded_pool, monkeypatch):
-    """`_background_process` and `_background_geometry` are what the routes
-    call; the limit is worthless if either one bypasses it."""
-    bounded_pool(1)
-    ran = threading.Event()
-    calls: list[tuple] = []
-
-    def fake_process(db, version_id, actor_id=None):
-        calls.append(("process", version_id))
-        ran.set()
-
-    monkeypatch.setattr(ifc_api, "process_version", fake_process)
-    ifc_api._background_process(uuid.uuid4(), uuid.uuid4())
-    assert ran.wait(timeout=10)
-    assert calls and calls[0][0] == "process"
-
-
-def test_a_job_closes_its_database_session_even_when_processing_fails(monkeypatch):
-    closed: list[bool] = []
-
-    class _Session:
-        def close(self):
-            closed.append(True)
-
-    monkeypatch.setattr(ifc_api, "SessionLocal", lambda: _Session())
-
-    def boom(db, version_id, actor_id=None):
-        raise RuntimeError("processing exploded")
-
-    monkeypatch.setattr(ifc_api, "process_version", boom)
-    with pytest.raises(RuntimeError):
-        ifc_api._process_job(uuid.uuid4(), uuid.uuid4())
-    assert closed == [True], "a failed job must not leak its session"
+# The processing limit (once an in-process pool) is the job queue's ceiling
+# now; its guarantees are pinned in tests/test_job_runner.py.

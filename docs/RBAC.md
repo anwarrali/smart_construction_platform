@@ -133,6 +133,31 @@ Nothing here is a new authorization system: every answer comes from
 `has_permission` or from a relationship the platform already records — task
 assignment, `ProjectConsultantReviewer`, the person's disciplines.
 
+## Project reach — the record and the work
+
+Reaching a project has two levels (QA-06B, 2026-10-17):
+
+| Level | What it opens | Who reaches it without being on the team |
+| --- | --- | --- |
+| **Record** | the project in the list, its details and settings, its team and parties | `platform.view_all_projects` — the Office Administrator by default |
+| **Work** | tasks, schedule, documents, models, issues, reports, messages, voice, agents | `platform.work_in_all_projects` — General Manager and Technical Director |
+
+Owners, the assigned manager and active members reach both. The checks are
+`user_can_see_project_record` and `user_has_project_access` in
+`app.core.deps`. A catalogue permission marked `registry=True`
+(`project.manage_members`, `project.edit`, `project.delete`,
+`project.manage_parties`, `project.invite_external`) resolves its project
+check at the record level; every other project-scoped permission needs the work
+level. `effective_permissions(user, project_id)` applies the same rule, so
+`GET /access-control/me?project_id=` tells the interface what the person can
+open *in that project*, and the workspace uses that answer.
+
+This is what keeps system administration from being project participation:
+the administrator can staff any project, and opens its work only by joining the
+team. Migration `i6f3a9c4d170` gave the new code to every role and override
+that held `platform.view_all_projects`, except the seeded Office Administrator,
+so no one else's reach changed.
+
 ## The two ceilings
 
 Some permissions are the consulting office's own job. But "the office's job" is
@@ -359,6 +384,189 @@ office's own role. An office customizes by editing a role on the Office roles
 page (`PUT /organization/roles/{id}/permissions`); editing a shared template
 copies it into the office first. The retired role-by-permission matrix
 (`/access-control/roles`) and its write-through table are gone.
+
+From then on the copy *is* that role for the office: the role list shows it in
+the template's place, and `rbac.office_role_id` resolves the permissions of
+anyone in the office who still points at the template through the copy (their
+office is their company, else the tenant). Before 2026-10-22 accounts kept the
+template's permissions, so an office's edit reached nobody — a grant of
+`platform.create_project` to Engineers showed on screen and applied to no
+engineer. Deleting the copy hands its holders back to the template.
+
+## Customizing permissions, end to end
+
+What an administrator configures is what the server enforces, at the next
+request. Pinned by `tests/test_rbac_customization.py`.
+
+### Three layers, one resolver
+
+| Layer | Stored in | Edited on | Applies to |
+| --- | --- | --- | --- |
+| **Role** | `role_permissions` | Office roles page — `PUT /organization/roles/{id}/permissions` | everyone the role *governs* |
+| **Person, everywhere** | `user_permission_overrides`, `project_id` NULL | Access Control › People — `PUT /access-control/users/{id}` | one person |
+| **Person, one project** | `user_permission_overrides`, `project_id` set | the same, with a project selected | one person, one project |
+
+An override row is **tri-state**: `allowed = true` grants, `allowed = false`
+denies, and *no row* inherits from the role. "Use role default" deletes the
+row; an absent override is never read as a denial. No migration was needed —
+the table always had this shape.
+
+`authorization.effective_permissions(user, project_id)` is the only resolver.
+Its precedence, as implemented:
+
+1. **Inactive account → nothing.** Not overridable.
+2. Governing office role ∪ project role (`rbac.resolved_permissions`); an
+   external participant's role contributes nothing office-wide or office-only.
+3. Person override, everywhere — grant adds, deny removes.
+4. Person override, this project — wins over 3.
+5. Office administrator: `admin_locked` codes restored (cannot be denied).
+6. External participant: everything office-wide and every `never_external`
+   code stripped **after** overrides — a grant cannot cross the wall.
+7. In a project's context, a project-scoped code survives only where the
+   person reaches the project (work level, or record level for `registry`
+   codes). **A grant never brings project membership with it**;
+   `has_permission` re-checks the same.
+8. Anything else: denied.
+
+### Which role governs
+
+Editing a shared template copies it into the office (`_editable_role`), and
+accounts keep pointing at the template. `rbac.office_role_id` resolves such an
+account through the office's copy, so the role the editor shows is the role
+that applies. The role list marks a role `isTemplate` until its first edit,
+and counts the template holders a copy governs. Another office's accounts keep
+the template.
+
+### Why, per permission
+
+`GET /access-control/users/{id}[?project_id=]` returns, besides the effective
+set, `decisions[]` — for every catalogue code `held`, `reason`, `roleGrants`
+and the explicit `override` at that scope — and `governingRoleName` /
+`governedByOfficeCopy`. `held` is membership of `effective_permissions`, not a
+recomputation; only the reason is derived (`explain_permissions`), and a test
+asserts the two agree for every code. Reasons: `granted_by_role`,
+`granted_by_project_role`, `granted_to_user`, `granted_on_project`,
+`admin_locked`, `denied_for_user`, `denied_on_project`, `blocked_external`,
+`blocked_project_access`, `account_inactive`, `not_granted`.
+
+### When a change takes effect
+
+- **Server:** at the affected person's next request. Nothing caches effective
+  permissions beyond one request (`office_role_id` and the two
+  `*_all_projects_effective` answers are memoized on the request's `User`
+  object). No restart, no re-login.
+- **Web client:** the permission snapshot is re-read when the tab regains
+  focus and whenever the server answers 403 (`permission.store.revalidate`,
+  throttled to once per 5 s), keeping the previous answer while it loads. An
+  administrator editing their own account or a role is refreshed at once.
+  A stale snapshot can only hide or show a control — the endpoint re-checks.
+
+### Module view permissions are enforced by the API
+
+Until 2026-10-23 `task.view`, `site_report.view`, `issue.view` and
+`design_change.view` guarded routes only: revoking one hid the page and the
+API kept answering. Each module's read endpoints now `require` it, and the
+cross-project lists narrow through `authorization.projects_with_permission`.
+`project.invite_external` was registered and checked nowhere; adding a member
+for an outside party (`partyId` set) now requires it. `message.send` (starting
+a conversation), `message.send_client` (writing to the client) and
+`task.comment` (posting on a task) were checked by voice only and are now
+enforced on the REST endpoints too. Default holders of both
+are unchanged, so no default behaviour moved. The full inventory is
+[PERMISSION_COVERAGE.md](PERMISSION_COVERAGE.md).
+
+### No identity shortcuts in front of a permission
+
+Until the second pass of 2026-10-23, most task operations asked "is this caller
+`project.project_manager_id`?" and treated the permission as a second gate at
+best. A grant to anybody else showed the control and failed — Rana, granted
+`task.create`, got "Only the assigned Project Manager can create project
+tasks". The rule now is the permission and project access:
+
+| Operation | Permission | Plus |
+| --- | --- | --- |
+| Create a task (also from an IFC suggestion or an AI insight) | `task.create` | project access |
+| Edit, assign, delete, reorder tasks | `task.edit` | project access |
+| Start, update, submit, complete your work | `task.update_progress` | assigned to the task |
+| Review submitted work | `task.review` | named reviewer, or also `task.edit` |
+| Task dependencies, milestones, shifts | `schedule.edit` | project access |
+| Edit or reassign someone else's issue | `issue.resolve` | project access |
+| Delete a project | `project.delete` | project record access; permanent |
+| Share a document with an outside party | `document.share_external` | can read the document; party on the same project |
+
+`project_manager_id` is still read for *routing* — who is notified, whose
+authority an automatic agent run borrows — never as an authorization answer in
+these paths. A handful of checks still read "permission **or** assigned
+manager"; they are listed under *Policy decisions* in
+[PERMISSION_COVERAGE.md](PERMISSION_COVERAGE.md).
+
+Each permission's extra conditions are in `permission_catalogue.PREREQUISITES`
+and shown next to it in both editors, so an administrator sees, for instance,
+that `task.update_progress` only applies to tasks assigned to the person.
+
+### Verification codes when editing permissions
+
+Production: changing one person's permissions (`admin.change_permissions`,
+one code covers a sitting of `STEP_UP_VALIDITY_MINUTES`) and changing
+somebody's role (`admin.change_user_role`) ask for an e-mailed code. Editing a
+role's permission set does not — that was already so, and is recorded under
+*Open policy questions*.
+
+Development and QA: set
+
+```
+ENVIRONMENT=development        # or local, test, qa
+STEP_UP_PERMISSION_EDIT_BYPASS=true
+```
+
+and those two purposes no longer ask. What does not change: sign-in, the
+`platform.manage_permissions` / `platform.manage_users` checks, the catalogue
+and wall validations, and every other step-up purpose (password change,
+password reset, deactivate, delete). Each skipped challenge writes a
+`step_up_bypassed_development` audit row. No code is generated or echoed, and
+`OTP_DEV_ECHO_ENABLED` stays off.
+
+Safeguards: the settings **refuse to load** with the switch on unless
+`ENVIRONMENT` is `development`, `local`, `test` or `qa` (staging is excluded
+on purpose), and `step_up_service.permission_edit_bypass_active` re-checks the
+environment on every call. The test suite runs production-like by default
+(`conftest._step_up_as_in_production`), whatever a developer's `.env` says.
+
+### Adding a permission
+
+1. Add it to `app.core.permission_catalogue.CATALOGUE` with the right flags
+   (`project_scoped`, `registry`, `office_only`, `never_external`,
+   `admin_locked`).
+2. Give it to the templates that should hold it by default in
+   `app.core.role_templates`, and update `tests/test_role_templates.py`. For an
+   existing database, a data migration grants it to existing roles (see
+   `h5e2f8b3c069`, `i6f3a9c4d170`).
+3. Enforce it **on the server** at every endpoint it governs — `require(db,
+   user, code, project_id)` — and narrow cross-project lists with
+   `projects_with_permission`.
+4. Then the client: `PermissionGuard` on the route, `hasCapability` on the
+   action, the sidebar entry in `navigation.ts`.
+5. Test both outcomes through the API, including a revoke by override: add a
+   row to `READ_MATRIX` / `WRITE_MATRIX` in `tests/test_permission_capabilities.py`.
+   If the operation has an extra condition, add it to `PREREQUISITES`. Never
+   gate on `project_manager_id` or a role name.
+6. Regenerate the inventory: `python scripts/permission_inventory.py
+   --json ../docs/permission_inventory.json --markdown
+   ../docs/permission_inventory_table.md` (from `backend/`). A new code must
+   not land as `ui-only` or `unused`.
+
+### Open policy questions
+
+- **Role edits take no verification code** in production, while a single
+  person's override does. Requiring one would change the production policy,
+  so it was left as it was; it is the product owner's call.
+- **`message.send` covers starting a conversation, not replying.** A client
+  (who does not hold it by default) can still answer a conversation the office
+  opened. Gating replies too would be a new rule.
+- **Legacy Consultant accounts** no longer post task comments or write to the
+  client through REST (2026-10-23). That matches the retired Consultant policy
+  the role was frozen from — intentional, not a regression; grant per person
+  or move the account to Senior Engineer if the office wants otherwise. See [PERMISSION_COVERAGE.md](PERMISSION_COVERAGE.md).
 
 ## How accounts are written
 

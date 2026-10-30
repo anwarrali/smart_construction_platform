@@ -1,0 +1,64 @@
+!pragma layout smetana
+skinparam dpi 200
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam ArrowColor #34495E
+skinparam ArrowThickness 1
+skinparam BackgroundColor white
+skinparam roundCorner 6
+skinparam ActorBorderColor #2C3E50
+skinparam ActorBackgroundColor #EAF1F8
+skinparam usecase {
+  BackgroundColor #EAF1F8
+  BorderColor #2C5F8A
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #2C5F8A
+}
+skinparam component {
+  BackgroundColor #EAF1F8
+  BorderColor #2C5F8A
+}
+skinparam node {
+  BackgroundColor #F7F9FB
+  BorderColor #34495E
+}
+skinparam database {
+  BackgroundColor #EAF1F8
+  BorderColor #2C5F8A
+}
+skinparam package {
+  BackgroundColor #FBFCFD
+  BorderColor #7F8C8D
+}
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #2C5F8A
+  HeaderBackgroundColor #EAF1F8
+}
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #2C5F8A
+}
+skinparam state {
+  BackgroundColor #EAF1F8
+  BorderColor #2C5F8A
+}
+skinparam activity {
+  BackgroundColor #EAF1F8
+  BorderColor #2C5F8A
+  DiamondBackgroundColor #FFFFFF
+}
+skinparam sequence {
+  ParticipantBackgroundColor #EAF1F8
+  ParticipantBorderColor #2C5F8A
+  LifeLineBorderColor #95A5A6
+  BoxBackgroundColor #FBFCFD
+}
+skinparam note {
+  BackgroundColor #FFFDF0
+  BorderColor #B7A64B
+}
+hide stereotype

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  portfolioMilestonesPath,
   canOpenProjectModule,
   portfolioProjectsPath,
   projectEntityPath,
+  projectEntryPath,
+  projectLandingModule,
   projectModulePath,
   projectWorkspaceBase,
   replaceProjectInPath,
@@ -17,7 +20,7 @@ const holding = (...codes: string[]) => (code: string) => codes.includes(code);
 const holdingNothing = () => false;
 
 const EVERYTHING = holding(
-  "task.view", "document.view", "site_report.view", "issue.view",
+  "task.view", "task.view_all", "document.view", "site_report.view", "issue.view",
   "design_change.view", "schedule.view", "ifc.view", "ai.view_insights",
   "task.review", "field_evidence.verify", "project.manage_members",
   "project.manage_parties",
@@ -39,6 +42,51 @@ describe("projectWorkspaceBase", () => {
   });
 });
 
+// QA-06B: an administrator who is not on a project holds its team and parties
+// pages, not its work. Their links into the project must land on what they can open.
+describe("projectLandingModule", () => {
+  const registryOnly = (code: string) => ["project.manage_members", "project.manage_parties"].includes(code);
+
+  it("is the overview for anyone who works in the project", () => {
+    expect(projectLandingModule(EVERYTHING)).toBe("dashboard");
+  });
+
+  it("is the team page for someone who only administers the project", () => {
+    expect(projectLandingModule(registryOnly)).toBe("team");
+    expect(projectLandingModule((code) => code === "project.manage_parties")).toBe("parties");
+    expect(projectModulePath(PROJECT, "tasks", registryOnly)).toBe(`/projects/${PROJECT}/team`);
+  });
+
+  it("is the overview while nothing is known", () => {
+    expect(projectLandingModule()).toBe("dashboard");
+    expect(projectLandingModule(() => false)).toBe("dashboard");
+  });
+});
+
+// QA 2026-10-22: the Projects page's "Open" went to the bare project address,
+// which for an administrator not on the team ended on the portfolio dashboard.
+describe("projectEntryPath", () => {
+  const ADMIN = holding("task.view", "task.view_all", "project.manage_members", "project.manage_parties");
+
+  it("opens a project whose work you can open on its overview", () => {
+    expect(projectEntryPath({ id: PROJECT, canOpenWork: true }, ADMIN)).toBe(`/projects/${PROJECT}/dashboard`);
+  });
+
+  it("opens a project you only administer on its team, whatever your office-wide permissions", () => {
+    expect(projectEntryPath({ id: PROJECT, canOpenWork: false }, ADMIN)).toBe(`/projects/${PROJECT}/team`);
+    expect(projectEntryPath({ id: PROJECT, canOpenWork: false }, holding("project.manage_parties")))
+      .toBe(`/projects/${PROJECT}/parties`);
+  });
+
+  it("sends somebody who can open nothing of it back to the list", () => {
+    expect(projectEntryPath({ id: PROJECT, canOpenWork: false }, holding("task.view"))).toBe("/projects");
+  });
+
+  it("treats an older payload without the flag as workable", () => {
+    expect(projectEntryPath({ id: PROJECT }, holding("task.view"))).toBe(`/projects/${PROJECT}/my-work`);
+  });
+});
+
 describe("projectModulePath", () => {
   it("builds module links without asking who is looking", () => {
     expect(projectModulePath(PROJECT, "tasks", EVERYTHING)).toBe(`/projects/${PROJECT}/tasks`);
@@ -57,8 +105,18 @@ describe("projectModulePath", () => {
   it("degrades to the dashboard rather than linking into a guard the reader fails", () => {
     // Somebody without `task.review` must not be handed a review-queue link
     // that immediately bounces them and drops the project id on the way.
-    const noReview = holding("task.view");
+    const noReview = holding("task.view", "task.view_all");
     expect(projectModulePath(PROJECT, "review-queue", noReview)).toBe(`/projects/${PROJECT}/dashboard`);
+  });
+
+  // QA 2026-10-22: the overview's endpoint requires `task.view_all`. An
+  // engineer (assigned work only) was offered it and refused with "Open your
+  // own work for assigned-task metrics"; they land on their own work instead.
+  it("sends somebody who sees only their own work to it, not to the overview", () => {
+    const engineer = holding("task.view", "task.review");
+    expect(projectLandingModule(engineer)).toBe("my-work");
+    expect(projectModulePath(PROJECT, "dashboard", engineer)).toBe(`/projects/${PROJECT}/my-work`);
+    expect(canOpenProjectModule("dashboard", engineer)).toBe(false);
   });
 
   it("links optimistically while permissions are still loading", () => {
@@ -198,5 +256,23 @@ describe("sharedWorkspaceUrl", () => {
   it("returns null for a path that was never one of the retired prefixes", () => {
     expect(sharedWorkspaceUrl(`/projects/${PROJECT}/tasks`)).toBeNull();
     expect(sharedWorkspaceUrl("/notifications")).toBeNull();
+  });
+});
+
+describe("portfolioMilestonesPath", () => {
+  // The manager dashboard's milestone entry used `ROUTES.SCHEDULE` ("/schedule"),
+  // which is the collaboration site-visit calendar.
+  it("opens a project's milestones, never the site-visit calendar", () => {
+    const path = portfolioMilestonesPath(["p-1", "p-2"], () => true);
+    expect(path).toBe("/projects/p-1/milestones");
+    expect(path).not.toBe("/schedule");
+  });
+
+  it("falls back to the project overview without schedule.view", () => {
+    expect(portfolioMilestonesPath(["p-1"], (code) => code !== "schedule.view")).toBe("/projects/p-1/dashboard");
+  });
+
+  it("goes to the project list when the manager has no project yet", () => {
+    expect(portfolioMilestonesPath([], () => true)).toBe("/projects");
   });
 });

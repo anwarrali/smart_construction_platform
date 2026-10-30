@@ -138,7 +138,7 @@
     "groupControl": "Control",
     "groupField": "Field",
     "groupReference": "Reference",
-    "groupTeam": "Team & activity",
+    "groupTeam": "Team",
     "menu": "Menu",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
@@ -146,7 +146,21 @@
     "voiceAssistant": "Voice Assistant",
     "officeRoles": "Roles & disciplines",
     "projectParties": "Project parties",
-    "agents": "Agents"
+    "agents": "Agents",
+    "dashboard": "Dashboard",
+    "projects": "Projects",
+    "coordination": "Coordination",
+    "executiveOverview": "Executive overview",
+    "groupWork": "Work",
+    "groupSite": "Site",
+    "groupDocuments": "Documents & models",
+    "groupAnalysis": "Analysis",
+    "collapseRail": "Collapse navigation",
+    "expandRail": "Expand navigation",
+    "breadcrumb": "Current location",
+    "userMenu": "Account menu",
+    "skipToContent": "Skip to content",
+    "milestones": "Milestones"
   },
   "roles": {
     "admin": "Administrator",
@@ -330,7 +344,17 @@
     "uploadedAt": "Uploaded",
     "fileSize": "Size",
     "fileType": "File type",
-    "download": "Download"
+    "download": "Download",
+    "type": {
+      "drawing": "Drawing",
+      "report": "Report",
+      "contract": "Contract",
+      "permit": "Permit",
+      "specification": "Specification",
+      "invoice": "Invoice",
+      "boq": "Bill of quantities",
+      "other": "Other"
+    }
   },
   "collaboration": {
     "actionCenter": "My action centre",
@@ -594,7 +618,9 @@
     "requiredFields": "Project, title and description are required.",
     "visitRequiredFields": "Project, title, start and end are required.",
     "intelligenceRunFailed": "Intelligence analysis could not be completed.",
-    "appCrashedHint": "The page ran into an unexpected problem. Reloading usually fixes it; your data was not affected."
+    "appCrashedHint": "The page ran into an unexpected problem. Reloading usually fixes it; your data was not affected.",
+    "notPermittedPrefix": "Not permitted:",
+    "supportId": "Support ID: {{id}}"
   },
   "validation": {
     "required": "This field is required.",
@@ -1326,7 +1352,15 @@
     "general": "General",
     "mechanical_hvac": "Mechanical / HVAC",
     "unclassified": "Unclassified",
-    "unassigned": "Unassigned"
+    "unassigned": "Unassigned",
+    "bim": "BIM",
+    "qa_qc": "QA/QC",
+    "geotechnical": "Geotechnical",
+    "mep": "MEP",
+    "survey": "Surveying",
+    "quantity_surveying": "Quantity surveying",
+    "landscape": "Landscape",
+    "infrastructure": "Infrastructure"
   },
   "accessControl": {
     "eyebrow": "Administration",
@@ -1391,7 +1425,25 @@
     "noEngineers": "This project has no engineers to assign yet.",
     "enforcementNote": "Permissions are enforced by the server on every request. Hiding a control here is presentation only — a change takes effect for the API as well.",
     "rolesMoved": "What each role can do is edited on the Office roles page, which lists every role the office has — the seeded ones and the ones it created.",
-    "openOfficeRoles": "Open Office roles"
+    "openOfficeRoles": "Open Office roles",
+    "saving": "Saving…",
+    "governedByOfficeCopy": "Permissions come from this office's “{{name}}” role",
+    "overrideGrant": "Allowed for this person",
+    "overrideDeny": "Denied for this person",
+    "overrideInherit": "Inherits from role",
+    "reason": {
+      "granted_by_role": "Granted by the {{role}} role",
+      "granted_by_project_role": "Granted by their role on this project",
+      "granted_to_user": "Granted directly to this person",
+      "granted_on_project": "Granted directly to this person on this project",
+      "admin_locked": "Always held by the office administrator",
+      "denied_for_user": "Denied by a person-specific override",
+      "denied_on_project": "Denied for this person on this project",
+      "blocked_external": "Blocked: people taking part for an outside party cannot hold it",
+      "blocked_project_access": "Blocked: they are not on this project's team",
+      "account_inactive": "Blocked: the account is not active",
+      "not_granted": "Not granted by their role"
+    }
   },
   "aiInsight": {
     "DISCIPLINE_NOT_IN_IFC": {
@@ -1552,7 +1604,8 @@
     "save_milestone": "Save Milestone",
     "milestone_name": "Milestone Name *",
     "planned_date": "Planned Date *",
-    "description": "Description"
+    "description": "Description",
+    "add_milestone": "Add milestone"
   },
   "profilePage": {
     "profile_not_found": "Profile not found",
@@ -1673,7 +1726,8 @@
   },
   "contextDiscussion": {
     "no_discussion_yet": "No discussion yet.",
-    "loading_discussion": "Loading discussion…"
+    "loading_discussion": "Loading discussion…",
+    "cannot_start": "You can reply once somebody starts this discussion; starting one needs permission to send project messages."
   },
   "dashboardSelectorPage": {
     "active_engineer_organization_side_is": "Active Engineer organization side is required.",
@@ -1736,7 +1790,13 @@
     "no_documents_found": "No documents found",
     "download": "Download",
     "delete": "Delete",
-    "ask_ai": "Ask AI"
+    "ask_ai": "Ask the document",
+    "column_document": "Document",
+    "column_type": "Type",
+    "column_revision": "Rev.",
+    "column_size": "Size",
+    "column_date": "Uploaded",
+    "column_actions": "Actions"
   },
   "documentsPage": {
     "project_documents_and_files": "Project documents and files",
@@ -2104,8 +2164,8 @@
     "error_IFC_FILE_CORRUPTED_action": "Export the model again from your authoring tool, then upload it once more.",
     "error_IFC_PARSER_UNAVAILABLE_title": "IFC processing is unavailable",
     "error_IFC_PARSER_UNAVAILABLE_action": "Contact support; the server IFC parser is not installed correctly.",
-    "error_IFC_ENTITY_LIMIT_EXCEEDED_title": "Model is too large",
-    "error_IFC_ENTITY_LIMIT_EXCEEDED_action": "Upload a single discipline or storey model instead of the federated model.",
+    "error_IFC_ENTITY_LIMIT_EXCEEDED_title": "Model has too many building elements",
+    "error_IFC_ENTITY_LIMIT_EXCEEDED_action": "Upload a single discipline or storey model, or retry after an administrator reviews the element limit.",
     "error_IFC_PARSE_TIMEOUT_title": "IFC processing timed out",
     "error_IFC_PARSE_TIMEOUT_action": "Retry, or upload a smaller discipline model.",
     "error_IFC_PARSER_OUT_OF_MEMORY_title": "Model needs more memory than this server has",
@@ -2130,7 +2190,11 @@
     "revision_is_now_baseline": "This revision is now the baseline.",
     "revision_designation_failed": "The revision could not be updated.",
     "download_started": "Downloading {{filename}}",
-    "download_failed": "The IFC file could not be downloaded."
+    "download_failed": "The IFC file could not be downloaded.",
+    "duplicate_upload": "This exact file is already uploaded as V{{number}} \"{{title}}\" ({{status}}). It has been opened instead of creating a second copy.",
+    "file_exceeds_processing_limit": "This {{size}} MB file can be stored, but this server can only process IFC models up to about {{limit}} MB. Upload a discipline or storey model to get the analysis.",
+    "error_IFC_MODEL_TOO_LARGE_FOR_HOST_title": "Model needs more memory than this server allows",
+    "error_IFC_MODEL_TOO_LARGE_FOR_HOST_action": "Upload a discipline or storey model, or retry after an administrator raises the processing memory on a larger host."
   },
   "issuesPage": {
     "track_and_resolve_project_issues": "Track and resolve project issues",
@@ -2174,7 +2238,16 @@
     "forward_note_optional": "Note (optional)",
     "forward_note_placeholder": "Add context for the recipient, e.g. \"Can you review this and give me your opinion?\"",
     "message_forwarded": "Message forwarded.",
-    "forward_failed": "The message could not be forwarded."
+    "forward_failed": "The message could not be forwarded.",
+    "all_project_members": "All project members",
+    "blocker_group": "Choose who receives it.",
+    "blocker_message": "Write a message to send.",
+    "blocker_recipient": "Choose at least one recipient.",
+    "choose_group": "Choose a group",
+    "no_projects_to_message": "You are not on any project team, so there are no project conversations to show. Messages and announcements belong to a project.",
+    "not_on_project_team": "Messaging on this project is for its team. You can manage the team without being on it; add yourself to the team to send messages or announcements here.",
+    "project_announcement": "Project announcement",
+    "recipients_unavailable": "Recipients could not be loaded."
   },
   "communication": {
     "forward": "Forward",
@@ -2354,7 +2427,8 @@
     "general": "General",
     "not_reviewed": "Not reviewed",
     "unlabelled": "Unlabelled",
-    "submitted_by": "Submitted by"
+    "submitted_by": "Submitted by",
+    "subtitle": "Search field photos with their task, submission, uploader and review provenance intact."
   },
   "projectDetail": {
     "back_to_projects": "Back to projects",
@@ -2397,7 +2471,21 @@
       "siteReports": "Site reports",
       "team": "Team",
       "milestones": "Milestones"
-    }
+    },
+    "meta": {
+      "status": "Status",
+      "location": "Location",
+      "type": "Type",
+      "start": "Start",
+      "plannedEnd": "Planned end",
+      "remaining": "Time left"
+    },
+    "days_remaining_one": "{{count}} day",
+    "days_remaining_other": "{{count}} days",
+    "days_overdue_one": "{{count}} day overdue",
+    "days_overdue_other": "{{count}} days overdue",
+    "needs_attention": "Needs attention",
+    "site_progress_report": "Site progress report"
   },
   "projectForm": {
     "cancel": "Cancel",
@@ -2481,7 +2569,25 @@
     "selectOwner": "Select owner",
     "selectProjectManager": "Select project manager",
     "noConsultantSelected": "No consultant selected",
-    "initial_consultant": "Initial Consultant"
+    "initial_consultant": "Initial Consultant",
+    "delete": {
+      "action": "Delete",
+      "title": "Delete {{name}}?",
+      "warning": "This permanently deletes the project and everything recorded against it. It cannot be undone.",
+      "loadFailed": "Could not load what this deletion would remove.",
+      "typeName": "Type “{{name}}” to confirm",
+      "confirm": "Delete permanently",
+      "done": "{{name}} was deleted.",
+      "failed": "The project was not deleted.",
+      "impact": {
+        "tasks": "{{count}} tasks",
+        "members": "{{count}} team members",
+        "documents": "{{count}} documents",
+        "issues": "{{count}} issues",
+        "siteReports": "{{count}} site reports",
+        "models": "{{count}} model versions"
+      }
+    }
   },
   "resetPassword": {
     "password_updated": "Password Updated",
@@ -2576,7 +2682,9 @@
     "progress": "Progress %",
     "review_comment_required_for_rejection": "Review comment (required for rejection)",
     "add_a_project_comment": "Add a project comment…",
-    "add_predecessor": "Add predecessor"
+    "add_predecessor": "Add predecessor",
+    "saved": "Saved.",
+    "start_before_progress": "Start the task to report execution progress."
   },
   "taskForm": {
     "assigned_team_members": "Assigned Team Members",
@@ -2599,7 +2707,11 @@
     "start_date": "Start Date",
     "end_date": "End Date",
     "duration_days": "Duration (Days)",
-    "review_due_date": "Review Due Date"
+    "review_due_date": "Review Due Date",
+    "assignee_hint": "Select one or more active project members — for example the engineers involved and the contractor. Leave all unchecked to keep the task unassigned.",
+    "unknown_member": "Former member",
+    "no_longer_assignable": "no longer assignable — remove to save",
+    "remove_assignee": "Remove {{name}}"
   },
   "tasksPage": {
     "only_work_assigned_to_you_in_the": "Only work assigned to you in the selected project is shown.",
@@ -2634,7 +2746,9 @@
     "confirm_delete_task": "Delete task \"{{name}}\"?",
     "new_task": "New Task",
     "due_today": "Due today",
-    "my_tasks": "My Tasks"
+    "my_tasks": "My Tasks",
+    "access_denied_hint": "Your account can see this project but not its tasks. Tasks are open to the project's team.",
+    "access_denied_title": "You don't have access to this project's tasks"
   },
   "userForm": {
     "the_account_is_activated_immediately": "The account is activated immediately. Store and share the password securely.",
@@ -2739,7 +2853,11 @@
     },
     "platform.view_all_projects": {
       "label": "See every project",
-      "description": "Read any project without being a member of it."
+      "description": "List every project and manage its details, team and parties without being a member. Does not open the project's tasks, documents, models or reports."
+    },
+    "platform.work_in_all_projects": {
+      "label": "Work in every project",
+      "description": "Open the tasks, documents, models and reports of any project without being on its team."
     },
     "project.manage_members": {
       "label": "Manage the project team",
@@ -2844,6 +2962,10 @@
     "ai.promote_insight": {
       "label": "Turn an AI insight into work",
       "description": "Create a formal issue or task from an AI insight."
+    },
+    "agents.view": {
+      "label": "Use the Agents page",
+      "description": "Open the project Agents page, run the agents and read their run history."
     }
   },
   "schedule": {
@@ -2865,7 +2987,8 @@
     "resendIn": "Resend available in {{seconds}}s",
     "invalidCode": "That code is not valid or has expired. Request a new one if needed.",
     "requestFailed": "The verification code could not be sent. Please try again shortly.",
-    "deliveryUnavailable": "Email delivery is not configured on this environment, so the code could not be sent."
+    "deliveryUnavailable": "Email delivery is not configured on this environment, so the code could not be sent.",
+    "devCode": "Development environment: the code is {{code}} and has been filled in. This is never shown in production."
   },
   "notificationRedirect": {
     "opening": "Opening notification…",
@@ -2985,7 +3108,8 @@
     "transcript": "Transcript",
     "understanding": "Understanding…",
     "updateFailed": "The action could not be updated. Try again.",
-    "whichTask": "Which task do you mean?"
+    "whichTask": "Which task do you mean?",
+    "livePreview": "Live preview (approximate — the final transcript is made from your recording and understands mixed Arabic and English)"
   },
   "officeRoles": {
     "title": "Roles and disciplines",
@@ -3017,7 +3141,10 @@
     "disciplineCreated": "Added {{name}}.",
     "permissionAdded": "Permission added.",
     "permissionRemoved": "Permission removed.",
-    "coversModelClasses": "Covers model classes: {{list}}"
+    "coversModelClasses": "Covers model classes: {{list}}",
+    "sharedTemplate": "Shared template — your first change creates this office's own copy, which then applies to everyone on the role.",
+    "officeConfiguration": "This office's configuration — changes apply to everyone on the role at their next request.",
+    "saving": "Saving…"
   },
   "projectParties": {
     "title": "Project parties",
@@ -3070,6 +3197,11 @@
       "partial": "Partially processed",
       "failed": "Failed",
       "unknown": "Unknown"
+    },
+    "index": {
+      "indexing": "Indexing…",
+      "ready": "Searchable",
+      "failed": "Indexing failed"
     }
   },
   "mcpClients": {
@@ -3184,5 +3316,20 @@
       "rfi_agent": "Tracks requests for information — which this platform records as design changes — for unanswered and overdue requests and recurring clarification areas.",
       "schedule_risk_agent": "Identifies schedule risk on top of existing scheduling data: overdue, stalled, blocked and undated work. It does not recompute the critical path."
     }
+  },
+  "workScope": {
+    "explanation": "This page gathers tasks, documents and messages from the projects you work on. You administer projects without being on their teams, so there is nothing to show here. Open a project to manage its team, or add yourself to a team to work in it.",
+    "openProjects": "Go to Projects",
+    "title": "You are not on any project team"
+  },
+  "documentSharing": {
+    "action": "Parties",
+    "title": "Outside parties who can read “{{name}}”",
+    "hint": "Contractors and the client see a document only once it is shared with their party here.",
+    "loadFailed": "Could not load this document's sharing.",
+    "shared": "Shared with {{party}}.",
+    "unshared": "No longer shared with {{party}}.",
+    "failed": "The share was not changed.",
+    "noParties": "This project has no outside parties yet."
   }
 }

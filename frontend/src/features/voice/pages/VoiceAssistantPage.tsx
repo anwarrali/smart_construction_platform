@@ -53,7 +53,7 @@ export const VoiceAssistantPage = () => {
 
       <Card>
         <h3 className="text-base font-semibold">{t("voiceAssistant.todaySummary")}</h3>
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="mt-2 text-sm text-state-overdue">{error}</p> : null}
         {readiness && readiness.updateCount > 0 ? (
           <>
             <p className="mt-1 text-sm opacity-70">
@@ -80,7 +80,7 @@ export const VoiceAssistantPage = () => {
               ))}
             </ul>
             {readiness.ready ? (
-              <p className="mt-3 text-sm text-emerald-600">{t("voiceAssistant.reportReady")}</p>
+              <p className="mt-3 text-sm text-state-verified">{t("voiceAssistant.reportReady")}</p>
             ) : null}
           </>
         ) : (

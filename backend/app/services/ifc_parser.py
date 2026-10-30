@@ -31,7 +31,57 @@ FURNITURE_EQUIPMENT = {"IfcFurniture", "IfcFurnishingElement", "IfcSystemFurnitu
 
 
 class IFCParseError(ValueError):
-    pass
+    """A processing failure with a stable code (`str(exc)`).
+
+    `user_message` replaces the code's generic description when the failure has
+    specifics worth telling the person (sizes, limits). `detail` is technical
+    context for the server log only and is never sent to the browser.
+    """
+
+    def __init__(self, code: str, *, user_message: str | None = None, detail: str | None = None):
+        super().__init__(code)
+        self.user_message = user_message
+        self.detail = detail
+
+
+#: Entities whose attribute list does not match their declared schema, found
+#: during the current parse. The parser runs in its own single-threaded worker
+#: process (see `ifc_processing_service.parse_with_timeout`), so a module-level
+#: collector is not shared between parses.
+_MALFORMED: dict[str, set[int]] = {}
+
+
+def _attr(entity: Any, name: str, default: Any = None) -> Any:
+    """Read one IFC attribute, tolerating an entity that is malformed.
+
+    ifcopenshell raises `RuntimeError` — not `AttributeError` — when an entity
+    was written with fewer arguments than its schema defines ("Index 10 is out
+    of range for variant of size 9"). Exporters that write IFC2X3-shaped doors
+    and windows into a file declared IFC4 produce exactly that, and a plain
+    `getattr(..., None)` lets it abort the whole extraction over one optional
+    field. The attribute is treated as absent and the entity is recorded so the
+    import can say, specifically, what it could not read.
+    """
+    try:
+        return getattr(entity, name, default)
+    except RuntimeError:
+        try:
+            key, step_id = entity.is_a(), entity.id()
+        except Exception:  # pragma: no cover - an entity too broken to name
+            key, step_id = "unknown entity", -1
+        _MALFORMED.setdefault(key, set()).add(step_id)
+        return default
+
+
+def _malformed_warning(schema: str) -> str | None:
+    if not _MALFORMED:
+        return None
+    total = sum(len(ids) for ids in _MALFORMED.values())
+    breakdown = ", ".join(f"{name} x{len(ids)}" for name, ids in sorted(_MALFORMED.items(), key=lambda item: -len(item[1])))
+    return (
+        f"{total} entities ({breakdown}) have attribute lists that do not match the {schema} schema; "
+        "their unreadable attributes were left empty. Re-export the model from the authoring tool to fix this."
+    )
 
 
 @dataclass
@@ -105,7 +155,7 @@ def _json_safe(value: Any, depth: int = 0) -> Any:
 
 
 def _global_id(entity: Any) -> str:
-    value = _clean(getattr(entity, "GlobalId", None), 64)
+    value = _clean(_attr(entity, "GlobalId", None), 64)
     return value or f"STEP-{entity.id()}"
 
 
@@ -147,9 +197,9 @@ def discipline_for_class(entity_type: str, *, system_name: str | None = None, pr
 
 
 def _parent_global_id(entity: Any) -> str | None:
-    decomposes = getattr(entity, "Decomposes", None) or []
+    decomposes = _attr(entity, "Decomposes", None) or []
     for relationship in decomposes:
-        parent = getattr(relationship, "RelatingObject", None)
+        parent = _attr(relationship, "RelatingObject", None)
         if parent:
             return _global_id(parent)
     return None
@@ -157,8 +207,8 @@ def _parent_global_id(entity: Any) -> str | None:
 
 def _spatial_ancestors(entity: Any) -> tuple[str | None, str | None, str | None]:
     storey = space = building = None
-    relationships = getattr(entity, "ContainedInStructure", None) or []
-    current = getattr(relationships[0], "RelatingStructure", None) if relationships else None
+    relationships = _attr(entity, "ContainedInStructure", None) or []
+    current = _attr(relationships[0], "RelatingStructure", None) if relationships else None
     visited: set[int] = set()
     while current and current.id() not in visited:
         visited.add(current.id())
@@ -171,8 +221,8 @@ def _spatial_ancestors(entity: Any) -> tuple[str | None, str | None, str | None]
             building = _global_id(current)
         parent_id = _parent_global_id(current)
         parent = None
-        for relationship in getattr(current, "Decomposes", None) or []:
-            candidate = getattr(relationship, "RelatingObject", None)
+        for relationship in _attr(current, "Decomposes", None) or []:
+            candidate = _attr(relationship, "RelatingObject", None)
             if candidate and _global_id(candidate) == parent_id:
                 parent = candidate
                 break
@@ -181,12 +231,12 @@ def _spatial_ancestors(entity: Any) -> tuple[str | None, str | None, str | None]
 
 
 def _placement_hash(entity: Any) -> str | None:
-    placement = getattr(entity, "ObjectPlacement", None)
+    placement = _attr(entity, "ObjectPlacement", None)
     return hashlib.sha256(str(placement).encode("utf-8", "replace")).hexdigest() if placement else None
 
 
 def _representation_hash(entity: Any) -> str | None:
-    representation = getattr(entity, "Representation", None)
+    representation = _attr(entity, "Representation", None)
     return hashlib.sha256(str(representation).encode("utf-8", "replace")).hexdigest() if representation else None
 
 
@@ -206,9 +256,9 @@ def _type_and_material(entity: Any) -> tuple[str | None, str | None]:
     try:
         from ifcopenshell.util.element import get_material, get_type
         item_type = get_type(entity)
-        type_name = _clean(getattr(item_type, "Name", None), 250) if item_type else None
+        type_name = _clean(_attr(item_type, "Name", None), 250) if item_type else None
         item_material = get_material(entity)
-        material = _clean(getattr(item_material, "Name", None) or item_material, 1000) if item_material else None
+        material = _clean(_attr(item_material, "Name", None) or item_material, 1000) if item_material else None
     except Exception:
         pass
     return type_name, material
@@ -216,10 +266,10 @@ def _type_and_material(entity: Any) -> tuple[str | None, str | None]:
 
 def _systems(entity: Any) -> str | None:
     names: list[str] = []
-    for assignment in getattr(entity, "HasAssignments", None) or []:
-        group = getattr(assignment, "RelatingGroup", None)
+    for assignment in _attr(entity, "HasAssignments", None) or []:
+        group = _attr(assignment, "RelatingGroup", None)
         if group and group.is_a("IfcSystem"):
-            value = _clean(getattr(group, "Name", None), 250)
+            value = _clean(_attr(group, "Name", None), 250)
             if value:
                 names.append(value)
     return ", ".join(dict.fromkeys(names)) or None
@@ -227,15 +277,15 @@ def _systems(entity: Any) -> str | None:
 
 def _classifications(entity: Any) -> list[dict]:
     result: list[dict] = []
-    for association in getattr(entity, "HasAssociations", None) or []:
-        reference = getattr(association, "RelatingClassification", None)
+    for association in _attr(entity, "HasAssociations", None) or []:
+        reference = _attr(association, "RelatingClassification", None)
         if not reference:
             continue
-        source = getattr(reference, "ReferencedSource", None)
+        source = _attr(reference, "ReferencedSource", None)
         item = {
-            "system": _clean(getattr(source, "Name", None), 200),
-            "code": _clean(getattr(reference, "Identification", None) or getattr(reference, "ItemReference", None), 200),
-            "name": _clean(getattr(reference, "Name", None), 300),
+            "system": _clean(_attr(source, "Name", None), 200),
+            "code": _clean(_attr(reference, "Identification", None) or _attr(reference, "ItemReference", None), 200),
+            "name": _clean(_attr(reference, "Name", None), 300),
             "source": "IFC_SOURCE",
         }
         if any(item.values()):
@@ -258,14 +308,14 @@ def _decimal_degrees(value: Any) -> float | None:
 def _georeferencing(model: Any) -> dict:
     sites = model.by_type("IfcSite")
     site = sites[0] if sites else None
-    latitude = _decimal_degrees(getattr(site, "RefLatitude", None)) if site else None
-    longitude = _decimal_degrees(getattr(site, "RefLongitude", None)) if site else None
-    elevation = getattr(site, "RefElevation", None) if site else None
-    crs_items = model.by_type("IfcProjectedCRS") if "IFC2X3" not in str(getattr(model, "schema", "")).upper() else []
+    latitude = _decimal_degrees(_attr(site, "RefLatitude", None)) if site else None
+    longitude = _decimal_degrees(_attr(site, "RefLongitude", None)) if site else None
+    elevation = _attr(site, "RefElevation", None) if site else None
+    crs_items = model.by_type("IfcProjectedCRS") if "IFC2X3" not in str(_attr(model, "schema", "")).upper() else []
     crs = crs_items[0] if crs_items else None
-    conversions = model.by_type("IfcMapConversion") if "IFC2X3" not in str(getattr(model, "schema", "")).upper() else []
+    conversions = model.by_type("IfcMapConversion") if "IFC2X3" not in str(_attr(model, "schema", "")).upper() else []
     conversion = conversions[0] if conversions else None
-    crs_name = _clean(getattr(crs, "Name", None), 250) if crs else None
+    crs_name = _clean(_attr(crs, "Name", None), 250) if crs else None
     epsg = None
     if crs_name:
         import re
@@ -289,10 +339,10 @@ def _georeferencing(model: Any) -> dict:
     return {
         "status": status, "impact": impact, "coordinateReferenceSystem": crs_name,
         "epsgCode": epsg, "latitude": latitude, "longitude": longitude,
-        "easting": getattr(conversion, "Eastings", None) if conversion else None,
-        "northing": getattr(conversion, "Northings", None) if conversion else None,
+        "easting": _attr(conversion, "Eastings", None) if conversion else None,
+        "northing": _attr(conversion, "Northings", None) if conversion else None,
         "elevation": elevation,
-        "orthogonalHeight": getattr(conversion, "OrthogonalHeight", None) if conversion else None,
+        "orthogonalHeight": _attr(conversion, "OrthogonalHeight", None) if conversion else None,
         "mapConversion": _json_safe(conversion.get_info()) if conversion else None,
         "source": "IFC_SOURCE" if (site or crs or conversion) else "MISSING",
     }
@@ -301,11 +351,11 @@ def _georeferencing(model: Any) -> dict:
 def _model_units(model: Any) -> dict:
     result: dict[str, str] = {}
     projects = model.by_type("IfcProject")
-    assignment = getattr(projects[0], "UnitsInContext", None) if projects else None
-    for unit in getattr(assignment, "Units", None) or []:
-        unit_type = _clean(getattr(unit, "UnitType", None), 80)
-        name = _clean(getattr(unit, "Name", None), 80)
-        prefix = _clean(getattr(unit, "Prefix", None), 40)
+    assignment = _attr(projects[0], "UnitsInContext", None) if projects else None
+    for unit in _attr(assignment, "Units", None) or []:
+        unit_type = _clean(_attr(unit, "UnitType", None), 80)
+        name = _clean(_attr(unit, "Name", None), 80)
+        prefix = _clean(_attr(unit, "Prefix", None), 40)
         if unit_type and name:
             symbols = {"METRE": "m", "SQUARE_METRE": "m²", "CUBIC_METRE": "m³", "GRAM": "g", "SECOND": "s", "AMPERE": "A", "KELVIN": "K"}
             prefixes = {"MILLI": "m", "CENTI": "c", "DECI": "d", "KILO": "k"}
@@ -423,10 +473,18 @@ class IFCParser:
             model = ifcopenshell.open(str(path))
         except Exception as exc:
             raise IFCParseError("IFC_FILE_CORRUPTED") from exc
-        schema = _clean(getattr(model, "schema", None), 40) or "UNKNOWN"
+        _MALFORMED.clear()
+        schema = _clean(_attr(model, "schema", None), 40) or "UNKNOWN"
         model_units = _model_units(model)
-        all_entities = list(model)
-        if len(all_entities) > settings.IFC_MAX_ENTITY_COUNT:
+        # The limit applies to the products extraction stores and analyses,
+        # not to every STEP record. Geometry primitives (points, faces, loops)
+        # are most of a model's entities and are never iterated here: a real
+        # 112 MB architectural model held 2.16 million STEP entities but only
+        # 2,263 products, and was rejected by a cap on the former although it
+        # extracts in about 20 seconds. Memory, which does grow with the whole
+        # file, is bounded before the file is opened (see
+        # `ifc_processing_service.check_processing_memory`).
+        if len(model.by_type("IfcProduct")) > settings.IFC_MAX_ENTITY_COUNT:
             raise IFCParseError("IFC_ENTITY_LIMIT_EXCEEDED")
         nodes: list[ParsedSpatialNode] = []
         seen_global_ids: set[str] = set()
@@ -440,18 +498,18 @@ class IFCParser:
                 seen_global_ids.add(global_id)
                 properties, quantities = _psets(entity)
                 space_classification = classify_space([
-                    ("IfcSpace.Name", getattr(entity, "Name", None)), ("IfcSpace.LongName", getattr(entity, "LongName", None)),
-                    ("IfcSpace.ObjectType", getattr(entity, "ObjectType", None)), ("IfcSpace.Description", getattr(entity, "Description", None)),
+                    ("IfcSpace.Name", _attr(entity, "Name", None)), ("IfcSpace.LongName", _attr(entity, "LongName", None)),
+                    ("IfcSpace.ObjectType", _attr(entity, "ObjectType", None)), ("IfcSpace.Description", _attr(entity, "Description", None)),
                     ("IfcSpace.Properties", json.dumps(properties, ensure_ascii=False)),
                 ]) if entity_type == "IfcSpace" else None
                 area = _first_numeric(quantities, ("GrossFloorArea", "NetFloorArea", "Area"))
                 volume = _first_numeric(quantities, ("GrossVolume", "NetVolume", "Volume"))
                 nodes.append(ParsedSpatialNode(
                     global_id=global_id, entity_type=entity_type,
-                    name=_clean(getattr(entity, "Name", None), 300) or f"Unnamed {entity_type}",
-                    description=_clean(getattr(entity, "Description", None)),
+                    name=_clean(_attr(entity, "Name", None), 300) or f"Unnamed {entity_type}",
+                    description=_clean(_attr(entity, "Description", None)),
                     parent_global_id=_parent_global_id(entity), node_type=NODE_TYPE[entity_type],
-                    elevation=float(entity.Elevation) if entity_type == "IfcBuildingStorey" and getattr(entity, "Elevation", None) is not None else None,
+                    elevation=float(entity.Elevation) if entity_type == "IfcBuildingStorey" and _attr(entity, "Elevation", None) is not None else None,
                     area=area, volume=volume,
                     metadata={"stepId": entity.id(), "properties": properties, "quantities": quantities,
                               "spaceClassification": space_classification,
@@ -482,9 +540,9 @@ class IFCParser:
                 material = None
                 material_status = "VIRTUAL_REFERENCE"
             system_name = _systems(entity)
-            predefined_type = _clean(getattr(entity, "PredefinedType", None), 100)
-            original_name = _clean(getattr(entity, "Name", None), 300)
-            object_type = _clean(getattr(entity, "ObjectType", None), 200)
+            predefined_type = _clean(_attr(entity, "PredefinedType", None), 100)
+            original_name = _clean(_attr(entity, "Name", None), 300)
+            object_type = _clean(_attr(entity, "ObjectType", None), 200)
             discipline, discipline_confidence, discipline_reason, discipline_attributes = discipline_for_class(
                 entity_type, system_name=system_name, predefined_type=predefined_type,
                 name=original_name, object_type=object_type, material=material,
@@ -493,7 +551,7 @@ class IFCParser:
                 ("IfcProduct.Name", original_name), ("IfcProduct.ObjectType", object_type),
                 ("IfcTypeObject.Name", type_name), ("IfcSystem.Name", system_name), ("IfcProduct.PredefinedType", predefined_type),
             ])
-            source_global_id = _clean(getattr(entity, "GlobalId", None), 64)
+            source_global_id = _clean(_attr(entity, "GlobalId", None), 64)
             classifications = _classifications(entity)
             missing = []
             if not original_name: missing.append("name")
@@ -506,10 +564,10 @@ class IFCParser:
             elements.append(ParsedElement(
                 global_id=global_id, entity_type=entity_type,
                 name=original_name or f"Unnamed {entity_type}",
-                description=_clean(getattr(entity, "Description", None)),
+                description=_clean(_attr(entity, "Description", None)),
                 object_type=object_type,
                 predefined_type=predefined_type,
-                tag=_clean(getattr(entity, "Tag", None), 120),
+                tag=_clean(_attr(entity, "Tag", None), 120),
                 storey_global_id=storey, space_global_id=space, building_global_id=building,
                 discipline=discipline, system_name=system_name,
                 type_name=type_name, material_summary=material,
@@ -525,6 +583,9 @@ class IFCParser:
                     "normalizedCategory": normalized_category["category"], "categoryInference": normalized_category,
                 },
             ))
+        malformed = _malformed_warning(schema)
+        if malformed:
+            warnings.append(malformed)
         if not any(node.node_type == "STOREY" for node in nodes):
             warnings.append("The model has no IfcBuildingStorey hierarchy; elements appear under Unassigned.")
         if not any(node.node_type == "SPACE" for node in nodes):
@@ -533,7 +594,7 @@ class IFCParser:
         applications = model.by_type("IfcApplication")
         if applications:
             app = applications[0]
-            authoring_application = _clean(f"{getattr(app, 'ApplicationFullName', '')} {getattr(app, 'Version', '')}", 250)
+            authoring_application = _clean(f"{_attr(app, 'ApplicationFullName', '')} {_attr(app, 'Version', '')}", 250)
         asset_type, confidence, evidence = _asset_type(nodes, elements)
         discipline_counts = Counter(item.discipline for item in elements)
         class_counts = Counter(item.entity_type for item in elements)

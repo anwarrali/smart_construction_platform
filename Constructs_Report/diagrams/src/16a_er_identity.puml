@@ -1,0 +1,56 @@
+@startuml
+!include _style.iuml
+hide circle
+entity companies {
+  * id : UUID <<PK>>
+  --
+  name, kind, is_tenant
+}
+entity users {
+  * id : UUID <<PK>>
+  --
+  email, hashed_password
+  status, must_change_password
+  company_id <<FK>>
+  org_role_id <<FK>>
+}
+entity roles {
+  * id : UUID <<PK>>
+  --
+  organization_id <<FK>>
+  code, name_en, name_ar
+  scope, undeletable, rank
+}
+entity role_permissions {
+  * id : UUID <<PK>>
+  --
+  role_id <<FK>>
+  permission_code, allowed
+}
+entity organization_memberships {
+  * id : UUID <<PK>>
+  --
+  user_id <<FK>>, organization_id <<FK>>
+  role_id <<FK>>, is_primary
+}
+entity user_permission_overrides {
+  * id : UUID <<PK>>
+  --
+  user_id <<FK>>, project_id <<FK, null>>
+  permission_code, allowed, reason
+}
+entity disciplines {
+  * id : UUID <<PK>>
+  --
+  organization_id <<FK>>
+  code, ifc_disciplines
+}
+companies ||--o{ users
+companies ||--o{ roles
+companies ||--o{ disciplines
+roles ||--o{ role_permissions
+roles ||--o{ users : org_role
+users ||--o{ organization_memberships
+roles ||--o{ organization_memberships
+users ||--o{ user_permission_overrides
+@enduml

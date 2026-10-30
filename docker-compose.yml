@@ -52,7 +52,12 @@ services:
       - "8000:8000"
     env_file:
       - ./backend/.env
-    environment:
+    # Shared with the worker below (`<<: *backend-env`), so the two processes
+    # can never disagree about the database, storage or a feature switch.
+    environment: &backend-env
+      # Heavy work runs on the dedicated `worker` service, not in the API
+      # process. Single-container deployments leave this at its true default.
+      JOB_RUNNER_EMBEDDED: ${JOB_RUNNER_EMBEDDED:-false}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-Const%402233}@db:5432/${POSTGRES_DB:-construction_platform}
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
@@ -101,6 +106,34 @@ services:
     # initialize RBAC, optional demo seed, serve. An override here once skipped
     # the RBAC step, so a fresh Compose database had no roles and no
     # administrator. tests/test_start_sequence.py keeps it from coming back.
+
+  # The background job runner: IFC parsing and geometry, file ingestion, RAG
+  # indexing and agent analysis, off the request path. Same image and the same
+  # environment as the API. It does not migrate: it waits until the API's start
+  # sequence has brought the database to the head its code expects.
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: construction_worker
+    restart: always
+    # Running jobs get time to finish on `docker compose stop`; anything still
+    # running after that is handed back by the reaper once its heartbeat stops.
+    stop_grace_period: 60s
+    volumes:
+      - uploads_data:/app/uploads
+      - voice_audio_data:/app/private_uploads
+      - ./backend/secrets:/run/secrets:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-env
+    networks:
+      - app-network
+    command: sh -c "python scripts/wait_for_db.py && exec python -m app.worker"
 
   frontend:
     build:

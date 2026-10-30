@@ -138,7 +138,7 @@
     "groupControl": "المتابعة",
     "groupField": "الموقع",
     "groupReference": "المراجع",
-    "groupTeam": "الفريق والنشاط",
+    "groupTeam": "الفريق",
     "menu": "القائمة",
     "openMenu": "فتح القائمة",
     "closeMenu": "إغلاق القائمة",
@@ -146,7 +146,21 @@
     "voiceAssistant": "المساعد الصوتي",
     "officeRoles": "الأدوار والتخصصات",
     "projectParties": "أطراف المشروع",
-    "agents": "الوكلاء"
+    "agents": "الوكلاء",
+    "dashboard": "لوحة التحكم",
+    "projects": "المشاريع",
+    "coordination": "التنسيق",
+    "executiveOverview": "النظرة التنفيذية",
+    "groupWork": "العمل",
+    "groupSite": "الموقع",
+    "groupDocuments": "المستندات والنماذج",
+    "groupAnalysis": "التحليل",
+    "collapseRail": "طي القائمة",
+    "expandRail": "توسيع القائمة",
+    "breadcrumb": "مسار الصفحة",
+    "userMenu": "قائمة الحساب",
+    "skipToContent": "الانتقال إلى المحتوى",
+    "milestones": "المراحل الرئيسية"
   },
   "roles": {
     "admin": "مدير النظام",
@@ -330,7 +344,17 @@
     "uploadedAt": "تاريخ الرفع",
     "fileSize": "الحجم",
     "fileType": "نوع الملف",
-    "download": "تنزيل"
+    "download": "تنزيل",
+    "type": {
+      "drawing": "مخطط",
+      "report": "تقرير",
+      "contract": "عقد",
+      "permit": "تصريح",
+      "specification": "مواصفات",
+      "invoice": "فاتورة",
+      "boq": "جدول الكميات",
+      "other": "أخرى"
+    }
   },
   "collaboration": {
     "actionCenter": "مركز الإجراءات",
@@ -594,7 +618,9 @@
     "requiredFields": "المشروع والعنوان والوصف حقول مطلوبة.",
     "visitRequiredFields": "المشروع والعنوان ووقت البداية والنهاية حقول مطلوبة.",
     "intelligenceRunFailed": "تعذّر إكمال تحليل الذكاء الاصطناعي.",
-    "appCrashedHint": "واجهت الصفحة مشكلة غير متوقعة. عادةً ما تحل إعادة التحميل المشكلة؛ بياناتك لم تتأثر."
+    "appCrashedHint": "واجهت الصفحة مشكلة غير متوقعة. عادةً ما تحل إعادة التحميل المشكلة؛ بياناتك لم تتأثر.",
+    "notPermittedPrefix": "غير مسموح:",
+    "supportId": "معرّف الدعم: {{id}}"
   },
   "validation": {
     "required": "هذا الحقل مطلوب.",
@@ -818,7 +844,7 @@
         "name": "المالك",
         "purpose": "رؤية عامة شاملة",
         "items": [
-          "التقدّم العام والمعالم",
+          "التقدّم العام والمراحل",
           "المستندات المعتمدة",
           "التأخيرات الكبرى وحالة المشروع"
         ]
@@ -1039,7 +1065,7 @@
         "قيد المراجعة",
         "المهام المتأخرة"
       ],
-      "milestoneProgress": "تقدّم المعالم",
+      "milestoneProgress": "تقدّم المراحل",
       "recentReports": "أحدث تقارير الموقع",
       "reports": [
         "فحص الأساسات",
@@ -1182,7 +1208,7 @@
       "delayedTasks": "المهام المتأخرة",
       "scheduledTaskDays": "أيام العمل المجدولة",
       "designChanges": "التعديلات التصميمية",
-      "milestones": "المعالم",
+      "milestones": "المراحل",
       "portfolioSub": "محفظة مشاريعك الكاملة",
       "plannedDatesSub": "تواريخ مخططة شاملة",
       "awaitingResolution": "بانتظار المعالجة",
@@ -1246,12 +1272,12 @@
       "reportsAwaiting_few": "{{count}} تقارير موقع بانتظار تحققك",
       "reportsAwaiting_many": "{{count}} تقريرًا بانتظار تحققك",
       "reportsAwaiting_other": "{{count}} تقرير موقع بانتظار تحققك",
-      "milestonesOpen_zero": "{{count}} معلم ما زال مفتوحًا",
-      "milestonesOpen_one": "{{count}} معلم ما زال مفتوحًا",
-      "milestonesOpen_two": "{{count}} معلمان ما زالا مفتوحين",
-      "milestonesOpen_few": "{{count}} معالم ما زالت مفتوحة",
-      "milestonesOpen_many": "{{count}} معلمًا ما زال مفتوحًا",
-      "milestonesOpen_other": "{{count}} معلم ما زال مفتوحًا"
+      "milestonesOpen_zero": "لا توجد مراحل مفتوحة",
+      "milestonesOpen_one": "مرحلة واحدة ما زالت مفتوحة",
+      "milestonesOpen_two": "مرحلتان ما زالتا مفتوحتين",
+      "milestonesOpen_few": "{{count}} مراحل ما زالت مفتوحة",
+      "milestonesOpen_many": "{{count}} مرحلة ما زالت مفتوحة",
+      "milestonesOpen_other": "{{count}} مرحلة ما زالت مفتوحة"
     },
     "table": {
       "report": "التقرير",
@@ -1275,7 +1301,7 @@
       "task": "مهمة",
       "issue": "مشكلة",
       "project": "مشروع",
-      "milestone": "معلم",
+      "milestone": "مرحلة",
       "document": "مستند",
       "site_report": "تقرير موقع",
       "site_visit": "زيارة ميدانية",
@@ -1370,7 +1396,15 @@
     "general": "عام",
     "mechanical_hvac": "ميكانيكا / تكييف",
     "unclassified": "غير مصنّف",
-    "unassigned": "غير مُسند"
+    "unassigned": "غير مُسند",
+    "bim": "نمذجة معلومات البناء",
+    "qa_qc": "ضبط وتأكيد الجودة",
+    "geotechnical": "جيوتقني",
+    "mep": "كهروميكانيك",
+    "survey": "مساحة",
+    "quantity_surveying": "حصر كميات",
+    "landscape": "تنسيق مواقع",
+    "infrastructure": "بنية تحتية"
   },
   "accessControl": {
     "eyebrow": "الإدارة",
@@ -1443,7 +1477,25 @@
     "noEngineers": "لا يوجد مهندسون في هذا المشروع بعد.",
     "enforcementNote": "يتحقق الخادم من الصلاحيات في كل طلب. إخفاء عنصر هنا هو أمر عرضي فقط — والتغيير يسري على الواجهة البرمجية أيضًا.",
     "rolesMoved": "تُحرَّر صلاحيات كل دور في صفحة أدوار المكتب، التي تعرض كل أدوار المكتب — المُعدّة مسبقًا والتي أنشأها المكتب.",
-    "openOfficeRoles": "فتح أدوار المكتب"
+    "openOfficeRoles": "فتح أدوار المكتب",
+    "saving": "جارٍ الحفظ…",
+    "governedByOfficeCopy": "الصلاحيات مأخوذة من دور «{{name}}» الخاص بهذا المكتب",
+    "overrideGrant": "مسموح لهذا الشخص",
+    "overrideDeny": "ممنوع على هذا الشخص",
+    "overrideInherit": "موروث من الدور",
+    "reason": {
+      "granted_by_role": "ممنوحة من دور {{role}}",
+      "granted_by_project_role": "ممنوحة من دوره في هذا المشروع",
+      "granted_to_user": "ممنوحة مباشرة لهذا الشخص",
+      "granted_on_project": "ممنوحة مباشرة لهذا الشخص في هذا المشروع",
+      "admin_locked": "يحتفظ بها مدير المكتب دائمًا",
+      "denied_for_user": "ممنوعة باستثناء خاص بهذا الشخص",
+      "denied_on_project": "ممنوعة على هذا الشخص في هذا المشروع",
+      "blocked_external": "محجوبة: لا يمكن لمن يشارك نيابة عن طرف خارجي حملها",
+      "blocked_project_access": "محجوبة: ليس ضمن فريق هذا المشروع",
+      "account_inactive": "محجوبة: الحساب غير نشط",
+      "not_granted": "لا يمنحها دوره"
+    }
   },
   "aiInsight": {
     "DISCIPLINE_NOT_IN_IFC": {
@@ -1590,21 +1642,22 @@
     "activeProjects": "المشاريع النشطة"
   },
   "milestonesPage": {
-    "open_a_project_to_manage_milestones": "افتح مشروعًا لإدارة المعالم.",
-    "project_milestones": "معالم المشروع",
+    "open_a_project_to_manage_milestones": "افتح مشروعًا لإدارة المراحل.",
+    "project_milestones": "مراحل المشروع",
     "link_scheduled_work_to_measurable": "اربط الأعمال المجدولة بأهداف قابلة للقياس في المشروع.",
-    "loading_milestones": "جارٍ تحميل المعالم…",
+    "loading_milestones": "جارٍ تحميل المراحل...",
     "no_tasks_linked_yet": "لم تُربط أي مهام بعد.",
     "edit": "تعديل",
     "delete": "حذف",
-    "no_milestones_have_been_created_for_this": "لم يتم إنشاء أي معالم لهذا المشروع.",
+    "no_milestones_have_been_created_for_this": "لم يتم إنشاء أي مراحل لهذا المشروع.",
     "linked_tasks": "المهام المرتبطة",
     "progress_is_calculated_automatically": "يُحتسب التقدّم تلقائيًا من المهام المحددة.",
     "cancel": "إلغاء",
-    "save_milestone": "حفظ المعلم",
-    "milestone_name": "اسم المعلم *",
+    "save_milestone": "حفظ المرحلة",
+    "milestone_name": "اسم المرحلة *",
     "planned_date": "التاريخ المخطط *",
-    "description": "الوصف"
+    "description": "الوصف",
+    "add_milestone": "إضافة مرحلة رئيسية"
   },
   "profilePage": {
     "profile_not_found": "الملف الشخصي غير موجود",
@@ -1725,7 +1778,8 @@
   },
   "contextDiscussion": {
     "no_discussion_yet": "لا يوجد نقاش بعد.",
-    "loading_discussion": "جارٍ تحميل النقاش…"
+    "loading_discussion": "جارٍ تحميل النقاش…",
+    "cannot_start": "يمكنك الرد بعد أن يبدأ أحد هذا النقاش؛ بدء نقاش يتطلب صلاحية إرسال رسائل المشروع."
   },
   "dashboardSelectorPage": {
     "active_engineer_organization_side_is": "يجب تحديد الجهة التنظيمية للمهندس النشط.",
@@ -1788,7 +1842,13 @@
     "no_documents_found": "لم يتم العثور على مستندات",
     "download": "تنزيل",
     "delete": "حذف",
-    "ask_ai": "اسأل الذكاء الاصطناعي"
+    "ask_ai": "اسأل المستند",
+    "column_document": "المستند",
+    "column_type": "النوع",
+    "column_revision": "الإصدار",
+    "column_size": "الحجم",
+    "column_date": "تاريخ الرفع",
+    "column_actions": "الإجراءات"
   },
   "documentsPage": {
     "project_documents_and_files": "مستندات المشروع وملفاته",
@@ -2156,8 +2216,8 @@
     "error_IFC_FILE_CORRUPTED_action": "أعد تصدير النموذج من برنامج التصميم، ثم ارفعه مرة أخرى.",
     "error_IFC_PARSER_UNAVAILABLE_title": "معالجة IFC غير متاحة",
     "error_IFC_PARSER_UNAVAILABLE_action": "تواصل مع الدعم الفني؛ محلّل IFC غير مثبَّت بشكل صحيح على الخادم.",
-    "error_IFC_ENTITY_LIMIT_EXCEEDED_title": "النموذج كبير جدًا",
-    "error_IFC_ENTITY_LIMIT_EXCEEDED_action": "ارفع نموذج تخصص واحد أو نموذج طابق واحد بدلًا من النموذج المدمج.",
+    "error_IFC_ENTITY_LIMIT_EXCEEDED_title": "يحتوي النموذج على عناصر بناء أكثر من المسموح",
+    "error_IFC_ENTITY_LIMIT_EXCEEDED_action": "ارفع نموذج تخصص واحد أو طابق واحد، أو أعد المحاولة بعد أن يراجع المسؤول حدّ العناصر.",
     "error_IFC_PARSE_TIMEOUT_title": "انتهت مهلة معالجة IFC",
     "error_IFC_PARSE_TIMEOUT_action": "أعد المحاولة، أو ارفع نموذج تخصص أصغر.",
     "error_IFC_PARSER_OUT_OF_MEMORY_title": "النموذج يحتاج ذاكرة أكبر مما يوفّره هذا الخادم",
@@ -2182,7 +2242,11 @@
     "revision_is_now_baseline": "أصبحت هذه المراجعة هي المرجعية الآن.",
     "revision_designation_failed": "تعذّر تحديث المراجعة.",
     "download_started": "جارٍ تنزيل {{filename}}",
-    "download_failed": "تعذّر تنزيل ملف IFC."
+    "download_failed": "تعذّر تنزيل ملف IFC.",
+    "duplicate_upload": "هذا الملف نفسه مرفوع مسبقًا بوصفه الإصدار V{{number}} \"{{title}}\" ({{status}}). تم فتحه بدلًا من إنشاء نسخة ثانية.",
+    "file_exceeds_processing_limit": "يمكن تخزين هذا الملف ({{size}} ميجابايت)، لكن هذا الخادم يعالج نماذج IFC حتى نحو {{limit}} ميجابايت فقط. ارفع نموذج تخصص أو طابق للحصول على التحليل.",
+    "error_IFC_MODEL_TOO_LARGE_FOR_HOST_title": "النموذج يحتاج ذاكرة أكبر مما يسمح به هذا الخادم",
+    "error_IFC_MODEL_TOO_LARGE_FOR_HOST_action": "ارفع نموذج تخصص أو طابق واحد، أو أعد المحاولة بعد أن يرفع المسؤول ذاكرة المعالجة على خادم أكبر."
   },
   "issuesPage": {
     "track_and_resolve_project_issues": "تتبّع مشكلات المشروع وحلّها",
@@ -2226,7 +2290,16 @@
     "forward_note_optional": "ملاحظة (اختياري)",
     "forward_note_placeholder": "أضف سياقًا للمستلم، مثل: \"هل يمكنك مراجعة هذا وإعطائي رأيك؟\"",
     "message_forwarded": "تم إعادة توجيه الرسالة.",
-    "forward_failed": "تعذّرت إعادة توجيه الرسالة."
+    "forward_failed": "تعذّرت إعادة توجيه الرسالة.",
+    "all_project_members": "جميع أعضاء المشروع",
+    "blocker_group": "اختر المجموعة التي ستصلها الرسالة.",
+    "blocker_message": "اكتب رسالة لإرسالها.",
+    "blocker_recipient": "اختر مستلمًا واحدًا على الأقل.",
+    "choose_group": "اختر مجموعة",
+    "no_projects_to_message": "لست عضوًا في فريق أي مشروع، لذلك لا توجد محادثات لعرضها. الرسائل والإعلانات مرتبطة بمشروع.",
+    "not_on_project_team": "المراسلة في هذا المشروع لفريقه. يمكنك إدارة الفريق دون أن تكون عضوًا فيه؛ أضف نفسك إلى الفريق لترسل الرسائل أو الإعلانات هنا.",
+    "project_announcement": "إعلان على مستوى المشروع",
+    "recipients_unavailable": "تعذّر تحميل المستلمين."
   },
   "communication": {
     "forward": "إعادة توجيه",
@@ -2406,7 +2479,8 @@
     "general": "عام",
     "not_reviewed": "لم تتم مراجعته",
     "unlabelled": "بدون تصنيف",
-    "submitted_by": "قدّمه"
+    "submitted_by": "قدّمه",
+    "subtitle": "ابحث في صور الموقع مع الاحتفاظ بمصدرها: المهمة والتقديم ومن رفعها ونتيجة المراجعة."
   },
   "projectDetail": {
     "back_to_projects": "العودة إلى المشاريع",
@@ -2414,7 +2488,7 @@
     "ifc_intelligence": "ذكاء IFC",
     "evidence_photos": "صور الأدلة",
     "schedule": "الجدول الزمني",
-    "milestones": "المعالم",
+    "milestones": "المراحل",
     "messages": "الرسائل",
     "team": "فريق العمل",
     "project_details": "تفاصيل المشروع",
@@ -2448,8 +2522,30 @@
       "designChanges": "تغييرات التصميم",
       "siteReports": "تقارير الموقع",
       "team": "الفريق",
-      "milestones": "المعالم"
-    }
+      "milestones": "المراحل"
+    },
+    "meta": {
+      "status": "الحالة",
+      "location": "الموقع",
+      "type": "النوع",
+      "start": "البداية",
+      "plannedEnd": "النهاية المخططة",
+      "remaining": "المدة المتبقية"
+    },
+    "needs_attention": "يتطلب المتابعة",
+    "site_progress_report": "تقرير تقدم الموقع",
+    "days_remaining_zero": "{{count}} يوم",
+    "days_remaining_one": "{{count}} يوم",
+    "days_remaining_two": "{{count}} يومان",
+    "days_remaining_few": "{{count}} أيام",
+    "days_remaining_many": "{{count}} يومًا",
+    "days_remaining_other": "{{count}} يوم",
+    "days_overdue_zero": "متأخر {{count}} يوم",
+    "days_overdue_one": "متأخر {{count}} يوم",
+    "days_overdue_two": "متأخر {{count}} يومين",
+    "days_overdue_few": "متأخر {{count}} أيام",
+    "days_overdue_many": "متأخر {{count}} يومًا",
+    "days_overdue_other": "متأخر {{count}} يوم"
   },
   "projectForm": {
     "cancel": "إلغاء",
@@ -2537,7 +2633,25 @@
     "selectOwner": "اختر المالك",
     "selectProjectManager": "اختر مدير المشروع",
     "noConsultantSelected": "لم يُحدَّد استشاري",
-    "initial_consultant": "الاستشاري الأولي"
+    "initial_consultant": "الاستشاري الأولي",
+    "delete": {
+      "action": "حذف",
+      "title": "حذف {{name}}؟",
+      "warning": "يحذف هذا المشروع وكل ما سُجِّل عليه نهائيًا. لا يمكن التراجع عنه.",
+      "loadFailed": "تعذّر تحميل ما سيحذفه هذا الإجراء.",
+      "typeName": "اكتب «{{name}}» للتأكيد",
+      "confirm": "حذف نهائي",
+      "done": "تم حذف {{name}}.",
+      "failed": "لم يُحذف المشروع.",
+      "impact": {
+        "tasks": "{{count}} مهام",
+        "members": "{{count}} أعضاء الفريق",
+        "documents": "{{count}} مستندات",
+        "issues": "{{count}} مشكلات",
+        "siteReports": "{{count}} تقارير موقع",
+        "models": "{{count}} إصدارات نموذج"
+      }
+    }
   },
   "resetPassword": {
     "password_updated": "تم تحديث كلمة المرور",
@@ -2632,7 +2746,9 @@
     "progress": "نسبة التقدّم ٪",
     "review_comment_required_for_rejection": "تعليق المراجعة (مطلوب عند الرفض)",
     "add_a_project_comment": "أضف تعليقًا على المشروع…",
-    "add_predecessor": "إضافة مهمة سابقة"
+    "add_predecessor": "إضافة مهمة سابقة",
+    "saved": "تم الحفظ.",
+    "start_before_progress": "ابدأ المهمة حتى تقدر تسجّل نسبة الإنجاز."
   },
   "taskForm": {
     "assigned_team_members": "أعضاء الفريق المُسندون",
@@ -2655,7 +2771,11 @@
     "start_date": "تاريخ البدء",
     "end_date": "تاريخ الانتهاء",
     "duration_days": "المدة (بالأيام)",
-    "review_due_date": "تاريخ استحقاق المراجعة"
+    "review_due_date": "تاريخ استحقاق المراجعة",
+    "assignee_hint": "اختر عضوًا أو أكثر من أعضاء المشروع النشطين — مثل المهندسين المعنيين والمقاول. اترك الكل دون تحديد لإبقاء المهمة غير مُسندة.",
+    "unknown_member": "عضو سابق",
+    "no_longer_assignable": "لم يعد قابلًا للإسناد — أزله للحفظ",
+    "remove_assignee": "إزالة {{name}}"
   },
   "tasksPage": {
     "only_work_assigned_to_you_in_the": "تُعرض فقط الأعمال المُسندة إليك في المشروع المحدد.",
@@ -2690,7 +2810,9 @@
     "confirm_delete_task": "حذف المهمة \"{{name}}\"؟",
     "new_task": "مهمة جديدة",
     "due_today": "مستحقة اليوم",
-    "my_tasks": "مهامي"
+    "my_tasks": "مهامي",
+    "access_denied_hint": "يمكن لحسابك رؤية هذا المشروع لكن ليس مهامه. المهام متاحة لفريق المشروع.",
+    "access_denied_title": "لا تملك صلاحية الوصول إلى مهام هذا المشروع"
   },
   "userForm": {
     "the_account_is_activated_immediately": "يتم تفعيل الحساب فورًا. احفظ كلمة المرور وشاركها بأمان.",
@@ -2795,7 +2917,11 @@
     },
     "platform.view_all_projects": {
       "label": "الاطلاع على كل المشاريع",
-      "description": "قراءة أي مشروع دون الحاجة لعضويته."
+      "description": "عرض كل المشاريع وإدارة بياناتها وفريقها وأطرافها دون عضوية فيها. لا يفتح مهام المشروع أو وثائقه أو نماذجه أو تقاريره."
+    },
+    "platform.work_in_all_projects": {
+      "label": "العمل في كل المشاريع",
+      "description": "فتح مهام أي مشروع ووثائقه ونماذجه وتقاريره دون أن يكون الشخص ضمن فريقه."
     },
     "project.manage_members": {
       "label": "إدارة فريق المشروع",
@@ -2900,6 +3026,10 @@
     "ai.promote_insight": {
       "label": "تحويل الملاحظة إلى عمل",
       "description": "إنشاء مشكلة أو مهمة رسمية من ملاحظة الذكاء الاصطناعي."
+    },
+    "agents.view": {
+      "label": "استخدام صفحة الوكلاء",
+      "description": "فتح صفحة وكلاء المشروع وتشغيلهم والاطلاع على سجل تشغيلهم."
     }
   },
   "schedule": {
@@ -2921,7 +3051,8 @@
     "resendIn": "يمكن إعادة الإرسال خلال {{seconds}} ثانية",
     "invalidCode": "هذا الرمز غير صالح أو منتهي الصلاحية. اطلب رمزًا جديدًا إذا لزم الأمر.",
     "requestFailed": "تعذّر إرسال رمز التحقق. حاول مرة أخرى بعد قليل.",
-    "deliveryUnavailable": "إرسال البريد الإلكتروني غير مُهيّأ في هذه البيئة، لذا تعذّر إرسال الرمز."
+    "deliveryUnavailable": "إرسال البريد الإلكتروني غير مُهيّأ في هذه البيئة، لذا تعذّر إرسال الرمز.",
+    "devCode": "بيئة تطوير: الرمز هو {{code}} وقد أُدخل تلقائيًا. لا يظهر هذا في بيئة الإنتاج أبدًا."
   },
   "notificationRedirect": {
     "opening": "جارٍ فتح الإشعار…",
@@ -2978,7 +3109,7 @@
       "SEND_PROJECT_MESSAGE": "رسالة للمشروع",
       "SEND_OWNER_UPDATE": "تحديث للمالك"
     },
-    "answer": "الجواب",
+    "answer": "إجابة",
     "applied_few": "تم تطبيق {{count}} تحديثات.",
     "applied_many": "تم تطبيق {{count}} تحديثاً.",
     "applied_one": "تم تطبيق تحديث واحد.",
@@ -3049,7 +3180,8 @@
     "transcript": "النص المنسوخ",
     "understanding": "جارٍ الفهم…",
     "updateFailed": "تعذّر تحديث الإجراء. حاول مرة أخرى.",
-    "whichTask": "أي مهمة تقصد؟"
+    "whichTask": "أي مهمة تقصد؟",
+    "livePreview": "معاينة مباشرة (تقريبية — النص النهائي يُستخرج من التسجيل ويفهم العربي والإنجليزي معًا)"
   },
   "officeRoles": {
     "title": "الأدوار والتخصصات",
@@ -3081,7 +3213,10 @@
     "disciplineCreated": "تمت إضافة {{name}}.",
     "permissionAdded": "تمت إضافة الصلاحية.",
     "permissionRemoved": "تمت إزالة الصلاحية.",
-    "coversModelClasses": "يشمل أصناف النموذج: {{list}}"
+    "coversModelClasses": "يشمل أصناف النموذج: {{list}}",
+    "sharedTemplate": "قالب مشترك — أول تعديل ينشئ نسخة خاصة بهذا المكتب تسري على كل من يحمل الدور.",
+    "officeConfiguration": "إعداد هذا المكتب — تسري التغييرات على كل من يحمل الدور عند طلبه التالي.",
+    "saving": "جارٍ الحفظ…"
   },
   "projectParties": {
     "title": "أطراف المشروع",
@@ -3134,6 +3269,11 @@
       "partial": "معالجة جزئية",
       "failed": "فشل",
       "unknown": "غير معروف"
+    },
+    "index": {
+      "indexing": "جارٍ الفهرسة…",
+      "ready": "قابل للبحث",
+      "failed": "فشلت الفهرسة"
     }
   },
   "mcpClients": {
@@ -3248,5 +3388,20 @@
       "rfi_agent": "يتابع طلبات الاستيضاح — التي تسجّلها المنصة كتغييرات تصميمية — بحثاً عن الطلبات غير المُجابة والمتأخرة ومجالات الاستيضاح المتكررة.",
       "schedule_risk_agent": "يحدد مخاطر الجدول الزمني اعتماداً على بيانات الجدولة القائمة: الأعمال المتأخرة والمتوقفة والمعطّلة وغير المؤرخة. لا يعيد حساب المسار الحرج."
     }
+  },
+  "workScope": {
+    "explanation": "تجمع هذه الصفحة المهام والوثائق والرسائل من المشاريع التي تعمل فيها. أنت تدير المشاريع دون أن تكون ضمن فرقها، لذلك لا يوجد ما يُعرض هنا. افتح مشروعًا لإدارة فريقه، أو أضف نفسك إلى فريق للعمل فيه.",
+    "openProjects": "الانتقال إلى المشاريع",
+    "title": "لست عضوًا في فريق أي مشروع"
+  },
+  "documentSharing": {
+    "action": "الأطراف",
+    "title": "الأطراف الخارجية التي يمكنها قراءة «{{name}}»",
+    "hint": "لا يرى المقاولون والعميل المستند إلا بعد مشاركته مع طرفهم هنا.",
+    "loadFailed": "تعذّر تحميل مشاركة هذا المستند.",
+    "shared": "تمت المشاركة مع {{party}}.",
+    "unshared": "لم يعد مشاركًا مع {{party}}.",
+    "failed": "لم تتغير المشاركة.",
+    "noParties": "لا توجد أطراف خارجية في هذا المشروع بعد."
   }
 }

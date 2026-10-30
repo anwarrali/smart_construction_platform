@@ -62,7 +62,7 @@ const show = (summary?: IFCSummary) =>
   render(
     <FindingsTab
       projectId={PROJECT} versionId={VERSION} summary={summary}
-      canReview canCreateIssue onViewElements={vi.fn()} onFocus3D={vi.fn()}
+      canReview canCreateIssue onViewElements={vi.fn()}
     />,
   );
 

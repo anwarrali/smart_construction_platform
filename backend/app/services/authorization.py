@@ -35,7 +35,7 @@ import uuid
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, user_has_project_access
+from app.core.deps import get_current_user, user_can_see_project_record, user_has_project_access
 from app.core.permission_catalogue import BY_CODE, CATALOGUE
 from app.db.database import get_db
 from app.models.enums import UserStatus
@@ -133,7 +133,114 @@ def effective_permissions(
         granted -= rbac.NON_PROJECT_SCOPED
         granted -= rbac.NEVER_EXTERNAL
 
+    # In one project's context, a project-scoped code means something only
+    # where the person can reach the project (`has_permission` re-checks the
+    # same). Reporting it anyway told the interface an administrator could
+    # open the tasks of a project they only administer (QA-06B).
+    if project_id is not None:
+        work = user_has_project_access(db, user, project_id)
+        record = work or user_can_see_project_record(db, user, project_id)
+        def reachable(code: str) -> bool:
+            permission = BY_CODE.get(code)
+            if permission is None or not permission.project_scoped or work:
+                return True
+            return record and permission.registry
+        granted = {code for code in granted if reachable(code)}
+
     return granted
+
+
+#: Why a permission is or is not held — the vocabulary of `explain_permissions`.
+GRANTED_BY_ROLE = "granted_by_role"
+GRANTED_BY_PROJECT_ROLE = "granted_by_project_role"
+GRANTED_TO_USER = "granted_to_user"
+GRANTED_ON_PROJECT = "granted_on_project"
+ADMIN_LOCKED = "admin_locked"
+DENIED_FOR_USER = "denied_for_user"
+DENIED_ON_PROJECT = "denied_on_project"
+BLOCKED_EXTERNAL = "blocked_external"
+BLOCKED_PROJECT_ACCESS = "blocked_project_access"
+ACCOUNT_INACTIVE = "account_inactive"
+NOT_GRANTED = "not_granted"
+
+
+def explain_permissions(
+    db: Session, user: User, project_id: uuid.UUID | None = None
+) -> dict[str, dict]:
+    """Why each catalogue permission is or is not held, for the editor.
+
+    `held` is **not** recomputed here: it is membership of
+    `effective_permissions`, the one resolver, so the editor can never show a
+    permission the server would refuse. Only the *reason* is derived — from
+    the same layers, in the same order — and `test_rbac_customization` asserts
+    the two agree for every code.
+
+    Returns `{code: {"held", "reason", "role_grants", "override"}}`, where
+    `override` is the explicit decision at this scope (True, False or None for
+    "inherits") and `role_grants` whether the governing roles confer it.
+    """
+    effective = effective_permissions(db, user, project_id)
+    overrides = _user_overrides(db, user.id)
+    global_rows = {row.permission_code: row.allowed for row in overrides if row.project_id is None}
+    project_rows = {
+        row.permission_code: row.allowed for row in overrides
+        if project_id is not None and row.project_id == project_id
+    }
+    office_role = rbac.role_permission_codes(db, rbac.office_role_id(db, user, user.org_role_id))
+    context = rbac.membership_context(db, user.id, project_id)
+    project_role = (
+        rbac.role_permission_codes(db, rbac.office_role_id(db, user, context.member.project_role_id))
+        if context.member is not None and context.member.project_role_id is not None else set()
+    )
+    external = rbac.is_external_participant(db, user, project_id)
+    office_admin = rbac.holds_office_admin_role(db, user)
+    active = user.status == UserStatus.ACTIVE
+
+    result: dict[str, dict] = {}
+    for item in CATALOGUE:
+        code = item.code
+        held = code in effective
+        at_scope = project_rows.get(code, global_rows.get(code))
+        if not active:
+            reason = ACCOUNT_INACTIVE
+        elif held:
+            if project_rows.get(code) is True:
+                reason = GRANTED_ON_PROJECT
+            elif global_rows.get(code) is True and code not in project_rows:
+                reason = GRANTED_TO_USER
+            elif code in office_role:
+                reason = GRANTED_BY_ROLE
+            elif code in project_role:
+                reason = GRANTED_BY_PROJECT_ROLE
+            elif office_admin and item.admin_locked:
+                reason = ADMIN_LOCKED
+            else:
+                reason = GRANTED_BY_ROLE
+        elif project_rows.get(code) is False:
+            reason = DENIED_ON_PROJECT
+        elif global_rows.get(code) is False and code not in project_rows:
+            reason = DENIED_FOR_USER
+        elif external and (code in office_role or code in project_role or at_scope):
+            reason = BLOCKED_EXTERNAL
+        elif project_id is not None and (code in office_role or code in project_role or at_scope):
+            reason = BLOCKED_PROJECT_ACCESS
+        else:
+            reason = NOT_GRANTED
+        result[code] = {
+            "held": held, "reason": reason,
+            "role_grants": code in office_role or code in project_role,
+            "override": at_scope,
+        }
+    return result
+
+
+def governing_role(db: Session, user: User):
+    """The role whose permissions actually apply to this person's office role.
+
+    The office's copy when the account still points at a template the office
+    has edited (`rbac.office_role_id`), else the assigned role itself.
+    """
+    return rbac.get_role(db, rbac.office_role_id(db, user, user.org_role_id))
 
 
 def has_permission(
@@ -146,6 +253,8 @@ def has_permission(
     if code not in effective_permissions(db, user, project_id):
         return False
     if permission.project_scoped and project_id is not None:
+        if permission.registry:
+            return user_can_see_project_record(db, user, project_id)
         return user_has_project_access(db, user, project_id)
     return True
 
@@ -217,6 +326,24 @@ def can_view_all_projects_effective(db: Session, user: User) -> bool:
     return result
 
 
+def can_work_in_all_projects_effective(db: Session, user: User) -> bool:
+    """Whether this person may work inside any project without being on it.
+
+    Resolves `platform.work_in_all_projects`, split from
+    `platform.view_all_projects` by QA-06B: the office administrator keeps the
+    registry (see `app.core.deps.user_can_see_project_record`), office
+    leadership keeps the work. Same recursion argument and per-request cache as
+    `can_view_all_projects_effective`: the code is not project-scoped and no
+    `project_id` is ever passed.
+    """
+    cached = getattr(user, "_work_in_all_projects_effective", None)
+    if cached is not None:
+        return cached[0]
+    result = has_permission(db, user, "platform.work_in_all_projects")
+    user._work_in_all_projects_effective = (result,)
+    return result
+
+
 def require(db: Session, user: User, code: str, project_id: uuid.UUID | None = None) -> None:
     """Raise the standard 403 unless the person holds the permission."""
     if not has_permission(db, user, code, project_id):
@@ -225,6 +352,26 @@ def require(db: Session, user: User, code: str, project_id: uuid.UUID | None = N
             detail=f"You do not have permission to {BY_CODE[code].label.lower()}"
             if code in BY_CODE else "Insufficient permissions for this action",
         )
+
+
+def projects_with_permission(
+    db: Session, user: User, code: str, project_ids: list[uuid.UUID] | None
+) -> list[uuid.UUID]:
+    """Of these projects, the ones where this person holds `code`.
+
+    For cross-project lists. `project_ids` is what `accessible_project_ids`
+    returned; `None` there means "every project", and is expanded here rather
+    than trusted, because reaching every project is not the same as holding a
+    module's view permission in each of them — a per-project override can take
+    it away on one job.
+
+    Before 2026-10-23 the lists of site reports, issues, design changes and
+    tasks asked only for project access, so revoking `site_report.view` hid the
+    page and left the API answering (`docs/PERMISSION_COVERAGE.md`).
+    """
+    if project_ids is None:
+        project_ids = [row for (row,) in db.query(Project.id).all()]
+    return [pid for pid in project_ids if has_permission(db, user, code, pid)]
 
 
 def require_permission(code: str):

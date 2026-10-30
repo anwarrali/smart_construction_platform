@@ -30,7 +30,7 @@ export const LoadingState = ({ label = "Loading model intelligence…" }: { labe
 
 export const ErrorState = ({ message, onRetry }: { message: string; onRetry?: () => void }) => {
   const { t } = useTranslation();
-  return <Card className="border-red-200"><div className="py-8 text-center"><AlertTriangle className="mx-auto mb-3 text-red-500"/><h3 className="font-semibold">{t("iFCShared.this_view_could_not_be_loaded")}</h3><p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">{message}</p>{onRetry && <Button className="mt-4" variant="outline" onClick={onRetry}><RefreshCw size={15}/> Retry</Button>}</div></Card>; }
+  return <Card className="border-state-overdue/30"><div className="py-8 text-center"><AlertTriangle className="mx-auto mb-3 text-state-overdue"/><h3 className="font-semibold">{t("iFCShared.this_view_could_not_be_loaded")}</h3><p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">{message}</p>{onRetry && <Button className="mt-4" variant="outline" onClick={onRetry}><RefreshCw size={15}/> Retry</Button>}</div></Card>; }
 
 /**
  * Why the server would refuse this file, decided before a byte is transmitted.
@@ -73,9 +73,9 @@ export const ProcessingFailure = ({ code, message, supportLogId, onRetry }: {
   const { t } = useTranslation();
   const known = code ? t(`ifcWorkspace.error_${code}_title`, { defaultValue: "" }) : "";
   const action = code ? t(`ifcWorkspace.error_${code}_action`, { defaultValue: "" }) : "";
-  return <Card className="border-red-200">
+  return <Card className="border-state-overdue/30">
     <div className="flex gap-3">
-      <AlertTriangle className="mt-0.5 shrink-0 text-red-500"/>
+      <AlertTriangle className="mt-0.5 shrink-0 text-state-overdue"/>
       <div className="min-w-0 flex-1">
         <h3 className="font-semibold">{known || t("ifcWorkspace.ifc_model_could_not_be_parsed")}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{message || t("ifcWorkspace.parsing_or_extraction_failed")}</p>

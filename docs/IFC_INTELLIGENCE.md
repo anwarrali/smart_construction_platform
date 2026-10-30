@@ -109,12 +109,29 @@ All settings are in `backend/.env.example`:
 - `IFC_MAX_FILE_MB`
 - `IFC_PARSE_TIMEOUT_SECONDS`
 - `IFC_MAX_ENTITY_COUNT`
+- `IFC_PARSE_MEMORY_MB`
 - `IFC_BACKGROUND_PROCESSING_ENABLED`
 - `IFC_ENGINEER_UPLOAD_ENABLED`
 - `IFC_COMPARISON_ENABLED`
 - `IFC_COORDINATION_CHECKS_ENABLED`
 - `IFC_GEOMETRY_ENABLED`
 - `IFC_AI_ANALYSIS_ENABLED`
+
+Three limits apply, and they are separate on purpose:
+
+| Setting | Limits | Default | Failure code |
+| --- | --- | --- | --- |
+| `IFC_MAX_FILE_MB` | what may be **uploaded and stored** | 500 MB | HTTP 413 at upload |
+| `IFC_PARSE_MEMORY_MB` | what this host can **process** — ifcopenshell holds the whole file in memory | 3072 MB (models up to ~174 MB) | `IFC_MODEL_TOO_LARGE_FOR_HOST`, before the file is opened |
+| `IFC_MAX_ENTITY_COUNT` | building elements (`IfcProduct`) extracted per model | 500,000 | `IFC_ENTITY_LIMIT_EXCEEDED` |
+
+The memory requirement was measured on real models: about 0.2 GB plus 16 MB per MB of IFC (a 112.7 MB architectural model peaked at 1.98 GB resident and parsed in ~22 s). Two parses may run at once (`IFC_MAX_CONCURRENT_PROCESSING`), so keep twice the budget under the worker's available memory. A file larger than the processable size is still stored unchanged and can be reprocessed after the budget is raised on a larger host. The parser process also runs under an address-space cap of the budget plus 1 GB, so an underestimate fails as `IFC_PARSER_OUT_OF_MEMORY` rather than taking the worker down.
+
+The entity limit counts products, not STEP records: geometry primitives are most of a model's records and are never iterated during extraction (the 112.7 MB model above has 2.16 million records but 2,263 products). `upload-constraints` reports both `maxFileMb` and `maxProcessableFileMb`, and the upload form warns before transfer when a file is beyond the latter.
+
+Entities whose attribute list does not match their declared schema (for example IFC2X3-shaped doors in a file declared IFC4) no longer abort extraction: the unreadable attributes are left empty and the version finishes `READY_WITH_WARNINGS` with a warning naming the entity types and counts. Any other processing failure is written to the server log with the support ID shown to the user and the parser's own message.
+
+Uploading bytes the project already holds returns `409` with `IFC_DUPLICATE` and names the existing version (`existingVersionId`, `existingModelGroupId`, number, title, status); the unique `(project_id, file_hash)` index settles a racing double submission the same way. Retrying a version that is already processing joins the running job (`202`) instead of answering `409`.
 
 `IFC_ENGINEER_UPLOAD_ENABLED=false` is the conservative default. Project Managers and admins manage versions; active main-contractor engineers can upload only when this setting is enabled. Consultant engineers can view, compare, and review findings within assigned projects. Owners and workers have read-only summary access. Private source files are never exposed by the static `/uploads` mount.
 

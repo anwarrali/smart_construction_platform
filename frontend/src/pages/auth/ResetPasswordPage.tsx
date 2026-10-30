@@ -38,7 +38,7 @@ export const ResetPasswordPage = () => {
 
   if (complete) return <div className="space-y-4 p-6 text-center">
     <h1 className="text-2xl font-bold">{t("resetPassword.password_updated")}</h1>
-    <p className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">{t("resetPassword.your_password_was_changed_successfully")}</p>
+    <p className="rounded-md bg-wash-verified px-4 py-3 text-sm text-state-verified">{t("resetPassword.your_password_was_changed_successfully")}</p>
     <Link to={ROUTES.LOGIN}><Button fullWidth>{t("resetPassword.go_to_login")}</Button></Link>
   </div>;
 
@@ -46,7 +46,7 @@ export const ResetPasswordPage = () => {
     <h1 className="mb-2 text-center text-2xl font-bold">{t("resetPassword.choose_a_new_password")}</h1>
     <p className="mb-6 text-center text-sm text-muted-foreground">{t("resetPassword.use_at_least_8_characters_and_keep_this")}</p>
     <form className="space-y-4" onSubmit={handleSubmit}>
-      {error && <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
+      {error && <div className="rounded-md bg-wash-overdue px-4 py-3 text-sm text-state-overdue">{error}</div>}
       <Input label={t("resetPassword.new_password")} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
       <Input label={t("resetPassword.confirm_password")} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
       <Button type="submit" fullWidth isLoading={isLoading} disabled={!token}>{t("resetPassword.update_password")}</Button>

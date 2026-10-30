@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
-import { Plug, Plus, ShieldOff, Trash2 } from "lucide-react";
+import { Plus, ShieldOff, Trash2 } from "lucide-react";
 
 import api from "../../../services/api";
 import { Badge } from "../../../components/ui/Badge";
@@ -228,10 +228,9 @@ export const McpClientsPage = () => {
 
   return (
     <div className="page-container space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header">
         <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold">
-            <Plug size={22} /> {t("mcpClients.title")}
+          <h1 className="page-title">{t("mcpClients.title")}
           </h1>
           <p className="mt-1 max-w-3xl text-muted-foreground">
             {t("mcpClients.subtitle")}

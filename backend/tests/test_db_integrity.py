@@ -132,7 +132,13 @@ def test_the_migration_chain_has_exactly_one_head():
     # `project_members.role_on_project`, `roles.legacy_role`,
     # `roles.legacy_affiliation`, `role_permission_overrides`, the `user_role`
     # type) and makes `users.org_role_id` NOT NULL.
-    assert heads == ["e1a9c3d5f720"], f"expected exactly one head, found: {heads}"
+    # Bumped by `f2b7d4e9a061`, which adds `background_jobs` — the durable queue
+    # heavy work runs on (this bump was missed when it landed).
+    # Bumped by `g4d1e7a2b958`, which inserts the shared QA/QC discipline. Data
+    # only and idempotent; no schema change.
+    # Bumped by `h5e2f8b3c069`, which grants the new `agents.view` permission to
+    # the Office Administrator role. Data only.
+    assert heads == ["i6f3a9c4d170"], f"expected exactly one head, found: {heads}"
 
     # Every down_revision must point at a migration that actually exists —
     # a dangling reference would mean the chain is broken, not just branched.

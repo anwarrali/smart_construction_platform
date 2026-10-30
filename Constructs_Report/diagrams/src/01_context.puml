@@ -1,0 +1,17 @@
+@startuml
+!include _style.iuml
+left to right direction
+actor "Office staff\n(Admin, GM, PM,\nEngineers, Site Eng.)" as office
+actor "External parties\n(Client rep., Contractor,\nSubcontractor, Reviewer)" as ext
+rectangle "Constructs platform\n(web, mobile, REST API, worker, database)" as sys
+rectangle "OpenAI API\n(transcription, embeddings,\nanswering, analysis)" as ai
+rectangle "Firebase Cloud\nMessaging (push)" as fcm
+rectangle "SMTP server\n(invitations, reset,\nstep-up codes)" as smtp
+rectangle "MCP desktop client\n(optional, off by default)" as mcp
+office --> sys : manage projects, tasks,\ndocuments, IFC, reviews
+ext --> sys : view shared data,\nupdate assigned work
+sys --> ai : HTTPS API calls
+sys --> fcm : push messages
+sys --> smtp : e-mail
+mcp --> sys : tool calls with\nscoped token
+@enduml

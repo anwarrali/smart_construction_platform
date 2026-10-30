@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, computed_field, model_validator
 
 from app.schemas.user import CamelModel
 
@@ -63,6 +63,14 @@ class IFCVersionOut(IFCCamelModel):
     parsing_error_code: str | None = None
     parsing_error_message: str | None = None
     support_log_id: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def parsing_error_retryable(self) -> bool:
+        """Whether offering "Retry" makes sense for this failure."""
+        from app.services.ifc_policy import is_retryable
+        return self.processing_status == "FAILED" and is_retryable(self.parsing_error_code)
+
     entity_count: int
     geometry_status: str
     geometry_error: str | None = None

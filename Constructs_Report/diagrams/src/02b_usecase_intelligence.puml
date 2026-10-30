@@ -1,0 +1,35 @@
+@startuml
+!include _style.iuml
+left to right direction
+actor "Office\nAdministrator" as ADM
+actor "Project Member\n(any authorized role)" as MEM
+actor "BIM Engineer" as BIM
+actor "OpenAI API" as AI
+rectangle "Documents, AI, IFC and administration" {
+  usecase "Manage users, roles\nand permissions" as A1
+  usecase "Set per-user\npermission overrides" as A2
+  usecase "Upload document /\nproject file" as D1
+  usecase "Share document with\nexternal party" as D2
+  usecase "Ask question over\nproject documents (RAG)" as D3
+  usecase "Issue voice command" as V1
+  usecase "Confirm proposed action" as V2
+  usecase "Upload IFC revision" as I1
+  usecase "Compare revisions" as I2
+  usecase "Review coordination\nfindings / suggestions" as I3
+  usecase "Run AI agent analysis" as G1
+}
+ADM --> A1
+ADM --> A2
+MEM --> D1
+MEM --> D2
+MEM --> D3
+MEM --> V1
+MEM --> G1
+BIM --> I1
+BIM --> I2
+BIM --> I3
+V1 ..> V2 : <<include>>
+D3 --> AI
+V1 --> AI
+G1 --> AI
+@enduml

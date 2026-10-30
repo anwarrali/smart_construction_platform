@@ -27,6 +27,9 @@ class RoleOut(CamelModel):
     #: How many people hold it, so an administrator can see what a change costs
     #: before making it.
     member_count: int = 0
+    #: A shared template no office has replaced. Editing it creates the
+    #: office's own copy, which then governs everyone on the role.
+    is_template: bool = False
 
 
 class RoleCreate(CamelModel):

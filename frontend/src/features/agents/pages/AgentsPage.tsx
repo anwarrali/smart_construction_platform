@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Bot, PlayCircle, RefreshCw, Zap, ZapOff } from "lucide-react";
+import { PlayCircle, RefreshCw, Zap, ZapOff } from "lucide-react";
 
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
@@ -169,10 +169,9 @@ export const AgentsPage = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Bot /> {t("agents.title")}
+          <h1 className="page-title">{t("agents.title")}
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             {t("agents.subtitle")}

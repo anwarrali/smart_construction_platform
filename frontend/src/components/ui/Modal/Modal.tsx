@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 
 interface ModalProps {
   isOpen: boolean;
@@ -155,7 +156,7 @@ export const Modal = ({
         {(title || showCloseButton) && (
           <div className="dialog-header">
             {title && (
-              <h2 id={titleId} className="min-w-0 pr-3 text-lg font-semibold sm:text-xl">
+              <h2 id={titleId} className="min-w-0 pe-3 text-[15px] font-semibold">
                 {title}
               </h2>
             )}
@@ -163,10 +164,10 @@ export const Modal = ({
               <button
                 onClick={onClose}
                 type="button"
-                className="btn btn-ghost btn-icon ml-auto shrink-0"
+                className="btn btn-ghost btn-icon -me-2 ms-auto h-8 w-8 shrink-0"
                 aria-label={t("modal.close")}
               >
-                ✕
+                <X size={16} aria-hidden />
               </button>
             )}
           </div>

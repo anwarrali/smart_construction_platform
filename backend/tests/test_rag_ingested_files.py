@@ -735,7 +735,7 @@ def test_the_index_endpoint_queues_the_work_rather_than_doing_it(db, world, monk
     queued = []
     monkeypatch.setattr(
         rag_api.rag, "submit_ingested_file_index",
-        lambda file_id, **kwargs: queued.append((file_id, kwargs)),
+        lambda db, file, **kwargs: queued.append((file.id, kwargs)),
     )
     file = pdf_file(db, world, ["Retention is five per cent."])
     payload = rag_api.index_ingested_file(
@@ -793,17 +793,20 @@ def test_an_unknown_file_is_a_404(db, world):
 
 # --- The background job -----------------------------------------------------
 
-def test_the_background_job_runs_on_the_shared_bounded_pool(monkeypatch):
+def test_the_background_job_runs_on_the_shared_job_queue(monkeypatch):
     """Not a new executor. `IFC_MAX_CONCURRENT_PROCESSING` stays one ceiling
     over all heavy work."""
+    from types import SimpleNamespace
+
     submitted = []
     monkeypatch.setattr(
-        ingestion.processing_pool, "submit",
-        lambda job, *args, **kwargs: submitted.append((job, args, kwargs)),
+        ingestion, "enqueue",
+        lambda db, kind, payload=None, **kwargs: submitted.append((kind, payload, kwargs)),
     )
-    file_id = uuid4()
-    ingestion.submit_ingested_file_index(file_id, force=True)
-    assert submitted == [(ingestion.index_ingested_file_job, (file_id,), {"force": True})]
+    file = SimpleNamespace(id=uuid4(), project_id=uuid4())
+    ingestion.submit_ingested_file_index(None, file, force=True)
+    assert submitted == [("rag.index_file", {"file_id": file.id, "force": True},
+                          {"dedupe_key": f"rag.index:{file.id}", "project_id": file.project_id})]
 
 
 def test_the_background_job_indexes_and_closes_its_own_session(db, world):
@@ -823,10 +826,14 @@ def test_the_background_job_swallows_a_missing_file(db, world):
     ingestion.index_ingested_file_job(uuid4())
 
 
-def test_the_background_job_records_a_failure_without_raising(db, world):
+def test_the_background_job_records_a_failure_and_raises_it_to_the_runner(db, world):
+    """The failure is written on the row first, then re-raised so the job
+    runner records the job as failed and retries it — it used to be swallowed,
+    and a failed index read SUCCEEDED in `background_jobs`."""
     file = pdf_file(db, world, [""])
     db.commit()
-    ingestion.index_ingested_file_job(file.id)
+    with pytest.raises(ingestion.IndexingFailed):
+        ingestion.index_ingested_file_job(file.id)
 
     db.expire_all()
     refreshed = db.get(IngestedFile, file.id)

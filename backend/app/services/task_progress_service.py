@@ -26,6 +26,10 @@ def update_task_progress(*, db: Session, current_user: User, task_id: UUID,
         raise HTTPException(status_code=403, detail="You do not have access to this task")
     is_pm = _is_project_manager(db, current_user, task.project_id)
     is_assignee = _is_task_engineer(task, current_user)
+    if is_assignee and not is_pm:
+        from app.services.authorization import require
+
+        require(db, current_user, "task.update_progress", task.project_id)
     validate_progress_change(
         task=task,
         progress=float(progress_percentage),
@@ -115,10 +119,13 @@ def validate_progress_change(*, task: Task, progress: float, is_project_manager:
 
 
 def _is_project_manager(db: Session, user: User, project_id: UUID) -> bool:
-    project = db.get(Project, project_id)
-    # The id comparison already implies the role: `project_manager_id` is
-    # validated to be an active PROJECT_MANAGER wherever it is written.
-    return bool(project and project.project_manager_id == user.id)
+    """Manages this project's tasks: `task.edit`, as `app.api.tasks` asks it.
+
+    Was the assigned-manager id, so a configured grant never applied here.
+    """
+    from app.services.authorization import has_permission
+
+    return has_permission(db, user, "task.edit", project_id)
 
 
 def _is_task_engineer(task: Task, user: User) -> bool:

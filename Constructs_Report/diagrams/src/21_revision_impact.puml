@@ -1,0 +1,47 @@
+@startuml
+!include _style.iuml
+|BIM Engineer|
+start
+:Request comparison of base
+and target versions;
+|Constructs API|
+if (Same model group and both
+versions READY?) then (no)
+  :Reject request (400 / 409);
+  stop
+else (yes)
+endif
+:Load elements of both versions
+keyed by IFC GlobalId;
+:Missing in target -> REMOVED
+New in target -> ADDED;
+:Present in both: compare hashes of
+properties, quantities, placement,
+geometry and identity fields;
+:Changed -> MODIFIED
+(MOVED when storey, space or
+placement changed);
+:Severity HIGH for structural
+classes with geometry or
+location change;
+repeat :For each change record;
+  if (Element linked to a task,
+issue or milestone?) then (yes)
+    :Impact suggestion on the linked
+item (confidence 1.0);
+  else (no)
+    :DISCIPLINE_REVIEW suggestions on
+up to 20 tasks of the same
+discipline (confidence 0.65);
+  endif
+repeat while (More changes?) is (yes)
+-> no;
+:Store summary, notify project
+manager, write audit log;
+|Project Manager|
+:Acknowledge or dismiss each
+impact suggestion (audited);
+:Update affected tasks or
+raise issues where needed;
+stop
+@enduml

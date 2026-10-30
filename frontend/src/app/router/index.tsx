@@ -2,6 +2,7 @@ import { lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ROUTES } from "../../utils/constants";
 import { ProtectedRoute } from "./ProtectedRoute";
+import { WorkScopeGuard } from "./WorkScopeGuard";
 import { PermissionGuard } from "./PermissionGuard";
 import { OfficeRolesPage } from "../../features/admin/pages/OfficeRolesPage";
 import {
@@ -122,9 +123,11 @@ export const Router = () => {
                 used to spell as `role in {OWNER, ADMIN}`. Deliberately not
                 office-only: the client is an external party, and this is the
                 one view that exists for them. */}
-            <Route element={<PermissionGuard permissions={["client_portal.view"]} />}>
-              <Route path={ROUTES.OWNER_DASHBOARD} element={<OwnerDashboard />} />
-              <Route path={ROUTES.EXECUTIVE_OVERVIEW} element={<ExecutiveOverviewPage />} />
+            <Route element={<WorkScopeGuard />}>
+              <Route element={<PermissionGuard permissions={["client_portal.view"]} />}>
+                <Route path={ROUTES.OWNER_DASHBOARD} element={<OwnerDashboard />} />
+                <Route path={ROUTES.EXECUTIVE_OVERVIEW} element={<ExecutiveOverviewPage />} />
+              </Route>
             </Route>
 
             {/* ── Office administration ──
@@ -162,9 +165,15 @@ export const Router = () => {
                 checks, so an office that takes IFC away from a role stops
                 seeing the tab as well as the data. */}
             <Route path={ROUTES.PROJECTS} element={<ProjectsPage />} />
-            <Route element={<PermissionGuard permissions={["task.view"]} />}>
+            {/* The overview is project-wide metrics, which its endpoint gives
+                only to `task.view_all`. Guarded on `task.view` it admitted
+                engineers to a page that could only refuse them; they are sent
+                to their own work instead (QA 2026-10-22). */}
+            <Route element={<PermissionGuard permissions={["task.view_all"]} />}>
               <Route path={ROUTES.PROJECT_DETAIL}    element={<ProjectDetailPage />} />
               <Route path={ROUTES.PROJECT_DASHBOARD} element={<ProjectDetailPage />} />
+            </Route>
+            <Route element={<PermissionGuard permissions={["task.view"]} />}>
               <Route path={ROUTES.PROJECT_MY_WORK}   element={<EngineerDashboard />} />
               <Route path={ROUTES.PROJECT_TASKS}     element={<TasksPage />} />
               <Route path={ROUTES.PROJECT_TASK_DETAIL} element={<TaskDetailPage />} />
@@ -205,14 +214,12 @@ export const Router = () => {
             <Route element={<PermissionGuard permissions={["ai.view_insights"]} />}>
               <Route path={ROUTES.PROJECT_AI_INTELLIGENCE} element={<AIIntelligencePage />} />
             </Route>
-            {/* The agents page is guarded on `task.view`, the broadest of the
-                five per-agent permissions, because the page's job is to show
-                the whole catalogue and say which of them this person may run.
-                Guarding it on any one agent's permission would hide the others
-                from somebody entitled to know they exist; the run buttons are
-                what the narrower permissions gate, and the server refuses a run
-                regardless of what the button offered. */}
-            <Route element={<PermissionGuard permissions={["task.view"]} />}>
+            {/* The agents page is granted explicitly — `agents.view`, held by
+                the Office Administrator and handed out by them per role or per
+                person. It used to be open to anyone with `task.view`. Each
+                agent's own permission still gates its run button, and every
+                agents endpoint checks `agents.view` itself. */}
+            <Route element={<PermissionGuard permissions={["agents.view"]} />}>
               <Route path={ROUTES.PROJECT_AGENTS} element={<AgentsPage />} />
             </Route>
 
@@ -251,7 +258,10 @@ export const Router = () => {
                 selected: each renders a picker and then scopes to the choice.
                 They therefore carry the same permission as their in-project
                 twin, which is what stops the two disagreeing about who may
-                open a page. */}
+                open a page. Each gathers project work, so somebody who
+                works in no project gets the reason instead of an empty page
+                (`WorkScopeGuard`). */}
+            <Route element={<WorkScopeGuard />}>
             <Route element={<PermissionGuard permissions={["task.view"]} />}>
               <Route path={ROUTES.TASKS}       element={<TasksPage />} />
               <Route path={ROUTES.TASK_DETAIL} element={<TaskDetailPage />} />
@@ -272,6 +282,11 @@ export const Router = () => {
             <Route element={<PermissionGuard permissions={["schedule.view"]} />}>
               <Route path={ROUTES.PROJECT_MILESTONES_PORTFOLIO} element={<MilestonesPage />} />
             </Route>
+            <Route path={ROUTES.MESSAGES}        element={<MessagesPage />} />
+            <Route path={ROUTES.MY_ACTIONS}      element={<CollaborationPage initialTab="actions" />} />
+            <Route path={ROUTES.REQUESTS}        element={<CollaborationPage initialTab="requests" />} />
+            <Route path={ROUTES.SCHEDULE}        element={<CollaborationPage initialTab="schedule" />} />
+            </Route>
             <Route element={<PermissionGuard permissions={["project.manage_members"]} />}>
               <Route path={ROUTES.TEAM} element={<ProjectTeamPage />} />
             </Route>
@@ -284,10 +299,6 @@ export const Router = () => {
                 project-scoped, and each endpoint returns only the caller's own
                 rows. */}
             <Route path={ROUTES.NOTIFICATIONS}   element={<NotificationsPage />} />
-            <Route path={ROUTES.MESSAGES}        element={<MessagesPage />} />
-            <Route path={ROUTES.MY_ACTIONS}      element={<CollaborationPage initialTab="actions" />} />
-            <Route path={ROUTES.REQUESTS}        element={<CollaborationPage initialTab="requests" />} />
-            <Route path={ROUTES.SCHEDULE}        element={<CollaborationPage initialTab="schedule" />} />
             <Route path={ROUTES.SETTINGS}        element={<ProfilePage />} />
             {/* Deliberately ungated. An MCP client token is one of "their own
                 tokens" in the same sense as a device registration: it carries

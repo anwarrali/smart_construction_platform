@@ -161,8 +161,19 @@ class ProjectOut(ProjectBase):
     owner_id: Optional[UUID] = None
     project_manager_id: Optional[UUID] = None
     consultant_approval_mode: ConsultantApprovalMode
+    #: The full team, for whoever staffs the project (`project.manage_members`)
+    #: — the same rule as `GET /projects/{id}/members`. Empty for everyone else.
     members: List[ProjectMemberOut] = []
     open_issue_count: int = 0
+    #: Whether the caller can open this project's work (tasks, documents,
+    #: models…) rather than only its record. False for the office
+    #: administrator on a project they are not on (QA-06B); the interface uses
+    #: it to open such a project on its Team page and to decide which
+    #: portfolio pages have anything to show.
+    can_open_work: bool = True
+    #: Whether the caller holds `project.delete` on this project — per
+    #: project, so a grant for one project shows the action there only.
+    can_delete: bool = False
     created_at: datetime
     updated_at: datetime
 

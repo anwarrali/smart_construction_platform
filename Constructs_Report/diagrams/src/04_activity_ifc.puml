@@ -1,0 +1,28 @@
+@startuml
+!include _style.iuml
+|API request|
+start
+:Upload IFC file (ifc.upload permission);
+:Validate size, extension, schema header;
+:Store in private storage;\nCreate model version (UPLOADED);
+:Enqueue job "ifc.process_version"\nin the same transaction;
+|Worker process|
+:Claim job (SKIP LOCKED,\nfleet-wide concurrency ceiling);
+:Parse in isolated subprocess\n(ifcopenshell, timeout, memory cap);
+if (Parse succeeded?) then (no)
+  :Version = FAILED\n(friendly error recorded);
+  stop
+else (yes)
+endif
+:Build spatial hierarchy;
+:Extract elements, properties,\nquantities;
+:Run model-quality checks;
+:Version = READY or\nREADY_WITH_WARNINGS;
+|User / worker|
+:Generate geometry (optional job);
+:Detect structural/service\ninterference (AABB overlap);
+:Compare with previous revision\n(change records);
+:Create coordination findings and\nimpact suggestions for review;
+:Notify responsible members;
+stop
+@enduml

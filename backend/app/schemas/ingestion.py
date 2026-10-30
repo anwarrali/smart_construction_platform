@@ -57,6 +57,15 @@ class IngestedFileOut(CamelModel):
 
     processing_started_at: datetime | None = None
     processing_completed_at: datetime | None = None
+
+    #: RAG indexing, separate from `status` (processing) on purpose: a file
+    #: can be READY and not yet indexed, or indexed and later reprocessed.
+    #: NOT_INDEXED | INDEXING | READY | FAILED — the same values and reason
+    #: `GET /rag/files/{id}/status` reports to the same readers, here so a file
+    #: list can show both states without a request per file.
+    index_status: str = "NOT_INDEXED"
+    indexed_at: datetime | None = None
+    index_error: str | None = None
     created_at: datetime
     updated_at: datetime
 

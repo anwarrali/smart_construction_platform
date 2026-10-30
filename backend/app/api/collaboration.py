@@ -286,8 +286,10 @@ def _conflict_detail(db: Session, conflicts: list[SiteVisit]) -> list[dict]:
         Project.id.in_({item.project_id for item in conflicts})).all()) if conflicts else {}
     return [{
         "id": str(item.id), "title": item.title, "projectId": str(item.project_id),
-        "projectName": names.get(item.project_id), "scheduledStart": item.scheduled_start,
-        "scheduledEnd": item.scheduled_end, "visitType": item.visit_type, "status": item.status,
+        # ISO strings: this goes into an HTTPException detail, which is
+        # serialized as-is — a raw datetime turned every 409 into a 500.
+        "projectName": names.get(item.project_id), "scheduledStart": item.scheduled_start.isoformat(),
+        "scheduledEnd": item.scheduled_end.isoformat(), "visitType": item.visit_type, "status": item.status,
     } for item in conflicts]
 
 

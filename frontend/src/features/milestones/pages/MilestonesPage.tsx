@@ -1,3 +1,5 @@
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
@@ -87,17 +89,18 @@ export const MilestonesPage = () => {
 
   if (!activeProjectId) return <Card><p className="text-sm text-muted-foreground">{t("milestonesPage.open_a_project_to_manage_milestones")}</p></Card>;
   return <div className="page-container space-y-6">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h1 className="text-2xl font-bold">{t("milestonesPage.project_milestones")}</h1><p className="text-sm text-muted-foreground">{t("milestonesPage.link_scheduled_work_to_measurable")}</p></div>
-      {canEditSchedule && <Button onClick={() => openForm()}>+ Add Milestone</Button>}
-    </div>
+    <PageHeader
+      title={t("milestonesPage.project_milestones")}
+      description={t("milestonesPage.link_scheduled_work_to_measurable")}
+      actions={canEditSchedule && <Button leftIcon={<Plus size={15} />} onClick={() => openForm()}>{t("milestonesPage.add_milestone")}</Button>}
+    />
     {error && <Card><p className="text-sm text-destructive">{error}</p></Card>}
     {loading ? <p className="text-sm text-muted-foreground">{t("milestonesPage.loading_milestones")}</p> : <div className="grid gap-4 lg:grid-cols-2">
       {milestones.map((milestone) => <Card key={milestone.id} className="space-y-4">
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-primary">{milestone.milestoneCode}</p><h2 className="font-semibold">{milestone.name}</h2><p className="text-sm text-muted-foreground">Due {milestone.plannedDate}</p></div><Badge variant={milestone.status === "completed" ? "success" : milestone.status === "delayed" ? "danger" : "warning"}>{vocabulary.milestoneStatus(milestone.status)}</Badge></div>
         {milestone.description && <p className="text-sm text-muted-foreground">{milestone.description}</p>}
-        <div><div className="mb-1 flex justify-between text-xs"><span>{milestone.completedTaskCount}/{milestone.taskCount} tasks completed</span><span>{milestone.progressPercentage}%</span></div><div className="h-2 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{ width: `${milestone.progressPercentage}%` }} /></div></div>
-        <div className="flex flex-wrap gap-1">{milestone.taskIds.map((taskId) => <span key={taskId} className="rounded bg-muted px-2 py-1 text-xs">{linkedNames.get(taskId) || "Linked task"}</span>)}{!milestone.taskIds.length && <span className="text-xs text-muted-foreground">{t("milestonesPage.no_tasks_linked_yet")}</span>}</div>
+        <div><div className="mb-1 flex justify-between text-xs"><span>{milestone.completedTaskCount}/{milestone.taskCount} tasks completed</span><span>{milestone.progressPercentage}%</span></div><div className="gauge gauge-ticked"><div className="gauge-fill" style={{ width: `${milestone.progressPercentage}%` }} /></div></div>
+        <div className="flex flex-wrap gap-1">{milestone.taskIds.map((taskId) => <span key={taskId} className="border bg-well px-1.5 py-0.5 text-xs">{linkedNames.get(taskId) || "Linked task"}</span>)}{!milestone.taskIds.length && <span className="text-xs text-muted-foreground">{t("milestonesPage.no_tasks_linked_yet")}</span>}</div>
         {canEditSchedule && <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openForm(milestone)}>{t("milestonesPage.edit")}</Button><Button size="sm" variant="destructive" onClick={async () => { if (!window.confirm(`Delete ${milestone.milestoneCode}? Linked tasks will be preserved.`)) return; await api.milestones.delete(milestone.id); toast.success("Milestone deleted."); load(); }}>{t("milestonesPage.delete")}</Button></div>}
       </Card>)}
       {!milestones.length && <Card><p className="text-sm text-muted-foreground">{t("milestonesPage.no_milestones_have_been_created_for_this")}</p></Card>}

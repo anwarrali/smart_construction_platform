@@ -1,6 +1,7 @@
+import { Tabs } from "../../../components/ui/Tabs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Layers, Plus, RefreshCw, ShieldCheck, Trash2, Users } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Users } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { Badge } from "../../../components/ui/Badge";
@@ -9,6 +10,7 @@ import { Card } from "../../../components/ui/Card";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { errorMessage } from "../../../utils/errorMessage";
+import { useRole } from "../../../hooks/useRole";
 import { accessControlService, type Permission } from "../services/accessControl.service";
 import organizationService, {
   type Discipline,
@@ -49,6 +51,7 @@ const slug = (value: string) =>
  */
 export const OfficeRolesPage = () => {
   const { t } = useTranslation();
+  const { refreshPermissions } = useRole();
   const [tab, setTab] = useState<Tab>("roles");
   const [roles, setRoles] = useState<Role[]>([]);
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
@@ -100,9 +103,11 @@ export const OfficeRolesPage = () => {
     return [...byGroup.entries()];
   }, [catalogue]);
 
-  /** Codes the server will refuse on a role meant for people outside the office. */
+  /** Codes the server will refuse on a role meant for people outside the office:
+   *  office-wide ones, and the office's own work (`officeOnly`), which only an
+   *  Access Control grant to one person can delegate. */
   const refusedForExternal = useCallback(
-    (permission: Permission) => !permission.projectScoped,
+    (permission: Permission) => !permission.projectScoped || permission.officeOnly,
     [],
   );
 
@@ -123,6 +128,8 @@ export const OfficeRolesPage = () => {
       toast.success(
         held ? t("officeRoles.permissionRemoved") : t("officeRoles.permissionAdded"),
       );
+      // The administrator may hold the role they just changed.
+      void refreshPermissions();
     } catch (error) {
       toast.error(errorMessage(error));
     } finally {
@@ -198,9 +205,9 @@ export const OfficeRolesPage = () => {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+      <header className="page-header">
         <div>
-          <h1 className="text-2xl font-semibold">{t("officeRoles.title")}</h1>
+          <h1 className="page-title">{t("officeRoles.title")}</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             {t("officeRoles.subtitle")}
           </p>
@@ -211,18 +218,12 @@ export const OfficeRolesPage = () => {
         </Button>
       </header>
 
-      <div className="flex gap-2">
-        {(["roles", "disciplines"] as Tab[]).map((value) => (
-          <Button
-            key={value}
-            variant={tab === value ? "primary" : "ghost"}
-            onClick={() => setTab(value)}
-          >
-            {value === "roles" ? <ShieldCheck size={15} /> : <Layers size={15} />}
-            {t(`officeRoles.tab_${value}`)}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        label={t("officeRoles.title")}
+        value={tab}
+        onChange={setTab}
+        items={(["roles", "disciplines"] as Tab[]).map((value) => ({ value, label: t(`officeRoles.tab_${value}`) }))}
+      />
 
       {tab === "roles" ? (
         <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -296,6 +297,12 @@ export const OfficeRolesPage = () => {
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t("officeRoles.heldBy", { count: selected.memberCount })}
                     </p>
+                    <p className="mt-1 text-xs text-muted-foreground" data-testid="role-source">
+                      {selected.isTemplate ? t("officeRoles.sharedTemplate") : t("officeRoles.officeConfiguration")}
+                    </p>
+                    {saving && (
+                      <p className="mt-1 text-xs text-muted-foreground" role="status">{t("officeRoles.saving")}</p>
+                    )}
                   </div>
                   {!selected.undeletable && selected.memberCount === 0 && (
                     <Button variant="ghost" onClick={() => void removeRole(selected)}>
@@ -340,6 +347,11 @@ export const OfficeRolesPage = () => {
                                     ? t("officeRoles.refusedForExternal")
                                     : permission.description}
                                 </span>
+                                {!refused && permission.prerequisite && (
+                                  <span className="block text-xs text-muted-foreground" data-testid={`prerequisite-${permission.code}`}>
+                                    {t(`permissions.${permission.code}.prerequisite`, { defaultValue: permission.prerequisite })}
+                                  </span>
+                                )}
                               </span>
                             </label>
                           );

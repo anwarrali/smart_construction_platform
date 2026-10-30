@@ -22,7 +22,11 @@
 
 /** Every module the shared workspace registers, and what it costs to open. */
 const MODULE_PERMISSIONS: Record<string, string> = {
-  dashboard: "task.view",
+  // Project-wide metrics: the overview's endpoint refuses anyone without
+  // `task.view_all`, so offering it on `task.view` sent engineers to
+  // "Open your own work for assigned-task metrics" (QA 2026-10-22). They land
+  // on their own work instead (see `projectLandingModule`).
+  dashboard: "task.view_all",
   "my-work": "task.view",
   tasks: "task.view",
   messages: "task.view",
@@ -41,12 +45,11 @@ const MODULE_PERMISSIONS: Record<string, string> = {
   milestones: "schedule.view",
   ifc: "ifc.view",
   "ai-intelligence": "ai.view_insights",
-  // The agents page shows the whole catalogue and marks which of the five
-  // this person may run, so it is gated on the broadest of their five
-  // permissions rather than on any one agent's. A module missing from this
+  // The agents page is granted explicitly (`agents.view`), not opened to
+  // everyone who can see tasks. A module missing from this
   // map resolves to `false` and silently redirects to the fallback, so the
   // sidebar link would point at the wrong page without this line.
-  agents: "task.view",
+  agents: "agents.view",
   "review-queue": "task.review",
   reviews: "task.review",
   history: "task.review",
@@ -84,15 +87,60 @@ export const canOpenProjectModule = (
   return hasPermission(required);
 };
 
+/**
+ * The first page of a project this person can open: its overview; their own
+ * work, for somebody who sees only their assignments; or — for somebody who
+ * administers the project without taking part in it (the office administrator
+ * since QA-06B) — its team, then its parties. The overview when nothing is
+ * known yet.
+ */
+export const projectLandingModule = (hasPermission?: (code: string) => boolean) =>
+  [FALLBACK_MODULE, "my-work", "team", "parties"].find((module) => canOpenProjectModule(module, hasPermission))
+  ?? FALLBACK_MODULE;
+
+/**
+ * Where opening a project from a list should land. The list knows, per
+ * project, whether the reader can open its work (`canOpenWork`); the office-wide
+ * permissions do not, which is how the administrator was sent into an overview
+ * the server refused (QA 2026-10-22). A record-only project opens on its team.
+ */
+export const projectEntryPath = (
+  project: { id: string; canOpenWork?: boolean },
+  hasPermission?: (code: string) => boolean,
+) => {
+  if (project.canOpenWork === false) {
+    const recordOnly = (code: string) =>
+      (code === "project.manage_members" || code === "project.manage_parties") && (!hasPermission || hasPermission(code));
+    const module = ["team", "parties"].find((name) => canOpenProjectModule(name, recordOnly));
+    return module ? `${projectWorkspaceBase(project.id)}/${module}` : portfolioProjectsPath();
+  }
+  return projectModulePath(project.id, FALLBACK_MODULE, hasPermission);
+};
+
 export const projectModulePath = (
   projectId: string,
   module = FALLBACK_MODULE,
   hasPermission?: (code: string) => boolean,
 ) => {
   const requested = module.replace(/^\/+/, "") || FALLBACK_MODULE;
-  const effective = canOpenProjectModule(requested, hasPermission) ? requested : FALLBACK_MODULE;
+  const effective = canOpenProjectModule(requested, hasPermission) ? requested : projectLandingModule(hasPermission);
   return `${projectWorkspaceBase(projectId)}/${effective}`;
 };
+
+/**
+ * Where a portfolio-level "milestones" link should land.
+ *
+ * Milestones belong to a project, and the portfolio `/milestones` route can
+ * only say "open a project". The dashboard used to send managers to
+ * `ROUTES.SCHEDULE` instead, which is the collaboration site-visit calendar —
+ * the wrong page under a similar name. This opens the first project's
+ * milestones (the same convention the dashboard's schedule review follows),
+ * still gated on `schedule.view` through `projectModulePath`.
+ */
+export const portfolioMilestonesPath = (
+  projectIds: string[],
+  hasPermission?: (code: string) => boolean,
+) => (projectIds.length ? projectModulePath(projectIds[0], "milestones", hasPermission) : portfolioProjectsPath());
 
 /**
  * Maps a backend entity reference (notification `relatedEntityType`, audit-log

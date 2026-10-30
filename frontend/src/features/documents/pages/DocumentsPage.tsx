@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Upload } from "lucide-react";
 import { Card } from "../../../components/ui/Card";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
@@ -97,14 +99,13 @@ export const DocumentsPage = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Documents{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-          <p className="text-muted-foreground">{t("documentsPage.project_documents_and_files")}</p>
-        </div>
-        {canUpload && <Button onClick={() => setIsUploadOpen(true)}>+ Upload Document</Button>}
-      </div>
-      {focusedDocumentId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("documentsPage.showing_the_document_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("documentsPage.show_all_documents")}</Button></div>}
+      <PageHeader
+        context={workspace.project?.name}
+        title={t("nav.documents")}
+        description={t("documentsPage.project_documents_and_files")}
+        actions={canUpload && <Button leftIcon={<Upload size={15} />} onClick={() => setIsUploadOpen(true)}>{t("docUploader.upload_document")}</Button>}
+      />
+      {focusedDocumentId && <div className="flex items-center justify-between border bg-card px-3 py-2 text-sm"><span>{t("documentsPage.showing_the_document_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("documentsPage.show_all_documents")}</Button></div>}
 
       <Card>
         <div className="flex flex-col sm:flex-row gap-4 mb-6">

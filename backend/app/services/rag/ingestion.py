@@ -59,7 +59,7 @@ from app.db.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.ingestion import IngestedFile
-from app.services import processing_pool
+from app.services.jobs import enqueue
 from app.services.private_storage import private_storage
 from app.services.rag import pdf_text, text_source
 from app.services.rag.chunking import chunk_pages
@@ -474,19 +474,25 @@ def source_chunk_count(db: Session, source: ChunkSource) -> int:
 #
 # The IngestedFile path does not, because it is reached from the unified
 # ingestion pipeline where embedding a 300-page specification inside a request
-# handler is exactly how a web server stops answering. It runs on
-# `services/processing_pool.py` — the *same* bounded pool IFC parsing and file
-# processing already share, so `IFC_MAX_CONCURRENT_PROCESSING` remains one
-# ceiling over all heavy work rather than one of several.
+# handler is exactly how a web server stops answering. It runs on the durable
+# job queue (`services/jobs/`) — the *same* queue IFC parsing and file
+# processing share, so `IFC_MAX_CONCURRENT_PROCESSING` remains one ceiling over
+# all heavy work rather than one of several.
 
 
 def index_ingested_file_job(file_id: uuid.UUID, *, force: bool = False) -> None:
-    """The background entry point: its own session, its own failure handling.
+    """The job runner's entry point (`rag.index_file`): its own session.
 
-    A background job cannot borrow the request's session — the request has
-    ended and the session with it. Every outcome is already persisted by the
-    state machine before it reaches here, so this only has to make sure the
-    session is closed and nothing escapes into a `Future` nobody reads.
+    Two outcomes are not failures and return normally:
+
+      * `NotIndexable` — there is no text; the row is left untouched by design;
+      * `IndexingInProgress` — another run holds the row, and that run is the
+        one doing the work.
+
+    A run that started and could not finish — `IndexingFailed`, or anything
+    unexpected — has already recorded FAILED on the row, and is **re-raised**,
+    so the job runner records the job as failed and retries it. Swallowing it
+    here once made a failed index read SUCCEEDED in `background_jobs`.
     """
     db = SessionLocal()
     try:
@@ -494,20 +500,100 @@ def index_ingested_file_job(file_id: uuid.UUID, *, force: bool = False) -> None:
         if file is None:
             return
         index_ingested_file(db, file, force=force)
-    except (NotIndexable, IndexingInProgress, IndexingFailed) as error:
-        # All three are recorded outcomes, not surprises: NotIndexable leaves
-        # the row untouched by design, and the other two have already written
-        # their state. Logged at info because none of them is a defect.
-        logger.info("indexing file %s did not complete: %s", file_id, error)
-    except Exception:
-        logger.exception("[RAG] background indexing failed for file %s", file_id)
-        # The state machine records its own failures; anything reaching here
-        # is a defect in this module, and the row may still read INDEXING.
-        # Recovering it needs `force`, which is exactly what force is for.
+    except (NotIndexable, IndexingInProgress) as outcome:
+        logger.info("indexing file %s not started: %s", file_id, outcome)
     finally:
         db.close()
 
 
-def submit_ingested_file_index(file_id: uuid.UUID, *, force: bool = False) -> None:
-    """Hand indexing to the shared bounded pool."""
-    processing_pool.submit(index_ingested_file_job, file_id, force=force)
+def index_document_job(document_id: uuid.UUID, *, force: bool = False) -> None:
+    """The job runner's entry point (`rag.index_document`) for a library document.
+
+    Same contract as `index_ingested_file_job`: a run another worker holds
+    (`IndexingInProgress`) returns normally; a run that started and failed has
+    already recorded FAILED on the document and is re-raised for the runner to
+    retry. Extraction, chunking, embedding and storage are `index_document`'s —
+    the synchronous endpoint's — exactly.
+    """
+    db = SessionLocal()
+    try:
+        document = db.get(Document, document_id)
+        if document is None:
+            return
+        index_document(db, document, force=force)
+    except IndexingInProgress as outcome:
+        logger.info("indexing document %s not started: %s", document_id, outcome)
+    finally:
+        db.close()
+
+
+def should_auto_index_document(document: Document) -> bool:
+    """Whether a library upload should be indexed in the background.
+
+    A library document is indexable only as a PDF, so this is the rule the
+    synchronous path enforces, answered from what the upload already recorded:
+
+      * automatic indexing is on (`RAG_ENABLED` and `RAG_AUTO_INDEX_ENABLED`);
+      * the bytes are a PDF — `detected_format` comes from the magic bytes at
+        upload, never from the client's filename or MIME type;
+      * it is within `RAG_MAX_FILE_MB`, the limit indexing would refuse anyway;
+      * it lives in private storage (every upload since the move does).
+
+    A PDF with no text layer still passes — that is only known by reading it —
+    and its run records FAILED with the reason, exactly as the manual path does.
+    """
+    size_limit = settings.RAG_MAX_FILE_MB * 1024 * 1024
+    return (
+        settings.RAG_ENABLED
+        and settings.RAG_AUTO_INDEX_ENABLED
+        and document.detected_format == "PDF"
+        and bool(document.storage_key)
+        and 0 < (document.file_size_bytes or 0) <= size_limit
+    )
+
+
+def submit_document_index(db: Session, document: Document, *, force: bool = False) -> None:
+    """Queue a library document's indexing in the caller's transaction; the caller commits."""
+    enqueue(db, "rag.index_document", {"document_id": document.id, "force": force},
+            dedupe_key=f"rag.document:{document.id}", project_id=document.project_id)
+
+
+#: Ingestion outcomes that leave text to index. PARTIAL is a success with
+#: something missing, not a failure — see `ingestion.state`.
+_SETTLED_WITH_CONTENT = frozenset({"READY", "PARTIAL"})
+
+
+def should_auto_index(file: IngestedFile) -> bool:
+    """Whether a file the pipeline just settled should be indexed automatically.
+
+    All of these, answered from what the pipeline already recorded, without
+    opening the file:
+
+      * automatic indexing is on (`RAG_ENABLED` and `RAG_AUTO_INDEX_ENABLED`);
+      * processing finished with content — READY or PARTIAL, never FAILED;
+      * the extraction produced text (`text_source.is_indexable`), so a scan or
+        a drawing never becomes a job that can only fail;
+      * it is not a byte-identical copy of an earlier file in the project. A
+        retried upload creates a second row with the same bytes; its text is
+        already searchable through the first, and indexing it again would
+        return every passage twice. The manual action can still index it.
+    """
+    return (
+        settings.RAG_ENABLED
+        and settings.RAG_AUTO_INDEX_ENABLED
+        and file.status in _SETTLED_WITH_CONTENT
+        and file.duplicate_of_id is None
+        and text_source.is_indexable(file)
+    )
+
+
+def submit_ingested_file_index(db: Session, file: IngestedFile, *, force: bool = False) -> None:
+    """Queue indexing in the caller's transaction; the caller commits.
+
+    The one way indexing is queued — the automatic trigger in the ingestion
+    pipeline and the manual endpoint both come here — so both share the job
+    kind, the payload (ids only, never content) and the dedupe key: a second
+    request while one is queued or running joins it.
+    """
+    enqueue(db, "rag.index_file", {"file_id": file.id, "force": force},
+            dedupe_key=f"rag.index:{file.id}", project_id=file.project_id)

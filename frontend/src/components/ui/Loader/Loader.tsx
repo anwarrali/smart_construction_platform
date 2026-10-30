@@ -40,7 +40,7 @@ export const Loader = ({
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className={`rounded-full bg-current animate-bounce ${size === "sm" ? "h-1 w-1" : size === "md" ? "h-2 w-2" : "h-3 w-3"}`}
+                className={`bg-current animate-pulse ${size === "sm" ? "h-1 w-1" : size === "md" ? "h-2 w-2" : "h-3 w-3"}`}
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}
@@ -50,7 +50,7 @@ export const Loader = ({
       case "pulse":
         return (
           <div
-            className={`animate-pulse-soft rounded-full bg-current ${sizeClasses[size]} ${className}`}
+            className={`animate-pulse bg-current ${sizeClasses[size]} ${className}`}
             role="status"
             aria-label="Loading"
           />

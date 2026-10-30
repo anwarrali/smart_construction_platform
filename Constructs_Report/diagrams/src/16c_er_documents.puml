@@ -1,0 +1,53 @@
+@startuml
+!include _style.iuml
+hide circle
+entity projects {
+  * id : UUID <<PK>>
+}
+entity documents {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, uploaded_by_id
+  title, document_type, storage_key
+  version, index_status
+}
+entity document_party_shares {
+  * id : UUID <<PK>>
+  --
+  document_id <<FK>>, party_id <<FK>>
+}
+entity ingested_files {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, parent_file_id
+  file_category, status
+  checksum_sha256, duplicate_of_id
+}
+entity ingestion_jobs {
+  * id : UUID <<PK>>
+  --
+  file_id <<FK>>, status, attempt
+}
+entity document_chunks {
+  * id : UUID <<PK>>
+  --
+  document_id <<FK, null>>
+  ingested_file_id <<FK, null>>
+  project_id, page_number, chunk_index
+  content, embedding vector(1536)
+}
+entity background_jobs {
+  * id : UUID <<PK>>
+  --
+  queue, kind, payload, status
+  dedupe_key, attempts, heartbeat_at
+}
+projects ||--o{ documents
+projects ||--o{ ingested_files
+documents ||--o{ document_party_shares
+documents ||--o{ document_chunks
+ingested_files ||--o{ document_chunks
+ingested_files ||--o{ ingestion_jobs
+ingested_files |o--o{ ingested_files : parent or duplicate
+projects |o--o{ background_jobs
+@enduml

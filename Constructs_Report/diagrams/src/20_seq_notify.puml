@@ -1,0 +1,21 @@
+@startuml
+!include _style.iuml
+autonumber
+participant "Domain service\n(e.g. task assignment)" as S
+participant "notification_service" as N
+database "PostgreSQL" as DB
+participant "Push dispatcher\n(background thread)" as P
+participant "FCM" as F
+participant "SSE stream\n/events/stream" as E
+participant "Client" as C
+S -> N : notify(user, type, entity)
+N -> DB : INSERT notifications row\n(caller transaction)
+N -> DB : pg_notify on channel realtime
+S -> DB : COMMIT
+DB --> E : NOTIFY delivered to listening\nworkers only after commit
+E --> C : event hint (ids + type)
+C -> C : refetch through REST\n(authorization re-applied)
+DB --> P : after-commit hook
+P -> F : send push (if PUSH_ENABLED)
+F --> C : device notification
+@enduml

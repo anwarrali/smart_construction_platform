@@ -51,7 +51,7 @@ POST /projects/{id}/files
        │  refused → 415/413/400,       ingested_files     ingestion_jobs
        │  nothing stored                    row               row
        │                                                       │
-   ┌───────────────────── on the shared bounded pool ──────────▼──────────┐
+   ┌───────────────────── on the durable job queue ────────────▼──────────┐
    │  ProcessorRegistry.select(file)                                      │
    │        │                                                             │
    │        ├─ validate()  ─ may this processor touch it?                 │
@@ -75,7 +75,7 @@ POST /projects/{id}/files
 | `services/ingestion/processors/` | pdf, office, ifc, zip_package, misc |
 | `services/ingestion/pipeline.py` | orchestration, transactions, background dispatch |
 | `services/ingestion/ifc_bridge.py` | IFC revisions made visible without being owned |
-| `services/processing_pool.py` | the bounded pool, **moved out of `api/ifc.py` and shared** |
+| `services/jobs/` | the durable job queue every heavy job runs on (see [JOBS.md](JOBS.md)) |
 | `api/downloads.py` | streaming + RFC 6266 headers, **moved out of `api/ifc.py` and shared** |
 
 ## 3. The record
@@ -115,6 +115,14 @@ unparsed, a workbook whose sheet names were read but not its cells. Calling
 that FAILED would push people to retry something that can never succeed.
 `QUEUED → READY/PARTIAL` directly is legal so that inline processing (tests,
 and `INGESTION_BACKGROUND_PROCESSING_ENABLED=false`) is not a different machine.
+
+**Two kinds of FAILED.** A processor that rejects the file records FAILED with
+its own error code; that is final, and the job is not retried. A *run* that
+breaks — a lost database connection, a failed commit, a pipeline defect —
+records FAILED with `PROCESSING_FAILED` in a fresh transaction and is raised to
+the job runner, which retries it (`JOB_MAX_ATTEMPTS`); the retry finds the file
+FAILED and re-queues it. The internal detail stays on the row; the API
+publishes only the code.
 
 ## 5. Processors
 
@@ -203,8 +211,9 @@ INGESTION_ZIP_MAX_DEPTH=1
 ```
 
 There is deliberately **no** `INGESTION_MAX_CONCURRENT_PROCESSING`.
-`IFC_MAX_CONCURRENT_PROCESSING` governs the one shared pool; a second ceiling
-would silently double the memory bound the first exists to enforce.
+`IFC_MAX_CONCURRENT_PROCESSING` governs the one shared job queue, fleet-wide; a
+second ceiling would silently double the memory bound the first exists to
+enforce.
 
 ## 10. Migration
 
@@ -220,9 +229,13 @@ customer's files.
 
 ## 10b. RAG indexing (added after the foundation)
 
-An `IngestedFile` whose `metadata_json.extraction` is `TEXT` can be indexed for
-retrieval: `POST /rag/files/{id}/index` queues the work on the same bounded
-pool, and the chunks land in `document_chunks` with `ingested_file_id` set.
+An `IngestedFile` whose `metadata_json.extraction` is `TEXT` is indexed for
+retrieval automatically when processing settles it READY or PARTIAL (unless it
+is a byte-identical duplicate, or `RAG_AUTO_INDEX_ENABLED` is off), and on
+request through `POST /rag/files/{id}/index`. Both queue a `rag.index_file`
+job, and the chunks land in `document_chunks` with `ingested_file_id` set. The
+file API reports `indexStatus` (`NOT_INDEXED` | `INDEXING` | `READY` |
+`FAILED`), `indexedAt` and `indexError` beside the processing `status`.
 Files that extracted no text — a scan, a drawing, a spreadsheet — are refused
 using that recorded verdict, without the file being opened. The gate is the
 reason the extraction result is recorded at all. See

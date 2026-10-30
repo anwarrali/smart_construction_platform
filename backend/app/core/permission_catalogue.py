@@ -66,18 +66,25 @@ class Permission:
     #: Everything else that is `office_only` is office *work*, and work can be
     #: delegated. See docs/RBAC.md, "The two ceilings".
     never_external: bool = False
+    #: Acts on the project's *record* — its details, team and parties — rather
+    #: than on its work. Reachable through `platform.view_all_projects`, which
+    #: since 2026-10-17 (QA-06B) lets the office administrator list and staff
+    #: every project without opening its tasks, documents, models or reports.
+    #: See `app.core.deps.user_can_see_project_record`.
+    registry: bool = False
     aliases: tuple[str, ...] = field(default=())
 
 
 def _p(code, group, label, description, *, project_scoped=True,
-       admin_locked=False, office_only=False, never_external=False):
+       admin_locked=False, office_only=False, never_external=False, registry=False):
     return Permission(code, group, label, description,
                       project_scoped=project_scoped, admin_locked=admin_locked,
                       office_only=office_only,
                       # Certification and access governance are always both.
                       # Nothing is `never_external` without also being
                       # `office_only`: the wall implies the default.
-                      never_external=never_external or False)
+                      never_external=never_external or False,
+                      registry=registry)
 
 
 CATALOGUE: tuple[Permission, ...] = (
@@ -104,18 +111,34 @@ CATALOGUE: tuple[Permission, ...] = (
     # administrator's ability to administer (that is `platform.manage_users`
     # / `platform.manage_permissions`, both locked), only their bypass of
     # project membership — which they can always restore via Access Control.
+    #
+    # QA-06B (2026-10-17): this is the *registry* view — list every project,
+    # open its details, team and parties, and staff it. It no longer opens a
+    # project's work: system administration is not project participation.
+    # Working inside a project you are not on is `platform.work_in_all_projects`.
     _p("platform.view_all_projects", "platform", "See every project",
-       "Read any project without being a member of it.", project_scoped=False),
+       "List every project and manage its details, team and parties without being a member. "
+       "Does not open the project's tasks, documents, models or reports.",
+       project_scoped=False),
+    # Office leadership (General Manager, Technical Director) work across every
+    # project; the office administrator does not by default. Split from
+    # `platform.view_all_projects` by QA-06B. Not project-scoped, so the
+    # external-participant ceiling (`NON_PROJECT_SCOPED`) strips it like every
+    # other office-wide code — which is why it needs no `office_only` flag.
+    _p("platform.work_in_all_projects", "platform", "Work in every project",
+       "Open the tasks, documents, models and reports of any project without being on its team.",
+       project_scoped=False),
 
     # --- Project setup ------------------------------------------------------
     _p("project.manage_members", "project", "Manage the project team",
        "Add or remove people from a project and set their role on it.",
-       office_only=True, never_external=True),
+       office_only=True, never_external=True, registry=True),
     # Editing project setup was administrator-only at the endpoint. The default
     # records that, rather than widening access as a side effect of making the
     # check configurable; an administrator can grant it to managers in one click.
     _p("project.edit", "project", "Edit project details",
-       "Change project information, dates and settings.", office_only=True, never_external=True),
+       "Change project information, dates and settings.", office_only=True, never_external=True,
+       registry=True),
     _p("project.manage_reminders", "project", "Configure reminders",
        "Set reminder intervals, quiet hours and escalation."),
     # Deletion is its own code because it is its own act. `delete_project` was
@@ -137,7 +160,8 @@ CATALOGUE: tuple[Permission, ...] = (
     # itself. Defaulting to {ADMIN} alone keeps today's answer — see
     # `role_templates`, where `technical_director` explicitly declines it.
     _p("project.delete", "project", "Delete a project",
-       "Permanently delete a project and everything recorded against it.", office_only=True, never_external=True),
+       "Permanently delete a project and everything recorded against it.", office_only=True, never_external=True,
+       registry=True),
 
     # --- Tasks and scheduling ----------------------------------------------
     # Descriptive entry: `list_tasks` / `get_tasks_by_project` in app.api.tasks
@@ -273,6 +297,14 @@ CATALOGUE: tuple[Permission, ...] = (
     _p("ai.promote_insight", "ai", "Turn an AI insight into work",
        "Create a formal issue or task from an AI insight.",
        office_only=True, never_external=True),
+    # The Agents page — running the project agents and reading their runs —
+    # is the administrator's to hand out (QA pass 2026-10-17). It used to be
+    # open to anyone who could see tasks, which put engineers in front of
+    # agent controls nobody had decided to give them. Each agent still checks
+    # its own permission when it runs; this decides who reaches the page.
+    _p("agents.view", "ai", "Use the Agents page",
+       "Open the project Agents page, run the agents and read their run history.",
+       office_only=True),
 
     # --- Office administration (RBAC v2) ------------------------------------
     # The consulting office configures itself: roles, disciplines and its own
@@ -292,10 +324,11 @@ CATALOGUE: tuple[Permission, ...] = (
     # the project, not in the office's staff directory. Managing them is the
     # same authority that already manages the project team.
     _p("project.manage_parties", "project", "Manage project parties",
-       "Record the client, contractors and other external parties on a project.", office_only=True, never_external=True),
+       "Record the client, contractors and other external parties on a project.", office_only=True, never_external=True,
+       registry=True),
     _p("project.invite_external", "project", "Give external people access",
        "Grant someone outside the office access to this project.",
-       office_only=True, never_external=True),
+       office_only=True, never_external=True, registry=True),
     _p("document.share_external", "models", "Share documents externally",
        "Make a document readable by an external party on this project.", office_only=True, never_external=True),
     # One permission for one idea: "your view of this project is not narrowed
@@ -414,3 +447,27 @@ GROUPS: tuple[str, ...] = tuple(dict.fromkeys(item.group for item in CATALOGUE))
 
 def is_known(code: str) -> bool:
     return code in BY_CODE
+
+
+#: What else must be true for a permission to do anything, in the words the
+#: permission editors show next to it. Only conditions the server actually
+#: checks are written here — each is enforced at the endpoint named in
+#: docs/PERMISSION_COVERAGE.md. Every project-scoped code additionally needs
+#: the person to reach the project (`PROJECT_SCOPE_NOTE`), which the editors
+#: show for all of them rather than repeating it here.
+PREREQUISITES: dict[str, str] = {
+    "task.edit": "Covers editing, assigning, deleting and reordering tasks.",
+    "task.update_progress": "Only on tasks assigned to the person.",
+    "task.review": "Tasks the person is the named reviewer for, or any task if they also hold Edit tasks.",
+    "task.comment": "Also needs View tasks, on tasks the person can see.",
+    "schedule.edit": "Covers milestones, task dependencies and shifting dates.",
+    "project.delete": "Permanent. Deletes the project and everything recorded against it.",
+    "project.invite_external": "Also needs Manage the project team.",
+    "document.share_external": "Only documents the person can read. Never available to outside parties.",
+    "message.send": "Starting a conversation. Replying to one the person is in needs no permission.",
+    "message.send_client": "Also needs Send project messages.",
+    "ifc.upload": "Below Manage model versions, also needs the engineer-upload feature switch.",
+    "issue.resolve": "Also covers editing and reassigning other people's issues.",
+}
+
+PROJECT_SCOPE_NOTE = "Takes effect only on projects the person can open."

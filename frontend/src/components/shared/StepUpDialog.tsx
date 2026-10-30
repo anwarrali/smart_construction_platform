@@ -42,7 +42,10 @@ export const StepUpDialog = ({ purpose, label, onVerified, onCancel }: Props) =>
       const value = await api.stepUp.request(purpose);
       setChallenge(value);
       setCooldown(value.resendAfterSeconds || 0);
-      setCode("");
+      // Present only on a backend started with OTP_DEV_ECHO_ENABLED in a
+      // declared development environment (it refuses to boot otherwise), so
+      // local QA can run without email. Never sent in production.
+      setCode(value.devCode || "");
     } catch (err: unknown) {
       setError(errorMessage(err, t("stepUp.requestFailed")));
     } finally {
@@ -93,7 +96,13 @@ export const StepUpDialog = ({ purpose, label, onVerified, onCancel }: Props) =>
 
         <p className="text-sm text-muted-foreground">{t("stepUp.explanation")}</p>
 
-        {challenge && !challenge.delivered && (
+        {challenge?.devCode && (
+          <p role="note" className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
+            {t("stepUp.devCode", { code: challenge.devCode })}
+          </p>
+        )}
+
+        {challenge && !challenge.delivered && !challenge.devCode && (
           <p
             role="status"
             className="rounded-lg border border-state-review/40 bg-wash-review px-3 py-2 text-sm text-state-review"

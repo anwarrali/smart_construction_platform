@@ -30,6 +30,7 @@ import type {
   VoiceCommand,
 } from "../../../types/voice";
 import { TaskCandidatePicker } from "./TaskCandidatePicker";
+import { ClarificationAnswer } from "./ClarificationAnswer";
 
 type Phase = "idle" | "recording" | "processing" | "review" | "executing" | "done";
 
@@ -90,6 +91,30 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
       ),
     [clarifications],
   );
+  /* Any other open question about the draft — an issue's resolution note, a
+     status, a number — answered through `ClarificationAnswer`. */
+  const otherClarificationFor = useCallback(
+    (draft: VoiceActionDraft): VoiceClarification | undefined =>
+      clarifications.find(
+        (item) =>
+          item.voiceActionDraftId === draft.id &&
+          item.expectedAnswerType !== "TASK_SELECTION" &&
+          !item.answerText,
+      ),
+    [clarifications],
+  );
+
+  const answerOther = useCallback(
+    async (clarification: VoiceClarification, answer: string) => {
+      if (!command) return;
+      try {
+        setCommand(await api.voice.answerClarification(command.id, clarification.id, answer));
+      } catch (caught: unknown) {
+        setError(errorMessage(caught, t("voiceAssistant.selectionFailed")));
+      }
+    },
+    [command, t],
+  );
 
   const reset = useCallback(() => {
     uploadRef.current?.abort();
@@ -126,6 +151,21 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
           },
           controller.signal,
         );
+        if (result.status === "FAILED") {
+          // The server stores a provider failure and answers 201 with the
+          // failed command. This used to be treated as success: the saved
+          // recording's retry was dropped and the review area showed nothing,
+          // which is the "voice stopped responding, no console error" report.
+          const supportId = result.providerMetadata?.supportLogId as string | undefined;
+          setRetryable({ blob: audio, filename, seconds: durationSeconds });
+          setError(
+            `${result.errorDetail || t("voiceAssistant.processingFailed")}`
+            + (supportId ? ` (${t("errors.supportId", { id: supportId })})` : ""),
+          );
+          setCommand(null);
+          setPhase("idle");
+          return;
+        }
         setCommand(result);
         setRetryable(null);
         setTiming({
@@ -280,7 +320,16 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
     return parts.join(" · ");
   }, [command, t, timing]);
 
-  const transcript = command?.rawTranscript || capture.previewTranscript;
+  /* The server transcript is the only one shown once recording ends. The live
+     preview comes from the browser's own recogniser, which hears one language
+     at a time — it is set from the display language — so Arabic sentences
+     carrying English terms come out garbled in it. It used to stay on screen as
+     "the transcript" whenever the server's had not arrived (including after a
+     failure), which is why the website seemed to understand only the UI
+     language. The audio sent to the server is unaffected by any of this; the
+     server transcribes mixed Arabic-English speech without a language hint. */
+  const livePreview = capture.state === "recording" ? capture.previewTranscript : "";
+  const transcript = command?.rawTranscript || livePreview;
   const stored = command?.structuredResult?.answer;
   const answer = stored?.text ? stored : undefined;
 
@@ -297,10 +346,17 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
       </div>
 
       {!capture.supported ? (
-        <p className="text-sm text-amber-600">{t("voiceAssistant.browserUnsupported")}</p>
+        <p className="text-sm text-state-review">{t("voiceAssistant.browserUnsupported")}</p>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
+        {phase === "processing" ? (
+          // Never a dead end while the server works: the engineer can always
+          // walk away, and the recording stays available to retry.
+          <Button variant="ghost" onClick={() => { uploadRef.current?.abort(); setPhase("idle"); }}>
+            {t("voiceAssistant.cancel")}
+          </Button>
+        ) : null}
         {phase === "recording" ? (
           <>
             <Button variant="destructive" onClick={() => void onStop()}>
@@ -310,7 +366,7 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
               {t("voiceAssistant.cancel")}
             </Button>
             <span
-              className="inline-flex h-3 w-3 rounded-full bg-red-500"
+              className="inline-flex h-3 w-3 bg-state-overdue"
               style={{ transform: `scale(${1 + capture.level})` }}
               aria-hidden
             />
@@ -348,13 +404,13 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
       {transcript ? (
         <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
           <p className="text-xs uppercase opacity-60">
-            {command?.rawTranscript ? t("voiceAssistant.transcript") : t("voiceAssistant.hearing")}
+            {command?.rawTranscript ? t("voiceAssistant.transcript") : t("voiceAssistant.livePreview")}
           </p>
           <p className="mt-1 text-sm" aria-live="polite">{transcript}</p>
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
+      {error ? <p className="text-sm text-state-overdue" role="alert">{error}</p> : null}
 
       {phase === "review" || phase === "executing" || phase === "done" ? (
         <div className="space-y-3">
@@ -384,6 +440,11 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
           {drafts.map((draft) => {
             const needsTask = draft.missingFields.includes("target.taskId");
             const clarification = clarificationFor(draft);
+            const otherQuestion = otherClarificationFor(draft);
+            // Only an action aimed at a task can have its task changed. An
+            // issue action is about an issue, and offering "choose another
+            // task" on it is what made a standalone issue look task-bound.
+            const targetsTask = !draft.targetEntityType || draft.targetEntityType.toUpperCase() === "TASK";
             return (
               <div key={draft.id} className="rounded-lg border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -421,10 +482,18 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
                 ) : null}
 
                 {draft.warnings.map((warning) => (
-                  <p key={warning} className="mt-1 text-xs text-amber-600">{warning}</p>
+                  <p key={warning} className="mt-1 text-xs text-state-review">{warning}</p>
                 ))}
                 {draft.executionError ? (
-                  <p className="mt-1 text-xs text-red-600">{draft.executionError}</p>
+                  <p className="mt-1 text-xs text-state-overdue">{draft.executionError}</p>
+                ) : null}
+
+                {otherQuestion ? (
+                  <ClarificationAnswer
+                    clarification={otherQuestion}
+                    onAnswer={(answer) => answerOther(otherQuestion, answer)}
+                    disabled={phase !== "review"}
+                  />
                 ) : null}
 
                 {needsTask || clarification ? (
@@ -449,16 +518,18 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
                         ? t("voiceAssistant.removeAction")
                         : t("voiceAssistant.includeAction")}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        setPendingSelection((current) => ({ ...current, [draft.id]: "" }))
-                      }
-                      disabled={phase !== "review"}
-                    >
-                      {t("voiceAssistant.chooseAnotherTask")}
-                    </Button>
+                    {targetsTask ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setPendingSelection((current) => ({ ...current, [draft.id]: "" }))
+                        }
+                        disabled={phase !== "review"}
+                      >
+                        {t("voiceAssistant.chooseAnotherTask")}
+                      </Button>
+                    ) : null}
                   </div>
                 )}
 
@@ -498,7 +569,7 @@ export const VoiceAssistantPanel = ({ projectId, taskId, onExecuted }: Props) =>
               </Button>
             </div>
           ) : (
-            <p className="text-sm font-medium text-emerald-600">
+            <p className="text-sm font-medium text-state-verified">
               {t("voiceAssistant.finished")}
             </p>
           )}

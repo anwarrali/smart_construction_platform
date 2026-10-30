@@ -7,12 +7,15 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+
 from app.models.ai_governance import DomainEvent
 from app.models.enums import NotificationType, TaskStatus
 from app.models.ifc import AIInsight, IFCElement, IFCModelVersion, IFCSpatialNode
 from app.models.notification import Notification
 from app.models.project import Project
 from app.models.task import Task
+from app.services.jobs import enqueue
 
 
 IMPORTANT_EVENTS = {
@@ -74,14 +77,14 @@ def process_event(db: Session, event: DomainEvent) -> None:
         event.status = "PROCESSED_RULES_ONLY"
         event.processed_at = datetime.now(timezone.utc)
         event.error = None
-        # Proactive agent analysis, off unless an operator enabled it. Imported
-        # here rather than at module scope because the agents import this
-        # module's event vocabulary, and a top-level import would close the
-        # cycle. `safe_handle_event` never raises: the rules above are the
-        # event's own validation and must not be undone by an analysis pass.
-        from app.services.agents.event_subscriber import safe_handle_event
-
-        safe_handle_event(db, event)
+        # Proactive agent analysis, off unless an operator enabled it. Queued,
+        # not run: it used to run here, inside the transaction of whatever the
+        # user was doing, so a slow pass held their write open. As a job it
+        # commits with the event, runs on a worker, and its failure can never
+        # touch the event — the rules above are the event's own validation.
+        if settings.AGENT_AUTO_ANALYSIS_ENABLED:
+            enqueue(db, "agents.handle_event", {"event_id": event.id},
+                    dedupe_key=f"agents:{event.id}", project_id=event.project_id)
     except Exception as exc:
         event.status = "RETRY" if event.processing_attempts < 3 else "FAILED"
         event.error = f"{type(exc).__name__}: event validation failed"

@@ -1,0 +1,40 @@
+@startuml
+!include _style.iuml
+start
+:Request reaches endpoint
+(user, permission code, optional project);
+if (Account ACTIVE?) then (no)
+  :Holds nothing, 403;
+  stop
+else (yes)
+endif
+:Office role permissions
+union project role permissions;
+:Apply user-wide overrides
+(grant or deny);
+:Apply project-specific overrides
+(narrowest wins);
+if (Holds undeletable office
+administrator role?) then (yes)
+  :Restore admin-locked codes;
+else (no)
+endif
+if (External participant
+on this project?) then (yes)
+  :Remove non-project-scoped codes
+and NEVER_EXTERNAL codes;
+else (no)
+endif
+if (Project context given?) then (yes)
+  :Keep project-scoped codes only
+where the project is reachable;
+else (no)
+endif
+if (Required code in effective set?) then (yes)
+  :Execute operation,
+write audit log where applicable;
+else (no)
+  :403 Forbidden;
+endif
+stop
+@enduml

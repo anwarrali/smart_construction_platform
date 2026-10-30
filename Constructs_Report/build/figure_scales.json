@@ -1,0 +1,127 @@
+{
+ "concept": [
+  "00_concept.png",
+  0.851,
+  6.5
+ ],
+ "context": [
+  "01_context.png",
+  0.714,
+  6.5
+ ],
+ "uc1": [
+  "02a_usecase_project.png",
+  0.93,
+  5.8
+ ],
+ "uc2": [
+  "02b_usecase_intelligence.png",
+  0.991,
+  6.5
+ ],
+ "act_task": [
+  "03_activity_task_review.png",
+  0.741,
+  4.12
+ ],
+ "st_task": [
+  "09_state_task.png",
+  1.0,
+  5.99
+ ],
+ "st_ifc": [
+  "10_state_ifc.png",
+  0.746,
+  3.86
+ ],
+ "st_ing": [
+  "11_state_ingestion.png",
+  0.845,
+  6.5
+ ],
+ "arch": [
+  "13_architecture.png",
+  0.823,
+  6.5
+ ],
+ "components": [
+  "14_components.png",
+  0.738,
+  6.5
+ ],
+ "deploy": [
+  "15_deployment.png",
+  0.862,
+  6.5
+ ],
+ "er_id": [
+  "16a_er_identity.png",
+  1.0,
+  5.67
+ ],
+ "er_proj": [
+  "16b_er_projects.png",
+  0.663,
+  6.5
+ ],
+ "er_doc": [
+  "16c_er_documents.png",
+  0.706,
+  6.5
+ ],
+ "er_ifc": [
+  "16d_er_ifc.png",
+  0.818,
+  6.5
+ ],
+ "authz": [
+  "19_activity_authz.png",
+  0.686,
+  2.66
+ ],
+ "seq_auth": [
+  "05_seq_auth.png",
+  0.828,
+  6.5
+ ],
+ "seq_jobs": [
+  "08_seq_jobs.png",
+  0.837,
+  6.5
+ ],
+ "dfd": [
+  "18_dfd_ingestion.png",
+  0.835,
+  6.5
+ ],
+ "act_ifc": [
+  "04_activity_ifc.png",
+  0.64,
+  4.69
+ ],
+ "revision": [
+  "21_revision_impact.png",
+  0.648,
+  5.92
+ ],
+ "seq_rag": [
+  "06_seq_rag.png",
+  0.683,
+  9.0
+ ],
+ "seq_voice": [
+  "07_seq_voice.png",
+  0.644,
+  9.0
+ ],
+ "seq_notify": [
+  "20_seq_notify.png",
+  0.756,
+  9.0
+ ],
+ "class_rag": [
+  "17_class_rag.png",
+  0.782,
+  6.5
+ ]
+}

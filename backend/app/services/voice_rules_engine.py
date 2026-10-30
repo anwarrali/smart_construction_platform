@@ -260,8 +260,33 @@ class VoiceRulesEngine:
             (item for item in command.action_drafts if item.selected_for_execution),
             key=lambda item: priority.get(item.action_type, 50),
         )
+        # Records on which an earlier step of this command was refused. The
+        # steps are ordered (start, then progress, then submit) precisely
+        # because later ones depend on earlier ones, so a refused step must stop
+        # the rest for that record. Seen live: the manager's "start TSK-001,
+        # 30%" had START_TASK refused and UPDATE_TASK_PROGRESS then committed,
+        # leaving a task at 30% its engineer had never started.
+        failed_targets: set = set()
         for index, draft in enumerate(selected):
             if draft.execution_status == "EXECUTED":
+                continue
+            if draft.target_entity_id and draft.target_entity_id in failed_targets:
+                draft.execution_status = "SKIPPED"
+                draft.execution_error = "An earlier step on the same record was not applied"
+                results.append({
+                    "actionIndex": index,
+                    "type": draft.action_type,
+                    "success": False,
+                    "status": "SKIPPED",
+                    "message": draft.execution_error,
+                    "errorCode": "DEPENDENT_STEP_SKIPPED",
+                    "userMessage": (
+                        "ما نفّذت هالخطوة لأن الخطوة اللي قبلها على نفس السجل ما انقبلت."
+                        if language.startswith("ar")
+                        else "Not applied, because the step before it on the same record was refused."
+                    ),
+                })
+                db.commit()
                 continue
             before = self._task_state(db, draft.target_entity_id)
             try:
@@ -332,6 +357,8 @@ class VoiceRulesEngine:
                     "voice action %s rejected: %s (%s)",
                     draft.action_type, failure.error_code, exc.detail,
                 )
+                if draft.target_entity_id:
+                    failed_targets.add(draft.target_entity_id)
                 results.append({
                     "actionIndex": index,
                     "type": draft.action_type,

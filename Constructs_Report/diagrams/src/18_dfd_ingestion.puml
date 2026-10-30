@@ -1,0 +1,29 @@
+@startuml
+!include _style.iuml
+top to bottom direction
+actor "Project member" as U
+rectangle "1.0\nValidate and\nstore upload" as P1
+rectangle "2.0\nClassify and\ndetect duplicates" as P2
+rectangle "3.0\nProcess file\n(PDF, Office, IFC,\nZIP, image, text)" as P3
+rectangle "4.0\nChunk and\nembed text" as P4
+rectangle "5.0\nAnswer question\nwith citations" as P5
+database "D1 Private\nfile storage" as D1
+database "D2 ingested_files,\ningestion_jobs" as D2
+database "D3 document_chunks\n(pgvector)" as D3
+rectangle "OpenAI API" as AI
+U --> P1 : file
+P1 --> D1 : bytes
+P1 --> D2 : file record
+P1 --> P2 : stored file
+P2 --> D2 : category, checksum
+P2 --> P3 : queued job
+P3 --> D2 : READY, PARTIAL\nor FAILED + metadata
+P3 --> P4 : extracted text\n(auto-index on)
+P4 --> AI : text chunks
+AI --> P4 : embeddings
+P4 --> D3 : chunks + vectors
+U --> P5 : question
+P5 --> D3 : similarity search\n(authorized ids only)
+P5 --> AI : grounded prompt
+P5 --> U : answer + citations
+@enduml

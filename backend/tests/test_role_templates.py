@@ -14,6 +14,7 @@ from app.services import rbac
 
 EXPECTED: dict[str, frozenset[str]] = {
     "org_admin": frozenset({
+        "agents.view",  # QA pass 2026-10-17: the Agents page is granted explicitly
         "ai.promote_insight", "ai.review_insight", "ai.view_insights",
         "client_portal.view", "cost_validation.review", "design_change.propose",
         "design_change.view", "document.share_external", "document.upload",
@@ -32,6 +33,7 @@ EXPECTED: dict[str, frozenset[str]] = {
         "task.update_progress", "task.view", "task.view_all",
     }),
     "office_director": frozenset({
+        "platform.work_in_all_projects",  # QA-06B: leadership keeps project work
         "ai.promote_insight", "ai.review_insight", "ai.view_insights",
         "client_portal.view", "cost_validation.review", "design_change.propose",
         "design_change.view", "document.share_external", "document.upload",
@@ -50,6 +52,7 @@ EXPECTED: dict[str, frozenset[str]] = {
         "task.update_progress", "task.view", "task.view_all",
     }),
     "technical_director": frozenset({
+        "platform.work_in_all_projects",  # QA-06B: leadership keeps project work
         "ai.promote_insight", "ai.review_insight", "ai.view_insights",
         "client_portal.view", "cost_validation.review", "design_change.propose",
         "design_change.view", "document.share_external", "document.upload",

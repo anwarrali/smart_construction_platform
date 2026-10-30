@@ -1,3 +1,4 @@
+import { PageHeader } from "../../../components/ui/PageHeader";
 import { useCallback, useEffect, useState } from "react";
 import { formatDate, formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
@@ -98,15 +99,11 @@ export const EvidencePhotoArchivePage = () => {
   if (!projectId) return <Card>{t("photoArchive.no_project_is_selected")}</Card>;
 
   return <div className="page-container space-y-5">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-bold">{t("photoArchive.evidence_photo_archive")}</h1>
-        <p className="text-sm text-muted-foreground">
-          Search field photos while retaining their task, submission, uploader, and review provenance.
-        </p>
-      </div>
-      {canManage && <Button variant="outline" onClick={() => setShowManage(true)}>{t("photoArchive.manage_categories")}</Button>}
-    </div>
+    <PageHeader
+      title={t("photoArchive.evidence_photo_archive")}
+      description={t("photoArchive.subtitle")}
+      actions={canManage && <Button variant="secondary" onClick={() => setShowManage(true)}>{t("photoArchive.manage_categories")}</Button>}
+    />
 
     <Card className="space-y-4">
       <form className="flex gap-2" onSubmit={(event) => {
@@ -144,7 +141,7 @@ export const EvidencePhotoArchivePage = () => {
     {!loading && !items.length && <Card className="py-12 text-center text-muted-foreground">{t("photoArchive.no_evidence_photos_match_these_filters")}</Card>}
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {items.map((photo) => <button key={photo.id} type="button" onClick={() => setSelected(photo)}
-        className="overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+        className="overflow-hidden rounded-xl border bg-card text-left transition hover:-translate-y-0.5">
         <AuthedImage url={photo.attachment.downloadUrl} alt={photo.attachment.originalFilename}
           className="aspect-[4/3] w-full bg-muted object-cover" />
         <div className="space-y-2 p-3">

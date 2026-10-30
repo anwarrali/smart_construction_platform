@@ -16,7 +16,7 @@ from app.models.audit_log import AuditLog
 from app.models.notification import Notification
 from app.models.task import TaskReview
 from app.core.deps import get_current_user, user_has_project_access
-from app.services.authorization import can_view_all_projects_effective, has_permission
+from app.services.authorization import can_work_in_all_projects_effective, has_permission
 from app.models.enums import ProjectStatus, IssueStatus, IssueSeverity, TaskStatus, UserStatus, DesignChangeStatus
 from app.core.schedule_dates import inclusive_duration_days
 import json
@@ -210,7 +210,9 @@ def get_dashboard_stats(
     # scoping logic, which meant granting `platform.view_all_projects` to a
     # non-admin changed nothing on this specific dashboard. Default behaviour
     # is unchanged - only ADMIN holds the permission by default.
-    if not can_view_all_projects_effective(db, current_user):
+    # QA-06B: these are task figures — work, not registry — so the portfolio
+    # spans every project only for `platform.work_in_all_projects`.
+    if not can_work_in_all_projects_effective(db, current_user):
         # Membership, ownership or management — the same union
         # `accessible_project_ids` resolves. The branch this replaces gave a
         # PROJECT_MANAGER only the projects they managed and ignored their

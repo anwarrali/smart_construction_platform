@@ -69,7 +69,7 @@ const show = () =>
     <FindingsTab
       projectId={PROJECT} versionId={VERSION}
       summary={{ interference: { analysed: true } }}
-      canReview canCreateIssue onViewElements={vi.fn()} onFocus3D={vi.fn()}
+      canReview canCreateIssue onViewElements={vi.fn()}
     />,
   );
 

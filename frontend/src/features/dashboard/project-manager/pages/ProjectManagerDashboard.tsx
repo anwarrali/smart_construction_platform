@@ -16,7 +16,7 @@ import {
 import api from "../../../../services/api";
 import { ROUTES } from "../../../../utils/constants";
 import { useRole } from "../../../../hooks/useRole";
-import { projectModulePath } from "../../../../utils/projectRoutes";
+import { portfolioMilestonesPath, projectEntryPath, projectModulePath } from "../../../../utils/projectRoutes";
 
 /* ─── Types ─── */
 interface DashboardStats {
@@ -113,7 +113,7 @@ function formatReportDate(iso: string, locale: string, labels: { today: string; 
 
 /* ─── Skeleton loader ─── */
 const SkeletonCard = () => (
-  <div className="bg-card border rounded-xl p-5 shadow-sm animate-pulse">
+  <div className="bg-card border rounded-xl p-5 animate-pulse">
     <div className="flex items-center justify-between mb-3">
       <div className="h-3 bg-muted rounded w-24" />
       <div className="h-8 w-8 bg-muted rounded-lg" />
@@ -351,7 +351,7 @@ export const ProjectManagerDashboard = () => {
       tone: "text-state-progress",
       title: t("pmDashboard.decisions.milestonesOpen", { count: stats.milestonePending }),
       meta: t("pmDashboard.decisions.milestonesMet", { met: stats.milestoneCompleted, total: stats.milestoneTotal }),
-      to: ROUTES.SCHEDULE,
+      to: portfolioMilestonesPath(projects.map((project) => project.id), hasCapability),
     },
   ].filter(Boolean) as {
     key: string; kicker: string; tone: string; title: string; meta: string; to: string;
@@ -359,11 +359,11 @@ export const ProjectManagerDashboard = () => {
 
   /* ─── Render ─── */
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-5">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("pmDashboard.title")}</h1>
+          <h1 className="page-title">{t("pmDashboard.title")}</h1>
           <p className="text-muted-foreground mt-1">{dayLabel}</p>
         </div>
         <div className="flex gap-2">
@@ -434,7 +434,7 @@ export const ProjectManagerDashboard = () => {
           : kpiCards.map(({ label, value, sub, icon: Icon, color }) => (
               <div
                 key={label}
-                className="bg-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                className="bg-card border rounded-xl p-5 transition-shadow"
               >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm text-muted-foreground font-medium">{label}</span>
@@ -442,27 +442,27 @@ export const ProjectManagerDashboard = () => {
                     <Icon size={16} />
                   </span>
                 </div>
-                <p className="text-3xl font-bold">{value}</p>
+                <p className="metric-value">{value}</p>
                 <p className="text-xs text-muted-foreground mt-1">{sub}</p>
               </div>
             ))}
       </div>
 
-      <section className="bg-card border rounded-xl p-6 shadow-sm">
+      <section className="bg-card border rounded-xl p-6">
         <div className="mb-4 flex items-center justify-between">
           <div><h2 className="font-semibold">{t("pmDashboard.kpi.assignedProjects")}</h2><p className="text-xs text-muted-foreground">{t("pmDashboard.selectProject")}</p></div>
           <button className="text-xs text-primary hover:underline" onClick={() => navigate(ROUTES.PM_PROJECTS)}>{t("pmDashboard.viewProjects")}</button>
         </div>
         {projects.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">{t("pmDashboard.noProjectsAssigned")}</p> :
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{projects.map(project =>
-            <button key={project.id} onClick={() => navigate(projectModulePath(project.id, "dashboard", hasCapability))} className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/30">
+            <button key={project.id} onClick={() => navigate(projectEntryPath(project, hasCapability))} className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/30">
               <div className="flex items-center justify-between gap-2"><span className="font-medium">{project.name}</span><span className="text-xs text-muted-foreground">{t("project.status." + project.status, { defaultValue: project.status.replaceAll("_", " ") })}</span></div>
               <div className="mt-3 flex justify-between text-xs text-muted-foreground"><span>{t("pmDashboard.percentComplete", { value: project.completionPercentage })}</span><span>{t("pmDashboard.openIssueCount", { count: project.openIssueCount || 0 })}</span></div>
-              <div className="mt-1 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{width:`${project.completionPercentage}%`}} /></div>
+              <div className="mt-1 h-1.5 bg-muted"><div className="h-full bg-primary" style={{width:`${project.completionPercentage}%`}} /></div>
             </button>)}</div>}
       </section>
 
-      <section className="bg-card border rounded-xl p-6 shadow-sm">
+      <section className="bg-card border rounded-xl p-6">
         <h2 className="font-semibold">{t("pmDashboard.recentActivity")}</h2>
         <div className="mt-3 divide-y">{(stats?.recentActivity || []).map(activity =>
           <button key={activity.id} onClick={() => activity.projectId && navigate(`/project-manager/projects/${activity.projectId}/dashboard`)} className="flex w-full items-center justify-between py-2 text-left text-sm hover:text-primary">
@@ -472,7 +472,7 @@ export const ProjectManagerDashboard = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Urgent Issues ── */}
-        <div className="lg:col-span-2 bg-card border rounded-xl p-6 shadow-sm">
+        <div className="lg:col-span-2 bg-card border rounded-xl p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <Flame size={18} className="text-state-overdue" />
@@ -531,7 +531,7 @@ export const ProjectManagerDashboard = () => {
         </div>
 
         {/* ── Task Completion ── */}
-        <div className="bg-card border rounded-xl p-6 shadow-sm">
+        <div className="bg-card border rounded-xl p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <BarChart2 size={18} className="text-primary" />
@@ -586,9 +586,9 @@ export const ProjectManagerDashboard = () => {
                         {pct}%
                       </span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-1.5 bg-muted overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-700 ${
+                        className={`h-full transition-all duration-700 ${
                           isHigh ? "bg-state-verified" : "bg-state-review"
                         }`}
                         style={{ width: `${pct}%` }}
@@ -606,7 +606,7 @@ export const ProjectManagerDashboard = () => {
       </div>
 
       {/* ── Recent Site Report Reviews ── */}
-      <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-card border rounded-xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-base font-semibold">{t("pmDashboard.siteReportReviews")}</h2>
           <button
@@ -677,7 +677,7 @@ export const ProjectManagerDashboard = () => {
                       {/* This table only ever lists reports fetched with
                           status=submitted, so "pending review" reflects the
                           real backend state rather than being shown unconditionally. */}
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-wash-review text-state-review">
+                      <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-medium bg-wash-review text-state-review">
                         {t("pmDashboard.pendingReview")}
                       </span>
                     </td>

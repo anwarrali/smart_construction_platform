@@ -167,17 +167,17 @@ export const EngineerDashboard = () => {
   ] as const;
 
   return <div className="page-container space-y-6">
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="page-header">
       <div>
-        <p className="text-sm font-semibold text-primary">Main Contractor · {data.project.specialization?.replaceAll("_", " ") || "Engineer"}</p>
-        <h1 className="text-2xl font-bold">{data.project.name} · Execution Dashboard</h1>
+        <p className="page-kicker">Main Contractor · {data.project.specialization?.replaceAll("_", " ") || "Engineer"}</p>
+        <p className="page-kicker">{data.project.name}</p><h1 className="page-title">{t("nav.myTasks")}</h1>
         <p className="text-sm text-muted-foreground">{data.project.assignmentTitle || "Project Engineer"}{data.project.isSiteEngineer ? " · Site Engineer" : ""}</p>
       </div>
       <Button variant="outline" onClick={load}><RefreshCw size={15} /> Refresh</Button>
     </div>
 
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {cards.map(([label, value, Icon, color]) => <Card key={label} className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-bold">{value}</p></div><span className={`rounded-lg p-2 ${color}`}><Icon size={18} /></span></div></Card>)}
+      {cards.map(([label, value, Icon, color]) => <Card key={label} className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="mt-2 metric-value">{value}</p></div><span className={`rounded-lg p-2 ${color}`}><Icon size={18} /></span></div></Card>)}
     </div>
 
     <div className="grid gap-6 xl:grid-cols-2">

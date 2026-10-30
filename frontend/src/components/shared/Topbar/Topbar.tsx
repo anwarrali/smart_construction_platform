@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
-import { Bell, LogOut, Menu } from "lucide-react";
-import { Badge } from "../../ui/Badge";
+import { Link, useNavigate } from "react-router-dom";
+import { Bell, ChevronDown, LogOut, Menu, Mic, Settings } from "lucide-react";
 import { NotificationDropdown } from "../NotificationDropdown";
 import { LanguageSwitcher } from "../LanguageSwitcher";
 import { ThemeSwitcher } from "../ThemeSwitcher";
+import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { useAuth } from "../../../hooks/useAuth";
 import { useRole } from "../../../hooks/useRole";
 import { useNotificationStore } from "../../../app/store/notification.store";
@@ -13,26 +13,34 @@ import { useRealtimeRefresh } from "../../../hooks/useRealtimeRefresh";
 import { ROUTES } from "../../../utils/constants";
 import api from "../../../services/api";
 import { useProjectWorkspace } from "../../../features/projects/context/ProjectWorkspaceContext";
-import { replaceProjectInPath } from "../../../utils/projectRoutes";
-import { useLocation } from "react-router-dom";
 
+/* A square tool button for the bar. One definition, so every tool in the bar
+   has the same footprint, hover and focus. */
+const toolClass =
+  "relative inline-flex h-bar w-10 shrink-0 cursor-pointer items-center justify-center border-none bg-transparent text-foreground/65 outline-none transition-colors hover:bg-muted hover:text-foreground";
+
+/**
+ * The top bar: where you are on the left, the tools that apply here on the
+ * right. Project-only tools appear only inside a project, and only when the
+ * person's capabilities allow the page behind them.
+ */
 export const Topbar = ({ onOpenMenu }: { onOpenMenu?: () => void }) => {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const { unreadCount, setUnreadCount } = useNotificationStore();
-  const { roleLabel } = useRole();
+  const { roleLabel, hasCapability, permissionsReady } = useRole();
   const navigate = useNavigate();
-  const location = useLocation();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
   const workspace = useProjectWorkspace();
 
-  // Fetch real unread count from backend on mount
   const fetchUnreadCount = useCallback(async () => {
     try {
       const { count } = await api.notifications.getUnreadCount();
       setUnreadCount(count);
     } catch {
-      // silently fail
+      // The badge is a hint; a failed count leaves the last known one.
     }
   }, [setUnreadCount]);
 
@@ -40,14 +48,32 @@ export const Topbar = ({ onOpenMenu }: { onOpenMenu?: () => void }) => {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
 
-  // The bell used to fetch once on mount and never again, so a notification
-  // arriving while the tab stayed open was invisible until a reload. Both
-  // event types matter: CREATED when somebody else acts, UPDATED when this
-  // user reads a notification in another tab and the badge must drop here too.
+  // CREATED when somebody else acts, UPDATED when this user reads a
+  // notification in another tab and the badge must drop here too.
   useRealtimeRefresh(
     ["NOTIFICATION_CREATED", "NOTIFICATION_UPDATED"],
     fetchUnreadCount,
   );
+
+  // The account menu closes on an outside click or Escape, like any menu.
+  useEffect(() => {
+    if (!isAccountOpen) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) setIsAccountOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setIsAccountOpen(false); };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isAccountOpen]);
+
+  const signOut = () => {
+    logout();
+    navigate(ROUTES.HOME);
+  };
 
   const initials =
     user?.fullName
@@ -57,55 +83,51 @@ export const Topbar = ({ onOpenMenu }: { onOpenMenu?: () => void }) => {
       .toUpperCase()
       .slice(0, 2) || "U";
 
+  // Same rule as the voice assistant's route guard.
+  const showVoice = workspace.isProjectWorkspace && permissionsReady && hasCapability("task.view");
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b bg-background/85 px-3 backdrop-blur-md sm:gap-4 sm:px-5 md:px-6">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {/* The rail is hidden below `lg`, so this is the only way to the
-            navigation on a phone or a narrow window. */}
+    <header className="sticky top-0 z-30 flex h-bar shrink-0 items-center justify-between border-b bg-card">
+      <div className="flex min-w-0 flex-1 items-center gap-2 ps-1 lg:ps-5">
+        {/* The rail is hidden below `lg`; this is the way to it there. */}
         <button
           type="button"
           onClick={onOpenMenu}
           aria-label={t("nav.openMenu")}
           title={t("nav.openMenu")}
-          className="-ms-1 inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-control border-none text-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground lg:hidden"
-          style={{ background: "none" }}
+          className={`${toolClass} lg:hidden`}
         >
-          <Menu size={20} />
+          <Menu size={18} />
         </button>
-        {workspace.isProjectWorkspace && <>
-          <span aria-hidden className="h-8 w-[3px] shrink-0 rounded-[1px] bg-accent" />
-          <div className="min-w-0">
-            <p className="label-caps text-muted-foreground/70">{t("common.activeProject")}</p>
-            <p className="truncate text-sm font-semibold tracking-heading">{workspace.project?.name || t("common.loadingProject")}</p>
-          </div>
-          <select aria-label={t("common.switchActiveProject")} value={workspace.projectId} onChange={(event) => {
-            navigate(`${replaceProjectInPath(location.pathname, event.target.value)}${location.search}`);
-          }} className="ms-2 hidden max-w-56 rounded-control border bg-card px-2.5 py-1.5 text-xs transition-colors hover:border-border-strong sm:block">
-            {workspace.assignedProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
-        </>}
+        <Breadcrumbs />
       </div>
 
-      <div className="flex h-full shrink-0 items-center gap-1 sm:gap-3">
-        <LanguageSwitcher />
-        {/* Light / Dark / System — the same control the landing page uses. */}
-        <ThemeSwitcher compact />
-
-        <div className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center">
-          <button
-            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
-            aria-label={t("common.notifications")}
-            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-control border-none text-foreground/65 outline-none transition-colors hover:bg-muted hover:text-foreground"
-            style={{ background: "none" }}
+      <div className="flex h-full shrink-0 items-center">
+        {showVoice && (
+          <Link
+            to={workspace.path("voice-assistant")}
+            aria-label={t("nav.voiceAssistant")}
+            title={t("nav.voiceAssistant")}
+            className={toolClass}
           >
-            <span className="relative inline-flex">
-              <Bell size={18} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -end-1.5 flex h-4 min-w-4 items-center justify-center rounded-chip bg-state-overdue px-1 text-[10px] font-semibold text-white">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </span>
+            <Mic size={17} />
+          </Link>
+        )}
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+            aria-label={unreadCount > 0 ? `${t("common.notifications")} (${unreadCount})` : t("common.notifications")}
+            aria-expanded={isNotificationOpen}
+            className={toolClass}
+          >
+            <Bell size={17} />
+            {unreadCount > 0 && (
+              <span className="absolute end-1.5 top-2 flex h-4 min-w-4 items-center justify-center bg-state-overdue px-1 text-[10px] font-semibold leading-none text-white">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
           <NotificationDropdown
             isOpen={isNotificationOpen}
@@ -113,42 +135,46 @@ export const Topbar = ({ onOpenMenu }: { onOpenMenu?: () => void }) => {
           />
         </div>
 
-        <div className="flex items-center gap-2.5 border-s ps-2 sm:ps-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-primary text-xs font-semibold text-primary-foreground">
-            {initials}
-          </div>
-          <div className="hidden md:block">
-            <p className="text-sm font-medium">{user?.fullName || t("common.account")}</p>
-            <Badge variant="neutral" size="sm">
-              {roleLabel}
-            </Badge>
-          </div>
-        </div>
+        <span aria-hidden className="mx-1 hidden h-5 w-px bg-border sm:block" />
+        <LanguageSwitcher className="hidden sm:inline-flex" />
+        <ThemeSwitcher compact />
+        <span aria-hidden className="mx-1 h-5 w-px bg-border" />
 
-        {/* Kept on every screen size — signing out is not optional on a phone.
-            Below `sm` it becomes an icon so the bar stops overflowing. */}
-        <button
-          className="btn-ghost btn-sm hidden sm:inline-flex"
-          onClick={() => {
-            logout();
-            navigate(ROUTES.HOME);
-          }}
-        >
-          {t("common.logout")}
-        </button>
-        <button
-          type="button"
-          aria-label={t("common.logout")}
-          title={t("common.logout")}
-          onClick={() => {
-            logout();
-            navigate(ROUTES.HOME);
-          }}
-          className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-control border-none text-foreground/65 outline-none transition-colors hover:bg-muted hover:text-foreground sm:hidden"
-          style={{ background: "none" }}
-        >
-          <LogOut size={18} className="rtl-flip" />
-        </button>
+        <div ref={accountRef} className="relative h-full">
+          <button
+            type="button"
+            onClick={() => setIsAccountOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={isAccountOpen}
+            aria-label={t("nav.userMenu")}
+            className="flex h-full cursor-pointer items-center gap-2.5 border-none bg-transparent pe-3 ps-2 text-start outline-none transition-colors hover:bg-muted lg:pe-5"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center bg-sidebar text-[11px] font-semibold text-white">
+              {initials}
+            </span>
+            <span className="hidden min-w-0 md:block">
+              <span className="block max-w-[11rem] truncate text-[13px] font-medium leading-tight">{user?.fullName || t("common.account")}</span>
+              <span className="block max-w-[11rem] truncate text-[11px] leading-tight text-muted-foreground">{roleLabel}</span>
+            </span>
+            <ChevronDown size={14} className="hidden text-muted-foreground md:block" aria-hidden />
+          </button>
+          {isAccountOpen && (
+            <div role="menu" className="dropdown-content absolute end-0 top-full mt-px w-64">
+              <div className="border-b px-3 pb-2.5 pt-2">
+                <p className="truncate text-[13px] font-semibold">{user?.fullName || t("common.account")}</p>
+                {user?.email && <p className="truncate text-xs text-muted-foreground force-ltr">{user.email}</p>}
+                <p className="mt-1 text-[11px] text-muted-foreground">{roleLabel}</p>
+              </div>
+              <Link role="menuitem" to={ROUTES.SETTINGS} onClick={() => setIsAccountOpen(false)} className="dropdown-item text-foreground">
+                <Settings size={14} aria-hidden /> {t("common.profileSettings")}
+              </Link>
+              <LanguageSwitcher className="dropdown-item h-auto justify-start sm:hidden" />
+              <button role="menuitem" type="button" onClick={signOut} className="dropdown-item border-none bg-transparent text-destructive">
+                <LogOut size={14} className="rtl-flip" aria-hidden /> {t("common.logout")}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

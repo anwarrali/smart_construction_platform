@@ -4,6 +4,11 @@ from typing import Optional
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
+#: Deployments where development-only switches may be turned on. `qa` is the
+#: internal QA environment; `staging` is deliberately absent — it is the
+#: production rehearsal, and must behave like production.
+DEVELOPMENT_ENVIRONMENTS = frozenset({"development", "local", "test", "qa"})
+
 class Settings(BaseSettings):
     # JWT Settings
     SECRET_KEY: str
@@ -74,17 +79,45 @@ class Settings(BaseSettings):
     IFC_GEOMETRY_TIMEOUT_SECONDS: int = int(os.getenv("IFC_GEOMETRY_TIMEOUT_SECONDS", "900"))
     IFC_GEOMETRY_MAX_VERTICES: int = int(os.getenv("IFC_GEOMETRY_MAX_VERTICES", "8000000"))
     IFC_GEOMETRY_WORKERS: int = int(os.getenv("IFC_GEOMETRY_WORKERS", "2"))
+    #: The most IfcProduct entities (walls, doors, members, equipment …) one
+    #: model may contain. Extraction time and stored rows scale with these, not
+    #: with the geometry records that make up most of a STEP file.
     IFC_MAX_ENTITY_COUNT: int = int(os.getenv("IFC_MAX_ENTITY_COUNT", "500000"))
+    #: Memory one IFC parse may use. ifcopenshell holds the whole file in
+    #: memory (~16 MB per MB of IFC, measured), so this — not the upload limit —
+    #: decides the largest model this host can process. Two parses may run at
+    #: once (IFC_MAX_CONCURRENT_PROCESSING), so keep 2 x this under the
+    #: worker's available memory. The 3 GB default parses models up to ~174 MB.
+    IFC_PARSE_MEMORY_MB: int = int(os.getenv("IFC_PARSE_MEMORY_MB", "3072"))
     IFC_COMPARISON_ENABLED: bool = os.getenv("IFC_COMPARISON_ENABLED", "true").lower() == "true"
     IFC_COORDINATION_CHECKS_ENABLED: bool = os.getenv("IFC_COORDINATION_CHECKS_ENABLED", "true").lower() == "true"
     IFC_AI_ANALYSIS_ENABLED: bool = os.getenv("IFC_AI_ANALYSIS_ENABLED", "false").lower() == "true"
     IFC_AI_MODEL: str = os.getenv("IFC_AI_MODEL", os.getenv("OPENAI_ANALYSIS_MODEL", "gpt-5.6-luna"))
     IFC_BACKGROUND_PROCESSING_ENABLED: bool = os.getenv("IFC_BACKGROUND_PROCESSING_ENABLED", "true").lower() == "true"
-    #: How many IFC parse/tessellation jobs may run at once. Each one spawns an
-    #: isolated child process holding a whole model in memory, so this is a
-    #: memory ceiling rather than a throughput dial; see `app.api.ifc`.
+    #: How many background jobs may run at once across every worker process —
+    #: IFC parsing and tessellation, ingestion, indexing, agent analysis. An IFC
+    #: job spawns a child holding a whole model in memory, so this is a memory
+    #: ceiling rather than a throughput dial; see `app.services.jobs.queue`.
     IFC_MAX_CONCURRENT_PROCESSING: int = int(os.getenv("IFC_MAX_CONCURRENT_PROCESSING", "2"))
     IFC_ENGINEER_UPLOAD_ENABLED: bool = os.getenv("IFC_ENGINEER_UPLOAD_ENABLED", "false").lower() == "true"
+    # --- Background jobs ----------------------------------------------------
+    # The durable queue heavy work runs on (app/services/jobs/). How many jobs
+    # run at once is IFC_MAX_CONCURRENT_PROCESSING, enforced across every
+    # worker process together rather than per process.
+    #: Which queue this process produces to and consumes from. A test session
+    #: or a separate tier sets its own so it never takes another's work.
+    JOB_QUEUE: str = os.getenv("JOB_QUEUE", "default")
+    #: Run the job runner inside the API process. Right for a single-container
+    #: deployment; set false where a dedicated worker (`python -m app.worker`)
+    #: runs instead, which is what docker-compose.yml does.
+    JOB_RUNNER_EMBEDDED: bool = os.getenv("JOB_RUNNER_EMBEDDED", "true").lower() == "true"
+    #: How long an idle runner waits before looking for work again.
+    JOB_POLL_INTERVAL_SECONDS: float = float(os.getenv("JOB_POLL_INTERVAL_SECONDS", "2"))
+    #: How often a running job's heartbeat is refreshed, and how old one may get
+    #: before the job is presumed abandoned and handed back to the queue.
+    JOB_HEARTBEAT_SECONDS: int = int(os.getenv("JOB_HEARTBEAT_SECONDS", "15"))
+    JOB_STALE_SECONDS: int = int(os.getenv("JOB_STALE_SECONDS", "120"))
+    JOB_MAX_ATTEMPTS: int = int(os.getenv("JOB_MAX_ATTEMPTS", "3"))
     # Private artefact storage (IFC sources, geometry, voice audio). "local" is the
     # development default; an S3/R2 backend plugs in behind the same interface.
     PRIVATE_STORAGE_BACKEND: str = os.getenv("PRIVATE_STORAGE_BACKEND", "local")
@@ -94,9 +127,9 @@ class Settings(BaseSettings):
     # packages. See app/services/ingestion/ and docs/FILE_INGESTION.md.
     #
     # There is deliberately no INGESTION_MAX_CONCURRENT_PROCESSING: ingestion
-    # runs on the same bounded pool as IFC (app/services/processing_pool.py),
-    # because a second ceiling would silently double the memory bound the first
-    # one exists to enforce. IFC_MAX_CONCURRENT_PROCESSING governs both.
+    # runs on the same job queue as IFC (app/services/jobs/), because a second
+    # ceiling would silently double the memory bound the first one exists to
+    # enforce. IFC_MAX_CONCURRENT_PROCESSING governs both.
     INGESTION_ENABLED: bool = os.getenv("INGESTION_ENABLED", "true").lower() == "true"
     #: Larger than the 25 MB document limit because a design package is many
     #: drawings at once, and well under IFC_MAX_FILE_MB because nothing here
@@ -141,8 +174,25 @@ class Settings(BaseSettings):
     #: Deliberately far shorter than the login session.
     STEP_UP_VALIDITY_MINUTES: int = int(os.getenv("STEP_UP_VALIDITY_MINUTES", "10"))
     #: Development only. When true the send endpoint echoes the code so the
-    #: flow can be exercised without SMTP. Must stay false anywhere real.
+    #: flow can be exercised without SMTP. Must stay false anywhere real — the
+    #: settings refuse to load with it on unless `ENVIRONMENT` says this is a
+    #: development, local or test environment (see `validate_security`).
     OTP_DEV_ECHO_ENABLED: bool = os.getenv("OTP_DEV_ECHO_ENABLED", "false").lower() == "true"
+    #: Development and QA only. When true, editing roles and per-person
+    #: permissions (`admin.change_permissions`, `admin.change_user_role`) no
+    #: longer asks for a verification code. Authentication and the
+    #: `platform.manage_permissions` / `platform.manage_users` checks are
+    #: unchanged, and every other step-up purpose — password changes, resets,
+    #: deactivation, deletion — still asks. Refused at startup unless
+    #: `ENVIRONMENT` is a development environment, and re-checked per request
+    #: (`step_up_service.permission_edit_bypass_active`).
+    STEP_UP_PERMISSION_EDIT_BYPASS: bool = (
+        os.getenv("STEP_UP_PERMISSION_EDIT_BYPASS", "false").lower() == "true"
+    )
+    #: What kind of deployment this is: `development`, `local`, `test`, `qa`,
+    #: `staging` or `production`. Empty means unstated, which is treated as
+    #: *not* development — a development-only switch needs it said out loud.
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "").strip().lower()
 
     # --- Realtime (Server-Sent Events) --------------------------------------
     # Keeps an open application synchronized. Distinct from push: SSE is for a
@@ -171,6 +221,11 @@ class Settings(BaseSettings):
     # every RAG route reports itself unavailable rather than erroring, and no
     # other feature observes any difference.
     RAG_ENABLED: bool = os.getenv("RAG_ENABLED", "false").lower() == "true"
+    #: Queue indexing automatically when the ingestion pipeline finishes a file
+    #: that has text. Only takes effect with RAG_ENABLED. Every indexed file is
+    #: an embedding call, so an operator who wants indexing on request only —
+    #: the manual "index" action, or a project re-index — turns this off.
+    RAG_AUTO_INDEX_ENABLED: bool = os.getenv("RAG_AUTO_INDEX_ENABLED", "true").lower() == "true"
     OPENAI_EMBEDDING_MODEL: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     #: The answering model. Deliberately its own setting rather than reusing
     #: OPENAI_ANALYSIS_MODEL, which names a voice-analysis model — the two
@@ -327,12 +382,20 @@ class Settings(BaseSettings):
             raise ValueError("IFC_MAX_FILE_MB must be between 1 and 2048")
         if not 1000 <= self.IFC_MAX_ENTITY_COUNT <= 5_000_000:
             raise ValueError("IFC_MAX_ENTITY_COUNT must be between 1000 and 5000000")
+        if not 512 <= self.IFC_PARSE_MEMORY_MB <= 65536:
+            raise ValueError("IFC_PARSE_MEMORY_MB must be between 512 and 65536")
         if not 100_000 <= self.IFC_GEOMETRY_MAX_VERTICES <= 50_000_000:
             raise ValueError("IFC_GEOMETRY_MAX_VERTICES must be between 100000 and 50000000")
         if not 1 <= self.IFC_GEOMETRY_WORKERS <= 8:
             raise ValueError("IFC_GEOMETRY_WORKERS must be between 1 and 8")
         if not 1 <= self.IFC_MAX_CONCURRENT_PROCESSING <= 16:
             raise ValueError("IFC_MAX_CONCURRENT_PROCESSING must be between 1 and 16")
+        if not self.JOB_HEARTBEAT_SECONDS * 3 <= self.JOB_STALE_SECONDS:
+            # Shorter and a slow heartbeat write gets a live job taken away
+            # and run twice.
+            raise ValueError("JOB_STALE_SECONDS must be at least three heartbeats")
+        if not 1 <= self.JOB_MAX_ATTEMPTS <= 10:
+            raise ValueError("JOB_MAX_ATTEMPTS must be between 1 and 10")
         # Refuse to boot on a step-up configuration that would be insecure,
         # rather than silently accepting it: a one-digit code or a step-up
         # window measured in hours defeats the point of the whole feature.
@@ -344,6 +407,25 @@ class Settings(BaseSettings):
             raise ValueError("OTP_MAX_VERIFY_ATTEMPTS must be between 1 and 10")
         if not 1 <= self.STEP_UP_VALIDITY_MINUTES <= 60:
             raise ValueError("STEP_UP_VALIDITY_MINUTES must be between 1 and 60")
+        # The code echo hands the one-time code to whoever asked for it, which
+        # is the whole of step-up's protection. It exists so local QA can run
+        # without SMTP; anywhere not explicitly declared a development
+        # environment — production, staging, or nothing stated — refuse to boot.
+        if self.OTP_DEV_ECHO_ENABLED and self.ENVIRONMENT not in DEVELOPMENT_ENVIRONMENTS:
+            raise ValueError(
+                "OTP_DEV_ECHO_ENABLED=true requires ENVIRONMENT to be one of "
+                + ", ".join(sorted(DEVELOPMENT_ENVIRONMENTS))
+                + f" (got {self.ENVIRONMENT or 'nothing'})"
+            )
+        # Same rule for skipping the code on permission edits: it removes a
+        # security control, so it must be asked for *and* the deployment must
+        # say it is not production.
+        if self.STEP_UP_PERMISSION_EDIT_BYPASS and self.ENVIRONMENT not in DEVELOPMENT_ENVIRONMENTS:
+            raise ValueError(
+                "STEP_UP_PERMISSION_EDIT_BYPASS=true requires ENVIRONMENT to be one of "
+                + ", ".join(sorted(DEVELOPMENT_ENVIRONMENTS))
+                + f" (got {self.ENVIRONMENT or 'nothing'})"
+            )
         # Refuse to boot claiming push works when it cannot: a silently
         # unconfigured provider looks identical to "nobody has registered a
         # device yet", and that ambiguity is exactly what makes missing

@@ -449,11 +449,10 @@ performed.**
 3. **~~Vector search does not scale.~~ Resolved.** Embeddings are a pgvector
    `vector(1536)` column with an HNSW cosine index (`c63fa2b5e819`); retrieval
    ranks in the database.
-4. **Heavy work runs in the API process.** IFC parse and geometry fork
-   subprocesses from the web container; agent analysis runs *inline inside the
-   emitting transaction*. There is no queue, no worker tier and no backpressure —
-   a large model upload competes directly with request serving, and enabling
-   `AGENT_AUTO_ANALYSIS_ENABLED` puts LLM latency inside a write transaction.
+4. **~~Heavy work runs in the API process.~~ Resolved.** IFC parsing and
+   geometry, ingestion, indexing and agent analysis run on a durable job queue
+   in PostgreSQL, on a dedicated `worker` service under Compose; the ceiling is
+   enforced fleet-wide. See [JOBS.md](JOBS.md).
 5. **File storage is host-local.** Uploads live in named Docker volumes, so the
    backend cannot be horizontally scaled as it stands. `PrivateStorage` is a
    Protocol ready for S3/R2 and `PRIVATE_STORAGE_BACKEND` exists, but only the
@@ -488,7 +487,7 @@ Ordered by risk reduced per unit of work.
 |---|---|---|
 | 1 | ~~Serve documents and attachments through an authenticated endpoint.~~ Done. | Risk 1 |
 | 2 | ~~Close the RBAC migration window.~~ Done: role-based helpers removed, retired schema dropped (`e1a9c3d5f720`). | Risk 2 |
-| 3 | Move IFC processing and agent analysis out of the request path onto a real job runner. Given the deliberate no-broker stance, a database-backed queue table using the advisory-lock worker pattern already in `scheduler.py` would fit the existing architecture without new infrastructure. | Risk 4 |
+| 3 | ~~Move heavy work onto a real job runner.~~ Done: `background_jobs` and `app.worker` (see JOBS.md). | Risk 4 |
 | 4 | ~~Execute the pgvector migration.~~ Done (`c63fa2b5e819`). | Risk 3 |
 | 5 | Write the S3/R2 `PrivateStorage` implementation and give public uploads the same abstraction, so the backend becomes stateless. | Risk 5 |
 | 6 | ~~Make one start sequence authoritative.~~ Done: the Compose override is gone. | Risk 7 |

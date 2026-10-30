@@ -1,99 +1,122 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+/**
+ * QA-06B: inside a project the interface asks what the person may do *there*.
+ * An administrator who is not on the team holds the project's team and
+ * parties pages, not its tasks; the office-wide list said otherwise.
+ */
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mine = vi.fn();
-
-vi.mock("../../features/admin/services/accessControl.service", () => ({
-  default: { mine: (...args: unknown[]) => mine(...args) },
+vi.mock("../../features/admin/services/accessControl.service", () => ({ default: { mine } }));
+vi.mock("./auth.store", () => ({
+  useAuthStore: (select: (state: unknown) => unknown) =>
+    select({ user: { id: "admin-1" }, isAuthenticated: true }),
 }));
 
-import { usePermissionStore } from "./permission.store";
+const { usePermissionStore } = await import("./permission.store");
+const { usePermissions } = await import("../../hooks/usePermissions");
 
-/**
- * The cache backing `useRole()`/`usePermissions()`. Covers what P1 of the
- * platform improvement pass requires of it directly: it loads from the
- * backend (not a hardcoded map), it does not re-fetch on every mount, a
- * failed load never leaves a stale/wrong list in place, and logout (`clear`)
- * leaves no trace of the previous session's permissions.
- */
-describe("usePermissionStore", () => {
-  afterEach(() => {
+const OFFICE_WIDE = ["platform.manage_users", "project.manage_members", "task.view", "document.view"];
+const IN_PROJECT = ["platform.manage_users", "project.manage_members"];
+
+describe("project-scoped permissions", () => {
+  beforeEach(() => {
     mine.mockReset();
+    mine.mockImplementation(async (projectId?: string) => (projectId ? IN_PROJECT : OFFICE_WIDE));
     usePermissionStore.getState().clear();
   });
+  afterEach(() => usePermissionStore.getState().clear());
 
-  it("loads effective permissions from the backend, not a local table", async () => {
-    mine.mockResolvedValue(["task.create", "platform.create_project"]);
+  it("answers with the open project's permissions once they arrive", async () => {
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => { await usePermissionStore.getState().fetch("admin-1"); });
+    expect(result.current.hasPermission("task.view")).toBe(true);
 
-    await usePermissionStore.getState().fetch("user-1");
+    await act(async () => { await usePermissionStore.getState().enterProject("project-1"); });
+    expect(mine).toHaveBeenLastCalledWith("project-1");
+    expect(result.current.hasPermission("task.view")).toBe(false);
+    expect(result.current.hasPermission("project.manage_members")).toBe(true);
+    expect(result.current.isReady).toBe(true);
 
-    const state = usePermissionStore.getState();
-    expect(state.permissions).toEqual(["task.create", "platform.create_project"]);
-    expect(state.loadedForUserId).toBe("user-1");
-    expect(state.isLoading).toBe(false);
-    expect(state.error).toBeNull();
+    act(() => usePermissionStore.getState().leaveProject());
+    expect(result.current.hasPermission("task.view")).toBe(true);
   });
 
-  it("does not start a second request while one is already in flight", async () => {
-    let resolveFetch!: (value: string[]) => void;
-    mine.mockReturnValue(new Promise<string[]>((resolve) => { resolveFetch = resolve; }));
+  it("is not ready until the open project's answer has arrived", async () => {
+    let release: (codes: string[]) => void = () => undefined;
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => { await usePermissionStore.getState().fetch("admin-1"); });
+    mine.mockImplementationOnce(() => new Promise((done) => { release = done; }));
 
-    const first = usePermissionStore.getState().fetch("user-1");
-    const second = usePermissionStore.getState().fetch("user-1"); // e.g. Sidebar and Topbar mounting together
+    let entering: Promise<void> = Promise.resolve();
+    act(() => { entering = usePermissionStore.getState().enterProject("project-1"); });
+    expect(result.current.isReady).toBe(false);
 
-    expect(mine).toHaveBeenCalledTimes(1);
-    resolveFetch(["schedule.view"]);
-    await Promise.all([first, second]);
-    expect(usePermissionStore.getState().permissions).toEqual(["schedule.view"]);
+    await act(async () => { release(IN_PROJECT); await entering; });
+    expect(result.current.isReady).toBe(true);
   });
 
-  it("a failed fetch reports an error and does not keep a stale permission list", async () => {
-    mine.mockResolvedValueOnce(["ai.view_insights"]);
-    await usePermissionStore.getState().fetch("user-1");
-    expect(usePermissionStore.getState().permissions).toEqual(["ai.view_insights"]);
+  it("falls back to the office-wide answer if the project's cannot be loaded", async () => {
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => { await usePermissionStore.getState().fetch("admin-1"); });
+    mine.mockRejectedValueOnce(new Error("Network Error"));
+    await act(async () => { await usePermissionStore.getState().enterProject("project-1"); });
+    expect(result.current.isReady).toBe(true);
+    expect(result.current.hasPermission("task.view")).toBe(true);
+  });
+});
 
+/* 2026-10-23: a grant or revocation made while somebody is signed in reached
+   their tab only after a reload. The snapshot is re-read on focus and on 403. */
+describe("revalidation after a permission change", () => {
+  beforeEach(() => {
+    cleanup();
+    usePermissionStore.getState().clear();
     mine.mockReset();
-    usePermissionStore.getState().clear(); // simulate a fresh session before the failing call
-    mine.mockRejectedValueOnce(new Error("network error"));
-    await usePermissionStore.getState().fetch("user-2");
+  });
+  afterEach(() => { cleanup(); usePermissionStore.getState().clear(); });
 
-    const state = usePermissionStore.getState();
-    expect(state.permissions).toBeNull();
-    expect(state.error).not.toBeNull();
-    expect(state.loadedForUserId).toBeNull();
+  it("drops a revoked permission when the server answers 403", async () => {
+    mine.mockResolvedValueOnce(["platform.create_project", "task.view"]);
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => { await usePermissionStore.getState().fetch("admin-1"); });
+    expect(result.current.hasPermission("platform.create_project")).toBe(true);
+
+    mine.mockResolvedValue(["task.view"]);
+    await act(async () => { window.dispatchEvent(new Event("permissions:stale")); });
+    await vi.waitFor(() => expect(result.current.hasPermission("platform.create_project")).toBe(false));
+    expect(result.current.hasPermission("task.view")).toBe(true);
   });
 
-  it("switching users (logout, then a different login) never mixes the two people's permissions", async () => {
-    // Models the real flow: auth.store's logout() clears this store before
-    // any new session can start (see auth.store.ts), so by the time a second
-    // person's fetch begins, the first person's list is already gone - not
-    // merely overwritten moments later.
-    mine.mockResolvedValueOnce(["platform.manage_users", "platform.manage_permissions"]);
-    await usePermissionStore.getState().fetch("admin-1");
-    expect(usePermissionStore.getState().permissions).toContain("platform.manage_users");
-
-    usePermissionStore.getState().clear(); // what auth.store's logout() does
-    expect(usePermissionStore.getState().permissions).toBeNull();
-
+  it("shows a new grant when the tab regains focus, and keeps the old answer while it loads", async () => {
     mine.mockResolvedValueOnce(["task.view"]);
-    await usePermissionStore.getState().fetch("engineer-2");
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => { await usePermissionStore.getState().fetch("admin-1"); });
 
-    const state = usePermissionStore.getState();
-    expect(state.permissions).toEqual(["task.view"]);
-    expect(state.permissions).not.toContain("platform.manage_users");
-    expect(state.loadedForUserId).toBe("engineer-2");
+    let release: (codes: string[]) => void = () => undefined;
+    mine.mockImplementationOnce(() => new Promise((done) => { release = done; }));
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    // No blank state while the re-read is in flight.
+    expect(result.current.isReady).toBe(true);
+    expect(result.current.hasPermission("task.view")).toBe(true);
+
+    await act(async () => { release(["task.view", "platform.create_project"]); });
+    await vi.waitFor(() => expect(result.current.hasPermission("platform.create_project")).toBe(true));
   });
 
-  it("clear removes every trace of the previous session's permissions (logout)", async () => {
-    mine.mockResolvedValue(["platform.manage_users"]);
-    await usePermissionStore.getState().fetch("admin-1");
-    expect(usePermissionStore.getState().permissions).not.toBeNull();
+  it("keeps the previous answer if the re-read fails", async () => {
+    mine.mockResolvedValueOnce(["task.view"]);
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => { await usePermissionStore.getState().fetch("admin-1"); });
+    mine.mockRejectedValueOnce(new Error("Network Error"));
+    await act(async () => { await usePermissionStore.getState().revalidate(); });
+    expect(result.current.hasPermission("task.view")).toBe(true);
+  });
 
-    usePermissionStore.getState().clear();
-
-    const state = usePermissionStore.getState();
-    expect(state.permissions).toBeNull();
-    expect(state.loadedForUserId).toBeNull();
-    expect(state.isLoading).toBe(false);
-    expect(state.error).toBeNull();
+  it("does nothing before anybody has signed in", async () => {
+    const before = mine.mock.calls.length;
+    await usePermissionStore.getState().revalidate();
+    expect(mine.mock.calls.length).toBe(before);
   });
 });

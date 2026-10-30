@@ -1,3 +1,4 @@
+import { UploadCloud } from "lucide-react";
 import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
@@ -87,7 +88,7 @@ export const DocumentUploader = ({
     <Modal isOpen={isOpen} onClose={onClose} title={t("docUploader.upload_document")} size="md">
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="bg-red-50 text-red-600 text-sm rounded-md px-4 py-3">
+          <div className="bg-wash-overdue text-state-overdue text-sm rounded-md px-4 py-3">
             {error}
           </div>
         )}
@@ -105,7 +106,7 @@ export const DocumentUploader = ({
             </div>
           ) : (
             <div>
-              <p className="text-2xl mb-2">📁</p>
+              <UploadCloud size={22} strokeWidth={1.5} className="mx-auto mb-2 text-muted-foreground" aria-hidden />
               <p className="text-sm text-muted-foreground">
                 {t("docUploader.click_to_select_a_file")}
               </p>

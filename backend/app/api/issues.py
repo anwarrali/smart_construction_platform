@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, time, timezone
 
 from app.db.database import get_db
-from app.services.authorization import has_permission, require
+from app.services.authorization import has_permission, projects_with_permission, require
 from app.models.user import User
 from app.models.issue import Issue
 from app.schemas.issue import IssueOut, IssueCreate, IssueUpdate
@@ -30,6 +30,9 @@ from app.models.task import Task
 
 router = APIRouter(prefix="/issues", tags=["Issues"])
 
+#: Reading issues — enforced here, not only by the route guard.
+VIEW = "issue.view"
+
 @router.get("", response_model=List[IssueOut])
 def list_issues(
     project_id: Optional[uuid.UUID] = None,
@@ -47,16 +50,19 @@ def list_issues(
     # organization-side refusal blocked the office's own engineers.
     if project_id and not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    if project_id:
+        require(db, current_user, VIEW, project_id)
     query = db.query(Issue)
-    # "Sees every project" is `platform.view_all_projects`, which
+    # "Works in every project" is `platform.work_in_all_projects` (QA-06B), which
     # `accessible_project_ids` already answers by returning None. Reading the
     # role instead meant two things went wrong: an administrator whose
     # permission had been explicitly revoked still bypassed the filter, and a
     # non-administrator who had been *granted* it got `None or []` — an empty
-    # list, so they saw nothing at all.
-    accessible_ids = accessible_project_ids(db, current_user)
-    if accessible_ids is not None:
-        query = query.filter(Issue.project_id.in_(accessible_ids))
+    # list, so they saw nothing at all. Narrowed again to the projects where the
+    # person may view issues.
+    query = query.filter(Issue.project_id.in_(projects_with_permission(
+        db, current_user, VIEW, accessible_project_ids(db, current_user),
+    )))
     if project_id:
         query = query.filter(Issue.project_id == project_id)
     if status:
@@ -99,6 +105,7 @@ def get_issues_by_project(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    require(db, current_user, VIEW, project_id)
     query = work_scope.narrow_to_disciplines(
         db.query(Issue).filter(Issue.project_id == project_id),
         Issue.task_id, db, current_user, project_id,
@@ -116,6 +123,7 @@ def get_issue_by_id(
         raise HTTPException(status_code=404, detail="Issue not found")
     if not user_has_project_access(db, current_user, issue.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this issue")
+    require(db, current_user, VIEW, issue.project_id)
     if issue.task_id and not work_scope.task_is_in_scope(
         db, current_user, issue.project_id, db.get(Task, issue.task_id)
     ):
@@ -240,10 +248,10 @@ def update_issue(
         raise HTTPException(status_code=404, detail="Issue not found")
     if not user_has_project_access(db, current_user, issue.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this issue")
-    project = db.get(Project, issue.project_id)
-    # `project_manager_id` is validated at both write paths to be an active
-    # PROJECT_MANAGER, so the role half was always implied by the id test.
-    can_manage = bool(project and project.project_manager_id == current_user.id)
+    # Managing somebody else's issue is `issue.resolve` ("Close or resolve a
+    # project issue"). It was the assigned-manager id, so neither a grant nor
+    # a revocation of `issue.resolve` changed who could edit an issue.
+    can_manage = has_permission(db, current_user, "issue.resolve", issue.project_id)
     if not can_manage and current_user.id not in {issue.raised_by_id, issue.assigned_to_id}:
         raise HTTPException(status_code=403, detail="You cannot update this issue")
     # Reassigning an issue and closing one are both `issue.resolve`, which is

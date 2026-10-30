@@ -52,7 +52,12 @@ export const DashboardSelectorPage = () => {
     return <div className="p-8 text-center text-muted-foreground">{t("common.loading")}</div>;
   }
   if (hasCapability("platform.manage_users")) return <Navigate to="/admin" replace />;
-  if (hasCapability("project.manage_members") || hasCapability("platform.create_project")) {
+  // The portfolio dashboard is project-wide work, which its endpoints give to
+  // `task.view_all`. Creating projects alone does not make somebody a
+  // portfolio manager: an engineer an office lets open projects still lands on
+  // their own work, and reaches "Add Project" from Projects (QA 2026-10-22).
+  if (hasCapability("project.manage_members")
+    || (hasCapability("platform.create_project") && hasCapability("task.view_all"))) {
     return <ProjectManagerDashboard />;
   }
   if (!isInternal && hasCapability("client_portal.view")) return <Navigate to="/owner-dashboard" replace />;

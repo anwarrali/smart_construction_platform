@@ -284,6 +284,10 @@ async def create_voice_command_from_transcript(
         command.status = VoiceAnalysisStatus.FAILED
         command.row_version += 1
         command.error_code = "VOICE_TIMEOUT" if isinstance(exc, AIProviderTimeoutError) else "VOICE_PROCESSING_FAILED"
+        logger.warning(
+            "voice interpretation failed command=%s project=%s code=%s error=%s: %s",
+            command.id, command.project_id, command.error_code, type(exc).__name__, str(exc)[:300],
+        )
         command.error_detail = (
             "AI analysis timed out. The original transcript was preserved; retry is safe."
             if isinstance(exc, AIProviderTimeoutError)

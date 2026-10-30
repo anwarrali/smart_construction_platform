@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 
 type ButtonVariant =
   | "primary"
@@ -50,15 +51,16 @@ export const Button = ({
     <button
       className={`${variantClasses[variant]} ${sizeClasses[size]} ${fullWidth ? "w-full" : ""} ${className}`}
       disabled={disabled || isLoading}
+      aria-busy={isLoading || undefined}
       {...props}
     >
       {isLoading ? (
-        <span className="animate-spin">⏳</span>
+        <Loader2 size={size === "sm" ? 13 : 15} className="animate-spin" aria-hidden />
       ) : leftIcon ? (
-        <span>{leftIcon}</span>
+        <span className="inline-flex shrink-0">{leftIcon}</span>
       ) : null}
       {children}
-      {!isLoading && rightIcon && <span>{rightIcon}</span>}
+      {!isLoading && rightIcon && <span className="inline-flex shrink-0">{rightIcon}</span>}
     </button>
   );
 };

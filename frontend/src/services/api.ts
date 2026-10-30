@@ -233,6 +233,11 @@ const api = {
       axiosInstance
         .delete<void>(ENDPOINTS.PROJECTS.BY_ID(id))
         .then((res) => res.data),
+    deletionImpact: (id: string) =>
+      axiosInstance
+        .get<{ tasks: number; members: number; documents: number; issues: number; siteReports: number; models: number }>(
+          ENDPOINTS.PROJECTS.DELETION_IMPACT(id))
+        .then((res) => res.data),
     getSummary: () =>
       axiosInstance
         .get<ProjectSummary>(ENDPOINTS.PROJECTS.SUMMARY)
@@ -412,7 +417,13 @@ const api = {
       form.append("idempotency_key", body.idempotencyKey);
       form.append("audio", body.audio, body.filename);
       return axiosInstance
-        .post<VoiceCommand>(ENDPOINTS.VOICE.COMMANDS, form, { signal, timeout: 120000 })
+        .post<VoiceCommand>(ENDPOINTS.VOICE.COMMANDS, form, {
+          signal,
+          // Longer than the server's own worst case (two provider stages, each a
+          // 60 s request with one retry), so the browser does not give up on a
+          // command the server is still finishing.
+          timeout: 300000,
+        })
         .then((res) => res.data);
     },
 
@@ -921,10 +932,6 @@ const api = {
     hierarchy: (projectId: string, versionId: string) => axiosInstance.get<IFCSpatialNode[]>(ENDPOINTS.IFC.HIERARCHY(projectId, versionId)).then((res) => res.data),
     spatialDetails: (projectId: string, nodeId: string) => axiosInstance.get<IFCSpatialDetails>(ENDPOINTS.IFC.SPATIAL_DETAILS(projectId, nodeId)).then((res) => res.data),
     spatialProjectData: (projectId: string, nodeId: string) => axiosInstance.get<{projectData:Array<{entity:{id:string;type:string;title?:string;status?:string}}> }>(ENDPOINTS.IFC.SPATIAL_PROJECT_DATA(projectId, nodeId)).then((res) => res.data),
-    geometryStatus: (projectId: string, versionId: string) => axiosInstance.get<{versionId:string; status:string; assetReady:boolean; error?:string; stats:Record<string,unknown>; generatedAt?:string}>(ENDPOINTS.IFC.GEOMETRY_STATUS(projectId, versionId)).then((res) => res.data),
-    generateGeometry: (projectId: string, versionId: string) => axiosInstance.post<{status:string;message:string}>(ENDPOINTS.IFC.GEOMETRY_GENERATE(projectId, versionId)).then((res) => res.data),
-    geometryAsset: (projectId: string, versionId: string) => axiosInstance.get<ArrayBuffer>(ENDPOINTS.IFC.GEOMETRY_ASSET(projectId, versionId), { responseType: "arraybuffer" }).then((res) => res.data),
-    geometryMapping: (projectId: string, versionId: string) => axiosInstance.get<{versionId:string;items:Record<string,{id:string;globalId:string;name:string;entityType:string;kind?:"ELEMENT"|"SPATIAL";nodeType?:string;buildingNodeId?:string;storeyNodeId?:string;spaceNodeId?:string;discipline?:string;systemName?:string;category?:string}>}>(ENDPOINTS.IFC.GEOMETRY_MAPPING(projectId, versionId)).then((res) => res.data),
     elements: (projectId: string, versionId: string, filters: Record<string, unknown> = {}) => axiosInstance.get<{items: IFCElement[]; total: number}>(`${ENDPOINTS.IFC.ELEMENTS(projectId, versionId)}?${parseQueryParams(filters)}`).then((res) => res.data),
     element: (projectId: string, versionId: string, elementId: string) => axiosInstance.get<IFCElement>(`${ENDPOINTS.IFC.ELEMENTS(projectId, versionId)}/${elementId}`).then((res) => res.data),
     elementProjectData: (projectId: string, elementId: string) => axiosInstance.get<{projectData:Array<{entity:{id:string;type:string;title?:string;status?:string}}> }>(ENDPOINTS.IFC.ELEMENT_PROJECT_DATA(projectId, elementId)).then((res) => res.data),

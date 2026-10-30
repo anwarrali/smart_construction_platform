@@ -76,7 +76,7 @@ describe("Breadcrumbs", () => {
   });
 
   it("names a module exactly the fallback's length", () => {
-    expect(at(`/projects/${PROJECT}/milestones`)).toContain("task.milestone");
+    expect(at(`/projects/${PROJECT}/milestones`)).toContain("nav.milestones");
   });
 
   it("still names the dashboard on the dashboard", () => {
@@ -103,9 +103,16 @@ describe("Breadcrumbs", () => {
     expect(at(`/projects/${PROJECT}/something-new`)).toContain("something new");
   });
 
-  it("renders nothing outside a project workspace", () => {
+  it("names the portfolio page outside a project workspace", () => {
     workspace.isProjectWorkspace = false;
-    location.pathname = "/projects";
+    workspace.projectId = undefined;
+    expect(at("/projects")).toBe("nav.projects");
+  });
+
+  it("renders nothing for a portfolio page it does not know", () => {
+    workspace.isProjectWorkspace = false;
+    workspace.projectId = undefined;
+    location.pathname = "/somewhere/unlisted";
     const { container } = render(<Breadcrumbs />);
     expect(container).toBeEmptyDOMElement();
   });

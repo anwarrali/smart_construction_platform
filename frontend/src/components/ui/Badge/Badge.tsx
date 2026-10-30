@@ -17,19 +17,22 @@ interface BadgeProps {
   className?: string;
 }
 
+/* Every variant is a status chip from the shared vocabulary: square, edged in
+   its own colour, with a leading square so the state does not rest on hue
+   alone. `primary` is the one non-status tag — a solid steel label. */
 const variantClasses: Record<BadgeVariant, string> = {
   success: "badge-success",
   warning: "badge-warning",
   danger: "badge-danger",
   info: "badge-info",
   neutral: "badge-neutral",
-  primary: "bg-primary text-primary-foreground",
+  primary: "inline-flex items-center border border-primary bg-primary text-primary-foreground",
 };
 
 const sizeClasses: Record<BadgeSize, string> = {
-  sm: "text-[10px] px-1.5 py-0.5",
-  md: "text-xs px-2.5 py-0.5",
-  lg: "text-sm px-3 py-1",
+  sm: "text-[10px] leading-4",
+  md: "",
+  lg: "text-xs px-2 py-0.5",
 };
 
 export const Badge = ({
@@ -41,9 +44,9 @@ export const Badge = ({
 }: BadgeProps) => {
   return (
     <span
-      className={`inline-flex items-center rounded-full font-medium ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`${variantClasses[variant]} ${sizeClasses[size]} font-semibold ${variant === "primary" ? "px-1.5 py-px text-[11px]" : ""} ${className}`}
     >
-      {dot && <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5" />}
+      {dot && variant === "primary" && <span className="me-1.5 h-1.5 w-1.5 bg-current" />}
       {children}
     </span>
   );

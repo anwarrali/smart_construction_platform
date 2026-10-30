@@ -1,0 +1,34 @@
+@startuml
+!include _style.iuml
+autonumber
+actor "Project member" as U
+participant "POST /rag/query" as API
+participant "Authorization\nservice" as AUTH
+participant "retrieve()" as RET
+participant "EmbeddingService" as EMB
+participant "PgVectorStore" as VS
+participant "AnswerService" as ANS
+participant "OpenAI API" as AI
+database "PostgreSQL\n+ pgvector" as DB
+U -> API : question, project_id
+API -> AUTH : readable document ids,\nreadable ingested-file ids
+AUTH --> API : allowed id sets
+API -> RET : query + allowed sets
+alt no readable source
+  RET --> API : [] (no DB or model call)
+else
+  RET -> EMB : embed_one(question)
+  EMB -> AI : embeddings request
+  AI --> EMB : vector(1536)
+  RET -> VS : search(project, allowed ids, vector, k)
+  VS -> DB : ORDER BY embedding <=> query LIMIT k\n(HNSW cosine index)
+  DB --> VS : top-k chunks
+  VS --> RET : scored chunks
+  RET --> API : retrieved chunks
+  API -> ANS : answer(question, chunks)
+  ANS -> AI : grounded prompt with numbered passages
+  AI --> ANS : answer or INSUFFICIENT_CONTEXT
+  ANS -> ANS : citations built from chunk records
+end
+API --> U : answer, citations, found flag
+@enduml

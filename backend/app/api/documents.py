@@ -20,9 +20,13 @@ from app.services.file_storage import delete_upload
 from app.services.private_storage import private_storage
 from app.models.enums import DocumentType, TaskStatus, NotificationType
 from app.models.project import Project
+from app.models.rbac import DocumentPartyShare, ProjectParty
 from app.models.task import Task
+from app.schemas.user import CamelModel
+from pydantic import Field
 from app.models.notification import Notification
 from app.services.audit_service import record_audit
+from app.services.rag import ingestion as rag_ingestion
 from app.services.file_intelligence import (
     Classification, classify_document, identify_format, text_sample,
 )
@@ -251,6 +255,12 @@ async def upload_document(
         correlation_id=f"document:{new_doc.id}",
         idempotency_key=f"DOCUMENT_UPLOADED:{new_doc.id}",
     )
+    # Background RAG indexing for an eligible PDF, queued in this transaction
+    # so the job exists only if the document does and a worker never looks
+    # for a row that is not committed yet. The synchronous
+    # `POST /rag/documents/{id}/index` stays as the manual path.
+    if rag_ingestion.should_auto_index_document(new_doc):
+        rag_ingestion.submit_document_index(db, new_doc)
     db.commit()
     db.refresh(new_doc)
     return new_doc
@@ -297,6 +307,85 @@ def delete_document(
     db.delete(doc)
     db.commit()
     return {"message": "Document deleted successfully"}
+
+
+# --- Sharing with an outside party -------------------------------------------
+# External document access is deny-by-default (`document_access.
+# party_document_scope`): a contractor or the client reads a document only once a
+# `DocumentPartyShare` exists. Until 2026-10-23 nothing but the offline legacy
+# backfill could write one, so `document.share_external` was offered in Access
+# Control and governed nothing.
+
+SHARE = "document.share_external"
+
+
+class PartyShareCreate(CamelModel):
+    party_id: uuid.UUID
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+def _shareable_document(db: Session, user: User, document_id: uuid.UUID) -> Document:
+    doc = db.get(Document, document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    # The sharer must be able to read it: sharing never hands on more than you see.
+    assert_document_readable(db, user, doc)
+    require(db, user, SHARE, doc.project_id)
+    return doc
+
+
+def _share_payload(db: Session, share: DocumentPartyShare) -> dict:
+    party = db.get(ProjectParty, share.party_id)
+    return {"documentId": share.document_id, "partyId": share.party_id,
+            "partyName": party.display_name if party else None,
+            "partyKind": party.kind if party else None,
+            "sharedById": share.shared_by_id, "note": share.note,
+            "createdAt": share.created_at}
+
+
+@router.get("/{document_id}/party-shares")
+def list_party_shares(document_id: uuid.UUID, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)):
+    doc = _shareable_document(db, current_user, document_id)
+    rows = db.query(DocumentPartyShare).filter(DocumentPartyShare.document_id == doc.id).all()
+    return [_share_payload(db, row) for row in rows]
+
+
+@router.post("/{document_id}/party-shares", status_code=201)
+def share_with_party(document_id: uuid.UUID, data: PartyShareCreate, db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)):
+    doc = _shareable_document(db, current_user, document_id)
+    party = db.get(ProjectParty, data.party_id)
+    if party is None or party.project_id != doc.project_id or not party.is_active:
+        raise HTTPException(status_code=400, detail="That party is not active on this document's project")
+    existing = db.query(DocumentPartyShare).filter(
+        DocumentPartyShare.document_id == doc.id, DocumentPartyShare.party_id == party.id).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="This document is already shared with that party")
+    share = DocumentPartyShare(document_id=doc.id, party_id=party.id,
+                               shared_by_id=current_user.id, note=data.note)
+    db.add(share)
+    record_audit(db, actor_id=current_user.id, action="document_shared_with_party", entity_type="document",
+                 entity_id=doc.id, project_id=doc.project_id,
+                 details={"partyId": str(party.id), "partyKind": party.kind})
+    db.commit()
+    db.refresh(share)
+    return _share_payload(db, share)
+
+
+@router.delete("/{document_id}/party-shares/{party_id}")
+def unshare_with_party(document_id: uuid.UUID, party_id: uuid.UUID, db: Session = Depends(get_db),
+                       current_user: User = Depends(get_current_user)):
+    doc = _shareable_document(db, current_user, document_id)
+    share = db.query(DocumentPartyShare).filter(
+        DocumentPartyShare.document_id == doc.id, DocumentPartyShare.party_id == party_id).first()
+    if not share:
+        raise HTTPException(status_code=404, detail="This document is not shared with that party")
+    db.delete(share)
+    record_audit(db, actor_id=current_user.id, action="document_unshared_with_party", entity_type="document",
+                 entity_id=doc.id, project_id=doc.project_id, details={"partyId": str(party_id)})
+    db.commit()
+    return {"message": "Share removed"}
 
 @router.get("/{document_id}/download")
 def download_document(

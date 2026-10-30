@@ -334,10 +334,13 @@ NEVER_EXTERNAL_AUTHORITY = (
 #: Office work by default — no external role inherits it — but an office may
 #: delegate it to one named outside person on one project. `message.broadcast`
 #: belongs here: a main contractor may be allowed to address the whole project.
-DELEGABLE_OFFICE_WORK = ("task.create", "task.edit", "schedule.edit", "issue.resolve", "message.broadcast")
+# `agents.view` (2026-10-17) is office work the administrator hands out by name;
+# it certifies nothing, so it sits here rather than behind the wall.
+DELEGABLE_OFFICE_WORK = ("task.create", "task.edit", "schedule.edit", "issue.resolve", "message.broadcast",
+                         "agents.view")
 PLATFORM_AUTHORITY = (
     "platform.manage_users", "platform.manage_permissions",
-    "platform.view_all_projects", "platform.create_project",
+    "platform.view_all_projects", "platform.work_in_all_projects", "platform.create_project",
     "org.manage_roles", "org.manage_disciplines", "org.manage_settings",
 )
 

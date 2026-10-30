@@ -160,7 +160,8 @@ def index_ingested_file(
             ),
         )
 
-    rag.submit_ingested_file_index(file.id, force=force)
+    rag.submit_ingested_file_index(db, file, force=force)
+    db.commit()
     return _ingested_file_status(db, file)
 
 
@@ -455,13 +456,11 @@ def reindex_project(
         entity_type="project", entity_id=project_id, project_id=project_id,
         details={"scope": scope, "sources": job.total_sources},
     )
+    # Queued in this transaction: the run exists only if the request commits.
+    maintenance.submit_project_reindex(db, job)
     db.commit()
     db.refresh(job)
-    payload_out = _reindex_status(db, project_id, job)
-    # Submitted after the commit: a pool worker opens its own session and would
-    # not see a row this transaction has not committed yet.
-    maintenance.submit_project_reindex(job.id)
-    return payload_out
+    return _reindex_status(db, project_id, job)
 
 
 @router.get("/projects/{project_id}/reindex", response_model=RagReindexStatus)

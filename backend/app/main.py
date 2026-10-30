@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
+from app.core import request_context
 from app.services import scheduler
 # Imported for its import side effect: this installs the session listeners that
 # flush queued push deliveries after a commit. Without it, push would only work
@@ -14,6 +15,7 @@ from app.services import scheduler
 from app.services import push  # noqa: F401
 from app.services.push.fcm import get_provider
 from app.services.realtime import get_listener
+from app.services.jobs import runner as job_runner
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,6 +31,10 @@ async def lifespan(_: FastAPI):
     # in-process registry could not do that.
     realtime_listener = get_listener()
     realtime_listener.start(asyncio.get_running_loop())
+    # Heavy work runs off the request path on the durable job queue. Embedded
+    # here for a single-container deployment; a dedicated `python -m
+    # app.worker` replaces it where JOB_RUNNER_EMBEDDED is false.
+    job_runner.start_embedded()
     # Say plainly at boot whether push can work. A silently unconfigured
     # provider is indistinguishable from "nobody has registered a device", and
     # that ambiguity is the hardest part of diagnosing a missing notification.
@@ -65,6 +71,9 @@ async def lifespan(_: FastAPI):
     # loop is still running; a thread parked in select() would otherwise delay
     # shutdown until its poll timeout expired.
     realtime_listener.stop()
+    # Before the scheduler: running jobs get a short grace period, and any
+    # still running are handed back by a surviving runner's reaper.
+    await asyncio.to_thread(job_runner.stop_embedded)
     await scheduler.stop()
 
 
@@ -82,7 +91,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The browser hides response headers from a cross-origin page unless they
+    # are listed; the client reads the support ID from this one.
+    expose_headers=[request_context.HEADER],
 )
+request_context.install(app)
 
 # The public mount, narrowed to exactly one category.
 #

@@ -36,7 +36,7 @@ export const ForgotPasswordPage = () => {
 
       {sent ? (
         <div className="text-center space-y-4">
-          <div className="bg-green-50 text-green-600 text-sm rounded-md px-4 py-3">
+          <div className="bg-wash-verified text-state-verified text-sm rounded-md px-4 py-3">
             If an account exists with that email, you&apos;ll receive reset instructions shortly.
           </div>
           <Link to={ROUTES.LOGIN}>
@@ -48,7 +48,7 @@ export const ForgotPasswordPage = () => {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="bg-red-50 text-red-600 text-sm rounded-md px-4 py-3">
+            <div className="bg-wash-overdue text-state-overdue text-sm rounded-md px-4 py-3">
               {error}
             </div>
           )}

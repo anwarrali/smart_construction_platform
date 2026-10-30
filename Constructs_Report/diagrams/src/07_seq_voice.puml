@@ -1,0 +1,29 @@
+@startuml
+!include _style.iuml
+autonumber
+actor "Site engineer" as U
+participant "Client\n(web / mobile)" as C
+participant "Voice API" as V
+participant "Transcription +\nanalysis services" as T
+participant "OpenAI API" as AI
+participant "voice_router /\nrules engine" as R
+participant "voice_action_service" as X
+database "PostgreSQL" as DB
+U -> C : record spoken report (Arabic / English)
+C -> V : upload audio (private storage)
+V -> T : transcribe and analyse
+T -> AI : transcription + structured analysis
+AI --> T : transcript, intent, entities
+T -> R : route (question vs. mutation)
+alt question
+  R --> C : spoken / text answer
+else mutation
+  R -> DB : proposed action drafts
+  R --> C : drafts + confirmation token (10 min)
+  U -> C : review, edit, confirm
+  C -> V : confirm selected actions
+  V -> X : execute with permission re-check
+  X -> DB : apply change, audit_logs,\nai_action_versions, domain event
+  X --> C : per-action outcome
+end
+@enduml

@@ -2,232 +2,232 @@
    StructIQ — design tokens
    Smart Construction Management Platform
 
-   The identity is built from the logo outward. The mark is a chamfered
-   structural frame in Architectural Navy with a connection tail in Verdant
-   Data, and the interface reuses exactly that pair:
+   The interface is drawn like an engineering instrument: graphite
+   structure, a light working sheet, one steel-blue accent for action and
+   selection, and colour reserved for state.
 
-     NAVY     structure, authority, the built thing.
-              Primary actions, headings, the navigation rail, the ink of
-              the product.
+     GRAPHITE  structure. The navigation rail, headings, the ink of the
+               product.
 
-     VERDANT  intelligence, connection, the resolved decision.
-              The active mark, AI and insight surfaces, verified state,
-              focus. It is the colour of the product knowing something.
+     STEEL     action and selection. Primary buttons, the active
+               destination, focus, links. One hue, used for one purpose.
 
-   Three rules govern everything below.
+   Four rules govern everything below.
 
-     1. The ground is light. This is engineering software used all day in
-        site offices; it stays bright, calm and legible, and the only dark
-        surface in the product is the navigation rail, which frames the
-        work the way the mark frames its own tail.
+     1. Geometry is square. Panels, controls, chips and dialogs have
+        straight edges; the only round shapes left in the product are the
+        ones that are round by nature (a spinner, a radio dot, an avatar
+        is not one of them).
 
-     2. Structure comes from line weight and space, not from a border,
-        shadow and radius on every element. Cards are one device among
-        several, never the design language itself.
+     2. Structure comes from rules, alignment and type weight — not from
+        shadows. Elevation exists only for things that genuinely float
+        above the page: menus and dialogs.
 
-     3. Colour is signal. Outside the two brand colours, chroma is reserved
-        for state a person must act on, and each hue means exactly one
-        thing across the entire product.
+     3. Colour is signal. Outside graphite and steel, chroma means a state
+        a person must act on, and each hue means exactly one thing across
+        the entire product.
+
+     4. Measured values — quantities, codes, dates, revisions, float — set
+        in the technical face, so numbers line up and read as data.
    ============================================================ */
 
 :root {
-  /* ── Typography ───────────────────────────────────────────
-     Inter carries the interface. The mono face is reserved for measured
-     things — quantities, codes, revisions, dates, float — which is what
-     makes the product read as engineering software rather than as a
-     generic dashboard. */
+  /* ── Typography ─────────────────────────────────────────── */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
   --font-arabic: "Cairo", "Tajawal", sans-serif;
 
-  /* Optical tracking. Display tightens, technical labels open up. */
-  --tracking-display: -0.023em;
-  --tracking-heading: -0.014em;
-  --tracking-label: 0.085em;
+  --tracking-display: -0.02em;
+  --tracking-heading: -0.011em;
+  --tracking-label: 0.07em;
 
-  /* ── Radius ───────────────────────────────────────────────
-     Unchanged from the current product. The rounding here is already the
-     middle ground worth keeping — softer than legacy enterprise, tighter
-     than consumer — so the rebrand leaves it exactly as it was. */
-  --radius-chip: 3px;
-  --radius-control: 5px;
-  --radius-panel: 8px;
-  --radius-sheet: 12px;
-  --radius: var(--radius-control);
+  /* ── Geometry ───────────────────────────────────────────────
+     Square by default. The names are kept so every existing usage
+     (rounded-control, rounded-panel …) inherits the new geometry. */
+  --radius-chip: 0px;
+  --radius-control: 0px;
+  --radius-panel: 0px;
+  --radius-sheet: 0px;
+  --radius: 0px;
 
-  /* ── Line weights ─────────────────────────────────────────
-     Borrowed from drafting practice: heavy = a boundary, medium = an
-     edge, hairline = reference information. */
+  /* ── Line weights, from drafting practice ──
+     hairline = reference, edge = a panel boundary, cut = a section. */
   --rule-hair: 1px;
   --rule-edge: 1px;
   --rule-cut: 2px;
 
-  /* ── Brand constants ──────────────────────────────────────
-     Used by the logo lockup and anywhere the brand itself appears.
-     These are the identity, so they do not drift with the theme —
-     only --brand-ink flips, so the wordmark stays legible on the
-     dark rail and in dark mode. */
+  /* ── Layout ── */
+  --rail-width: 15rem;
+  --rail-width-collapsed: 3.25rem;
+  --bar-height: 3rem;
+
+  /* ── Brand constants ──
+     The logo keeps its own pair; the interface does not borrow the
+     verdant, so "green" means verified and nothing else. */
   --brand-ink:    216 60% 15%;   /* Architectural Navy  #10233F */
   --brand-accent: 134 28% 43%;   /* Verdant Data        #4E8B5C */
 
   /* ══ LIGHT ═══════════════════════════════════════════════ */
 
-  /* A cool, bright technical ground — daylight on a desk, not a warm
-     paper pastiche and not a blue "technology" surface. */
-  --background:         210 25% 98%;
-  --foreground:         216 38% 13%;
+  /* A cool, neutral working sheet. */
+  --background:         216 14% 95%;
+  --foreground:         218 22% 11%;
 
-  /* Panels sit above the ground as clean white sheets. */
   --card:               0 0% 100%;
-  --card-foreground:    216 38% 13%;
+  --card-foreground:    218 22% 11%;
   --popover:            0 0% 100%;
-  --popover-foreground: 216 38% 13%;
+  --popover-foreground: 218 22% 11%;
 
-  /* Sunken wells for tables, insets and technical read-outs. */
-  --well:               210 22% 96%;
-  --well-foreground:    216 14% 34%;
+  /* Sunken ground for table heads, insets and technical read-outs. */
+  --well:               216 16% 96.5%;
+  --well-foreground:    218 10% 34%;
 
-  /* Primary — Architectural Navy, lifted just enough to hold white text
-     with presence rather than reading as flat black. */
-  --primary:            216 55% 19%;
-  --primary-foreground: 210 30% 98%;
+  /* Steel — the single action colour. */
+  --primary:            211 58% 33%;
+  --primary-foreground: 0 0% 100%;
 
-  --secondary:            210 20% 94%;
-  --secondary-foreground: 216 45% 22%;
+  --secondary:            216 14% 92%;
+  --secondary-foreground: 218 22% 16%;
 
-  --muted:              210 20% 94%;
-  --muted-foreground:   215 13% 45%;
+  --muted:              216 14% 93%;
+  --muted-foreground:   218 9% 40%;
 
-  /* Accent — Verdant Data. The intelligence signal of the product. */
-  --accent:             134 30% 38%;
+  /* Accent is the same steel family, lighter, for selection washes and
+     anything the platform worked out on its own. */
+  --accent:             208 62% 42%;
   --accent-foreground:  0 0% 100%;
-  --accent-wash:        134 34% 95%;
+  --accent-wash:        208 70% 96%;
 
-  --destructive:            8 62% 48%;
+  --destructive:            3 68% 44%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Rules, tuned so a hairline is visible but quiet. */
-  --border:        214 20% 90%;
-  --border-strong: 214 16% 79%;
-  --input:         214 18% 86%;
-  --ring:          134 30% 38%;
+  --border:        216 13% 86%;
+  --border-strong: 216 10% 70%;
+  --input:         216 11% 76%;
+  --ring:          208 75% 45%;
 
-  /* ── Status — one semantic ramp ──
-     Six hues, one meaning each, used identically in every module. This
-     replaces the indigo / sky / violet / cyan / emerald / rose scatter
-     that previously carried no consistent meaning. */
-  --state-verified: 140 34% 34%;   /* approved · signed off · on plan   */
-  --state-progress: 205 60% 42%;   /* under way · information           */
-  --state-review:   36 82% 44%;    /* at risk · awaiting a decision     */
-  --state-overdue:  8 62% 48%;     /* delayed · critical · past date    */
-  --state-blocked:  282 24% 48%;   /* held by something else            */
-  --state-idle:     215 10% 60%;   /* not started · inactive            */
+  /* ── Status — one semantic ramp, one meaning per hue ── */
+  --state-verified: 146 52% 28%;   /* approved · signed off · on plan   */
+  --state-progress: 208 62% 38%;   /* under way · information           */
+  --state-review:   33 92% 36%;    /* at risk · awaiting a decision     */
+  --state-overdue:  3 68% 44%;     /* delayed · critical · past date    */
+  --state-blocked:  268 22% 44%;   /* held by something else            */
+  --state-idle:     218 8% 50%;    /* not started · inactive            */
 
-  /* Tinted grounds for the same six, for chips and row washes. */
-  --state-verified-wash: 140 36% 95%;
-  --state-progress-wash: 205 58% 95%;
-  --state-review-wash:   36 80% 94%;
-  --state-overdue-wash:  8 64% 96%;
-  --state-blocked-wash:  282 30% 96%;
-  --state-idle-wash:     215 14% 95%;
+  --state-verified-wash: 146 40% 94%;
+  --state-progress-wash: 208 66% 95%;
+  --state-review-wash:   40 92% 93%;
+  --state-overdue-wash:  4 80% 95%;
+  --state-blocked-wash:  268 30% 95%;
+  --state-idle-wash:     216 12% 93%;
 
-  /* ── Elevation — light, never heavy. Panels lift by a few pixels. ── */
-  --shadow-sheet: 0 1px 2px hsl(216 30% 12% / 0.05), 0 1px 1px hsl(216 30% 12% / 0.03);
-  --shadow-lift:  0 4px 14px hsl(216 30% 12% / 0.07), 0 1px 3px hsl(216 30% 12% / 0.04);
-  --shadow-float: 0 14px 36px hsl(216 30% 12% / 0.12), 0 2px 8px hsl(216 30% 12% / 0.06);
+  /* ── Data series, for the few charts the product draws. Ordered so
+     adjacent series stay distinguishable without relying on hue alone. ── */
+  --series-1: 211 58% 33%;
+  --series-2: 196 55% 46%;
+  --series-3: 33 85% 45%;
+  --series-4: 146 40% 36%;
+  --series-5: 268 22% 50%;
+  --series-6: 218 8% 55%;
 
-  /* Structural grid, used as texture in a small number of places only.
-     Never a full blueprint treatment — the brief is explicit that
-     engineering references stay subtle. */
-  --grid-line:  216 40% 22%;
-  --grid-alpha: 0.04;
+  /* ── Elevation — only for what genuinely floats. ── */
+  --shadow-sheet: none;
+  --shadow-lift:  0 1px 0 hsl(218 22% 11% / 0.06);
+  --shadow-float: 0 10px 28px hsl(218 30% 8% / 0.16), 0 1px 3px hsl(218 30% 8% / 0.10);
 
-  /* ── Navigation rail ──
-     Navy in both themes. It is the constant edge of the product and the
-     one place the identity is stated without apology. */
-  --sidebar:                   216 52% 12%;
-  --sidebar-foreground:        212 20% 70%;
-  --sidebar-border:            216 40% 19%;
-  --sidebar-accent:            216 40% 18%;
-  --sidebar-accent-foreground: 210 30% 97%;
-  --sidebar-mark:              134 38% 52%;   /* the active marker */
+  --grid-line:  216 30% 30%;
+  --grid-alpha: 0.05;
+
+  /* ── Navigation rail — graphite in both themes ── */
+  --sidebar:                   218 16% 11%;
+  --sidebar-foreground:        216 10% 70%;
+  --sidebar-border:            218 13% 19%;
+  --sidebar-accent:            218 14% 17%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-mark:              207 72% 60%;   /* the active marker */
 }
 
 /* ══ DARK ══════════════════════════════════════════════════
-   Not an inverted dashboard. The ground goes to a deep navy-black drawn
-   from the same hue as the mark, panels lift by tone alone, and the
-   verdant brightens so it keeps its signal without glaring. */
+   A graphite workstation: panels separate by tone and rule, steel
+   brightens so it keeps its signal without glare. */
 .dark {
   --brand-ink: 210 30% 96%;
 
-  --background:         216 32% 8%;
-  --foreground:         210 22% 92%;
+  --background:         218 16% 8%;
+  --foreground:         216 18% 90%;
 
-  --card:               216 28% 11%;
-  --card-foreground:    210 22% 92%;
-  --popover:            216 28% 12%;
-  --popover-foreground: 210 22% 92%;
+  --card:               218 15% 11%;
+  --card-foreground:    216 18% 90%;
+  --popover:            218 15% 12%;
+  --popover-foreground: 216 18% 90%;
 
-  --well:               216 30% 9%;
-  --well-foreground:    212 15% 66%;
+  --well:               218 15% 9.5%;
+  --well-foreground:    216 10% 66%;
 
-  --primary:            210 40% 78%;
-  --primary-foreground: 216 45% 11%;
+  --primary:            208 70% 58%;
+  --primary-foreground: 218 30% 8%;
 
-  --secondary:            216 22% 16%;
-  --secondary-foreground: 210 22% 84%;
+  --secondary:            218 13% 16%;
+  --secondary-foreground: 216 16% 86%;
 
-  --muted:              216 22% 15%;
-  --muted-foreground:   214 13% 58%;
+  --muted:              218 13% 15%;
+  --muted-foreground:   216 9% 60%;
 
-  --accent:             134 36% 52%;
-  --accent-foreground:  216 45% 10%;
-  --accent-wash:        134 30% 14%;
+  --accent:             207 72% 60%;
+  --accent-foreground:  218 30% 8%;
+  --accent-wash:        210 40% 14%;
 
-  --destructive:            8 60% 57%;
+  --destructive:            4 70% 58%;
   --destructive-foreground: 0 0% 100%;
 
-  --border:        216 20% 18%;
-  --border-strong: 216 16% 27%;
-  --input:         216 20% 20%;
-  --ring:          134 36% 50%;
+  --border:        218 12% 19%;
+  --border-strong: 218 10% 30%;
+  --input:         218 11% 26%;
+  --ring:          207 72% 60%;
 
-  --state-verified: 140 38% 52%;
-  --state-progress: 205 62% 60%;
-  --state-review:   36 78% 57%;
-  --state-overdue:  8 62% 60%;
-  --state-blocked:  282 32% 68%;
-  --state-idle:     215 10% 50%;
+  --state-verified: 146 42% 52%;
+  --state-progress: 207 70% 62%;
+  --state-review:   36 85% 56%;
+  --state-overdue:  4 72% 62%;
+  --state-blocked:  268 30% 70%;
+  --state-idle:     216 8% 56%;
 
-  --state-verified-wash: 140 28% 14%;
-  --state-progress-wash: 205 40% 15%;
-  --state-review-wash:   36 40% 14%;
-  --state-overdue-wash:  8 40% 15%;
-  --state-blocked-wash:  282 24% 17%;
-  --state-idle-wash:     215 14% 15%;
+  --state-verified-wash: 146 30% 13%;
+  --state-progress-wash: 207 40% 14%;
+  --state-review-wash:   36 45% 13%;
+  --state-overdue-wash:  4 45% 14%;
+  --state-blocked-wash:  268 22% 15%;
+  --state-idle-wash:     216 10% 15%;
 
-  --shadow-sheet: 0 1px 2px hsl(0 0% 0% / 0.32);
-  --shadow-lift:  0 4px 14px hsl(0 0% 0% / 0.40);
-  --shadow-float: 0 14px 36px hsl(0 0% 0% / 0.52);
+  --series-1: 207 70% 60%;
+  --series-2: 190 55% 55%;
+  --series-3: 36 85% 56%;
+  --series-4: 146 42% 50%;
+  --series-5: 268 30% 68%;
+  --series-6: 216 8% 58%;
 
-  --grid-line:  210 40% 80%;
+  --shadow-sheet: none;
+  --shadow-lift:  0 1px 0 hsl(0 0% 0% / 0.3);
+  --shadow-float: 0 12px 32px hsl(0 0% 0% / 0.5), 0 1px 3px hsl(0 0% 0% / 0.4);
+
+  --grid-line:  210 30% 80%;
   --grid-alpha: 0.05;
 
-  --sidebar:                   216 40% 7%;
-  --sidebar-foreground:        212 16% 62%;
-  --sidebar-border:            216 30% 14%;
-  --sidebar-accent:            216 30% 13%;
-  --sidebar-accent-foreground: 210 24% 93%;
-  --sidebar-mark:              134 40% 55%;
+  --sidebar:                   218 18% 6%;
+  --sidebar-foreground:        216 9% 64%;
+  --sidebar-border:            218 14% 14%;
+  --sidebar-accent:            218 14% 12%;
+  --sidebar-accent-foreground: 0 0% 96%;
+  --sidebar-mark:              207 72% 60%;
 }
 
 /* Arabic sets in Cairo, which needs the optical tracking neutralised —
-   the negative tracking that flatters Inter's Latin display sizes works
-   against Arabic letterforms. Layout is mirrored by logical properties
-   throughout, so nothing else needs to change here. */
+   negative tracking that flatters Inter works against Arabic letterforms,
+   and uppercase labels do not exist in Arabic script. Layout mirrors
+   through logical properties, so nothing else changes here. */
 [dir="rtl"] {
   --font-sans: "Cairo", "Tajawal", sans-serif;
   --tracking-display: 0;
   --tracking-heading: 0;
-  --tracking-label: 0.03em;
+  --tracking-label: 0;
 }

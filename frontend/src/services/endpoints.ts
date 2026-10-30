@@ -22,6 +22,7 @@ export const ENDPOINTS = {
   PROJECTS: {
     BASE: "/projects",
     BY_ID: (id: string) => `/projects/${id}`,
+    DELETION_IMPACT: (id: string) => `/projects/${id}/deletion-impact`,
     MEMBERS: (id: string) => `/projects/${id}/members`,
     ADD_MEMBER: (id: string) => `/projects/${id}/members`,
     REMOVE_MEMBER: (projectId: string, userId: string) =>
@@ -242,10 +243,6 @@ export const ENDPOINTS = {
     HIERARCHY: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/hierarchy`,
     SPATIAL_DETAILS: (projectId: string, nodeId: string) => `/projects/${projectId}/ifc/spatial/${nodeId}/details`,
     SPATIAL_PROJECT_DATA: (projectId: string, nodeId: string) => `/projects/${projectId}/ifc/spatial/${nodeId}/project-data`,
-    GEOMETRY_STATUS: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/geometry/status`,
-    GEOMETRY_ASSET: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/geometry/asset`,
-    GEOMETRY_MAPPING: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/geometry/mapping`,
-    GEOMETRY_GENERATE: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/geometry/generate`,
     ELEMENTS: (projectId: string, versionId: string) => `/projects/${projectId}/ifc/versions/${versionId}/elements`,
     ELEMENT_PROJECT_DATA: (projectId: string, elementId: string) => `/projects/${projectId}/ifc/elements/${elementId}/project-data`,
     COMPARISONS: (projectId: string) => `/projects/${projectId}/ifc/comparisons`,

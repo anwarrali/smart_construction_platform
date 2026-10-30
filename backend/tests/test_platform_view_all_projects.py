@@ -31,7 +31,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.dashboard import get_dashboard_stats
 from app.api.projects import list_projects
-from app.core.deps import accessible_project_ids, user_has_project_access
+from app.core.deps import accessible_project_ids, user_can_see_project_record, user_has_project_access
 from app.core.permission_catalogue import BY_CODE
 from app.db.database import SessionLocal
 from app.models.enums import ProjectStatus, UserStatus
@@ -164,9 +164,27 @@ def test_platform_view_all_projects_is_not_project_scoped():
 # --- default behaviour is unchanged ---------------------------------------
 
 def test_admin_sees_every_project_by_default(db, world):
-    assert user_has_project_access(db, world["admin"], world["project_a"].id)
-    assert user_has_project_access(db, world["admin"], world["project_b"].id)
-    assert accessible_project_ids(db, world["admin"]) is None
+    """The registry: every project listed, its record reachable."""
+    assert user_can_see_project_record(db, world["admin"], world["project_a"].id)
+    assert user_can_see_project_record(db, world["admin"], world["project_b"].id)
+    ids = {project.id for project in list_projects(db=db, current_user=world["admin"]).data}
+    assert {world["project_a"].id, world["project_b"].id} <= ids
+
+
+def test_admin_does_not_work_in_projects_they_are_not_on(db, world):
+    """QA-06B: system administration is not project participation. Seeing a
+    project in the registry no longer opens its tasks, documents or reports."""
+    assert not user_has_project_access(db, world["admin"], world["project_a"].id)
+    assert not user_has_project_access(db, world["admin"], world["project_b"].id)
+    assert accessible_project_ids(db, world["admin"]) == []
+    assert not has_permission(db, world["admin"], "task.view", world["project_a"].id)
+    # …while the staffing side of the record stays theirs.
+    assert has_permission(db, world["admin"], "project.manage_members", world["project_a"].id)
+
+
+def test_platform_work_in_all_projects_is_not_project_scoped():
+    # Same recursion argument as `platform.view_all_projects`.
+    assert BY_CODE["platform.work_in_all_projects"].project_scoped is False
 
 
 def test_a_pm_does_not_see_the_other_pms_project_by_default(db, world):
@@ -202,8 +220,9 @@ def test_the_list_projects_endpoint_keeps_a_pm_scoped_to_their_own_project_by_de
 
 def test_granting_view_all_projects_to_a_pm_lets_them_see_the_other_pms_project(db, world):
     _grant(db, world["pm_b"], "platform.view_all_projects")
-    assert user_has_project_access(db, world["pm_b"], world["project_a"].id)
-    assert accessible_project_ids(db, world["pm_b"]) is None
+    assert user_can_see_project_record(db, world["pm_b"], world["project_a"].id)
+    # The record, not the work (QA-06B).
+    assert not user_has_project_access(db, world["pm_b"], world["project_a"].id)
 
     result = list_projects(db=db, current_user=world["pm_b"])
     ids = {project.id for project in result.data}
@@ -224,21 +243,39 @@ def test_granting_view_all_projects_also_widens_the_portfolio_dashboard(db, worl
     assert world["project_a"].name not in names_without
     assert world["project_b"].name in names_without
 
-    _grant(db, world["pm_b"], "platform.view_all_projects")
+    # Task figures are work, so it is the work-side grant that widens them (QA-06B).
+    _grant(db, world["pm_b"], "platform.work_in_all_projects")
     with_grant = get_dashboard_stats(db=db, current_user=_as_fresh_object(world["pm_b"]))
     names_with = {row["name"] for row in with_grant["taskCompletion"]}
     assert world["project_a"].name in names_with
     assert world["project_b"].name in names_with
 
 
-def test_granting_view_all_projects_to_a_worker_bypasses_membership_for_read_only_visibility(db, world):
-    """The permission's own description is "read any project without being a
-    member of it" — a Worker with no relationship to project_b at all must be
-    able to see it once explicitly granted, same as any other role."""
+def test_granting_view_all_projects_to_a_worker_bypasses_membership_for_the_record(db, world):
+    """A Worker with no relationship to project_b at all sees its record once
+    explicitly granted, same as any other role — and only its record."""
     _grant(db, world["outsider"], "platform.view_all_projects")
+    assert user_can_see_project_record(db, world["outsider"], world["project_a"].id)
+    assert user_can_see_project_record(db, world["outsider"], world["project_b"].id)
+    assert not user_has_project_access(db, world["outsider"], world["project_b"].id)
+
+
+def test_granting_work_in_all_projects_bypasses_membership_for_the_work(db, world):
+    _grant(db, world["outsider"], "platform.work_in_all_projects")
     assert user_has_project_access(db, world["outsider"], world["project_a"].id)
     assert user_has_project_access(db, world["outsider"], world["project_b"].id)
     assert accessible_project_ids(db, world["outsider"]) is None
+
+
+def test_office_leadership_works_in_every_project_by_default(db, world):
+    """The General Manager and Technical Director templates carry the work-side
+    bypass, so their access is what it was before the split."""
+    director = with_office_role(db, User(full_name="VapDirector", email=f"vapdir-{uuid4().hex[:8]}@example.com",
+                                         hashed_password="x", status=UserStatus.ACTIVE), "office_director")
+    db.add(director)
+    db.flush()
+    assert user_has_project_access(db, director, world["project_b"].id)
+    assert accessible_project_ids(db, director) is None
 
 
 def test_granting_is_scoped_to_the_specific_user_not_every_worker(db, world):
@@ -269,12 +306,12 @@ def _as_fresh_object(user: User) -> User:
 
 
 def test_revoking_view_all_projects_from_the_admin_role_actually_restricts_admins(db, world):
-    assert user_has_project_access(db, world["admin"], world["project_b"].id)
+    assert user_can_see_project_record(db, world["admin"], world["project_b"].id)
     _configure_role(db, world["admin"], "platform.view_all_projects", False)
 
     admin = _as_fresh_object(world["admin"])
-    assert not user_has_project_access(db, admin, world["project_b"].id)
-    assert accessible_project_ids(db, admin) == []
+    assert not user_can_see_project_record(db, admin, world["project_b"].id)
+    assert world["project_b"].id not in {project.id for project in list_projects(db=db, current_user=admin).data}
     # Losing this does not touch the admin-locked platform administration
     # permissions - the whole reason this one is safe to leave unlocked.
     assert has_permission(db, admin, "platform.manage_permissions")
@@ -310,7 +347,7 @@ def test_granting_view_all_projects_does_not_grant_management_authority(db, worl
     still not be treated as able to *manage* it by this helper."""
     from app.services.authorization import manageable_project
     _grant(db, world["pm_b"], "platform.view_all_projects")
-    assert user_has_project_access(db, world["pm_b"], world["project_a"].id)
+    assert user_can_see_project_record(db, world["pm_b"], world["project_a"].id)
     with pytest.raises(HTTPException) as error:
         manageable_project(db, world["pm_b"], world["project_a"].id, "project.edit")
     assert error.value.status_code == 403
@@ -320,8 +357,8 @@ def test_granting_view_all_projects_does_not_grant_management_authority(db, worl
 
 def test_repeated_calls_on_the_same_user_object_do_not_recurse_or_change_answer(db, world):
     for _ in range(50):
-        assert user_has_project_access(db, world["admin"], world["project_a"].id) is True
-        assert user_has_project_access(db, world["admin"], world["project_b"].id) is True
+        assert user_can_see_project_record(db, world["admin"], world["project_a"].id) is True
+        assert user_has_project_access(db, world["admin"], world["project_b"].id) is False
 
 
 def test_the_per_request_cache_does_not_leak_across_different_user_objects(db, world):

@@ -41,7 +41,7 @@ export const ThemeSwitcher = ({ compact = false, className = "" }: { compact?: b
             onClick={() => setPreference(value)}
             className={`inline-flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] border-none px-2 text-xs font-medium outline-none transition-colors ${
               active
-                ? "bg-card text-foreground shadow-sm"
+                ? "bg-card text-foreground"
                 : "bg-transparent text-muted-foreground hover:text-foreground"
             }`}
           >

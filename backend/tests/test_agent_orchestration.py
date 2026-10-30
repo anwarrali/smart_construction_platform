@@ -322,19 +322,19 @@ def test_permission_is_checked_before_anything_that_reveals_activity(db, world):
 def test_the_dispatcher_hook_is_gated_rather_than_absent(db, world):
     """Phase 7 built the architecture; Phase 8 wired it, deliberately.
 
-    This test previously asserted the dispatcher contained no agent wiring at
-    all — a tripwire whose job was to make adding that hook a decision rather
-    than a drift. Phase 8 made the decision, so the assertion now guards what
-    actually matters about the hook: that it is switched off by default and
-    that it cannot take down the event processing it runs inside.
+    The hook queues analysis as a job rather than running it, so it can never
+    take down the event processing it is part of, and it is switched off by
+    default. A direct call to the handler would put analysis back inside the
+    emitting transaction.
     """
     import app.services.domain_event_dispatcher as dispatcher
     from app.core.config import Settings
 
     with open(dispatcher.__file__, encoding="utf-8") as handle:
         body = handle.read()
-    assert "safe_handle_event" in body, "the hook must go through the wrapped entry point"
-    assert "handle_event(db, event)" not in body.replace("safe_handle_event(db, event)", ""),         "the dispatcher must never call the unwrapped handler"
+    assert '"agents.handle_event"' in body, "the hook must queue analysis as a job"
+    assert "handle_event(" not in body, "the dispatcher must never run analysis inline"
+    assert "if settings.AGENT_AUTO_ANALYSIS_ENABLED:" in body
     assert Settings.model_fields["AGENT_AUTO_ANALYSIS_ENABLED"].default is False
 
 

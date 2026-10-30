@@ -32,6 +32,8 @@ export type Role = {
   permissions: string[];
   /** How many people hold it, so the cost of a change is visible first. */
   memberCount: number;
+  /** A shared template; the first edit creates this office's own copy. */
+  isTemplate?: boolean;
 };
 
 export type Discipline = {

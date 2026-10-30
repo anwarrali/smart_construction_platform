@@ -1,0 +1,65 @@
+@startuml
+!include _style.iuml
+hide circle
+entity ifc_model_groups {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, discipline
+  active_version_id, baseline_version_id
+}
+entity ifc_model_versions {
+  * id : UUID <<PK>>
+  --
+  model_group_id <<FK>>, project_id <<FK>>
+  version_number, ifc_schema
+  processing_status, parent_version_id <<FK>>
+}
+entity ifc_spatial_nodes {
+  * id : UUID <<PK>>
+  --
+  version_id <<FK>>, node type, parent
+}
+entity ifc_elements {
+  * id : UUID <<PK>>
+  --
+  version_id <<FK>>, global_id, entity_type
+  storey_node_id <<FK>>, space_node_id <<FK>>
+  discipline, properties_json
+}
+entity ifc_comparisons {
+  * id : UUID <<PK>>
+  --
+  base_version_id <<FK>>, target_version_id <<FK>>
+  status, summary_json
+}
+entity ifc_change_records {
+  * id : UUID <<PK>>
+  --
+  comparison_id <<FK>>
+  base_element_id, target_element_id
+  change_type, match_method, severity
+}
+entity ifc_coordination_findings {
+  * id : UUID <<PK>>
+  --
+  version_id <<FK>>, comparison_id <<FK>>
+  element_a_id, element_b_id
+  finding_type, severity, confidence
+}
+entity ifc_impact_suggestions {
+  * id : UUID <<PK>>
+  --
+  comparison_id <<FK>>, change_record_id <<FK>>
+  affected_entity_type, affected_entity_id
+  status, reviewed_by_id
+}
+ifc_model_groups ||--o{ ifc_model_versions
+ifc_model_versions ||--o{ ifc_spatial_nodes
+ifc_model_versions ||--o{ ifc_elements
+ifc_spatial_nodes |o--o{ ifc_elements
+ifc_model_versions ||--o{ ifc_comparisons : base or target
+ifc_comparisons ||--o{ ifc_change_records
+ifc_comparisons ||--o{ ifc_impact_suggestions
+ifc_change_records ||--o{ ifc_impact_suggestions
+ifc_model_versions ||--o{ ifc_coordination_findings
+@enduml

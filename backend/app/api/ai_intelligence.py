@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.api.tasks import _is_project_manager, _next_task_code
+from app.api.tasks import _next_task_code
 from app.core.deps import get_current_user
 from app.db.database import get_db
 from app.models.enums import IssueSeverity, IssueStatus, NotificationType, TaskPriority, TaskStatus
@@ -199,7 +199,8 @@ def insight_to_issue(project_id:uuid.UUID,insight_id:uuid.UUID,db:Session=Depend
 @router.post("/insights/{insight_id}/create-task",status_code=201)
 def insight_to_task(project_id:uuid.UUID,insight_id:uuid.UUID,payload:AIInsightCreateTask,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
     _require(db,current_user,project_id,"REVIEW_SUGGESTION")
-    if not _is_project_manager(db,current_user,project_id):raise HTTPException(status_code=403,detail="Only the assigned Project Manager can create a task from an insight")
+    # Creates a task: `task.create`, as the task endpoint asks (was the assigned-manager id).
+    require(db,current_user,"task.create",project_id)
     item=_insight(db,project_id,insight_id)
     if item.category!="SUGGESTED_TASK":raise HTTPException(status_code=400,detail="Only reviewed task suggestions can create tasks")
     if item.applied_entity_id:raise HTTPException(status_code=409,detail="This suggestion has already created a task")

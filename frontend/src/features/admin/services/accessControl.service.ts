@@ -11,6 +11,10 @@ export type Permission = {
   officeOnly: boolean;
   /** Never held by an external participant. */
   neverExternal: boolean;
+  /** Another condition the server checks before this permission does anything. */
+  prerequisite?: string | null;
+  /** Project-scoped codes apply only on projects the person can open. */
+  scopeNote?: string | null;
 };
 
 export type UserPermissionOverride = {
@@ -22,6 +26,31 @@ export type UserPermissionOverride = {
   reason?: string | null;
 };
 
+/** Why the server says a permission is or is not held (`authorization.explain_permissions`). */
+export type PermissionReason =
+  | "granted_by_role"
+  | "granted_by_project_role"
+  | "granted_to_user"
+  | "granted_on_project"
+  | "admin_locked"
+  | "denied_for_user"
+  | "denied_on_project"
+  | "blocked_external"
+  | "blocked_project_access"
+  | "account_inactive"
+  | "not_granted";
+
+export type PermissionDecision = {
+  code: string;
+  /** The effective answer — membership of the server's resolved set. */
+  held: boolean;
+  reason: PermissionReason;
+  /** Whether the governing role confers it. */
+  roleGrants: boolean;
+  /** The explicit decision at this scope; null = inherits from the role. */
+  override: boolean | null;
+};
+
 export type UserPermissionSummary = {
   userId: string;
   fullName: string;
@@ -29,10 +58,15 @@ export type UserPermissionSummary = {
   /** The office role the person holds. */
   roleCode?: string | null;
   roleName?: string | null;
+  /** The role whose permissions apply — the office's copy of an edited template. */
+  governingRoleId?: string | null;
+  governingRoleName?: string | null;
+  governedByOfficeCopy?: boolean;
   status: string;
   projectId?: string | null;
   effectivePermissions: string[];
   overrides: UserPermissionOverride[];
+  decisions?: PermissionDecision[];
 };
 
 export type ConsultantScope = {

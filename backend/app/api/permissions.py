@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
-from app.core.permission_catalogue import BY_CODE, CATALOGUE
+from app.core.permission_catalogue import BY_CODE, CATALOGUE, PREREQUISITES, PROJECT_SCOPE_NOTE
 from app.db.database import get_db
 from app.models.enums import UserStatus
 from app.models.permission import ConsultantEngineerScope, UserPermissionOverride
@@ -27,7 +27,9 @@ from app.schemas.permission import (
 from app.services import rbac
 from app.services.audit_service import record_audit
 from app.services.step_up_service import require_step_up
-from app.services.authorization import effective_permissions, has_permission, require
+from app.services.authorization import (
+    effective_permissions, explain_permissions, governing_role, has_permission, require,
+)
 
 router = APIRouter(prefix="/access-control", tags=["Access Control"])
 
@@ -54,6 +56,8 @@ def list_permissions(db: Session = Depends(get_db), current_user: User = Depends
         "description": item.description,
         "project_scoped": item.project_scoped, "admin_locked": item.admin_locked,
         "office_only": item.office_only, "never_external": item.never_external,
+        "prerequisite": PREREQUISITES.get(item.code),
+        "scope_note": PROJECT_SCOPE_NOTE if item.project_scoped else None,
     } for item in CATALOGUE]
 
 
@@ -73,13 +77,19 @@ def user_permissions(user_id: uuid.UUID, project_id: uuid.UUID | None = Query(de
         raise HTTPException(status_code=404, detail="User not found")
     overrides = db.query(UserPermissionOverride).filter(
         UserPermissionOverride.user_id == user_id).all()
+    governing = governing_role(db, target)
+    decisions = explain_permissions(db, target, project_id)
     return {
         "user_id": target.id, "full_name": target.full_name, "email": target.email,
         "role_code": target.org_role.code if target.org_role else None,
         "role_name": target.org_role.name_en if target.org_role else None,
+        "governing_role_id": governing.id if governing else None,
+        "governing_role_name": governing.name_en if governing else None,
+        "governed_by_office_copy": bool(governing and governing.id != target.org_role_id),
         "status": target.status.value, "project_id": project_id,
-        "effective_permissions": sorted(effective_permissions(db, target, project_id)),
+        "effective_permissions": sorted(code for code, item in decisions.items() if item["held"]),
         "overrides": overrides,
+        "decisions": [{"code": code, **item} for code, item in decisions.items()],
     }
 
 

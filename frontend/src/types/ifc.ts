@@ -61,6 +61,8 @@ export interface IFCSummary {
 export interface IFCUploadConstraints {
   maxFileBytes: number; maxFileMb: number; acceptedExtensions: string[];
   maxEntityCount: number; supportedSchemas: string[]; geometryEnabled: boolean;
+  /** Largest file this host can parse; larger files are stored but cannot be processed. */
+  maxProcessableFileMb?: number;
 }
 
 export interface IFCVersion {
@@ -69,6 +71,8 @@ export interface IFCVersion {
   originalFilename: string; fileHash: string; fileSize: number; ifcSchema?: string;
   authoringApplication?: string; processingStatus: string; processingProgress: number;
   processingDurationMs?: number; parsingErrorCode?: string; parsingErrorMessage?: string; supportLogId?: string;
+  /** Whether processing this failure again could succeed (server policy). */
+  parsingErrorRetryable?: boolean;
   entityCount: number; geometryStatus: string;
   geometryError?: string; geometryStatsJson?: Record<string, unknown>; geometryGeneratedAt?: string;
   analysisStatus: string; modelSummaryJson: IFCSummary; isActive: boolean; createdAt: string;

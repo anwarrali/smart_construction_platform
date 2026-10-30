@@ -32,7 +32,11 @@ export const OwnerDashboard = () => {
 
   useEffect(() => {
     api.projects.list({ limit: 100 }).then((response) => {
-      const assigned = response.data || [];
+      // The client portal is project work: only projects whose work this
+      // person can open. The administrator's list also holds projects they
+      // only administer, and picking one of those produced "You don't have
+      // permission to open this client portal" (QA 2026-10-22).
+      const assigned = (response.data || []).filter((project) => project.canOpenWork !== false);
       setProjects(assigned);
       setProjectId((current) => current || assigned[0]?.id || "");
       if (!assigned.length) setIsLoading(false);
@@ -71,38 +75,38 @@ export const OwnerDashboard = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div className="page-header">
         <div>
-          <p className="text-sm font-medium text-primary">{t("owner.dashboard")}</p>
-          <h1 className="text-3xl font-bold">{summary.name}</h1>
-          <p className="mt-1 text-muted-foreground">{t("owner.intro")}</p>
+          <p className="page-kicker">{t("owner.dashboard")}</p>
+          <h1 className="page-title">{summary.name}</h1>
+          <p className="page-intro">{t("owner.intro")}</p>
         </div>
         <Select
           label={t("owner.selectedProject")}
-          className="w-full lg:w-80"
+          className="w-full sm:w-72"
           value={projectId}
           onChange={(event) => setProjectId(event.target.value)}
           options={projects.map((project) => ({ value: project.id, label: project.name }))}
         />
       </div>
 
-      {error && <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+      {error && <p className="border border-destructive/30 bg-wash-overdue px-3 py-2 text-sm text-destructive">{error}</p>}
 
       <Card className="border-primary/20 bg-primary/5 p-5">
         <div className="flex items-start gap-3"><CheckCircle2 className="mt-1 text-primary" /><div className="flex-1"><h2 className="font-semibold">{t("owner.sinceYourLastVisit")}</h2><p className="text-xs text-muted-foreground">{data.sinceLastVisit.basis === "YOUR_PREVIOUS_VISIT" && data.sinceLastVisit.previousVisitAt ? `Verified and approved project information recorded since you last opened this project on ${formatDateTime(data.sinceLastVisit.previousVisitAt)}.` : `First recorded visit — showing verified and approved project information from the last ${data.sinceLastVisit.periodDays} days.`}</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <div><p className="text-2xl font-bold">{data.sinceLastVisit.verifiedTasks}</p><p className="text-xs text-muted-foreground">{t("owner.tasksVerified")}</p></div>
-          <div><p className="text-2xl font-bold">{data.sinceLastVisit.verifiedSiteReports}</p><p className="text-xs text-muted-foreground">{t("owner.verifiedSiteReports")}</p></div>
-          <div><p className="text-2xl font-bold">{data.sinceLastVisit.approvedDesignChanges}</p><p className="text-xs text-muted-foreground">{t("owner.designChangesApproved")}</p></div>
-          <div><p className="text-2xl font-bold">{data.sinceLastVisit.requestsAwaitingClarification}</p><p className="text-xs text-muted-foreground">{t("owner.requestsNeedClarification")}</p></div>
+          <div><p className="metric-value">{data.sinceLastVisit.verifiedTasks}</p><p className="text-xs text-muted-foreground">{t("owner.tasksVerified")}</p></div>
+          <div><p className="metric-value">{data.sinceLastVisit.verifiedSiteReports}</p><p className="text-xs text-muted-foreground">{t("owner.verifiedSiteReports")}</p></div>
+          <div><p className="metric-value">{data.sinceLastVisit.approvedDesignChanges}</p><p className="text-xs text-muted-foreground">{t("owner.designChangesApproved")}</p></div>
+          <div><p className="metric-value">{data.sinceLastVisit.requestsAwaitingClarification}</p><p className="text-xs text-muted-foreground">{t("owner.requestsNeedClarification")}</p></div>
           <div><p className="text-sm font-bold">{data.sinceLastVisit.nextEngineerVisit ? formatDateTime(data.sinceLastVisit.nextEngineerVisit) : t("common.notScheduled")}</p><p className="text-xs text-muted-foreground">{t("owner.nextEngineerVisit")}</p></div>
         </div></div></div>
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.projectProgress")}</p><p className="mt-2 text-3xl font-bold">{summary.completionPercentage}%</p><p className="text-xs text-muted-foreground">{summary.currentPhase}</p></div><Building2 className="text-primary" /></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${summary.completionPercentage}%` }} /></div></Card>
-        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.projectStatus")}</p><span className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${health.className}`}>{health.label}</span><p className="mt-2 text-xs text-muted-foreground">{summary.daysRemaining >= 0 ? t("project.daysRemaining", { count: summary.daysRemaining }) : t("project.daysOverdue", { count: Math.abs(summary.daysRemaining) })}</p></div><CheckCircle2 className="text-state-verified" /></div></Card>
-        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.criticalDelayedTasks")}</p><p className="mt-2 text-3xl font-bold">{data.delayedTasks.length}</p><a href="#delays" className="text-xs font-medium text-primary">{t("owner.viewCriticalDelays")}</a></div><Clock className="text-state-overdue" /></div></Card>
-        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("project.openIssues")}</p><p className="mt-2 text-3xl font-bold">{data.openIssues.length}</p><p className="text-xs text-muted-foreground">{data.openIssues.filter((item) => item.severity === "critical").length} critical</p></div><AlertTriangle className="text-state-review" /></div></Card>
+        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.projectProgress")}</p><p className="mt-2 metric-value">{summary.completionPercentage}%</p><p className="text-xs text-muted-foreground">{summary.currentPhase}</p></div><Building2 className="text-primary" /></div><div className="mt-4 h-2 overflow-hidden bg-muted"><div className="h-full bg-primary" style={{ width: `${summary.completionPercentage}%` }} /></div></Card>
+        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.projectStatus")}</p><span className={`mt-3 inline-flex px-3 py-1 text-sm font-semibold ${health.className}`}>{health.label}</span><p className="mt-2 text-xs text-muted-foreground">{summary.daysRemaining >= 0 ? t("project.daysRemaining", { count: summary.daysRemaining }) : t("project.daysOverdue", { count: Math.abs(summary.daysRemaining) })}</p></div><CheckCircle2 className="text-state-verified" /></div></Card>
+        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("owner.criticalDelayedTasks")}</p><p className="mt-2 metric-value">{data.delayedTasks.length}</p><a href="#delays" className="text-xs font-medium text-primary">{t("owner.viewCriticalDelays")}</a></div><Clock className="text-state-overdue" /></div></Card>
+        <Card className="p-5"><div className="flex justify-between"><div><p className="text-sm text-muted-foreground">{t("project.openIssues")}</p><p className="mt-2 metric-value">{data.openIssues.length}</p><p className="text-xs text-muted-foreground">{data.openIssues.filter((item) => item.severity === "critical").length} critical</p></div><AlertTriangle className="text-state-review" /></div></Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
@@ -118,9 +122,9 @@ export const OwnerDashboard = () => {
         <Card className="p-5">
           <div className="flex items-center gap-2"><Wallet size={18} /><h2 className="font-semibold">{t("owner.projectCost")}</h2></div>
           <div className="mt-5 space-y-4">
-            <div><p className="text-xs text-muted-foreground">{t("owner.overallBudget")}</p><p className="text-2xl font-bold">{money(cost.budgetTotal)}</p></div>
+            <div><p className="text-xs text-muted-foreground">{t("owner.overallBudget")}</p><p className="metric-value">{money(cost.budgetTotal)}</p></div>
             <div className="grid grid-cols-2 gap-3"><div><p className="text-xs text-muted-foreground">{t("project.spent")}</p><p className="font-semibold">{money(cost.budgetSpent)}</p></div><div><p className="text-xs text-muted-foreground">{t("project.remaining")}</p><p className="font-semibold">{money(remaining)}</p></div></div>
-            <div><div className="mb-1 flex justify-between text-xs"><span>{t("owner.costProgress")}</span><span>{cost.budgetTotal ? Math.min(Math.round(cost.budgetSpent / cost.budgetTotal * 100), 100) : 0}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-state-verified" style={{ width: `${cost.budgetTotal ? Math.min(cost.budgetSpent / cost.budgetTotal * 100, 100) : 0}%` }} /></div></div>
+            <div><div className="mb-1 flex justify-between text-xs"><span>{t("owner.costProgress")}</span><span>{cost.budgetTotal ? Math.min(Math.round(cost.budgetSpent / cost.budgetTotal * 100), 100) : 0}%</span></div><div className="h-2 overflow-hidden bg-muted"><div className="h-full bg-state-verified" style={{ width: `${cost.budgetTotal ? Math.min(cost.budgetSpent / cost.budgetTotal * 100, 100) : 0}%` }} /></div></div>
           </div>
         </Card>
       </div>
@@ -137,7 +141,7 @@ export const OwnerDashboard = () => {
         <Card className="p-5">
           <h2 className="font-semibold">{t("owner.projectBreakdown")}</h2>
           <p className="text-sm text-muted-foreground">High-level phases derived from the project’s existing work disciplines.</p>
-          <div className="mt-4 space-y-4">{data.projectBreakdown.map((phase) => <div key={phase.name}><div className="mb-1 flex justify-between text-sm"><span>{phase.name}</span><span>{phase.completionPercentage}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${phase.completionPercentage}%` }} /></div></div>)}{!data.projectBreakdown.length && <p className="text-sm text-muted-foreground">{t("owner.noPhases")}</p>}</div>
+          <div className="mt-4 space-y-4">{data.projectBreakdown.map((phase) => <div key={phase.name}><div className="mb-1 flex justify-between text-sm"><span>{phase.name}</span><span>{phase.completionPercentage}%</span></div><div className="h-2 overflow-hidden bg-muted"><div className="h-full bg-primary" style={{ width: `${phase.completionPercentage}%` }} /></div></div>)}{!data.projectBreakdown.length && <p className="text-sm text-muted-foreground">{t("owner.noPhases")}</p>}</div>
         </Card>
       </div>
 

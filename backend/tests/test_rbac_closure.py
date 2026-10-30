@@ -158,8 +158,15 @@ def test_eligible_principals_answer_by_the_project_rules(world):
 
 
 def test_the_principal_picker_is_refused_to_people_who_set_up_no_projects(world):
+    # The subject is chosen by what they hold, not by role name: an office may
+    # let its Engineers create projects (one did on 2026-10-22, and since the
+    # office's role edits now take effect, the engineer here would hold it).
+    # The clerk's role starts with read access only.
+    db, clerk = world["db"], world["clerk"]
+    for code in ("platform.create_project", "project.edit", "project.manage_members"):
+        assert not has_permission(db, clerk, code), f"precondition: the clerk must not hold {code}"
     with pytest.raises(HTTPException) as refusal:
-        eligible_users(purpose="project_manager", db=world["db"], current_user=world["doer"])
+        eligible_users(purpose="project_manager", db=db, current_user=clerk)
     assert refusal.value.status_code == 403
 
 

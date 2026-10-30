@@ -111,6 +111,41 @@ def role_by_code(db: Session, code: str, organization_id: uuid.UUID | None = Non
     return query.filter(Role.organization_id.is_(None)).first()
 
 
+def office_role_id(db: Session, user: User, role_id: uuid.UUID | None) -> uuid.UUID | None:
+    """The role that actually governs `role_id` for this person's office.
+
+    Editing a shared template copies it into the office (`organization.
+    _editable_role`), and from then on the office's role list shows the copy in
+    the template's place (`_visible_roles`). Accounts keep pointing at the
+    template, though, so without this an office's edit reached nobody: an
+    administrator granted Engineers `platform.create_project`, the screen
+    showed the grant, and no engineer received it (QA 2026-10-22). Resolving a
+    replaced template through the office's copy makes what the office sees the
+    rule that applies. An office's own role, and a template the office never
+    edited, resolve to themselves.
+
+    The office is found the way `organization._office` finds it — the person's
+    company, else the tenant — without ever creating one.
+    """
+    if role_id is None:
+        return None
+    cache = user.__dict__.setdefault("_office_role_ids", {})
+    if role_id in cache:
+        return cache[role_id]
+    resolved = role_id
+    role = get_role(db, role_id)
+    if role is not None and role.organization_id is None:
+        office_id = user.company_id or db.query(Company.id).filter(Company.is_tenant.is_(True)).scalar()
+        if office_id is not None:
+            own = db.query(Role.id).filter(
+                Role.code == role.code, Role.organization_id == office_id,
+            ).scalar()
+            if own is not None:
+                resolved = own
+    cache[role_id] = resolved
+    return resolved
+
+
 def role_permission_codes(db: Session, role_id: uuid.UUID | None) -> set[str]:
     """Permissions this role grants. Unknown codes are dropped, never trusted."""
     if role_id is None:
@@ -306,11 +341,11 @@ def resolved_permissions(
         # `users.org_role_id` is NOT NULL, so only an unsaved, hand-built
         # account can get here. Refuse rather than guess at its authority.
         raise UnmigratedUser(f"User {user.id} has no org_role_id")
-    granted = role_permission_codes(db, user.org_role_id)
+    granted = role_permission_codes(db, office_role_id(db, user, user.org_role_id))
 
     context = membership_context(db, user.id, project_id)
     if context.member is not None and context.member.project_role_id is not None:
-        granted |= role_permission_codes(db, context.member.project_role_id)
+        granted |= role_permission_codes(db, office_role_id(db, user, context.member.project_role_id))
 
     if context.is_external or (user.org_role_id is not None and not user.is_internal):
         # What a *role* confers. An external participant's authority is

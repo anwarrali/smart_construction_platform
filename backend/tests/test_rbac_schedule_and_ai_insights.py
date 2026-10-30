@@ -84,6 +84,9 @@ def world(db):
 
     people = {
         "admin": user("RbacAdmin", "org_admin"),
+        # QA-06B: an administrator reaches project work by being on the team.
+        # This one is not, to pin that the role alone opens nothing.
+        "outside_admin": user("RbacOutsideAdmin", "org_admin"),
         "manager": user("RbacPm", "project_manager"),
         "owner": user("RbacOwner", "client_representative"),
         # schedule.view's default is the "legacy_consultant" *role*, not an
@@ -110,7 +113,7 @@ def world(db):
                       owner_id=people["owner"].id, project_manager_id=people["manager"].id)
     db.add(project)
     db.flush()
-    for key in ("manager", "consultant", "consultant_engineer", "engineer", "worker"):
+    for key in ("admin", "manager", "consultant", "consultant_engineer", "engineer", "worker"):
         db.add(ProjectMember(project_id=project.id, user_id=people[key].id,
                              is_active=True))
     db.flush()
@@ -168,6 +171,16 @@ def test_the_default_holders_can_see_the_gantt(db, world):
     for key in ("admin", "manager", "consultant", "owner"):
         result = get_gantt_data(world["project"].id, db=db, current_user=world[key])
         assert "tasks" in result
+
+
+def test_an_administrator_not_on_the_project_does_not_reach_its_schedule_or_insights(db, world):
+    """QA-06B: system administration does not open a project's work."""
+    with pytest.raises(HTTPException) as error:
+        get_gantt_data(world["project"].id, db=db, current_user=world["outside_admin"])
+    assert error.value.status_code == 403
+    with pytest.raises(HTTPException) as error:
+        list_insights(world["project"].id, db=db, current_user=world["outside_admin"], page=1, page_size=50)
+    assert error.value.status_code == 403
 
 
 def test_a_worker_member_no_longer_reaches_the_schedule(db, world):

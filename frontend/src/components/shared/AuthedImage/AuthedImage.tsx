@@ -35,7 +35,7 @@ export const AuthedImage = ({
         role="status"
         aria-label={t("common.loading", { defaultValue: "Loading" })}
       >
-        <span className="h-4 w-4 animate-pulse rounded-full bg-muted-foreground/40" />
+        <span className="h-4 w-4 animate-pulse bg-muted-foreground/40" />
       </div>
     );
   }

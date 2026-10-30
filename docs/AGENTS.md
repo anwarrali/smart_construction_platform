@@ -235,10 +235,12 @@ so without the agents changing.
 ## Autonomous detection (Phase 8)
 
 Analysis that starts because something happened, rather than because someone
-clicked. `emit_domain_event` calls `process_event` synchronously, so the hook is
-inline — no worker, no queue, no scheduler — and it is wrapped so a failure in
-analysis can never fail the upload or task update that triggered it. Secondary
-products do not break primary ones.
+clicked. `process_event` queues an `agents.handle_event` job in the transaction
+that emitted the event, and a worker runs the analysis in a transaction of its
+own (see [JOBS.md](JOBS.md)). Analysis therefore never holds the user's write
+open, and a failure in it can never fail the upload or task update that
+triggered it — it fails, and retries, as a job. Secondary products do not break
+primary ones.
 
 **Off by default.** `AGENT_AUTO_ANALYSIS_ENABLED` defaults to false. Proactive
 analysis writes into people's notification queues, and switching that on is an

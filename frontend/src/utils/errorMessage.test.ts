@@ -17,13 +17,31 @@ describe("errorMessage", () => {
       .toBe("Engineer must be an active project participant");
   });
 
-  it("flattens a FastAPI validation array into a sentence", () => {
+  it("flattens a FastAPI validation array into a sentence naming each field", () => {
     const detail = [
       { loc: ["body", "title"], msg: "Field required", type: "missing" },
       { loc: ["body", "scheduledEnd"], msg: "Input should be a valid datetime", type: "datetime" },
+      { loc: ["body"], msg: "Value error, End date must be on or after start date", type: "value_error" },
     ];
     expect(errorMessage(asError(detail, 422), "fallback"))
-      .toBe("Field required. Input should be a valid datetime");
+      .toBe("Title: Field required. Scheduled end: Input should be a valid datetime. End date must be on or after start date");
+  });
+
+  it("marks an authorization refusal as one, so it is not read as bad input", () => {
+    expect(errorMessage(asError("Only the Project Manager can assign tasks", 403), "fallback"))
+      .toBe("Not permitted: Only the Project Manager can assign tasks");
+    // A 400 with similar wording is left alone.
+    expect(errorMessage(asError("Only the Project Manager can assign tasks", 400), "fallback"))
+      .toBe("Only the Project Manager can assign tasks");
+  });
+
+  it("quotes the support ID of a server-side failure, and only of one", () => {
+    const serverError = { response: { status: 500, data: { detail: { message: "Something went wrong", supportId: "abc123def" } } } };
+    expect(errorMessage(serverError, "fallback")).toContain("abc123def");
+    const fromHeader = { response: { status: 502, data: {}, headers: { "x-request-id": "req-98765432" } } };
+    expect(errorMessage(fromHeader, "fallback")).toContain("req-98765432");
+    const validation = { response: { status: 400, data: { detail: "Bad dates" }, headers: { "x-request-id": "req-1" } } };
+    expect(errorMessage(validation, "fallback")).toBe("Bad dates");
   });
 
   it("reads the message out of a structured detail object", () => {

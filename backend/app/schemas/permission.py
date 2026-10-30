@@ -17,6 +17,10 @@ class PermissionOut(CamelModel):
     office_only: bool = False
     #: Never held by an external participant, whatever is configured.
     never_external: bool = False
+    #: Another condition the server checks before this permission does anything.
+    prerequisite: str | None = None
+    #: Set for project-scoped codes: they apply only where the person reaches the project.
+    scope_note: str | None = None
 
 
 class UserPermissionUpdate(CamelModel):
@@ -35,6 +39,19 @@ class UserPermissionOverrideOut(CamelModel):
     reason: str | None = None
 
 
+class PermissionDecisionOut(CamelModel):
+    """Why one permission is or is not held — see `authorization.explain_permissions`."""
+
+    code: str
+    #: Membership of the effective set; the server's answer, not a recomputation.
+    held: bool
+    reason: str
+    #: Whether the governing office or project role confers it.
+    role_grants: bool
+    #: The explicit decision at this scope; None means it inherits.
+    override: bool | None = None
+
+
 class UserPermissionSummary(CamelModel):
     user_id: UUID
     full_name: str
@@ -42,10 +59,16 @@ class UserPermissionSummary(CamelModel):
     #: The person's office role.
     role_code: str | None = None
     role_name: str | None = None
+    #: The role whose permissions apply: the office's copy when the account
+    #: still points at a template the office has edited.
+    governing_role_id: UUID | None = None
+    governing_role_name: str | None = None
+    governed_by_office_copy: bool = False
     status: str
     project_id: UUID | None = None
     effective_permissions: list[str]
     overrides: list[UserPermissionOverrideOut]
+    decisions: list[PermissionDecisionOut] = Field(default_factory=list)
 
 
 class ConsultantScopeUpdate(CamelModel):

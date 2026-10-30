@@ -116,3 +116,4 @@ from app.models.collaboration import (
     SiteVisit, SiteVisitParticipant, AIInsightSource,
 )
 from app.models.agent_run import AgentRun  # noqa: F401,E402
+from app.models.background_job import BackgroundJob  # noqa: F401,E402

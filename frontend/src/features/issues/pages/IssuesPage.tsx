@@ -3,6 +3,8 @@ import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Plus, AlertTriangle } from "lucide-react";
 import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
 import { Loader } from "../../../components/ui/Loader";
@@ -29,6 +31,9 @@ export const IssuesPage = () => {
   const workspace = useProjectWorkspace();
   const { hasCapability } = useRole();
   const canResolve = hasCapability("issue.resolve");
+  // The form posts to an endpoint guarded by issue.create; a person without it
+  // (a client, by default) would only ever see it refused.
+  const canRaise = hasCapability("issue.create");
   const [searchParams, setSearchParams] = useSearchParams();
   const focusedIssueId = searchParams.get("issueId");
   const activeProjectId = workspace.projectId;
@@ -125,16 +130,13 @@ export const IssuesPage = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t("issue.issues")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-          <p className="text-muted-foreground">
-            {t("issuesPage.track_and_resolve_project_issues")}
-          </p>
-        </div>
-        <Button onClick={() => setFormOpen(true)}>+ {t("issue.newIssue")}</Button>
-      </div>
-      {focusedIssueId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("issuesPage.showing_the_issue_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("issuesPage.show_all_issues")}</Button></div>}
+      <PageHeader
+        context={workspace.project?.name}
+        title={t("issue.issues")}
+        description={t("issuesPage.track_and_resolve_project_issues")}
+        actions={canRaise && <Button leftIcon={<Plus size={15} />} onClick={() => setFormOpen(true)}>{t("issue.newIssue")}</Button>}
+      />
+      {focusedIssueId && <div className="flex items-center justify-between border bg-card px-3 py-2 text-sm"><span>{t("issuesPage.showing_the_issue_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("issuesPage.show_all_issues")}</Button></div>}
 
       <Card className="grid gap-3 p-4 md:grid-cols-6">
         {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || t("project.selectedProject")}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:t("project.allProjects")},...projects.map(project=>({value:project.id,label:project.name}))]}/>}
@@ -150,7 +152,7 @@ export const IssuesPage = () => {
       {visibleIssues.length === 0 ? (
         <Card>
           <div className="empty-state">
-            <div className="empty-state-icon">⚠️</div>
+            <AlertTriangle size={22} strokeWidth={1.5} className="empty-state-icon" aria-hidden />
             <p className="empty-state-title">{t("issuesPage.no_issues_found")}</p>
           </div>
         </Card>

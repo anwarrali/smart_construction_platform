@@ -189,10 +189,13 @@ _NO_REVIEW_AUTHORITY = ("task.review", "design_change.approve")
 TEMPLATES: tuple[RoleTemplate, ...] = (
     # --- office administration ---------------------------------------------
     _t("org_admin", "Office Administrator", "مدير النظام", SCOPE_ORG, True,
-       OFFICE_ADMINISTRATION, rank=10, undeletable=True,
+       OFFICE_ADMINISTRATION, extra=("agents.view",), rank=10, undeletable=True,
        description="Runs the platform for the office: accounts, roles and permissions."),
+    # The two leadership templates keep working inside every project
+    # (`platform.work_in_all_projects`); the administrator above does not —
+    # QA-06B, system administration is not project participation.
     _t("office_director", "General Manager", "المدير العام", SCOPE_BOTH, True,
-       OFFICE_ADMINISTRATION, rank=20,
+       OFFICE_ADMINISTRATION, extra=("platform.work_in_all_projects",), rank=20,
        description="Office-level authority across every project."),
     # `project.delete` is declined explicitly. This template inherits the
     # administrator's catalogue defaults but provisions accounts whose retired
@@ -204,7 +207,7 @@ TEMPLATES: tuple[RoleTemplate, ...] = (
     # Whether a technical director *should* be able to delete a project is a
     # product question; this preserves the current answer until it is asked.
     _t("technical_director", "Technical Director", "المدير الفني", SCOPE_BOTH, True,
-       OFFICE_ADMINISTRATION,
+       OFFICE_ADMINISTRATION, extra=("platform.work_in_all_projects",),
        without=("platform.manage_users", "platform.manage_permissions", "project.delete"),
        rank=30,
        description="Technical authority across projects, without account administration."),
@@ -347,6 +350,10 @@ DISCIPLINES: tuple[DisciplineTemplate, ...] = (
                        ("SITE_CIVIL",), None, 140),
     DisciplineTemplate("infrastructure", "Infrastructure", "بنية تحتية",
                        ("SITE_CIVIL",), None, 150),
+    # Inspection, testing and handover quality work. Not an IFC discipline:
+    # QA/QC findings span every trade, so it maps to no IFC set. Existing
+    # databases receive it through migration g4d1e7a2b958.
+    DisciplineTemplate("qa_qc", "QA/QC", "ضبط وتأكيد الجودة", (), None, 160),
 )
 
 DISCIPLINE_BY_CODE: dict[str, DisciplineTemplate] = {

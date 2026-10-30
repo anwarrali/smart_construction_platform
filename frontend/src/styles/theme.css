@@ -21,10 +21,12 @@
     letter-spacing: var(--tracking-heading);
   }
 
-  h1 { @apply text-2xl md:text-[1.75rem]; letter-spacing: var(--tracking-display); }
-  h2 { @apply text-lg md:text-xl; }
-  h3 { @apply text-base md:text-lg; }
-  h4 { @apply text-sm md:text-base; }
+  /* Operational screens, not a marketing site: headings establish order,
+     they do not shout. */
+  h1 { @apply text-xl leading-tight md:text-[1.375rem]; letter-spacing: var(--tracking-display); }
+  h2 { @apply text-base md:text-[1.0625rem]; }
+  h3 { @apply text-sm md:text-[0.9375rem]; }
+  h4 { @apply text-sm; }
 
   /* Measured values read in the technical face wherever they appear. */
   .tabular-nums, [data-measured] {
@@ -39,8 +41,7 @@
   /* Focus is a precise ring, consistent across every control. */
   :where(a, button, input, select, textarea, [tabindex]):focus-visible {
     outline: 2px solid hsl(var(--ring));
-    outline-offset: 2px;
-    border-radius: var(--radius-control);
+    outline-offset: 1px;
   }
 }
 
@@ -51,7 +52,7 @@
      sits inside its border.
      ══════════════════════════════════════════════════════════ */
   .page-container {
-    @apply mx-auto w-full max-w-[1440px] px-5 py-6 md:px-8 lg:px-10;
+    @apply mx-auto w-full max-w-[1680px] px-4 py-5 md:px-6 lg:px-8;
   }
 
   /* The shell provides the sheet margin, and many pages also declare their
@@ -67,8 +68,8 @@
      left, measured metadata in a precise row beneath, actions right.
      ══════════════════════════════════════════════════════════ */
   .title-block {
-    @apply relative flex flex-col gap-4 pb-5 lg:flex-row lg:items-end lg:justify-between;
-    border-bottom: var(--rule-cut) solid hsl(var(--border-strong));
+    @apply relative flex flex-col gap-3 pb-4 lg:flex-row lg:items-end lg:justify-between;
+    border-bottom: var(--rule-edge) solid hsl(var(--border-strong));
   }
 
   .title-block-eyebrow {
@@ -77,7 +78,27 @@
   }
 
   .title-block h1 {
-    @apply mt-2;
+    @apply mt-1;
+  }
+
+  /* ── PAGE HEADER ── the shared title block (components/ui/PageHeader). */
+  .page-header {
+    @apply flex flex-col gap-3 pb-3 sm:flex-row sm:items-end sm:justify-between;
+    border-bottom: var(--rule-edge) solid hsl(var(--border-strong));
+  }
+
+  .page-kicker {
+    @apply mb-1 truncate text-[11px] font-semibold uppercase text-muted-foreground;
+    letter-spacing: var(--tracking-label);
+  }
+
+  .page-title {
+    @apply text-xl font-semibold leading-tight text-foreground md:text-[1.375rem];
+    letter-spacing: var(--tracking-display);
+  }
+
+  .page-intro {
+    @apply mt-1 max-w-3xl text-[13px] text-muted-foreground;
   }
 
   /* The metadata strip: discipline, revision, status, dates. */
@@ -101,41 +122,42 @@
      One hairline, a whisper of lift, no heavy shadow.
      ══════════════════════════════════════════════════════════ */
   .panel {
-    @apply rounded-panel border bg-card;
-    box-shadow: var(--shadow-sheet);
+    @apply border bg-card;
   }
 
+  /* The head of a panel is a title strip on the sunken ground, ruled off
+     from its contents — the way a schedule's header row is set. */
   .panel-head {
-    @apply flex items-center justify-between gap-3 px-5 py-3.5;
+    @apply flex min-h-10 items-center justify-between gap-3 bg-well px-4 py-2;
     border-bottom: var(--rule-hair) solid hsl(var(--border));
   }
 
   .panel-title {
-    @apply text-sm font-semibold;
+    @apply text-[13px] font-semibold;
   }
 
-  .panel-body { @apply p-5; }
-  .panel-tight { @apply p-4; }
+  .panel-body { @apply p-4; }
+  .panel-tight { @apply p-3; }
 
   /* A panel that reads as inset rather than raised — for tables and
      technical read-outs. */
   .well {
-    @apply rounded-panel border bg-well;
+    @apply border bg-well;
   }
 
   /* Backwards compatibility: existing markup still says .card, and it
      should inherit the new language rather than the old one. */
   .card {
-    @apply rounded-panel border bg-card p-5;
-    box-shadow: var(--shadow-sheet);
+    @apply border bg-card p-4;
   }
 
+  /* A clickable panel answers the pointer with its edge, not by floating. */
   .card-hover {
-    @apply card transition-[box-shadow,transform] duration-200;
+    @apply card transition-colors duration-150;
   }
   .card-hover:hover {
-    box-shadow: var(--shadow-lift);
-    transform: translateY(-1px);
+    border-color: hsl(var(--border-strong));
+    background: hsl(var(--well));
   }
 
   /* ══════════════════════════════════════════════════════════
@@ -153,7 +175,7 @@
   }
 
   .metric-value {
-    @apply text-[1.75rem] font-semibold leading-none text-foreground;
+    @apply text-[1.5rem] font-semibold leading-none text-foreground;
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-heading);
@@ -163,10 +185,10 @@
 
   /* A row of metrics divided by hairlines instead of boxed into cards. */
   .metric-row {
-    @apply grid gap-px overflow-hidden rounded-panel border bg-border;
+    @apply grid gap-px overflow-hidden border bg-border;
   }
   .metric-row > * {
-    @apply bg-card px-5 py-4;
+    @apply bg-card px-4 py-3;
   }
 
   /* Legacy names keep working. */
@@ -204,7 +226,7 @@
   }
 
   .data-row {
-    @apply flex items-center gap-4 px-4 py-3 transition-colors;
+    @apply flex items-center gap-4 px-4 py-2.5 transition-colors;
   }
   .data-row:hover { @apply bg-muted/40; }
 
@@ -218,14 +240,18 @@
      STATUS — chips carry a state colour and a leading tick, so state
      is legible without relying on colour alone.
      ══════════════════════════════════════════════════════════ */
+  /* A status tag: square, edged in its own colour, with a leading square
+     so state is never carried by hue alone. */
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-chip px-2 py-0.5 text-[11px] font-semibold;
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap border px-1.5 py-px text-[11px] font-semibold leading-[1.125rem];
+    border-color: currentColor;
+    border-color: color-mix(in srgb, currentColor 32%, transparent);
     letter-spacing: 0.01em;
   }
 
   .chip::before {
     content: "";
-    @apply h-1.5 w-1.5 shrink-0 rounded-[1px];
+    @apply h-1.5 w-1.5 shrink-0;
     background: currentColor;
   }
 
@@ -249,11 +275,11 @@
      a scale bar is drawn, rather than a rounded pill.
      ══════════════════════════════════════════════════════════ */
   .gauge {
-    @apply relative h-1.5 w-full overflow-hidden rounded-[2px] bg-muted;
+    @apply relative h-1.5 w-full overflow-hidden bg-muted;
   }
 
   .gauge-fill {
-    @apply absolute inset-y-0 start-0 rounded-[2px] bg-primary transition-[width] duration-500;
+    @apply absolute inset-y-0 start-0 bg-primary transition-[width] duration-500;
   }
 
   /* Quarter ticks, so a bar can be read as a quantity at a glance. */
@@ -290,7 +316,7 @@
      NAVIGATION
      ══════════════════════════════════════════════════════════ */
   .nav-link {
-    @apply relative flex items-center gap-3 rounded-control px-3 py-2 text-sm font-medium transition-colors;
+    @apply relative flex h-8 items-center gap-2.5 px-3 text-[13px] font-medium transition-colors;
     color: hsl(var(--sidebar-foreground));
   }
   .nav-link:hover {
@@ -306,7 +332,7 @@
   }
   .nav-link-active::before {
     content: "";
-    @apply absolute inset-y-1.5 start-0 w-[2px] rounded-full;
+    @apply absolute inset-y-0 start-0 w-[3px];
     background: hsl(var(--sidebar-mark));
   }
 
@@ -317,7 +343,7 @@
      EMPTY STATES — a drawn placeholder, not a giant emoji.
      ══════════════════════════════════════════════════════════ */
   .empty-state {
-    @apply flex flex-col items-center justify-center rounded-panel border border-dashed px-6 py-14 text-center;
+    @apply flex flex-col items-center justify-center border border-dashed border-border-strong px-6 py-12 text-center;
   }
 
   .empty-state-icon { @apply mb-3 text-muted-foreground/60; }
@@ -334,18 +360,18 @@
      ══════════════════════════════════════════════════════════ */
   .table-responsive { @apply w-full overflow-x-auto; }
 
-  .table-container { @apply overflow-hidden rounded-panel border bg-card; }
+  .table-container { @apply overflow-hidden border bg-card; }
 
   .schedule-table { @apply w-full text-sm; }
 
   .schedule-table thead th {
-    @apply bg-well px-4 py-2.5 text-start text-[11px] font-semibold uppercase text-muted-foreground;
+    @apply h-9 whitespace-nowrap bg-well px-3 py-2 text-start text-[11px] font-semibold uppercase text-muted-foreground;
     letter-spacing: var(--tracking-label);
     border-bottom: var(--rule-edge) solid hsl(var(--border-strong));
   }
 
   .schedule-table tbody td {
-    @apply px-4 py-3 align-middle;
+    @apply px-3 py-2 align-middle;
     border-top: var(--rule-hair) solid hsl(var(--border));
   }
 
@@ -354,7 +380,7 @@
   .schedule-table td[data-measured],
   .schedule-table th[data-measured] { @apply text-end; }
 
-  .skeleton { @apply animate-pulse rounded-control bg-muted; }
+  .skeleton { @apply animate-pulse bg-muted; }
 }
 
 @layer utilities {
@@ -381,21 +407,17 @@
    ══════════════════════════════════════════════════════════════════════ */
 @layer components {
   .btn {
-    @apply inline-flex h-10 items-center justify-center gap-2 rounded-control px-4 text-sm font-medium transition-all duration-150;
+    @apply inline-flex h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap border border-transparent px-3.5 text-[13px] font-medium transition-colors duration-150;
     @apply disabled:pointer-events-none disabled:opacity-45;
-    letter-spacing: -0.006em;
   }
 
   .btn-primary {
     @apply btn bg-primary text-primary-foreground;
-    box-shadow: var(--shadow-sheet);
   }
-  .btn-primary:hover { background: hsl(var(--primary) / 0.92); }
-  .btn-primary:active { transform: translateY(0.5px); }
+  .btn-primary:hover { background: hsl(var(--primary) / 0.88); }
 
   .btn-secondary {
-    @apply btn border bg-card text-foreground;
-    box-shadow: var(--shadow-sheet);
+    @apply btn border-input bg-card text-foreground;
   }
   .btn-secondary:hover { @apply bg-muted; border-color: hsl(var(--border-strong)); }
 
@@ -403,7 +425,7 @@
   .btn-destructive:hover { background: hsl(var(--destructive) / 0.9); }
 
   .btn-outline {
-    @apply btn border bg-transparent text-foreground;
+    @apply btn border-input bg-transparent text-foreground;
   }
   .btn-outline:hover { @apply bg-muted; border-color: hsl(var(--border-strong)); }
 
@@ -412,8 +434,8 @@
 
   .btn-link { @apply btn h-auto px-0 text-primary underline-offset-4 hover:underline; }
 
-  .btn-sm { @apply h-8 rounded-control px-2.5 text-xs; }
-  .btn-lg { @apply h-11 rounded-control px-6; }
+  .btn-sm { @apply h-7 gap-1.5 px-2.5 text-xs; }
+  .btn-lg { @apply h-10 px-5 text-sm; }
   .btn-icon { @apply h-9 w-9 p-0; }
 
   /* ── Forms ── */
@@ -427,7 +449,7 @@
   .form-error { @apply mt-1 text-xs text-destructive; }
 
   .input {
-    @apply flex h-10 w-full rounded-control border border-input bg-card px-3 text-sm transition-colors;
+    @apply flex h-9 w-full border border-input bg-card px-2.5 text-sm transition-colors;
     @apply placeholder:text-muted-foreground/60;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
@@ -435,27 +457,26 @@
   .input:focus {
     outline: none;
     border-color: hsl(var(--ring));
-    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.12);
+    box-shadow: inset 0 0 0 1px hsl(var(--ring));
   }
 
   /* ── Dialogs ── */
   .dialog-overlay {
     @apply fixed inset-0 z-50 flex items-center justify-center overflow-hidden p-2 sm:p-4;
-    background: hsl(220 24% 8% / 0.55);
-    backdrop-filter: blur(2px);
+    background: hsl(218 24% 6% / 0.58);
     animation: fade-in 0.18s ease-out;
   }
 
   .dialog-content {
-    @apply relative z-50 flex w-full min-w-0 flex-col overflow-hidden rounded-sheet border bg-card outline-none;
+    @apply relative z-50 flex w-full min-w-0 flex-col overflow-hidden border border-border-strong bg-card outline-none;
     box-shadow: var(--shadow-float);
     max-height: calc(100dvh - 1rem);
     animation: rise-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .dialog-header {
-    @apply flex shrink-0 items-center justify-between gap-3 px-5 py-4;
-    border-bottom: var(--rule-edge) solid hsl(var(--border-strong));
+    @apply flex shrink-0 items-center justify-between gap-3 bg-well px-5 py-3;
+    border-bottom: var(--rule-edge) solid hsl(var(--border));
   }
 
   .dialog-body {
@@ -482,13 +503,13 @@
 
   /* ── Dropdowns ── */
   .dropdown-content {
-    @apply z-50 min-w-[9rem] overflow-hidden rounded-panel border bg-popover p-1 text-popover-foreground;
+    @apply z-50 min-w-[9rem] overflow-hidden border border-border-strong bg-popover py-1 text-popover-foreground;
     box-shadow: var(--shadow-float);
     animation: rise-in 0.16s ease-out;
   }
 
   .dropdown-item {
-    @apply relative flex cursor-pointer select-none items-center gap-2 rounded-control px-2.5 py-1.5 text-sm outline-none transition-colors;
+    @apply relative flex w-full cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-start text-[13px] outline-none transition-colors;
   }
   .dropdown-item:hover { @apply bg-muted; }
 
@@ -516,13 +537,12 @@
      a dashboard that reports and one that directs. Deliberately not a
      card: it is a full-width band divided into decisions by hairlines. */
   .attention-band {
-    @apply overflow-hidden rounded-panel border bg-card;
+    @apply overflow-hidden border bg-card;
     border-inline-start: 3px solid hsl(var(--state-review));
-    box-shadow: var(--shadow-sheet);
   }
 
   .attention-head {
-    @apply flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3;
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1 bg-well px-4 py-2.5;
     border-bottom: var(--rule-hair) solid hsl(var(--border));
   }
 
@@ -536,7 +556,7 @@
   /* A single decision. The kicker carries the state, the title carries
      the consequence, and the meta line carries the evidence. */
   .decision {
-    @apply flex flex-col gap-2 px-5 py-4 text-start transition-colors;
+    @apply flex flex-col gap-1.5 px-4 py-3 text-start transition-colors;
   }
   .decision:hover { @apply bg-muted/40; }
 
@@ -546,7 +566,7 @@
   }
   .decision-kicker::before {
     content: "";
-    @apply h-2 w-2 shrink-0 rounded-[2px];
+    @apply h-2 w-2 shrink-0;
     background: currentColor;
   }
 
@@ -572,11 +592,11 @@
   }
 
   .bar-row-track {
-    @apply relative h-2 overflow-hidden rounded-[3px] bg-muted;
+    @apply relative h-2 overflow-hidden bg-muted;
   }
 
   .bar-row-fill {
-    @apply absolute inset-y-0 start-0 rounded-[3px] transition-[width] duration-700;
+    @apply absolute inset-y-0 start-0 transition-[width] duration-700;
     background: hsl(var(--primary));
   }
 
@@ -591,7 +611,7 @@
      leading rule; float is set in the technical face because it is a
      measured engineering quantity, not a label. */
   .dep-node {
-    @apply relative rounded-control border bg-card px-3 py-2.5;
+    @apply relative border bg-card px-3 py-2;
     border-inline-start-width: 3px;
   }
 
@@ -618,14 +638,13 @@
   }
 
   /* ── INSIGHT SURFACE ──────────────────────────────────────
-     Where the product tells you something it worked out. Verdant, because
-     that is the brand's intelligence colour, and quiet, because an
-     inference is not an alert. No robot, no brain, no sparkle cliché —
-     the signal is the colour and the connection rule. */
+     Something the platform worked out, not something a person verified.
+     The dashed edge is the distinction: a suggestion is drawn in
+     construction line until somebody accepts it. */
   .insight {
-    @apply relative rounded-panel px-4 py-3.5;
+    @apply relative px-4 py-3;
     background: hsl(var(--accent-wash));
-    border: var(--rule-hair) solid hsl(var(--accent) / 0.22);
+    border: var(--rule-hair) dashed hsl(var(--accent) / 0.45);
   }
 
   .insight-label {
@@ -638,9 +657,8 @@
      that ties the identity to the intelligence in the product. */
   .insight-label::before {
     content: "";
-    @apply h-1.5 w-1.5 shrink-0 rounded-full;
+    @apply h-1.5 w-1.5 shrink-0;
     background: hsl(var(--accent));
-    box-shadow: 0 0 0 3px hsl(var(--accent) / 0.16);
   }
 
   .insight-body {
@@ -656,7 +674,7 @@
   }
 
   .tab-link {
-    @apply relative whitespace-nowrap px-3 py-2.5 text-[13px] font-medium text-muted-foreground transition-colors;
+    @apply relative inline-flex h-9 items-center gap-1.5 whitespace-nowrap px-3 text-[13px] font-medium text-muted-foreground transition-colors;
   }
   .tab-link:hover { @apply text-foreground; }
 
@@ -665,25 +683,28 @@
   }
   .tab-link-active::after {
     content: "";
-    @apply absolute inset-x-2 -bottom-px h-[2px] rounded-full;
-    background: hsl(var(--accent));
+    @apply absolute inset-x-0 -bottom-px h-[2px];
+    background: hsl(var(--primary));
   }
 
   /* ── SEGMENTED CONTROL ────────────────────────────────────
      For sorting and small mutually-exclusive choices. */
   .segmented {
-    @apply inline-flex items-center gap-0.5 rounded-control border bg-well p-0.5;
+    @apply inline-flex items-stretch border border-input bg-card;
   }
 
   .segmented-item {
-    @apply rounded-[5px] px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors;
+    @apply px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors;
+  }
+  .segmented-item + .segmented-item {
+    border-inline-start: var(--rule-hair) solid hsl(var(--input));
   }
   .segmented-item:hover { @apply text-foreground; }
 
   .segmented-item-active {
-    @apply bg-card text-foreground;
-    box-shadow: var(--shadow-sheet);
+    @apply bg-primary text-primary-foreground;
   }
+  .segmented-item-active:hover { @apply text-primary-foreground; }
 
   /* ── PORTFOLIO / WORKSPACE DISTINCTION ────────────────────
      The global portfolio and an individual project must not look alike.
@@ -691,12 +712,27 @@
      project workspace header sits on a tinted band with its reference
      and status, so you always know which of the two you are in. */
   .workspace-header {
-    @apply relative overflow-hidden rounded-sheet border bg-card px-6 py-5;
-    box-shadow: var(--shadow-sheet);
+    @apply relative overflow-hidden border bg-card px-5 py-4;
   }
   .workspace-header::before {
     content: "";
-    @apply absolute inset-y-0 start-0 w-1;
+    @apply absolute inset-y-0 start-0 w-[3px];
     background: hsl(var(--primary));
   }
+
+  /* ── TOOLBAR ──────────────────────────────────────────────
+     The strip of filters and view controls above a table or schedule.
+     One ruled row, controls aligned on a common height. */
+  .toolbar {
+    @apply flex flex-wrap items-center gap-2 border bg-card px-3 py-2;
+  }
+  .toolbar-spacer { @apply ms-auto; }
+
+  /* ── KEY / VALUE ──────────────────────────────────────────
+     Technical metadata set as a two-column schedule. */
+  .kv {
+    @apply grid grid-cols-[minmax(7rem,auto)_1fr] gap-x-4 gap-y-1.5 text-[13px];
+  }
+  .kv dt { @apply text-muted-foreground; }
+  .kv dd { @apply min-w-0 font-medium; }
 }

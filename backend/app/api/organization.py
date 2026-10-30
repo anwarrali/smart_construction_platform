@@ -24,6 +24,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -81,6 +82,26 @@ def _member_count(db: Session, role_id: uuid.UUID) -> int:
     return users + members
 
 
+def _replaced_template_holders(db: Session, role: Role) -> int:
+    """People still pointing at the template an office copy replaced.
+
+    They are governed by the copy (`rbac.office_role_id`), so the copy's count
+    shows them; otherwise the list read "0 members" for a role four engineers
+    hold. Not used by `delete_role`: deleting the copy hands them back to the
+    template, which is safe, so they do not block it.
+    """
+    if role.organization_id is None:
+        return 0
+    template = db.query(Role).filter(Role.code == role.code, Role.organization_id.is_(None)).first()
+    if template is None:
+        return 0
+    office = db.get(Company, role.organization_id)
+    in_office = User.company_id == role.organization_id
+    if office is not None and office.is_tenant:
+        in_office = or_(in_office, User.company_id.is_(None))
+    return db.query(User).filter(User.org_role_id == template.id, in_office).count()
+
+
 def _role_payload(db: Session, role: Role, *, with_permissions: bool = True) -> dict:
     return {
         "id": role.id, "code": role.code, "name_en": role.name_en,
@@ -89,7 +110,8 @@ def _role_payload(db: Session, role: Role, *, with_permissions: bool = True) -> 
         "is_system": role.is_system, "undeletable": role.undeletable,
         "rank": role.rank, "is_active": role.is_active,
         "permissions": sorted(rbac.role_permission_codes(db, role.id)) if with_permissions else [],
-        "member_count": _member_count(db, role.id),
+        "member_count": _member_count(db, role.id) + _replaced_template_holders(db, role),
+        "is_template": role.organization_id is None,
     }
 
 
@@ -509,9 +531,10 @@ def list_project_parties(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from app.core.deps import user_has_project_access
+    from app.core.deps import user_can_see_project_record
 
-    if not user_has_project_access(db, current_user, project_id):
+    # Parties are part of the project record (QA-06B).
+    if not user_can_see_project_record(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     parties = db.query(ProjectParty).filter(
         ProjectParty.project_id == project_id
