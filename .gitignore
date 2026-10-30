@@ -1,4 +1,8 @@
 .env
+Constructs_Graduation_Project_Report.docx
+Graduation_Project_Final_Report.docx
+/report
+/research
 backend/.env
 backend/uploads/
 # Private file storage (documents, attachments, IFC sources, voice audio).

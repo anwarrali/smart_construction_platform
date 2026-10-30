@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+import logging
 import signal
 from multiprocessing import get_context
 from queue import Empty
@@ -32,6 +33,9 @@ from app.services.ifc_interference import InterferenceElement, detect_interferen
 from app.core.config import settings
 
 
+logger = logging.getLogger(__name__)
+
+
 VERSION_TRANSITIONS = {
     "UPLOADED": {"VALIDATING", "QUEUED", "FAILED", "ARCHIVED"},
     "VALIDATING": {"QUEUED", "FAILED"}, "QUEUED": {"PARSING", "FAILED"},
@@ -46,14 +50,80 @@ VERSION_TRANSITIONS = {
 }
 
 
+def _limit_worker_memory() -> None:
+    """Cap the parser process's address space at the processing budget.
+
+    The pre-flight estimate (`check_processing_memory`) keeps a model that is
+    clearly too large from starting; this is the backstop for one that grows
+    past it anyway. An allocation the cap refuses surfaces as `MemoryError` or
+    as ifcopenshell's `bad_alloc`, both reported as out-of-memory below,
+    instead of the OS killing whichever process it chooses. The headroom covers
+    the interpreter and the native libraries mapped before any model is read
+    (about 0.9 GB of address space for an empty parse).
+    """
+    try:
+        import resource
+    except ImportError:  # pragma: no cover - not a POSIX host
+        return
+    limit = (settings.IFC_PARSE_MEMORY_MB + PARSE_ADDRESS_SPACE_HEADROOM_MB) * 1024 * 1024
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+    except (ValueError, OSError):  # pragma: no cover - a host that refuses the cap
+        pass
+
+
 def _parse_worker(path: str, output) -> None:
+    _limit_worker_memory()
     try:
         with private_storage.local_path(path) as source:
             output.put(("ok", IFCParser().parse(source)))
     except IFCParseError as exc:
-        output.put(("error", str(exc)))
-    except Exception:
-        output.put(("error", "IFC_PROCESSING_FAILED"))
+        output.put(("error", (str(exc), None)))
+    except MemoryError:
+        output.put(("error", ("IFC_PARSER_OUT_OF_MEMORY", "MemoryError")))
+    except Exception as exc:
+        # The class and message are for the server log only — never the user —
+        # and contain no file content, only what the parser said went wrong.
+        text = f"{type(exc).__name__}: {exc}"[:500]
+        code = "IFC_PARSER_OUT_OF_MEMORY" if "bad_alloc" in text else "IFC_PROCESSING_FAILED"
+        output.put(("error", (code, text)))
+
+
+#: Address space the parser needs before it reads a model: interpreter plus
+#: native libraries, measured at ~0.9 GB for an empty parse.
+PARSE_ADDRESS_SPACE_HEADROOM_MB = 1024
+#: Resident memory a parse needs, measured on real models: a fixed ~0.2 GB plus
+#: ~16 MB per MB of IFC (a 112.7 MB model peaked at 1.98 GB resident).
+PARSE_MEMORY_FIXED_MB = 200
+PARSE_MEMORY_PER_FILE_MB = 16.5
+
+
+def estimated_parse_memory_mb(file_size_bytes: int) -> int:
+    return int(PARSE_MEMORY_FIXED_MB + PARSE_MEMORY_PER_FILE_MB * file_size_bytes / (1024 * 1024))
+
+
+def max_processable_file_mb() -> int:
+    """The largest IFC this host's processing budget can parse."""
+    return max(1, int((settings.IFC_PARSE_MEMORY_MB - PARSE_MEMORY_FIXED_MB) / PARSE_MEMORY_PER_FILE_MB))
+
+
+def check_processing_memory(file_size_bytes: int) -> None:
+    """Refuse, before opening the file, a model this host cannot parse.
+
+    ifcopenshell loads the whole file into memory, so the requirement is known
+    from the size alone. Failing here takes a second and says why; letting the
+    parse start would spend minutes and then be killed by the OS.
+    """
+    needed = estimated_parse_memory_mb(file_size_bytes)
+    if needed > settings.IFC_PARSE_MEMORY_MB:
+        raise IFCParseError(
+            "IFC_MODEL_TOO_LARGE_FOR_HOST",
+            user_message=(
+                f"This {file_size_bytes / (1024 * 1024):.0f} MB model needs about {needed / 1024:.1f} GB of processing memory; "
+                f"this server allows {settings.IFC_PARSE_MEMORY_MB / 1024:.1f} GB per model "
+                f"(models up to about {max_processable_file_mb()} MB). The file is stored unchanged."
+            ),
+        )
 
 
 #: How often the parent re-checks whether the parser worker is still alive.
@@ -102,7 +172,8 @@ def parse_with_timeout(storage_key: str):
             process.terminate(); process.join(timeout=5)
         output.close()
     if kind != "ok":
-        raise IFCParseError(value)
+        code, detail = value
+        raise IFCParseError(code, detail=detail)
     return value
 
 
@@ -167,6 +238,7 @@ def process_version(db: Session, version_id, actor_id=None) -> None:
     try:
         job.status = "RUNNING"; job.started_at = datetime.now(timezone.utc); job.progress = 10
         transition_version(version, "PARSING", 20); db.commit()
+        check_processing_memory(version.file_size)
         parsed = parse_with_timeout(version.storage_key)
         transition_version(version, "BUILDING_HIERARCHY", 38)
         db.query(IFCElement).filter(IFCElement.version_id == version.id).delete(synchronize_session=False)
@@ -321,6 +393,12 @@ def process_version(db: Session, version_id, actor_id=None) -> None:
         version.asset_type_confidence = parsed.summary["assetType"]["confidence"]
         version.geometry_status = "GEOMETRY_PROCESSING" if settings.IFC_GEOMETRY_ENABLED else "GEOMETRY_NOT_GENERATED"
         version.analysis_status = "READY"
+        # A retry that succeeds replaces the earlier failure; leaving its code,
+        # message and support ID on a READY version showed a model as both
+        # imported and failed.
+        version.parsing_error_code = None
+        version.parsing_error_message = None
+        version.support_log_id = None
         transition_version(
             version,
             "READY_WITH_WARNINGS"
@@ -373,9 +451,16 @@ def process_version(db: Session, version_id, actor_id=None) -> None:
         db.rollback(); version = db.get(IFCModelVersion, version_id); job = db.get(IFCProcessingJob, job.id)
         code = str(exc) if isinstance(exc, IFCParseError) else "IFC_PROCESSING_FAILED"
         support_id = uuid4().hex
+        # The support ID shown to the user finds this line. It carries the
+        # failure class and the parser's own message, never file content.
+        logger.warning(
+            "IFC processing failed support_id=%s version=%s project=%s code=%s detail=%s",
+            support_id, version_id, version.project_id if version else None, code,
+            getattr(exc, "detail", None) or (None if isinstance(exc, IFCParseError) else f"{type(exc).__name__}: {exc}"[:500]),
+        )
         version.processing_status = "FAILED"; version.processing_progress = min(max(version.processing_progress, 1), 99)
         version.parsing_error_code = code; version.support_log_id = support_id
-        version.parsing_error_message = friendly_ifc_error(code, support_id)["description"]
+        version.parsing_error_message = getattr(exc, "user_message", None) or friendly_ifc_error(code, support_id)["description"]
         if job:
             job.status = "FAILED"; job.failure_code = code; job.failure_message = version.parsing_error_message
             job.completed_at = datetime.now(timezone.utc); job.duration_ms = int((perf_counter() - started) * 1000)

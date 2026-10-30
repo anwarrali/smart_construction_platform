@@ -1,0 +1,26 @@
+@startuml
+!include _style.iuml
+autonumber
+actor User
+participant "Web client\n(axios interceptor)" as FE
+participant "FastAPI\n/auth" as API
+database "PostgreSQL" as DB
+User -> FE : enter e-mail and password
+FE -> API : POST /auth/login (OAuth2 form)
+API -> DB : check rate_limit_hits
+API -> DB : load user, verify argon2 hash
+API --> FE : access JWT (30 min) + refresh JWT (7 days)
+FE -> API : GET /resource (Bearer access)
+API -> API : get_current_user: verify type=access,\nstatus ACTIVE, must_change_password
+API -> DB : effective_permissions(user, project)
+API --> FE : 200 data
+... access token expires ...
+FE -> API : GET /resource
+API --> FE : 401 (expired)
+FE -> API : POST /auth/refresh (single-flight)
+API -> DB : refresh token hash in revoked_tokens?
+API -> DB : store old token hash (single use)
+API --> FE : new access + refresh pair
+FE -> API : retry original request
+API --> FE : 200 data
+@enduml

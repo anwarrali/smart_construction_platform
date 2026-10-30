@@ -166,7 +166,7 @@ export const UserForm = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="bg-red-50 text-red-600 text-sm rounded-md px-4 py-3">
+          <div className="bg-wash-overdue text-state-overdue text-sm rounded-md px-4 py-3">
             {error}
           </div>
         )}

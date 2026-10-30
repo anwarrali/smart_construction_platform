@@ -128,8 +128,14 @@ in the project, which would be answering a question nobody asked.
 ## 3. Ingestion flow
 
 1. A PDF is uploaded through the **existing** `POST /documents/upload`.
-   Nothing is indexed automatically.
-2. `POST /rag/documents/{id}/index` is called explicitly.
+2. Indexing happens one of two ways, both through `index_document`:
+   - **in the background**, when the upload's bytes are a PDF (magic bytes, not
+     the filename), within `RAG_MAX_FILE_MB`, and `RAG_AUTO_INDEX_ENABLED` is
+     on: the upload queues a `rag.index_document` job in its own transaction
+     (`rag.ingestion.should_auto_index_document`, see [JOBS.md](JOBS.md));
+   - **synchronously**, when `POST /rag/documents/{id}/index` is called — the
+     manual path the Document Assistant uses, which returns the page and chunk
+     counts in its response.
 3. Permission check — project access **plus** the owner/consultant document
    scopes (§7).
 4. The document is claimed with an atomic `UPDATE … WHERE index_status <>
@@ -702,10 +708,13 @@ PDFs, so extraction is genuinely exercised.
 - **A process that dies mid-index** leaves the row in `INDEXING` until the
   reaper takes it back — within `RAG_INDEX_STALE_MINUTES`, or immediately with
   `?force=true`. See §13.
-- **Library documents are not indexed automatically.** Files from the unified
-  ingestion pipeline are (`RAG_AUTO_INDEX_ENABLED`); a document uploaded to the
-  Documents library is still indexed on request through
-  `POST /rag/documents/{id}/index`.
+- **Existing library documents are not backfilled.** New PDF uploads to the
+  Documents library are indexed in the background; documents uploaded before
+  that are indexed through the manual endpoint or a project re-index.
+- **The manual document index is still synchronous.** `POST
+  /rag/documents/{id}/index` embeds inside the request, because the Document
+  Assistant reads the result from the response. Moving it to the queue needs a
+  client that polls `GET /rag/documents/{id}/status` instead.
 - **A re-index is per project.** There is no cross-project or platform-wide
   sweep, so a model change has to be actioned project by project.
 - **A run is not resumable mid-source.** An interrupted run keeps every source

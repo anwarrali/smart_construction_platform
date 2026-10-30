@@ -1,3 +1,4 @@
+import { BellOff, List as ListIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -42,7 +43,7 @@ export const NotificationDropdown = ({
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute right-0 top-full mt-2 w-80 rounded-md border bg-popover shadow-lg z-50">
+      <div className="absolute end-0 top-full z-50 mt-px w-[22rem] max-w-[calc(100vw-1rem)] border border-border-strong bg-popover shadow-float">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-sm">{t("notificationDropdown.notifications")}</h3>
@@ -65,8 +66,10 @@ export const NotificationDropdown = ({
                 navigate(ROUTES.NOTIFICATIONS);
                 onClose();
               }}
+              aria-label={t("notificationDropdown.notifications")}
+              title={t("notificationDropdown.notifications")}
             >
-              ⚙️
+              <ListIcon size={15} aria-hidden />
             </Button>
           </div>
         </div>
@@ -78,7 +81,7 @@ export const NotificationDropdown = ({
             </div>
           ) : notifications.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              <p className="text-2xl mb-2">🔔</p>
+              <BellOff size={20} strokeWidth={1.5} className="mx-auto mb-2 text-muted-foreground/60" aria-hidden />
               <p>{t("notificationDropdown.no_notifications_yet")}</p>
             </div>
           ) : (
@@ -109,7 +112,7 @@ export const NotificationDropdown = ({
                     </p>
                   </div>
                   {!notification.isRead && (
-                    <span className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                    <span className="w-2 h-2 bg-primary mt-1.5 flex-shrink-0" />
                   )}
                 </div>
               </button>

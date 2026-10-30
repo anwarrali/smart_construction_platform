@@ -236,14 +236,14 @@ def test_the_download_survives_a_backend_whose_local_path_disappears(
     assert ephemeral_storage.materialised == []
 
 
-def test_the_viewer_asset_survives_the_same_backend(client, world, ephemeral_storage):
+def test_the_removed_viewer_asset_is_no_longer_served(client, world):
+    # The stored mesh in this fixture stays on disk — removing the viewer
+    # deleted no data — but no route hands it out any more.
     response = client.get(
         ifc_url(world["project"].id, f"/versions/{world['version'].id}/geometry/asset"),
         headers=_auth(client, world["manager"]),
     )
-    assert response.status_code == 200
-    assert response.content == b"BIMGEO1\x00mock-geometry-payload"
-    assert ephemeral_storage.materialised == []
+    assert response.status_code in {404, 405}
 
 
 def test_the_response_names_the_file_in_both_header_forms(client, world):

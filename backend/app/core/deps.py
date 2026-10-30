@@ -146,8 +146,14 @@ def user_has_project_access(
     # Deferred import: this module is imported by app.services.authorization
     # for `user_has_project_access` itself, so importing at module load time
     # here would be a circular import; by call time both modules are loaded.
-    from app.services.authorization import can_view_all_projects_effective
-    if can_view_all_projects_effective(db, user):
+    #
+    # QA-06B (2026-10-17): this answers "may this person work inside the
+    # project" — its tasks, documents, models, reports, messages. The bypass is
+    # `platform.work_in_all_projects` (office leadership), no longer
+    # `platform.view_all_projects`: that one is the administrator's registry
+    # view, answered by `user_can_see_project_record` below.
+    from app.services.authorization import can_work_in_all_projects_effective
+    if can_work_in_all_projects_effective(db, user):
         return True
 
     project = db.query(Project).filter(Project.id == project_id).first()
@@ -198,6 +204,23 @@ def user_has_project_access(
 
     return False
 
+def user_can_see_project_record(db: Session, user: User, project_id: uuid.UUID) -> bool:
+    """Whether this person may see the project's *record*: its details, team
+    and parties — the registry and staffing side, not the work.
+
+    Anyone who can work in the project can see its record. On top of that,
+    `platform.view_all_projects` reaches every project's record without
+    membership: that is how the office administrator lists and staffs projects
+    they are not on, without that also opening tasks, documents, models or
+    reports (QA-06B). Permissions marked `registry` in the catalogue resolve
+    their project check through this, not `user_has_project_access`.
+    """
+    from app.services.authorization import can_view_all_projects_effective
+    if can_view_all_projects_effective(db, user):
+        return db.query(Project.id).filter(Project.id == project_id).first() is not None
+    return user_has_project_access(db, user, project_id)
+
+
 def accessible_project_ids(db: Session, user: User) -> list[uuid.UUID] | None:
     """Return every project visible to the user, including direct owner/PM assignments.
 
@@ -208,8 +231,10 @@ def accessible_project_ids(db: Session, user: User) -> list[uuid.UUID] | None:
     role-only default, and an unconditional static OR would make a revoke
     impossible.
     """
-    from app.services.authorization import can_view_all_projects_effective
-    if can_view_all_projects_effective(db, user):
+    # The work-side answer, like `user_has_project_access` (QA-06B): this feeds
+    # cross-project lists of tasks, issues, documents and the like.
+    from app.services.authorization import can_work_in_all_projects_effective
+    if can_work_in_all_projects_effective(db, user):
         return None
     # The same early return `user_has_project_access` carried, removed for the
     # same reason: it replaced the membership union with "projects I manage",
@@ -231,7 +256,8 @@ def get_project_or_403(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if not user_has_project_access(db, current_user, project_id):
+    # The project record (details), so the registry view reaches it — QA-06B.
+    if not user_can_see_project_record(db, current_user, project_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this project")
     return project
 

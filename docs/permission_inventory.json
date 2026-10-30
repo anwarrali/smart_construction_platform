@@ -1,0 +1,2891 @@
+[
+  {
+    "code": "platform.manage_users",
+    "group": "platform",
+    "label": "Manage user accounts",
+    "description": "Create, edit, activate and deactivate accounts.",
+    "scope": "platform",
+    "admin_locked": true,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin"
+    ],
+    "user_override": "grant/deny; deny refused on the office administrator",
+    "backend_enforcement": [
+      "backend/app/api/organization.py:364 (+1)",
+      "backend/app/api/users.py:62 (+10)",
+      "backend/app/core/config.py:184",
+      "backend/app/core/deps.py:126",
+      "backend/app/services/authorization.py:125",
+      "backend/app/services/mcp/tokens.py:170 (+1)",
+      "backend/app/services/rbac.py:28",
+      "backend/app/services/step_up_service.py:62 (+3)",
+      "backend/app/services/user_service.py:60"
+    ],
+    "operations": [
+      "DELETE /users/{user_id} (permanently_delete_user)",
+      "GET /users (list_users)",
+      "GET /users/search (search_users)",
+      "GET /users/{user_id} (get_user_by_id)",
+      "POST /users (create_user)",
+      "POST /users/{user_id}/reset-password (admin_reset_password)",
+      "PUT /organization/users/{user_id}/disciplines (set_user_disciplines)",
+      "PUT /organization/users/{user_id}/role (assign_user_role)",
+      "PUT /users/{user_id} (update_user_by_admin)",
+      "PUT /users/{user_id}/activate (activate_user)",
+      "PUT /users/{user_id}/deactivate (deactivate_user)",
+      "services.mcp.tokens.find_for_revocation",
+      "services.mcp.tokens.visible_tokens",
+      "services.rbac (module-level table)",
+      "services.step_up_service (module-level table)",
+      "services.user_service.create_provisioned_user"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:134 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:78 (+3)",
+      "frontend/src/features/dashboard/DashboardSelectorPage.tsx:54",
+      "frontend/src/features/projects/pages/ProjectsPage.tsx:122",
+      "frontend/src/features/settings/pages/McpClientsPage.tsx:59 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:141 (+4)",
+      "backend/tests/test_authorization_migrated_endpoints.py:166 (+7)",
+      "backend/tests/test_configurable_account_creation.py:111 (+2)",
+      "backend/tests/test_fresh_deployment_rbac.py:104",
+      "backend/tests/test_organization_api.py:172 (+2)",
+      "backend/tests/test_permission_capabilities.py:412",
+      "backend/tests/test_platform_view_all_projects.py:318",
+      "backend/tests/test_qa_pass_2026_10_17.py:368",
+      "backend/tests/test_rbac_redesign.py:280 (+5)",
+      "backend/tests/test_rbac_security_regression.py:342 (+3)",
+      "backend/tests/test_role_templates.py:27 (+1)",
+      "backend/tests/test_step_up_security.py:300",
+      "backend/tests/test_user_creation_authorization.py:3 (+3)"
+    ],
+    "frontend_tests": [
+      "frontend/src/app/store/permission.store.test.ts:20 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:20",
+      "frontend/src/features/settings/pages/McpClientsPage.test.tsx:42 (+1)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "platform.manage_permissions",
+    "group": "platform",
+    "label": "Manage permissions",
+    "description": "Change what roles and people are allowed to do.",
+    "scope": "platform",
+    "admin_locked": true,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin"
+    ],
+    "user_override": "grant/deny; deny refused on the office administrator",
+    "backend_enforcement": [
+      "backend/app/api/permissions.py:3 (+1)",
+      "backend/app/core/config.py:184",
+      "backend/app/services/step_up_service.py:67"
+    ],
+    "operations": [
+      "api.permissions (module-level table)",
+      "api.permissions._gate",
+      "services.step_up_service (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:142",
+      "frontend/src/components/shared/Sidebar/navigation.ts:123"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:140 (+4)",
+      "backend/tests/test_configurable_account_creation.py:111",
+      "backend/tests/test_permission_capabilities.py:413",
+      "backend/tests/test_platform_view_all_projects.py:317",
+      "backend/tests/test_rbac_redesign.py:375 (+1)",
+      "backend/tests/test_rbac_security_regression.py:342",
+      "backend/tests/test_role_templates.py:27 (+1)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:20"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "platform.create_project",
+    "group": "platform",
+    "label": "Create projects",
+    "description": "Open a new project on the platform.",
+    "scope": "platform",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/projects.py:326",
+      "backend/app/api/users.py:129",
+      "backend/app/core/deps.py:297",
+      "backend/app/services/rbac.py:121"
+    ],
+    "operations": [
+      "GET /users/eligible (eligible_users)",
+      "POST /projects (create_project)",
+      "services.rbac.office_role_id"
+    ],
+    "frontend": [
+      "frontend/src/features/dashboard/DashboardSelectorPage.tsx:60",
+      "frontend/src/features/projects/pages/ProjectsPage.tsx:92"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization_migrated_endpoints.py:279",
+      "backend/tests/test_permission_capabilities.py:387",
+      "backend/tests/test_qa_pass_2026_10_22.py:57 (+7)",
+      "backend/tests/test_rbac_closure.py:166",
+      "backend/tests/test_rbac_customization.py:99 (+32)",
+      "backend/tests/test_rbac_security_regression.py:343",
+      "backend/tests/test_role_templates.py:26 (+2)"
+    ],
+    "frontend_tests": [
+      "frontend/src/app/store/permission.store.test.ts:81 (+4)",
+      "frontend/src/features/admin/pages/AccessControlPage.test.tsx:55 (+6)",
+      "frontend/src/features/dashboard/DashboardSelectorPage.test.tsx:4 (+2)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "platform.view_all_projects",
+    "group": "platform",
+    "label": "See every project",
+    "description": "List every project and manage its details, team and parties without being a member. Does not open the project's tasks, documents, models or reports.",
+    "scope": "platform",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/audit_logs.py:15",
+      "backend/app/api/dashboard.py:210",
+      "backend/app/api/projects.py:161",
+      "backend/app/core/deps.py:136 (+3)",
+      "backend/app/services/authorization.py:293 (+4)",
+      "backend/app/services/rbac.py:622"
+    ],
+    "operations": [
+      "core.deps.accessible_project_ids",
+      "core.deps.user_can_see_project_record",
+      "services.authorization.can_view_all_projects_effective",
+      "services.authorization.can_work_in_all_projects_effective",
+      "services.rbac.apply_org_role"
+    ],
+    "frontend": [
+      "frontend/src/features/projects/pages/ProjectsPage.tsx:96"
+    ],
+    "backend_tests": [
+      "backend/tests/test_external_party_isolation.py:298 (+1)",
+      "backend/tests/test_fresh_deployment_rbac.py:104",
+      "backend/tests/test_organization_api.py:194 (+1)",
+      "backend/tests/test_permission_capabilities.py:416",
+      "backend/tests/test_platform_view_all_projects.py:1 (+12)",
+      "backend/tests/test_qa_pass_2026_10_17.py:309",
+      "backend/tests/test_rbac_redesign.py:284 (+1)",
+      "backend/tests/test_rbac_security_regression.py:343",
+      "backend/tests/test_role_templates.py:28 (+2)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "platform.work_in_all_projects",
+    "group": "platform",
+    "label": "Work in every project",
+    "description": "Open the tasks, documents, models and reports of any project without being on its team.",
+    "scope": "platform",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/cost_validations.py:25",
+      "backend/app/api/dashboard.py:214",
+      "backend/app/api/design_changes.py:52",
+      "backend/app/api/issues.py:56",
+      "backend/app/api/site_reports.py:65",
+      "backend/app/core/deps.py:152",
+      "backend/app/services/authorization.py:332 (+1)"
+    ],
+    "operations": [
+      "services.authorization.can_work_in_all_projects_effective"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_cost_validation_access.py:72",
+      "backend/tests/test_permission_capabilities.py:417",
+      "backend/tests/test_platform_view_all_projects.py:187 (+2)",
+      "backend/tests/test_qa_pass_2026_10_17.py:313 (+2)",
+      "backend/tests/test_rbac_security_regression.py:343",
+      "backend/tests/test_role_templates.py:36 (+1)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "project.manage_members",
+    "group": "project",
+    "label": "Manage the project team",
+    "description": "Add or remove people from a project and set their role on it.",
+    "scope": "project-record",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/projects.py:315 (+12)",
+      "backend/app/api/users.py:86 (+2)",
+      "backend/app/core/deps.py:195 (+4)",
+      "backend/app/schemas/project.py:164",
+      "backend/app/services/authorization.py:271 (+1)",
+      "backend/app/services/field_submission_authorization.py:134",
+      "backend/app/services/messaging_authorization.py:106",
+      "backend/app/services/voice_capabilities.py:339"
+    ],
+    "operations": [
+      "DELETE /projects/{project_id}/members/{user_id} (remove_project_member)",
+      "GET /projects/{project_id}/available-engineers (get_available_engineers)",
+      "GET /projects/{project_id}/available-team-members (get_available_team_members)",
+      "GET /projects/{project_id}/members (get_project_members)",
+      "GET /users/eligible (eligible_users)",
+      "GET /users/search (search_users)",
+      "PATCH /projects/{project_id}/members/{user_id}/assignment (update_member_assignment)",
+      "POST /projects/{project_id}/members (add_project_member)",
+      "POST /projects/{project_id}/members/{user_id}/transfer (transfer_project_member)",
+      "api.projects._project_out",
+      "core.deps.user_has_project_access",
+      "services.authorization.can_run_project",
+      "services.authorization.manageable_project",
+      "services.field_submission_authorization.can_manage_project_photo_categories",
+      "services.messaging_authorization.resolve_group_recipient_ids",
+      "services.voice_capabilities._manages_this_project"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:148 (+2)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:204",
+      "frontend/src/features/dashboard/DashboardSelectorPage.tsx:59",
+      "frontend/src/features/photo-archive/pages/EvidencePhotoArchivePage.tsx:35 (+1)",
+      "frontend/src/features/projects/pages/ProjectDetailPage.tsx:39",
+      "frontend/src/features/projects/pages/ProjectTeamPage.tsx:40 (+1)",
+      "frontend/src/features/projects/pages/ProjectsPage.tsx:95 (+1)",
+      "frontend/src/utils/projectRoutes.ts:57 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:144",
+      "backend/tests/test_authorization_migrated_endpoints.py:64 (+17)",
+      "backend/tests/test_configurable_account_creation.py:168",
+      "backend/tests/test_milestone_authorization.py:272",
+      "backend/tests/test_permission_capabilities.py:403",
+      "backend/tests/test_platform_view_all_projects.py:182",
+      "backend/tests/test_qa_pass_2026_10_17.py:365 (+1)",
+      "backend/tests/test_rbac_closure.py:78 (+3)",
+      "backend/tests/test_rbac_security_regression.py:320",
+      "backend/tests/test_role_templates.py:29 (+3)",
+      "backend/tests/test_work_scope_and_routing.py:183 (+1)"
+    ],
+    "frontend_tests": [
+      "frontend/src/app/router/PermissionGuard.test.tsx:63 (+2)",
+      "frontend/src/app/store/permission.store.test.ts:20 (+2)",
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:21",
+      "frontend/src/features/dashboard/DashboardSelectorPage.test.tsx:41",
+      "frontend/src/utils/projectRoutes.test.ts:25 (+2)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "project.edit",
+    "group": "project",
+    "label": "Edit project details",
+    "description": "Change project information, dates and settings.",
+    "scope": "project-record",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/attachments.py:286",
+      "backend/app/api/cost_validations.py:77",
+      "backend/app/api/documents.py:281 (+1)",
+      "backend/app/api/projects.py:393 (+2)",
+      "backend/app/api/users.py:130"
+    ],
+    "operations": [
+      "DELETE /attachments/{attachment_id} (delete_attachment)",
+      "DELETE /documents/{document_id} (delete_document)",
+      "GET /users/eligible (eligible_users)",
+      "POST /cost-validations (create_cost_validation)",
+      "PUT /projects/{project_id} (update_project)",
+      "PUT /projects/{project_id}/approval-workflow (update_project_approval_workflow)"
+    ],
+    "frontend": [
+      "frontend/src/features/projects/pages/ProjectTeamPage.tsx:39 (+1)",
+      "frontend/src/features/projects/pages/ProjectsPage.tsx:94"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization_migrated_endpoints.py:238 (+4)",
+      "backend/tests/test_permission_capabilities.py:483",
+      "backend/tests/test_platform_view_all_projects.py:352",
+      "backend/tests/test_project_deletion_authorization.py:11 (+3)",
+      "backend/tests/test_qa_pass_2026_10_17.py:388",
+      "backend/tests/test_rbac_closure.py:166",
+      "backend/tests/test_rbac_security_regression.py:321",
+      "backend/tests/test_role_templates.py:28 (+2)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "project.manage_reminders",
+    "group": "project",
+    "label": "Configure reminders",
+    "description": "Set reminder intervals, quiet hours and escalation.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/collaboration.py:435 (+2)"
+    ],
+    "operations": [
+      "GET /reminders/scheduler-status (reminder_scheduler_status)",
+      "POST /projects/{project_id}/reminders/run (run_reminders)",
+      "PUT /projects/{project_id}/reminder-rules (upsert_reminder_rule)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:415",
+      "backend/tests/test_role_templates.py:30 (+3)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "project.delete",
+    "group": "project",
+    "label": "Delete a project",
+    "description": "Permanently delete a project and everything recorded against it.",
+    "scope": "project-record",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "office_director",
+      "org_admin"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/projects.py:318 (+3)",
+      "backend/app/schemas/project.py:174"
+    ],
+    "operations": [
+      "DELETE /projects/{project_id} (delete_project)",
+      "GET /projects/{project_id}/deletion-impact (project_deletion_impact)",
+      "api.projects._project_out"
+    ],
+    "frontend": [
+      "frontend/src/features/projects/components/DeleteProjectDialog.tsx:15",
+      "frontend/src/features/projects/pages/ProjectsPage.tsx:308",
+      "frontend/src/features/projects/services/projects.service.ts:32",
+      "frontend/src/types/project.ts:28"
+    ],
+    "backend_tests": [
+      "backend/tests/test_configurable_account_creation.py:111",
+      "backend/tests/test_db_integrity.py:118",
+      "backend/tests/test_milestone_authorization.py:272",
+      "backend/tests/test_permission_capabilities.py:12 (+1)",
+      "backend/tests/test_project_deletion_authorization.py:10 (+3)",
+      "backend/tests/test_qa_pass_2026_10_17.py:388",
+      "backend/tests/test_rbac_security_regression.py:326",
+      "backend/tests/test_role_templates.py:28 (+1)"
+    ],
+    "frontend_tests": [
+      "frontend/src/features/projects/components/DeleteProjectDialog.test.tsx:4"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "task.view",
+    "group": "tasks",
+    "label": "View tasks",
+    "description": "See the project task list.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "client_representative",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "office_staff",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/tasks.py:72 (+1)",
+      "backend/app/services/agents/registry.py:41",
+      "backend/app/services/ai_tools/registry.py:21 (+5)",
+      "backend/app/services/field_submission_authorization.py:107",
+      "backend/app/services/voice_analysis_authorization.py:31 (+1)"
+    ],
+    "operations": [
+      "GET /tasks (list_tasks)",
+      "GET /tasks/analytics/project/{project_id} (get_task_analytics)",
+      "GET /tasks/my-tasks (get_my_tasks)",
+      "GET /tasks/project/{project_id} (get_tasks_by_project)",
+      "api.tasks._get_task_or_403",
+      "services.agents.registry (module-level table)",
+      "services.ai_tools.registry (module-level table)",
+      "services.field_submission_authorization.can_view_field_submission",
+      "services.voice_analysis_authorization.authorized_voice_tasks",
+      "services.voice_analysis_authorization.can_create_voice_analysis"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:169 (+3)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:105 (+5)",
+      "frontend/src/components/shared/Topbar/Topbar.tsx:87",
+      "frontend/src/features/dashboard/DashboardSelectorPage.tsx:65",
+      "frontend/src/features/projects/pages/ProjectDetailPage.tsx:92 (+4)",
+      "frontend/src/utils/projectRoutes.ts:26 (+10)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_configurable_account_creation.py:205",
+      "backend/tests/test_organization_api.py:194 (+2)",
+      "backend/tests/test_permission_capabilities.py:400",
+      "backend/tests/test_platform_view_all_projects.py:180",
+      "backend/tests/test_qa_pass_2026_10_17.py:366",
+      "backend/tests/test_rbac_closure.py:78 (+1)",
+      "backend/tests/test_rbac_customization.py:301",
+      "backend/tests/test_rbac_redesign.py:311",
+      "backend/tests/test_rbac_security_regression.py:202 (+2)",
+      "backend/tests/test_role_templates.py:33 (+16)"
+    ],
+    "frontend_tests": [
+      "frontend/src/app/router/PermissionGuard.test.tsx:40 (+1)",
+      "frontend/src/app/store/permission.store.test.ts:20 (+12)",
+      "frontend/src/components/shared/Sidebar/Sidebar.test.tsx:48",
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:21 (+5)",
+      "frontend/src/features/agents/pages/AgentsPage.test.tsx:83",
+      "frontend/src/features/dashboard/DashboardSelectorPage.test.tsx:34 (+2)",
+      "frontend/src/features/tasks/pages/TaskDetailPage.test.tsx:38",
+      "frontend/src/features/tasks/pages/TasksPage.test.tsx:27",
+      "frontend/src/utils/projectRoutes.test.ts:23 (+9)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "task.create",
+    "group": "tasks",
+    "label": "Create tasks",
+    "description": "Add new tasks to a project.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/ai_intelligence.py:202 (+1)",
+      "backend/app/api/ifc.py:681 (+1)",
+      "backend/app/api/tasks.py:160 (+2)",
+      "backend/app/services/ai_tools/registry.py:152",
+      "backend/app/services/authorization.py:100",
+      "backend/app/services/voice_action_service.py:194 (+1)",
+      "backend/app/services/voice_capabilities.py:122"
+    ],
+    "operations": [
+      "POST /projects/{project_id}/ai-intelligence/insights/{insight_id}/create-task (insight_to_task)",
+      "POST /tasks (create_task)",
+      "api.ifc._create_task_from_suggestion",
+      "api.tasks._is_project_manager",
+      "services.ai_tools.registry (module-level table)",
+      "services.authorization.effective_permissions",
+      "services.voice_action_service._execute_one",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/ai-intelligence/pages/AIIntelligencePage.tsx:62 (+1)",
+      "frontend/src/features/tasks/pages/TasksPage.tsx:131"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:144 (+14)",
+      "backend/tests/test_permission_capabilities.py:5 (+10)",
+      "backend/tests/test_rbac_customization.py:265",
+      "backend/tests/test_rbac_redesign.py:402 (+1)",
+      "backend/tests/test_rbac_security_regression.py:339",
+      "backend/tests/test_role_templates.py:32 (+3)",
+      "backend/tests/test_voice_human_authority.py:179",
+      "backend/tests/test_work_scope_and_routing.py:183"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "task.edit",
+    "group": "tasks",
+    "label": "Edit tasks",
+    "description": "Change task details and assignment.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/documents.py:185 (+1)",
+      "backend/app/api/photo_archive.py:75",
+      "backend/app/api/tasks.py:157 (+4)",
+      "backend/app/services/authorization.py:100",
+      "backend/app/services/field_submission_authorization.py:50",
+      "backend/app/services/task_progress_service.py:122 (+1)",
+      "backend/app/services/voice_analysis_authorization.py:46",
+      "backend/app/services/voice_capabilities.py:82 (+5)"
+    ],
+    "operations": [
+      "DELETE /documents/{document_id} (delete_document)",
+      "DELETE /tasks/{task_id} (delete_task)",
+      "POST /documents/upload (upload_document)",
+      "api.photo_archive._scope_archive",
+      "api.tasks._is_project_manager",
+      "services.authorization.effective_permissions",
+      "services.field_submission_authorization.can_submit_field_evidence",
+      "services.task_progress_service._is_project_manager",
+      "services.voice_analysis_authorization.authorized_voice_tasks",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/tasks/pages/TaskDetailPage.tsx:31 (+2)",
+      "frontend/src/features/tasks/pages/TasksPage.tsx:128 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:153 (+1)",
+      "backend/tests/test_rbac_security_regression.py:339",
+      "backend/tests/test_role_templates.py:32 (+3)",
+      "backend/tests/test_voice_capabilities.py:85 (+1)",
+      "backend/tests/test_work_scope_and_routing.py:183"
+    ],
+    "frontend_tests": [
+      "frontend/src/features/tasks/pages/TaskDetailPage.test.tsx:38",
+      "frontend/src/features/tasks/pages/TasksPage.test.tsx:27"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "task.update_progress",
+    "group": "tasks",
+    "label": "Update task progress",
+    "description": "Record progress and submit work for review.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/ai/action_rules.py:12 (+2)",
+      "backend/app/api/tasks.py:170 (+5)",
+      "backend/app/services/ai_tools/registry.py:160",
+      "backend/app/services/messaging_authorization.py:99",
+      "backend/app/services/task_assignment.py:12 (+1)",
+      "backend/app/services/task_progress_service.py:32",
+      "backend/app/services/voice_capabilities.py:129 (+2)"
+    ],
+    "operations": [
+      "PUT /tasks/{task_id} (update_task)",
+      "PUT /tasks/{task_id}/progress (update_task_progress)",
+      "PUT /tasks/{task_id}/submit-review (submit_task_for_review)",
+      "ai.action_rules (module-level table)",
+      "api.tasks._require_task_work",
+      "services.ai_tools.registry (module-level table)",
+      "services.messaging_authorization.resolve_group_recipient_ids",
+      "services.task_assignment (module-level table)",
+      "services.task_assignment.assignee_refusal",
+      "services.task_progress_service.update_task_progress",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/tasks/pages/TaskDetailPage.tsx:68"
+    ],
+    "backend_tests": [
+      "backend/tests/test_ai_voice.py:274",
+      "backend/tests/test_authorization.py:148",
+      "backend/tests/test_configurable_account_creation.py:205",
+      "backend/tests/test_permission_capabilities.py:180 (+2)",
+      "backend/tests/test_rbac_closure.py:187",
+      "backend/tests/test_role_templates.py:33 (+13)"
+    ],
+    "frontend_tests": [
+      "frontend/src/features/tasks/pages/TaskDetailPage.test.tsx:38"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "task.view_all",
+    "group": "tasks",
+    "label": "See every task",
+    "description": "See the project's whole task list, not only your own work.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "client_representative",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/collaboration.py:315 (+1)",
+      "backend/app/api/dashboard.py:201 (+2)",
+      "backend/app/api/notifications.py:157 (+1)",
+      "backend/app/api/projects.py:914",
+      "backend/app/api/site_reports.py:198",
+      "backend/app/services/work_scope.py:54"
+    ],
+    "operations": [
+      "DELETE /projects/{project_id}/members/{user_id} (remove_project_member)",
+      "GET /dashboard/projects/{project_id} (get_project_dashboard)",
+      "GET /dashboard/stats (get_dashboard_stats)",
+      "POST /site-visits (create_site_visit)",
+      "api.notifications._mark_all_read",
+      "services.work_scope.sees_all_tasks"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:169 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:148 (+1)",
+      "frontend/src/features/collaboration/pages/CollaborationPage.tsx:210",
+      "frontend/src/features/dashboard/DashboardSelectorPage.tsx:56 (+1)",
+      "frontend/src/features/site-reports/pages/SiteReportsPage.tsx:63 (+1)",
+      "frontend/src/features/tasks/pages/TaskDetailPage.tsx:119",
+      "frontend/src/features/tasks/pages/TasksPage.tsx:292",
+      "frontend/src/utils/projectRoutes.ts:26 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:152 (+1)",
+      "backend/tests/test_rbac_closure.py:78 (+1)",
+      "backend/tests/test_rbac_customization.py:224 (+4)",
+      "backend/tests/test_role_templates.py:33 (+5)"
+    ],
+    "frontend_tests": [
+      "frontend/src/app/router/PermissionGuard.test.tsx:36 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:21 (+2)",
+      "frontend/src/features/dashboard/DashboardSelectorPage.test.tsx:5 (+2)",
+      "frontend/src/utils/projectRoutes.test.ts:23 (+3)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "task.review",
+    "group": "tasks",
+    "label": "Review submitted work",
+    "description": "Approve, reject or request rework on submitted task work.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "bim_engineer",
+      "contractor_representative",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/attachments.py:68 (+1)",
+      "backend/app/api/consultant_reviews.py:38",
+      "backend/app/api/permissions.py:173 (+1)",
+      "backend/app/api/photo_archive.py:74",
+      "backend/app/api/tasks.py:183 (+3)",
+      "backend/app/services/consultant_approval_service.py:9 (+3)",
+      "backend/app/services/field_submission_authorization.py:70",
+      "backend/app/services/messaging_authorization.py:124",
+      "backend/app/services/task_assignment.py:53 (+1)",
+      "backend/app/services/voice_analysis_authorization.py:45",
+      "backend/app/services/voice_capabilities.py:307",
+      "backend/app/services/work_scope.py:127 (+1)"
+    ],
+    "operations": [
+      "DELETE /attachments/{attachment_id} (delete_attachment)",
+      "api.attachments._entity_or_404",
+      "api.consultant_reviews._membership_or_403",
+      "api.permissions._project_reviewer_ids",
+      "api.photo_archive._scope_archive",
+      "api.tasks._can_review_task",
+      "api.tasks._is_consultant",
+      "services.consultant_approval_service (module-level table)",
+      "services.consultant_approval_service._active_member",
+      "services.consultant_approval_service.can_consultant_review_task",
+      "services.field_submission_authorization.can_review_field_submission",
+      "services.messaging_authorization.resolve_group_recipient_ids",
+      "services.task_assignment.reviewer_refusal",
+      "services.voice_analysis_authorization.authorized_voice_tasks",
+      "services.voice_capabilities (module-level table)",
+      "services.work_scope.can_see_task",
+      "services.work_scope.reviewable_task_ids"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:226 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:161",
+      "frontend/src/features/dashboard/DashboardSelectorPage.tsx:64",
+      "frontend/src/features/projects/pages/ProjectTeamPage.tsx:151",
+      "frontend/src/features/tasks/pages/TaskDetailPage.tsx:69 (+1)",
+      "frontend/src/features/tasks/pages/TasksPage.tsx:292",
+      "frontend/src/utils/projectRoutes.ts:53 (+2)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_configurable_account_creation.py:140 (+1)",
+      "backend/tests/test_rbac_closure.py:12",
+      "backend/tests/test_rbac_customization.py:256",
+      "backend/tests/test_rbac_schedule_and_ai_insights.py:222",
+      "backend/tests/test_rbac_security_regression.py:317 (+3)",
+      "backend/tests/test_role_templates.py:32 (+11)",
+      "backend/tests/test_work_scope_and_routing.py:181 (+4)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:21",
+      "frontend/src/features/dashboard/DashboardSelectorPage.test.tsx:34",
+      "frontend/src/utils/projectRoutes.test.ts:25 (+3)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "schedule.view",
+    "group": "schedule",
+    "label": "View the schedule",
+    "description": "Open the Gantt, critical path and delay analysis.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "client_representative",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/scheduling.py:26 (+3)",
+      "backend/app/services/agents/registry.py:86"
+    ],
+    "operations": [
+      "GET /{project_id}/critical-path (calculate_critical_path)",
+      "GET /{project_id}/delay-analysis (get_delay_analysis)",
+      "GET /{project_id}/gantt (get_gantt_data)",
+      "services.agents.registry (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:207 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:160 (+1)",
+      "frontend/src/features/milestones/pages/MilestonesPage.tsx:28",
+      "frontend/src/features/projects/pages/ProjectDetailPage.tsx:102 (+1)",
+      "frontend/src/utils/projectRoutes.ts:44 (+2)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_milestone_authorization.py:7 (+2)",
+      "backend/tests/test_permission_capabilities.py:402",
+      "backend/tests/test_rbac_schedule_and_ai_insights.py:3 (+7)",
+      "backend/tests/test_role_templates.py:31 (+5)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:21 (+1)",
+      "frontend/src/utils/projectRoutes.test.ts:24 (+1)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "schedule.edit",
+    "group": "schedule",
+    "label": "Change the schedule",
+    "description": "Shift planned dates and cascade the effect downstream.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/ifc.py:701 (+1)",
+      "backend/app/api/milestones.py:111 (+2)",
+      "backend/app/api/scheduling.py:203 (+1)",
+      "backend/app/api/tasks.py:1621 (+3)",
+      "backend/app/core/deps.py:273",
+      "backend/app/services/authorization.py:100"
+    ],
+    "operations": [
+      "DELETE /milestones/{milestone_id} (delete_milestone)",
+      "DELETE /tasks/{task_id}/dependencies/{dependency_id} (delete_task_dependency)",
+      "POST /milestones (create_milestone)",
+      "POST /tasks/{task_id}/dependencies (create_task_dependency)",
+      "POST /{project_id}/shift (shift_task_schedule)",
+      "PUT /milestones/{milestone_id} (update_milestone)",
+      "api.ifc._create_milestone_from_suggestion",
+      "services.authorization.effective_permissions"
+    ],
+    "frontend": [
+      "frontend/src/features/milestones/pages/MilestonesPage.tsx:32",
+      "frontend/src/features/tasks/pages/TaskDetailPage.tsx:103 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:144 (+10)",
+      "backend/tests/test_authorization_migrated_endpoints.py:135",
+      "backend/tests/test_milestone_authorization.py:6 (+6)",
+      "backend/tests/test_permission_capabilities.py:196 (+1)",
+      "backend/tests/test_platform_view_all_projects.py:131",
+      "backend/tests/test_rbac_redesign.py:408",
+      "backend/tests/test_rbac_schedule_and_ai_insights.py:141",
+      "backend/tests/test_rbac_security_regression.py:339",
+      "backend/tests/test_role_templates.py:30 (+3)",
+      "backend/tests/test_work_scope_and_routing.py:183"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "site_visit.schedule",
+    "group": "field",
+    "label": "Schedule site visits",
+    "description": "Book a site visit and notify its participants.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/collaboration.py:312 (+2)"
+    ],
+    "operations": [
+      "PATCH /site-visits/{visit_id} (update_site_visit)",
+      "POST /site-visits (create_site_visit)"
+    ],
+    "frontend": [
+      "frontend/src/features/collaboration/pages/CollaborationPage.tsx:206"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:404",
+      "backend/tests/test_permission_capabilities.py:477",
+      "backend/tests/test_role_templates.py:31 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "site_report.submit",
+    "group": "field",
+    "label": "Submit site reports",
+    "description": "File a daily or visit site report.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/ai/action_rules.py:17",
+      "backend/app/api/field_assistant.py:55",
+      "backend/app/api/site_reports.py:186 (+2)",
+      "backend/app/services/agents/registry.py:27",
+      "backend/app/services/ai_tools/registry.py:64 (+1)",
+      "backend/app/services/voice_capabilities.py:265"
+    ],
+    "operations": [
+      "POST /reports/submit (submit_site_report)",
+      "POST /site-reports/submit (submit_site_report)",
+      "ai.action_rules (module-level table)",
+      "api.field_assistant._validate_proposal",
+      "services.agents.registry (module-level table)",
+      "services.ai_tools.registry (module-level table)",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/site-reports/pages/SiteReportsPage.tsx:135"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization_migrated_endpoints.py:250 (+2)",
+      "backend/tests/test_configurable_account_creation.py:205",
+      "backend/tests/test_organization_api.py:151 (+1)",
+      "backend/tests/test_rbac_redesign.py:346 (+1)",
+      "backend/tests/test_rbac_security_regression.py:214",
+      "backend/tests/test_role_templates.py:83 (+10)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "site_report.verify",
+    "group": "field",
+    "label": "Verify site reports",
+    "description": "Approve or reject a submitted site report.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "project_manager"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/site_reports.py:304 (+2)"
+    ],
+    "operations": [
+      "DELETE /site-reports/{report_id} (delete_site_report)",
+      "PUT /reports/{report_id}/review (review_site_report)",
+      "PUT /site-reports/{report_id}/review (review_site_report)"
+    ],
+    "frontend": [
+      "frontend/src/features/site-reports/pages/SiteReportsPage.tsx:65 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_rbac_security_regression.py:318",
+      "backend/tests/test_role_templates.py:83",
+      "backend/tests/test_site_report_verification.py:210",
+      "backend/tests/test_work_scope_and_routing.py:182"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "issue.create",
+    "group": "field",
+    "label": "Raise issues",
+    "description": "Open a project issue.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/ai/action_rules.py:16",
+      "backend/app/api/field_assistant.py:46 (+1)",
+      "backend/app/api/ifc.py:886 (+1)",
+      "backend/app/api/issues.py:140 (+1)",
+      "backend/app/services/ai_tools/registry.py:167 (+1)",
+      "backend/app/services/voice_capabilities.py:227"
+    ],
+    "operations": [
+      "POST /issues (create_issue)",
+      "POST /projects/{project_id}/ifc/findings/{finding_id}/create-issue (finding_to_issue)",
+      "ai.action_rules (module-level table)",
+      "api.field_assistant._validate_proposal",
+      "services.ai_tools.registry (module-level table)",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/ifc/pages/IFCWorkspacePage.tsx:66 (+1)",
+      "frontend/src/features/issues/pages/IssuesPage.tsx:36",
+      "frontend/src/services/api.ts:953"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:433 (+1)",
+      "backend/tests/test_configurable_account_creation.py:219 (+1)",
+      "backend/tests/test_ifc_authorization.py:518 (+1)",
+      "backend/tests/test_organization_api.py:271",
+      "backend/tests/test_rbac_customization.py:200 (+9)",
+      "backend/tests/test_rbac_redesign.py:408",
+      "backend/tests/test_rbac_security_regression.py:204",
+      "backend/tests/test_role_templates.py:23 (+14)"
+    ],
+    "frontend_tests": [
+      "frontend/src/features/admin/pages/AccessControlPage.test.tsx:57 (+6)",
+      "frontend/src/features/ifc/components/FindingsTab.test.tsx:295"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "issue.resolve",
+    "group": "field",
+    "label": "Resolve issues",
+    "description": "Close or resolve a project issue.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/issues.py:165 (+8)",
+      "backend/app/services/authorization.py:101",
+      "backend/app/services/voice_capabilities.py:237 (+1)"
+    ],
+    "operations": [
+      "DELETE /issues/{issue_id} (delete_issue)",
+      "POST /issues (create_issue)",
+      "PUT /issues/{issue_id} (update_issue)",
+      "services.authorization.effective_permissions",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/issues/pages/IssuesPage.tsx:33"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:223 (+2)",
+      "backend/tests/test_permission_capabilities.py:214",
+      "backend/tests/test_rbac_security_regression.py:339",
+      "backend/tests/test_role_templates.py:23 (+3)",
+      "backend/tests/test_work_scope_and_routing.py:182 (+5)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "owner_request.create",
+    "group": "requests",
+    "label": "Submit client requests",
+    "description": "Raise a request on behalf of the client.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "client_representative",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/collaboration.py:144"
+    ],
+    "operations": [
+      "POST /owner-requests (create_owner_request)"
+    ],
+    "frontend": [
+      "frontend/src/features/collaboration/pages/CollaborationPage.tsx:207"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:152",
+      "backend/tests/test_permission_capabilities.py:490",
+      "backend/tests/test_rbac_redesign.py:310",
+      "backend/tests/test_role_templates.py:26 (+4)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "owner_request.review",
+    "group": "requests",
+    "label": "Answer client requests",
+    "description": "Respond to, accept or reject a client request.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/collaboration.py:195 (+1)"
+    ],
+    "operations": [
+      "PATCH /owner-requests/{request_id} (update_owner_request)"
+    ],
+    "frontend": [
+      "frontend/src/features/collaboration/pages/CollaborationPage.tsx:208"
+    ],
+    "backend_tests": [
+      "backend/tests/test_role_templates.py:26 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "design_change.propose",
+    "group": "requests",
+    "label": "Propose design changes",
+    "description": "Turn an accepted request into a proposed design change.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/collaboration.py:239 (+1)",
+      "backend/app/api/design_changes.py:152",
+      "backend/app/api/field_assistant.py:52",
+      "backend/app/services/agents/registry.py:71",
+      "backend/app/services/ai_tools/registry.py:130",
+      "backend/app/services/voice_capabilities.py:272"
+    ],
+    "operations": [
+      "POST /design-changes (create_design_change)",
+      "POST /owner-requests/{request_id}/convert-to-design-change (convert_owner_request)",
+      "api.field_assistant._validate_proposal",
+      "services.agents.registry (module-level table)",
+      "services.ai_tools.registry (module-level table)",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/design-changes/pages/DesignChangesPage.tsx:76"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:478",
+      "backend/tests/test_permission_capabilities.py:474",
+      "backend/tests/test_role_templates.py:19 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "cost_validation.review",
+    "group": "requests",
+    "label": "Review cost validations",
+    "description": "Approve or reject a submitted cost validation.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/cost_validations.py:110 (+1)",
+      "backend/app/api/projects.py:231 (+2)"
+    ],
+    "operations": [
+      "GET /projects (list_projects)",
+      "GET /projects/summary (get_projects_summary)",
+      "GET /projects/{project_id} (get_project_by_id)",
+      "POST /cost-validations/{validation_id}/review (review_cost_validation)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_get_project_by_id.py:10 (+3)",
+      "backend/tests/test_no_undefined_names.py:7",
+      "backend/tests/test_permission_capabilities.py:547 (+1)",
+      "backend/tests/test_rbac_schedule_and_ai_insights.py:223",
+      "backend/tests/test_rbac_security_regression.py:317",
+      "backend/tests/test_role_templates.py:19 (+13)",
+      "backend/tests/test_work_scope_and_routing.py:181"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "design_change.approve",
+    "group": "requests",
+    "label": "Approve design changes",
+    "description": "Give a design change its official approval.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "bim_engineer",
+      "contractor_representative",
+      "engineer",
+      "external_reviewer",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/design_changes.py:283 (+3)"
+    ],
+    "operations": [
+      "PUT /design-changes/{change_id}/approve (approve_design_change)",
+      "PUT /design-changes/{change_id}/reject (reject_design_change)"
+    ],
+    "frontend": [
+      "frontend/src/features/admin/pages/AccessControlPage.tsx:36",
+      "frontend/src/features/design-changes/pages/DesignChangesPage.tsx:77"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization_migrated_endpoints.py:250 (+3)",
+      "backend/tests/test_configurable_account_creation.py:167",
+      "backend/tests/test_consultant_engineer_dead_role_fix.py:16",
+      "backend/tests/test_rbac_schedule_and_ai_insights.py:223",
+      "backend/tests/test_rbac_security_regression.py:317 (+3)",
+      "backend/tests/test_role_templates.py:90 (+6)",
+      "backend/tests/test_work_scope_and_routing.py:181 (+4)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ifc.view",
+    "group": "models",
+    "label": "View IFC models",
+    "description": "Open models, hierarchy and properties.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "client_representative",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/agents/registry.py:56",
+      "backend/app/services/ai_tools/registry.py:104 (+1)",
+      "backend/app/services/ifc_policy.py:6 (+1)"
+    ],
+    "operations": [
+      "GET /projects/{project_id}/ifc/comparisons (list_comparisons) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/comparisons/{comparison_id} (comparison_detail) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/elements/{element_id}/project-data (element_project_data) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/findings (list_findings) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/findings/{finding_id} (get_finding) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/links (list_links) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/models (list_models) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/models/{model_id} (get_model) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/models/{model_id}/versions (list_versions) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/processing-jobs (processing_jobs) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/spatial/{node_id}/details (spatial_details) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/spatial/{node_id}/project-data (spatial_project_data) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/suggestions (list_suggestions) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/upload-constraints (upload_constraints) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id} (get_version) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/elements (elements) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/elements/{element_id} (element_detail) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/geometry/status (geometry_status) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/hierarchy (hierarchy) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/overview (version_overview) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/project-data (version_project_data) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/spaces (spaces) [IFC verb VIEW]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/storeys (storeys) [IFC verb VIEW]",
+      "api.ai_intelligence._require [IFC verb VIEW]",
+      "api.knowledge (module-level table) [IFC verb VIEW]",
+      "api.knowledge._answer_ifc [IFC verb VIEW]",
+      "api.knowledge._availability [IFC verb VIEW]",
+      "services.agents.registry (module-level table)",
+      "services.ai_tools.registry (module-level table)",
+      "services.ifc_policy (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:211",
+      "frontend/src/components/shared/Sidebar/navigation.ts:187",
+      "frontend/src/features/ifc/pages/IFCWorkspacePage.tsx:72",
+      "frontend/src/utils/projectRoutes.ts:46"
+    ],
+    "backend_tests": [
+      "backend/tests/test_ifc_authorization.py:100 (+8)",
+      "backend/tests/test_mcp.py:255 (+1)",
+      "backend/tests/test_permission_capabilities.py:410",
+      "backend/tests/test_qa_pass_2026_10_17.py:366",
+      "backend/tests/test_role_templates.py:23 (+15)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:22 (+2)",
+      "frontend/src/features/ifc/components/IFCRevisionActions.test.tsx:225",
+      "frontend/src/utils/projectRoutes.test.ts:24"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ifc.upload",
+    "group": "models",
+    "label": "Upload IFC models",
+    "description": "Add a new model revision.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/ifc_policy.py:6 (+1)"
+    ],
+    "operations": [
+      "POST /projects/{project_id}/files (ingest_file) [IFC verb UPLOAD]",
+      "POST /projects/{project_id}/ifc/models (create_model) [IFC verb UPLOAD]",
+      "POST /projects/{project_id}/ifc/models/{model_id}/versions (upload_version) [IFC verb UPLOAD]",
+      "POST /projects/{project_id}/ifc/versions/{version_id}/geometry/generate (generate_version_geometry) [IFC verb UPLOAD]",
+      "services.ifc_policy (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/ifc/pages/IFCWorkspacePage.tsx:62"
+    ],
+    "backend_tests": [
+      "backend/tests/test_ifc_authorization.py:97 (+2)",
+      "backend/tests/test_role_templates.py:23 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ifc.manage_version",
+    "group": "models",
+    "label": "Manage model versions",
+    "description": "Activate, supersede or remove a model revision.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/ifc_policy.py:6 (+2)"
+    ],
+    "operations": [
+      "DELETE /projects/{project_id}/ifc/models/{model_id} (archive_model) [IFC verb MANAGE_VERSION]",
+      "PATCH /projects/{project_id}/ifc/models/{model_id} (update_model) [IFC verb MANAGE_VERSION]",
+      "PATCH /projects/{project_id}/ifc/versions/{version_id} (patch_version) [IFC verb MANAGE_VERSION]",
+      "POST /projects/{project_id}/ifc/versions/{version_id}/activate (activate_version) [IFC verb MANAGE_VERSION]",
+      "POST /projects/{project_id}/ifc/versions/{version_id}/baseline (baseline_version) [IFC verb MANAGE_VERSION]",
+      "POST /projects/{project_id}/ifc/versions/{version_id}/retry (retry_version) [IFC verb MANAGE_VERSION]",
+      "services.ifc_policy (module-level table)",
+      "services.ifc_policy.can_ifc"
+    ],
+    "frontend": [
+      "frontend/src/features/ifc/pages/IFCWorkspacePage.tsx:63 (+1)",
+      "frontend/src/services/api.ts:899"
+    ],
+    "backend_tests": [
+      "backend/tests/test_ifc_authorization.py:99 (+5)",
+      "backend/tests/test_role_templates.py:22 (+4)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "document.upload",
+    "group": "models",
+    "label": "Upload documents",
+    "description": "Add drawings and documents.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/__init__.py:90",
+      "backend/app/api/documents.py:169 (+1)",
+      "backend/app/api/ingestion.py:9 (+3)",
+      "backend/app/api/rag.py:141 (+2)"
+    ],
+    "operations": [
+      "POST /documents/upload (upload_document)",
+      "POST /projects/{project_id}/files (ingest_file)",
+      "POST /projects/{project_id}/files/{file_id}/retry (retry_file)",
+      "api.ingestion (module-level table)",
+      "api.rag._assert_may_reindex",
+      "api.rag.index_ingested_file"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:28",
+      "frontend/src/features/documents/pages/DocumentsPage.tsx:42 (+1)",
+      "frontend/src/features/ingestion/components/ProjectFilesPanel.tsx:56"
+    ],
+    "backend_tests": [
+      "backend/tests/test_organization_api.py:274 (+2)",
+      "backend/tests/test_rag_maintenance.py:635",
+      "backend/tests/test_rbac_security_regression.py:203 (+4)",
+      "backend/tests/test_role_templates.py:20 (+13)"
+    ],
+    "frontend_tests": [
+      "frontend/src/features/ingestion/components/ProjectFilesPanel.test.tsx:9"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ai.view_insights",
+    "group": "ai",
+    "label": "View AI insights",
+    "description": "Read AI findings and suggestions.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "client_representative",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/ai_actions.py:29 (+1)",
+      "backend/app/api/ai_intelligence.py:43",
+      "backend/app/services/ai_tools/read_tools.py:393",
+      "backend/app/services/ai_tools/registry.py:139"
+    ],
+    "operations": [
+      "api.ai_actions._can_view_project_actions",
+      "api.ai_intelligence._require",
+      "services.ai_tools.read_tools.get_findings",
+      "services.ai_tools.registry (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:214",
+      "frontend/src/components/shared/Sidebar/navigation.ts:194",
+      "frontend/src/utils/projectRoutes.ts:47"
+    ],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:408",
+      "backend/tests/test_rbac_schedule_and_ai_insights.py:9 (+7)",
+      "backend/tests/test_role_templates.py:18 (+15)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:22 (+1)",
+      "frontend/src/utils/projectRoutes.test.ts:24"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ai.review_insight",
+    "group": "ai",
+    "label": "Act on AI insights",
+    "description": "Acknowledge, dismiss or resolve an AI insight.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/ai_intelligence.py:167",
+      "backend/app/services/agents/finding_routing.py:48",
+      "backend/app/services/ai_action_history_service.py:197 (+2)"
+    ],
+    "operations": [
+      "PATCH /projects/{project_id}/ai-intelligence/insights/{insight_id} (review_insight)",
+      "services.agents.finding_routing.resolve",
+      "services.ai_action_history_service.revert_action"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_authorization_migrated_endpoints.py:250 (+1)",
+      "backend/tests/test_rbac_schedule_and_ai_insights.py:13",
+      "backend/tests/test_rbac_security_regression.py:319 (+1)",
+      "backend/tests/test_role_templates.py:18 (+14)",
+      "backend/tests/test_work_scope_and_routing.py:526"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "ai.promote_insight",
+    "group": "ai",
+    "label": "Turn an AI insight into work",
+    "description": "Create a formal issue or task from an AI insight.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/ai_intelligence.py:185"
+    ],
+    "operations": [
+      "POST /projects/{project_id}/ai-intelligence/insights/{insight_id}/create-issue (insight_to_issue)"
+    ],
+    "frontend": [
+      "frontend/src/features/ai-intelligence/pages/AIIntelligencePage.tsx:61 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization_migrated_endpoints.py:281",
+      "backend/tests/test_rbac_schedule_and_ai_insights.py:13",
+      "backend/tests/test_rbac_security_regression.py:319",
+      "backend/tests/test_role_templates.py:18 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "agents.view",
+    "group": "ai",
+    "label": "Use the Agents page",
+    "description": "Open the project Agents page, run the agents and read their run history.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": false,
+    "default_roles": [
+      "org_admin"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/agents.py:30 (+1)"
+    ],
+    "operations": [
+      "api.agents._require_agents_page"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:217 (+2)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:195",
+      "frontend/src/utils/projectRoutes.ts:48 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_db_integrity.py:139",
+      "backend/tests/test_permission_capabilities.py:409",
+      "backend/tests/test_qa_pass_2026_10_17.py:244 (+2)",
+      "backend/tests/test_rbac_security_regression.py:337 (+1)",
+      "backend/tests/test_role_templates.py:17"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:102",
+      "frontend/src/features/agents/pages/AgentsPage.test.tsx:344 (+1)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "org.manage_roles",
+    "group": "platform",
+    "label": "Manage roles",
+    "description": "Create, rename and delete roles, and choose what each one may do.",
+    "scope": "platform",
+    "admin_locked": true,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; deny refused on the office administrator",
+    "backend_enforcement": [
+      "backend/app/api/organization.py:49"
+    ],
+    "operations": [
+      "DELETE /organization/roles/{role_id} (delete_role)",
+      "PATCH /organization/roles/{role_id} (update_role)",
+      "POST /organization/roles (create_role)",
+      "PUT /organization/roles/{role_id}/permissions (set_role_permissions)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/PermissionGuard.tsx:8",
+      "frontend/src/app/router/index.tsx:145",
+      "frontend/src/components/shared/Sidebar/navigation.ts:124",
+      "frontend/src/features/admin/pages/OfficeRolesPage.tsx:49"
+    ],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:486",
+      "backend/tests/test_rbac_redesign.py:375 (+1)",
+      "backend/tests/test_rbac_security_regression.py:344",
+      "backend/tests/test_role_templates.py:25 (+2)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:20"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "org.manage_disciplines",
+    "group": "platform",
+    "label": "Manage disciplines",
+    "description": "Maintain the office's list of engineering disciplines.",
+    "scope": "platform",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/organization.py:50"
+    ],
+    "operations": [
+      "PATCH /organization/disciplines/{discipline_id} (update_discipline)",
+      "POST /organization/disciplines (create_discipline)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:145"
+    ],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:484",
+      "backend/tests/test_rbac_security_regression.py:344",
+      "backend/tests/test_role_templates.py:25 (+2)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "org.manage_settings",
+    "group": "platform",
+    "label": "Manage office settings",
+    "description": "Change office details, branding and report templates.",
+    "scope": "platform",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/company.py:5 (+2)",
+      "backend/app/core/deps.py:94"
+    ],
+    "operations": [
+      "GET /company/settings (get_company_settings)",
+      "PUT /company/settings (update_company_settings)",
+      "api.company (module-level table)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:414",
+      "backend/tests/test_rbac_security_regression.py:344",
+      "backend/tests/test_role_templates.py:25 (+2)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "project.manage_parties",
+    "group": "project",
+    "label": "Manage project parties",
+    "description": "Record the client, contractors and other external parties on a project.",
+    "scope": "project-record",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/organization.py:552 (+2)"
+    ],
+    "operations": [
+      "DELETE /projects/{project_id}/parties/{party_id} (delete_project_party)",
+      "PATCH /projects/{project_id}/parties/{party_id} (update_project_party)",
+      "POST /projects/{project_id}/parties (create_project_party)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:151 (+2)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:205",
+      "frontend/src/features/projects/pages/ProjectPartiesPage.tsx:46",
+      "frontend/src/utils/projectRoutes.ts:58 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:481",
+      "backend/tests/test_qa_pass_2026_10_17.py:365 (+1)",
+      "backend/tests/test_rbac_security_regression.py:320",
+      "backend/tests/test_role_templates.py:29 (+3)"
+    ],
+    "frontend_tests": [
+      "frontend/src/utils/projectRoutes.test.ts:26 (+4)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "project.invite_external",
+    "group": "project",
+    "label": "Give external people access",
+    "description": "Grant someone outside the office access to this project.",
+    "scope": "project-record",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/projects.py:744"
+    ],
+    "operations": [
+      "POST /projects/{project_id}/members (add_project_member)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_qa_pass_2026_10_17.py:389",
+      "backend/tests/test_rbac_customization.py:343 (+2)",
+      "backend/tests/test_rbac_security_regression.py:321",
+      "backend/tests/test_role_templates.py:29 (+3)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "document.share_external",
+    "group": "models",
+    "label": "Share documents externally",
+    "description": "Make a document readable by an external party on this project.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "document_controller",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/api/documents.py:279 (+2)"
+    ],
+    "operations": [
+      "api.documents._shareable_document"
+    ],
+    "frontend": [
+      "frontend/src/features/documents/components/DocumentList.tsx:139",
+      "frontend/src/features/documents/components/DocumentPartySharing.tsx:16 (+1)"
+    ],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:328 (+1)",
+      "backend/tests/test_rbac_security_regression.py:321",
+      "backend/tests/test_role_templates.py:20 (+4)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "project.view_all_disciplines",
+    "group": "models",
+    "label": "See work in every discipline",
+    "description": "Read the project's documents, reports and issues without discipline narrowing.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/field_assistant.py:37",
+      "backend/app/services/document_access.py:15 (+4)",
+      "backend/app/services/voice_analysis_authorization.py:76",
+      "backend/app/services/work_scope.py:31 (+2)"
+    ],
+    "operations": [
+      "services.document_access (module-level table)",
+      "services.document_access.readable_documents_query",
+      "services.document_access.readable_ingested_files_query",
+      "services.voice_analysis_authorization.authorized_site_reports",
+      "services.work_scope (module-level table)",
+      "services.work_scope.scoped_discipline_codes",
+      "services.work_scope.sees_all_disciplines"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_permission_capabilities.py:575 (+1)",
+      "backend/tests/test_role_templates.py:30 (+12)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "field_evidence.submit",
+    "group": "field",
+    "label": "Submit field evidence",
+    "description": "Record photos, notes and voice observations from site.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/models/field_submission.py:21",
+      "backend/app/schemas/field_submission.py:39",
+      "backend/app/services/field_submission_authorization.py:5 (+1)",
+      "backend/app/services/field_submission_policy.py:12 (+1)",
+      "backend/app/services/voice_capabilities.py:254"
+    ],
+    "operations": [
+      "models.field_submission (module-level table)",
+      "services.field_submission_authorization (module-level table)",
+      "services.field_submission_authorization.can_submit_field_evidence",
+      "services.field_submission_policy (module-level table)",
+      "services.field_submission_policy.evidence_submission_allowed",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_ai_voice.py:283",
+      "backend/tests/test_configurable_account_creation.py:139 (+1)",
+      "backend/tests/test_field_submission_policy.py:26",
+      "backend/tests/test_organization_api.py:151 (+3)",
+      "backend/tests/test_rbac_redesign.py:229 (+3)",
+      "backend/tests/test_rbac_security_regression.py:215 (+2)",
+      "backend/tests/test_role_templates.py:76 (+10)",
+      "backend/tests/test_voice_human_authority.py:151"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "field_evidence.verify",
+    "group": "field",
+    "label": "Verify field evidence",
+    "description": "Confirm or reject a submitted field evidence package.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": true,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor"
+    ],
+    "user_override": "grant/deny; grant refused for external participants",
+    "backend_enforcement": [
+      "backend/app/services/field_submission_authorization.py:6 (+2)",
+      "backend/app/services/field_submission_policy.py:12"
+    ],
+    "operations": [
+      "services.field_submission_authorization (module-level table)",
+      "services.field_submission_authorization.authorized_reviewer_ids",
+      "services.field_submission_authorization.can_review_field_submission",
+      "services.field_submission_policy (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:235",
+      "frontend/src/components/shared/Sidebar/navigation.ts:178",
+      "frontend/src/utils/projectRoutes.ts:56"
+    ],
+    "backend_tests": [
+      "backend/tests/test_configurable_account_creation.py:167",
+      "backend/tests/test_field_submission_policy.py:27 (+1)",
+      "backend/tests/test_rbac_security_regression.py:318",
+      "backend/tests/test_role_templates.py:76 (+10)",
+      "backend/tests/test_work_scope_and_routing.py:182"
+    ],
+    "frontend_tests": [
+      "frontend/src/utils/projectRoutes.test.ts:25 (+1)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ifc.compare",
+    "group": "models",
+    "label": "Compare model versions",
+    "description": "Open a comparison between two revisions of a model.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/ifc_policy.py:34"
+    ],
+    "operations": [
+      "POST /projects/{project_id}/ifc/comparisons (create_comparison) [IFC verb COMPARE]",
+      "POST /projects/{project_id}/ifc/comparisons/{comparison_id}/analyze-impact (analyze_comparison_impact) [IFC verb COMPARE]",
+      "services.ifc_policy (module-level table)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_ifc_authorization.py:234 (+3)",
+      "backend/tests/test_role_templates.py:21 (+14)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "ifc.review_finding",
+    "group": "models",
+    "label": "Review coordination findings",
+    "description": "Act on a clash or coordination finding.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/ifc_policy.py:35"
+    ],
+    "operations": [
+      "PATCH /projects/{project_id}/ai-intelligence/insights/{insight_id} (review_insight) [IFC verb REVIEW_FINDING]",
+      "PATCH /projects/{project_id}/ifc/findings/{finding_id} (review_finding) [IFC verb REVIEW_FINDING]",
+      "POST /projects/{project_id}/ai-intelligence/insights/{insight_id}/create-issue (insight_to_issue) [IFC verb REVIEW_FINDING]",
+      "POST /projects/{project_id}/ifc/findings/{finding_id}/create-issue (finding_to_issue) [IFC verb REVIEW_FINDING]",
+      "services.ifc_policy (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/ifc/pages/IFCWorkspacePage.tsx:64 (+1)",
+      "frontend/src/services/api.ts:953"
+    ],
+    "backend_tests": [
+      "backend/tests/test_ifc_authorization.py:420 (+2)",
+      "backend/tests/test_role_templates.py:22 (+14)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ifc.review_suggestion",
+    "group": "models",
+    "label": "Review model suggestions",
+    "description": "Accept or dismiss a suggestion raised against the model.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/ifc_policy.py:36"
+    ],
+    "operations": [
+      "PATCH /projects/{project_id}/ifc/impacts/{impact_id} (review_impact) [IFC verb REVIEW_SUGGESTION]",
+      "PATCH /projects/{project_id}/ifc/suggestions/{suggestion_id} (review_suggestion) [IFC verb REVIEW_SUGGESTION]",
+      "POST /projects/{project_id}/ai-intelligence/insights/{insight_id}/create-task (insight_to_task) [IFC verb REVIEW_SUGGESTION]",
+      "POST /projects/{project_id}/ai-intelligence/run (run_intelligence) [IFC verb REVIEW_SUGGESTION]",
+      "POST /projects/{project_id}/ifc/suggestions/bulk-review (bulk_review_suggestions) [IFC verb REVIEW_SUGGESTION]",
+      "services.ifc_policy (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/ifc/pages/IFCWorkspacePage.tsx:63"
+    ],
+    "backend_tests": [
+      "backend/tests/test_ifc_authorization.py:422",
+      "backend/tests/test_role_templates.py:22 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ifc.download",
+    "group": "models",
+    "label": "Download model files",
+    "description": "Download the original IFC file.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/ifc_policy.py:38"
+    ],
+    "operations": [
+      "GET /projects/{project_id}/files/{file_id}/download (download_file) [IFC verb DOWNLOAD]",
+      "GET /projects/{project_id}/ifc/versions/{version_id}/download (download_version) [IFC verb DOWNLOAD]",
+      "services.ifc_policy (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/ifc/pages/IFCWorkspacePage.tsx:71 (+1)",
+      "frontend/src/services/api.ts:911"
+    ],
+    "backend_tests": [
+      "backend/tests/test_ifc_authorization.py:416 (+2)",
+      "backend/tests/test_role_templates.py:21 (+14)"
+    ],
+    "frontend_tests": [],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "ifc.manage_link",
+    "group": "models",
+    "label": "Link model elements to work",
+    "description": "Connect a model element to a task, issue or document.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/ifc_policy.py:37"
+    ],
+    "operations": [
+      "DELETE /projects/{project_id}/ifc/links/{link_id} (delete_link) [IFC verb MANAGE_LINK]",
+      "POST /projects/{project_id}/ifc/links (create_link) [IFC verb MANAGE_LINK]",
+      "services.ifc_policy (module-level table)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_ifc_authorization.py:423",
+      "backend/tests/test_role_templates.py:21 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "document.view",
+    "group": "models",
+    "label": "Open project documents",
+    "description": "See the project's document library, scoped to what you may read.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "client_representative",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/__init__.py:90",
+      "backend/app/api/ingestion.py:10 (+5)",
+      "backend/app/api/rag.py:97 (+3)",
+      "backend/app/services/document_access.py:310 (+2)"
+    ],
+    "operations": [
+      "GET /projects/{project_id}/files (list_files)",
+      "GET /projects/{project_id}/files/upload-constraints (upload_constraints)",
+      "GET /projects/{project_id}/files/{file_id} (get_file)",
+      "GET /projects/{project_id}/files/{file_id}/download (download_file)",
+      "GET /rag/projects/{project_id}/reindex (project_reindex_status)",
+      "POST /projects/{project_id}/files/{file_id}/retry (retry_file)",
+      "api.ingestion (module-level table)",
+      "api.rag._assert_may_reindex",
+      "api.rag.index_ingested_file",
+      "services.document_access.assert_ingested_file_readable",
+      "services.document_access.readable_ingested_file_ids"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:194 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:107 (+1)",
+      "frontend/src/utils/projectRoutes.ts:40"
+    ],
+    "backend_tests": [
+      "backend/tests/test_db_integrity.py:94",
+      "backend/tests/test_file_download_authorization.py:281",
+      "backend/tests/test_permission_capabilities.py:404",
+      "backend/tests/test_qa_pass_2026_10_17.py:366",
+      "backend/tests/test_rag_maintenance.py:630",
+      "backend/tests/test_rag_unified_retrieval.py:570",
+      "backend/tests/test_role_templates.py:21 (+15)"
+    ],
+    "frontend_tests": [
+      "frontend/src/app/store/permission.store.test.ts:20",
+      "frontend/src/components/shared/Sidebar/Sidebar.test.tsx:48",
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:21 (+2)",
+      "frontend/src/utils/projectRoutes.test.ts:23 (+1)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "site_report.view",
+    "group": "field",
+    "label": "Open site reports",
+    "description": "See the project's site reports, scoped to what you may read.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "client_representative",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/site_reports.py:40",
+      "backend/app/services/authorization.py:369"
+    ],
+    "operations": [
+      "GET /reports (list_site_reports)",
+      "GET /reports/project/{project_id} (get_site_reports_by_project)",
+      "GET /reports/{report_id} (get_site_report_by_id)",
+      "GET /site-reports (list_site_reports)",
+      "GET /site-reports/project/{project_id} (get_site_reports_by_project)",
+      "GET /site-reports/{report_id} (get_site_report_by_id)",
+      "services.authorization.projects_with_permission"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:197 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:177",
+      "frontend/src/features/projects/pages/ProjectDetailPage.tsx:105",
+      "frontend/src/utils/projectRoutes.ts:41"
+    ],
+    "backend_tests": [
+      "backend/tests/test_db_integrity.py:94",
+      "backend/tests/test_permission_capabilities.py:405",
+      "backend/tests/test_rbac_customization.py:302",
+      "backend/tests/test_role_templates.py:31 (+15)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:22 (+1)",
+      "frontend/src/utils/projectRoutes.test.ts:23"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "issue.view",
+    "group": "field",
+    "label": "Open project issues",
+    "description": "See the project's issue register, scoped to what you may read.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "client_representative",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/issues.py:34"
+    ],
+    "operations": [
+      "GET /issues (list_issues)",
+      "GET /issues/project/{project_id} (get_issues_by_project)",
+      "GET /issues/{issue_id} (get_issue_by_id)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:200 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:169",
+      "frontend/src/features/projects/pages/ProjectDetailPage.tsx:93 (+1)",
+      "frontend/src/utils/projectRoutes.ts:42"
+    ],
+    "backend_tests": [
+      "backend/tests/test_db_integrity.py:95",
+      "backend/tests/test_permission_capabilities.py:406",
+      "backend/tests/test_rbac_customization.py:303 (+1)",
+      "backend/tests/test_role_templates.py:23 (+15)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/Sidebar.test.tsx:48",
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:22 (+1)",
+      "frontend/src/utils/projectRoutes.test.ts:23"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "design_change.view",
+    "group": "requests",
+    "label": "Open design changes",
+    "description": "See the project's design changes, scoped to what you may read.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "client_representative",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/design_changes.py:27"
+    ],
+    "operations": [
+      "GET /design-changes (list_design_changes)",
+      "GET /design-changes/project/{project_id} (get_design_changes_by_project)",
+      "GET /design-changes/{change_id} (get_design_change_by_id)"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:203 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:170",
+      "frontend/src/features/projects/pages/ProjectDetailPage.tsx:95",
+      "frontend/src/utils/projectRoutes.ts:43"
+    ],
+    "backend_tests": [
+      "backend/tests/test_db_integrity.py:95",
+      "backend/tests/test_permission_capabilities.py:407",
+      "backend/tests/test_rbac_customization.py:304",
+      "backend/tests/test_role_templates.py:20 (+15)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:22 (+1)",
+      "frontend/src/utils/projectRoutes.test.ts:24"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "client_portal.view",
+    "group": "requests",
+    "label": "Open the client portal",
+    "description": "See the executive project overview prepared for the client.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "client_representative",
+      "office_director",
+      "org_admin",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/projects.py:1063 (+1)",
+      "backend/app/services/authorization.py:279 (+1)",
+      "backend/app/services/rbac.py:272"
+    ],
+    "operations": [
+      "GET /projects/{project_id}/owner-dashboard (get_owner_dashboard)",
+      "services.authorization.can_be_project_client",
+      "services.rbac.is_client_participant"
+    ],
+    "frontend": [
+      "frontend/src/app/router/index.tsx:122 (+1)",
+      "frontend/src/components/shared/Sidebar/navigation.ts:79 (+1)",
+      "frontend/src/features/dashboard/DashboardSelectorPage.tsx:63"
+    ],
+    "backend_tests": [
+      "backend/tests/test_db_integrity.py:95",
+      "backend/tests/test_permission_capabilities.py:411",
+      "backend/tests/test_role_templates.py:19 (+3)"
+    ],
+    "frontend_tests": [
+      "frontend/src/components/shared/Sidebar/navigation.test.ts:20 (+1)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "task.add_note",
+    "group": "tasks",
+    "label": "Add notes to tasks",
+    "description": "Record a note against a task.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/voice_capabilities.py:215"
+    ],
+    "operations": [
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_rbac_customization.py:564 (+3)",
+      "backend/tests/test_role_templates.py:31 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "task.comment",
+    "group": "tasks",
+    "label": "Post on a task discussion",
+    "description": "Write in a task's discussion thread.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/ai/action_rules.py:15",
+      "backend/app/api/tasks.py:1710",
+      "backend/app/services/voice_capabilities.py:299"
+    ],
+    "operations": [
+      "POST /tasks/{task_id}/comments (add_task_comment)",
+      "ai.action_rules (module-level table)",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_rbac_customization.py:471 (+4)",
+      "backend/tests/test_role_templates.py:32 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "message.send",
+    "group": "requests",
+    "label": "Send project messages",
+    "description": "Message another participant on the project.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "legacy_consultant",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/messages.py:455 (+1)",
+      "backend/app/services/voice_capabilities.py:283"
+    ],
+    "operations": [
+      "api.messages._create_conversation",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [
+      "frontend/src/features/messages/components/ContextDiscussion.tsx:19 (+1)",
+      "frontend/src/features/messages/pages/MessagesPage.tsx:262"
+    ],
+    "backend_tests": [
+      "backend/tests/test_rbac_customization.py:471 (+5)",
+      "backend/tests/test_role_templates.py:24 (+14)"
+    ],
+    "frontend_tests": [
+      "frontend/src/features/messages/pages/MessagesPage.test.tsx:23 (+1)"
+    ],
+    "status": "enforced+tested"
+  },
+  {
+    "code": "message.send_client",
+    "group": "requests",
+    "label": "Send client updates",
+    "description": "Send an update to the project's client.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": false,
+    "never_external": false,
+    "default_roles": [
+      "bim_engineer",
+      "cad_technician",
+      "contractor_representative",
+      "document_controller",
+      "engineer",
+      "external_reviewer",
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "senior_engineer",
+      "site_engineer",
+      "subcontractor_representative",
+      "surveyor",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/api/messages.py:488 (+1)",
+      "backend/app/services/voice_capabilities.py:293"
+    ],
+    "operations": [
+      "api.messages._create_conversation",
+      "services.voice_capabilities (module-level table)"
+    ],
+    "frontend": [],
+    "backend_tests": [
+      "backend/tests/test_rbac_customization.py:471 (+3)",
+      "backend/tests/test_role_templates.py:24 (+13)"
+    ],
+    "frontend_tests": [],
+    "status": "backend-only"
+  },
+  {
+    "code": "message.broadcast",
+    "group": "requests",
+    "label": "Message the whole project",
+    "description": "Start project group conversations and send announcements to the project.",
+    "scope": "project",
+    "admin_locked": false,
+    "office_only": true,
+    "never_external": false,
+    "default_roles": [
+      "office_director",
+      "org_admin",
+      "project_manager",
+      "technical_director"
+    ],
+    "user_override": "grant/deny",
+    "backend_enforcement": [
+      "backend/app/services/authorization.py:101",
+      "backend/app/services/messaging_authorization.py:64 (+2)"
+    ],
+    "operations": [
+      "services.authorization.effective_permissions",
+      "services.messaging_authorization.can_create_project_group_conversation",
+      "services.messaging_authorization.can_send_project_announcement"
+    ],
+    "frontend": [
+      "frontend/src/features/messages/pages/MessagesPage.tsx:357"
+    ],
+    "backend_tests": [
+      "backend/tests/test_authorization.py:387",
+      "backend/tests/test_db_integrity.py:128",
+      "backend/tests/test_messaging_policy.py:43 (+1)",
+      "backend/tests/test_permission_capabilities.py:488",
+      "backend/tests/test_rbac_security_regression.py:335 (+1)",
+      "backend/tests/test_role_templates.py:24 (+4)"
+    ],
+    "frontend_tests": [
+      "frontend/src/features/messages/pages/MessagesPage.test.tsx:23 (+1)"
+    ],
+    "status": "enforced+tested"
+  }
+]

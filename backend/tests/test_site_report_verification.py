@@ -197,6 +197,10 @@ def test_the_report_author_cannot_self_verify_without_being_the_manager(db, worl
 
 
 def test_an_administrator_needs_an_explicit_grant_to_verify(db, world):
+    # On the team, so the refusal below is about verification authority, not
+    # project access (QA-06B).
+    db.add(ProjectMember(project_id=world["project"].id, user_id=world["admin"].id, is_active=True))
+    db.flush()
     report = world["report"]()
     with pytest.raises(HTTPException) as error:
         review_site_report(report.id, SiteReportReviewRequest(approved=True),

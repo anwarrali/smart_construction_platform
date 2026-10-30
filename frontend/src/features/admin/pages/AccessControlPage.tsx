@@ -1,3 +1,4 @@
+import { Tabs } from "../../../components/ui/Tabs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Info, ShieldCheck, UserCog, Users, RefreshCw } from "lucide-react";
@@ -170,10 +171,10 @@ export const AccessControlPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="page-header">
         <div>
-          <p className="text-sm font-semibold text-primary">{t("accessControl.eyebrow")}</p>
-          <h1 className="text-3xl font-bold">{t("accessControl.title")}</h1>
+          <p className="page-kicker">{t("accessControl.eyebrow")}</p>
+          <h1 className="page-title">{t("accessControl.title")}</h1>
           <p className="mt-1 max-w-3xl text-muted-foreground">{t("accessControl.intro")}</p>
         </div>
         <Button variant="outline" onClick={() => void load()}>
@@ -181,13 +182,12 @@ export const AccessControlPage = () => {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {(["roles", "people", "consultants"] as Tab[]).map((value) => (
-          <Button key={value} variant={tab === value ? "primary" : "outline"} onClick={() => setTab(value)}>
-            {t(`accessControl.tabs.${value}`)}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        label={t("accessControl.title")}
+        value={tab}
+        onChange={setTab}
+        items={(["roles", "people", "consultants"] as Tab[]).map((value) => ({ value, label: t(`accessControl.tabs.${value}`) }))}
+      />
 
       {loading && <Card className="p-8 text-center text-muted-foreground">{t("common.loading")}</Card>}
 
@@ -221,6 +221,11 @@ export const AccessControlPage = () => {
             <div className="mt-6 space-y-4">
               <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
                 <Badge variant="info">{summary.roleName || "—"}</Badge>
+                {summary.governedByOfficeCopy && (
+                  <span className="text-xs text-muted-foreground" data-testid="governing-role">
+                    {t("accessControl.governedByOfficeCopy", { name: summary.governingRoleName })}
+                  </span>
+                )}
                 <span className="text-muted-foreground">{summary.email}</span>
                 <span className="ms-auto text-xs text-muted-foreground">
                   {t("accessControl.holdsCount", { count: summary.effectivePermissions.length })}
@@ -238,8 +243,10 @@ export const AccessControlPage = () => {
                         const override = summary.overrides.find((item) =>
                           item.permissionCode === permission.code
                           && (item.projectId ?? null) === (personProjectId || null));
-                        const held = summary.effectivePermissions.includes(permission.code);
+                        const decision = summary.decisions?.find((item) => item.code === permission.code);
+                        const held = decision?.held ?? summary.effectivePermissions.includes(permission.code);
                         const disabled = Boolean(personProjectId) && !permission.projectScoped;
+                        const saving = busy === `user:${permission.code}`;
                         return (
                           <div key={permission.code} className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
                             <div className="min-w-0 flex-1">
@@ -249,20 +256,42 @@ export const AccessControlPage = () => {
                                   ? t("accessControl.notProjectScoped")
                                   : t(`permissions.${permission.code}.description`, { defaultValue: permission.description })}
                               </p>
+                              {(permission.prerequisite || permission.scopeNote) && !disabled && (
+                                <p className="mt-1 text-xs text-muted-foreground" data-testid={`prerequisite-${permission.code}`}>
+                                  {[
+                                    permission.prerequisite && t(`permissions.${permission.code}.prerequisite`, { defaultValue: permission.prerequisite }),
+                                    permission.scopeNote && t("accessControl.scopeNote", { defaultValue: permission.scopeNote }),
+                                  ].filter(Boolean).join(" ")}
+                                </p>
+                              )}
+                              {decision && (
+                                <p className="mt-1 text-xs" data-testid={`reason-${permission.code}`}>
+                                  {t(`accessControl.reason.${decision.reason}`, { role: summary.governingRoleName || summary.roleName || "" })}
+                                </p>
+                              )}
                             </div>
-                            <Badge variant={held ? "success" : "neutral"}>
-                              {held ? t("accessControl.allowed") : t("accessControl.denied")}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-1" data-testid={`effective-${permission.code}`} data-held={held}>
+                              <Badge variant={held ? "success" : "neutral"}>
+                                {held ? t("accessControl.allowed") : t("accessControl.denied")}
+                              </Badge>
+                              <span className="text-[11px] text-muted-foreground">
+                                {override?.allowed === true ? t("accessControl.overrideGrant")
+                                  : override?.allowed === false ? t("accessControl.overrideDeny")
+                                    : t("accessControl.overrideInherit")}
+                              </span>
+                            </div>
                             <div className="flex gap-1">
                               <Button size="sm" variant={override?.allowed === true ? "primary" : "outline"}
-                                disabled={disabled || busy === `user:${permission.code}`}
+                                disabled={disabled || saving} aria-pressed={override?.allowed === true}
                                 onClick={() => void togglePerson(permission, true)}>{t("accessControl.grant")}</Button>
                               <Button size="sm" variant={override?.allowed === false ? "primary" : "outline"}
-                                disabled={disabled || busy === `user:${permission.code}`}
+                                disabled={disabled || saving} aria-pressed={override?.allowed === false}
                                 onClick={() => void togglePerson(permission, false)}>{t("accessControl.revoke")}</Button>
                               <Button size="sm" variant="ghost"
-                                disabled={disabled || !override || busy === `user:${permission.code}`}
-                                onClick={() => void togglePerson(permission, null)}>{t("accessControl.useDefault")}</Button>
+                                disabled={disabled || !override || saving}
+                                onClick={() => void togglePerson(permission, null)}>
+                                {saving ? t("accessControl.saving") : t("accessControl.useDefault")}
+                              </Button>
                             </div>
                           </div>
                         );

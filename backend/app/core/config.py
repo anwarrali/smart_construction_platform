@@ -4,6 +4,11 @@ from typing import Optional
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
+#: Deployments where development-only switches may be turned on. `qa` is the
+#: internal QA environment; `staging` is deliberately absent — it is the
+#: production rehearsal, and must behave like production.
+DEVELOPMENT_ENVIRONMENTS = frozenset({"development", "local", "test", "qa"})
+
 class Settings(BaseSettings):
     # JWT Settings
     SECRET_KEY: str
@@ -74,7 +79,16 @@ class Settings(BaseSettings):
     IFC_GEOMETRY_TIMEOUT_SECONDS: int = int(os.getenv("IFC_GEOMETRY_TIMEOUT_SECONDS", "900"))
     IFC_GEOMETRY_MAX_VERTICES: int = int(os.getenv("IFC_GEOMETRY_MAX_VERTICES", "8000000"))
     IFC_GEOMETRY_WORKERS: int = int(os.getenv("IFC_GEOMETRY_WORKERS", "2"))
+    #: The most IfcProduct entities (walls, doors, members, equipment …) one
+    #: model may contain. Extraction time and stored rows scale with these, not
+    #: with the geometry records that make up most of a STEP file.
     IFC_MAX_ENTITY_COUNT: int = int(os.getenv("IFC_MAX_ENTITY_COUNT", "500000"))
+    #: Memory one IFC parse may use. ifcopenshell holds the whole file in
+    #: memory (~16 MB per MB of IFC, measured), so this — not the upload limit —
+    #: decides the largest model this host can process. Two parses may run at
+    #: once (IFC_MAX_CONCURRENT_PROCESSING), so keep 2 x this under the
+    #: worker's available memory. The 3 GB default parses models up to ~174 MB.
+    IFC_PARSE_MEMORY_MB: int = int(os.getenv("IFC_PARSE_MEMORY_MB", "3072"))
     IFC_COMPARISON_ENABLED: bool = os.getenv("IFC_COMPARISON_ENABLED", "true").lower() == "true"
     IFC_COORDINATION_CHECKS_ENABLED: bool = os.getenv("IFC_COORDINATION_CHECKS_ENABLED", "true").lower() == "true"
     IFC_AI_ANALYSIS_ENABLED: bool = os.getenv("IFC_AI_ANALYSIS_ENABLED", "false").lower() == "true"
@@ -160,8 +174,25 @@ class Settings(BaseSettings):
     #: Deliberately far shorter than the login session.
     STEP_UP_VALIDITY_MINUTES: int = int(os.getenv("STEP_UP_VALIDITY_MINUTES", "10"))
     #: Development only. When true the send endpoint echoes the code so the
-    #: flow can be exercised without SMTP. Must stay false anywhere real.
+    #: flow can be exercised without SMTP. Must stay false anywhere real — the
+    #: settings refuse to load with it on unless `ENVIRONMENT` says this is a
+    #: development, local or test environment (see `validate_security`).
     OTP_DEV_ECHO_ENABLED: bool = os.getenv("OTP_DEV_ECHO_ENABLED", "false").lower() == "true"
+    #: Development and QA only. When true, editing roles and per-person
+    #: permissions (`admin.change_permissions`, `admin.change_user_role`) no
+    #: longer asks for a verification code. Authentication and the
+    #: `platform.manage_permissions` / `platform.manage_users` checks are
+    #: unchanged, and every other step-up purpose — password changes, resets,
+    #: deactivation, deletion — still asks. Refused at startup unless
+    #: `ENVIRONMENT` is a development environment, and re-checked per request
+    #: (`step_up_service.permission_edit_bypass_active`).
+    STEP_UP_PERMISSION_EDIT_BYPASS: bool = (
+        os.getenv("STEP_UP_PERMISSION_EDIT_BYPASS", "false").lower() == "true"
+    )
+    #: What kind of deployment this is: `development`, `local`, `test`, `qa`,
+    #: `staging` or `production`. Empty means unstated, which is treated as
+    #: *not* development — a development-only switch needs it said out loud.
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "").strip().lower()
 
     # --- Realtime (Server-Sent Events) --------------------------------------
     # Keeps an open application synchronized. Distinct from push: SSE is for a
@@ -351,6 +382,8 @@ class Settings(BaseSettings):
             raise ValueError("IFC_MAX_FILE_MB must be between 1 and 2048")
         if not 1000 <= self.IFC_MAX_ENTITY_COUNT <= 5_000_000:
             raise ValueError("IFC_MAX_ENTITY_COUNT must be between 1000 and 5000000")
+        if not 512 <= self.IFC_PARSE_MEMORY_MB <= 65536:
+            raise ValueError("IFC_PARSE_MEMORY_MB must be between 512 and 65536")
         if not 100_000 <= self.IFC_GEOMETRY_MAX_VERTICES <= 50_000_000:
             raise ValueError("IFC_GEOMETRY_MAX_VERTICES must be between 100000 and 50000000")
         if not 1 <= self.IFC_GEOMETRY_WORKERS <= 8:
@@ -374,6 +407,25 @@ class Settings(BaseSettings):
             raise ValueError("OTP_MAX_VERIFY_ATTEMPTS must be between 1 and 10")
         if not 1 <= self.STEP_UP_VALIDITY_MINUTES <= 60:
             raise ValueError("STEP_UP_VALIDITY_MINUTES must be between 1 and 60")
+        # The code echo hands the one-time code to whoever asked for it, which
+        # is the whole of step-up's protection. It exists so local QA can run
+        # without SMTP; anywhere not explicitly declared a development
+        # environment — production, staging, or nothing stated — refuse to boot.
+        if self.OTP_DEV_ECHO_ENABLED and self.ENVIRONMENT not in DEVELOPMENT_ENVIRONMENTS:
+            raise ValueError(
+                "OTP_DEV_ECHO_ENABLED=true requires ENVIRONMENT to be one of "
+                + ", ".join(sorted(DEVELOPMENT_ENVIRONMENTS))
+                + f" (got {self.ENVIRONMENT or 'nothing'})"
+            )
+        # Same rule for skipping the code on permission edits: it removes a
+        # security control, so it must be asked for *and* the deployment must
+        # say it is not production.
+        if self.STEP_UP_PERMISSION_EDIT_BYPASS and self.ENVIRONMENT not in DEVELOPMENT_ENVIRONMENTS:
+            raise ValueError(
+                "STEP_UP_PERMISSION_EDIT_BYPASS=true requires ENVIRONMENT to be one of "
+                + ", ".join(sorted(DEVELOPMENT_ENVIRONMENTS))
+                + f" (got {self.ENVIRONMENT or 'nothing'})"
+            )
         # Refuse to boot claiming push works when it cannot: a silently
         # unconfigured provider looks identical to "nobody has registered a
         # device yet", and that ambiguity is exactly what makes missing

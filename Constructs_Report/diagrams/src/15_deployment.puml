@@ -1,0 +1,28 @@
+@startuml
+!include _style.iuml
+top to bottom direction
+node "Browser" as BR
+node "Android / iOS device" as PH
+node "Docker host (docker-compose.yml)" {
+  node "frontend\n(nginx 1.27, static React build)\nport 5173 -> 80" as FE
+  node "backend\n(python:3.11, uvicorn,\n2 workers) port 8000" as BE
+  node "worker\n(same image,\npython -m app.worker)" as WK
+  database "db\n(pgvector/pgvector:pg15)\nport 5432" as DB
+  folder "named volumes:\nuploads_data, voice_audio_data,\npostgres_data" as VOL
+  folder "./backend/secrets\n(read-only bind)" as SEC
+  node "flutter-tools\n(profile mobile-tools,\nnot started by default)" as FT
+}
+cloud "OpenAI / FCM / SMTP" as EXT
+BR --> FE : HTTP
+BR --> BE : REST /api/v1, SSE
+PH --> BE : REST /api/v1
+BE --> DB : SQL, LISTEN/NOTIFY
+WK --> DB : job queue
+BE --> VOL
+WK --> VOL
+BE --> SEC
+BE --> EXT
+WK --> EXT
+FE -[hidden]down-> WK
+DB -[hidden]down-> FT
+@enduml

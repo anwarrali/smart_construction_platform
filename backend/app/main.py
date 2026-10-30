@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
+from app.core import request_context
 from app.services import scheduler
 # Imported for its import side effect: this installs the session listeners that
 # flush queued push deliveries after a commit. Without it, push would only work
@@ -90,7 +91,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The browser hides response headers from a cross-origin page unless they
+    # are listed; the client reads the support ID from this one.
+    expose_headers=[request_context.HEADER],
 )
+request_context.install(app)
 
 # The public mount, narrowed to exactly one category.
 #

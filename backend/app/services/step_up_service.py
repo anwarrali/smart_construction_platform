@@ -23,7 +23,7 @@ from hashlib import sha256
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.core.config import DEVELOPMENT_ENVIRONMENTS, settings
 from app.models.step_up import OtpChallenge, StepUpGrant
 from app.models.user import User
 from app.services import rate_limit_service
@@ -40,6 +40,17 @@ class StepUpPurpose:
     #: Recorded here for documentation; the endpoint still enforces it. OTP
     #: never grants permission, so this is never used to *allow* anything.
     related_permission: str | None = None
+    #: Whether one verification covers repeated actions of this kind until the
+    #: grant expires (STEP_UP_VALIDITY_MINUTES), instead of exactly one action.
+    #: For editing a permission matrix — a burst of small changes made in one
+    #: sitting — a fresh e-mailed code per checkbox made the screen unusable
+    #: while adding nothing: the same person, same session, same purpose,
+    #: minutes apart. Destructive one-off actions stay single-use.
+    session_scoped: bool = False
+    #: Editing who may do what — a role's permissions or one person's. The
+    #: only purposes `STEP_UP_PERMISSION_EDIT_BYPASS` skips in development and
+    #: QA; password, recovery and destructive purposes never are.
+    permission_editing: bool = False
 
 
 #: Every operation that requires step-up. Adding one is a single entry here
@@ -48,11 +59,13 @@ PURPOSES: dict[str, StepUpPurpose] = {
     purpose.code: purpose
     for purpose in (
         StepUpPurpose("security.change_password", "Change your password"),
-        StepUpPurpose("admin.change_user_role", "Change a user's role", "platform.manage_users"),
+        StepUpPurpose("admin.change_user_role", "Change a user's role", "platform.manage_users",
+                      permission_editing=True),
         StepUpPurpose("admin.deactivate_user", "Deactivate a user", "platform.manage_users"),
         StepUpPurpose("admin.delete_user", "Permanently delete a user", "platform.manage_users"),
         StepUpPurpose("admin.reset_user_password", "Reset another user's password", "platform.manage_users"),
-        StepUpPurpose("admin.change_permissions", "Change roles and permissions", "platform.manage_permissions"),
+        StepUpPurpose("admin.change_permissions", "Change roles and permissions", "platform.manage_permissions",
+                      session_scoped=True, permission_editing=True),
     )
 }
 
@@ -256,6 +269,8 @@ def consume_grant(db: Session, user: User, purpose_code: str,
 
     Consuming rather than merely checking is what keeps one verification tied
     to one action: a second attempt inside the same window must verify again.
+    A session-scoped purpose is the exception — its grant is used, not spent,
+    and lapses only when it expires.
     """
     now = now or datetime.now(timezone.utc)
     grant = db.query(StepUpGrant).filter(
@@ -266,9 +281,25 @@ def consume_grant(db: Session, user: User, purpose_code: str,
     ).order_by(StepUpGrant.created_at.desc()).first()
     if not grant:
         return None
-    grant.consumed_at = now
-    db.flush()
+    purpose = PURPOSES.get(purpose_code)
+    if purpose is None or not purpose.session_scoped:
+        grant.consumed_at = now
+        db.flush()
     return grant
+
+
+def permission_edit_bypass_active() -> bool:
+    """Whether permission edits skip the verification code in this deployment.
+
+    Both conditions, read at call time: the switch, and an `ENVIRONMENT` that
+    says this is development or QA. The settings already refuse to load the
+    switch anywhere else; asking again here means a runtime mutation of one of
+    the two values cannot turn it on in production.
+    """
+    return bool(
+        settings.STEP_UP_PERMISSION_EDIT_BYPASS
+        and settings.ENVIRONMENT in DEVELOPMENT_ENVIRONMENTS
+    )
 
 
 def require_step_up(db: Session, user: User, purpose_code: str,
@@ -280,6 +311,14 @@ def require_step_up(db: Session, user: User, purpose_code: str,
     a user who lacks the permission is refused before a code is ever relevant.
     """
     purpose = resolve_purpose(purpose_code)
+    if purpose.permission_editing and permission_edit_bypass_active():
+        # Development / QA only; see `permission_edit_bypass_active`. Recorded,
+        # so the audit trail never shows a permission change as verified when
+        # it was not.
+        record_audit(db, actor_id=user.id, action="step_up_bypassed_development",
+                     entity_type="step_up",
+                     details={"purpose": purpose.code, "environment": settings.ENVIRONMENT})
+        return
     if consume_grant(db, user, purpose.code, now=now) is None:
         record_audit(db, actor_id=user.id, action="step_up_required_denied",
                      entity_type="step_up", details={"purpose": purpose.code})

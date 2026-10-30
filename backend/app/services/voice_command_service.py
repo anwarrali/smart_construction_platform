@@ -40,6 +40,7 @@ from app.services.voice_action_requirements import (
     prompt_for,
 )
 from app.services import voice_conversation_service
+from app.models.issue import Issue
 from app.services.voice_capabilities import (
     ISSUES,
     REPORTS,
@@ -1749,7 +1750,21 @@ def update_draft(
         raise HTTPException(status_code=409, detail="This draft is no longer editable")
     if draft.voice_analysis_id != command.id:
         raise HTTPException(status_code=404, detail="Draft action not found")
-    if update.target_id:
+    capability = capability_for(draft.action_type)
+    if update.target_id and capability is not None and capability.needs_issue:
+        # An issue action targets an issue. This branch used to validate every
+        # target against the *task* list, so re-saving an issue draft (the
+        # website's include/remove toggle sends the current target back)
+        # failed with "Selected task is outside the allowed task list", and a
+        # standalone issue could not be resolved without a task.
+        on_project = db.query(Issue.id).filter(
+            Issue.id == update.target_id, Issue.project_id == command.project_id,
+        ).first()
+        if on_project is None:
+            raise HTTPException(status_code=422, detail="Selected issue is not an issue on this project")
+        draft.target_entity_type = "ISSUE"
+        draft.target_entity_id = update.target_id
+    elif update.target_id:
         allowed = {task.id for task in authorized_voice_tasks(db, user, command.project_id)}
         if update.target_id not in allowed:
             raise HTTPException(status_code=422, detail="Selected task is outside the allowed task list")

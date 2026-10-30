@@ -302,4 +302,125 @@ describe("voice assistant panel", () => {
     expect(screen.getByRole("alert").textContent).toContain("voiceAssistant.nothingHeard");
     expect(voiceApi.createCommand).not.toHaveBeenCalled();
   });
+
+  // QA pass 2026-10-17, defect 9: the server answers a provider failure with a
+  // stored FAILED command (HTTP 201). It used to be treated as success — the
+  // retry was dropped and the review area stayed empty.
+  it("treats a FAILED command as a failure and keeps the recording to retry", async () => {
+    const user = userEvent.setup();
+    voiceApi.createCommand.mockResolvedValueOnce(
+      command({
+        status: "FAILED",
+        actionDrafts: [],
+        errorDetail: "The voice service did not respond",
+        providerMetadata: { supportLogId: "abc123" },
+      } as Partial<VoiceCommand>),
+    );
+    render(<VoiceAssistantPanel projectId="project-1" />);
+
+    await speak(user);
+
+    const retry = await screen.findByRole("button", { name: "voiceAssistant.retrySend" });
+    expect(screen.getByRole("alert").textContent).toContain("The voice service did not respond");
+    expect(screen.getByRole("alert").textContent).toContain("errors.supportId");
+    expect(screen.queryByRole("button", { name: "voiceAssistant.confirmAndApply" })).toBeNull();
+
+    voiceApi.createCommand.mockResolvedValueOnce(command());
+    await user.click(retry);
+    await waitFor(() => expect(voiceApi.createCommand).toHaveBeenCalledTimes(2));
+    expect(voiceApi.createCommand.mock.calls[1][0].audio).toBe(captureResult.audio);
+  });
+
+  // Defect 5: a standalone issue's question ("how was it solved?") must be
+  // answerable, and the card must not suggest the issue needs a task.
+  it("answers an issue's text question without involving a task", async () => {
+    const user = userEvent.setup();
+    const issueDraft = draft({
+      actionType: "UPDATE_ISSUE_STATUS",
+      targetEntityType: "ISSUE",
+      targetEntityId: "issue-1",
+      extractedPayload: { status: "RESOLVED" },
+      missingFields: ["payload.resolutionNotes"],
+    } as Partial<VoiceCommand["actionDrafts"][number]>);
+    voiceApi.createCommand.mockResolvedValue(
+      command({
+        status: "NEEDS_CLARIFICATION",
+        actionDrafts: [issueDraft],
+        clarifications: [
+          {
+            id: "clar-9",
+            voiceActionDraftId: "draft-1",
+            sequence: 1,
+            fieldPath: "payload.resolutionNotes",
+            questionAr: "كيف تم الحل؟",
+            questionEn: "How was it solved?",
+            expectedAnswerType: "TEXT",
+            options: [],
+          },
+        ],
+      }),
+    );
+    voiceApi.answerClarification.mockResolvedValue(
+      command({ actionDrafts: [{ ...issueDraft, missingFields: [] }] }),
+    );
+    render(<VoiceAssistantPanel projectId="project-1" />);
+
+    await speak(user);
+
+    const input = await screen.findByRole("textbox", { name: "How was it solved?" });
+    expect(screen.queryByText("voiceAssistant.whichTask")).toBeNull();
+    expect(voiceApi.taskCandidates).not.toHaveBeenCalled();
+    await user.type(input, "Replaced the cracked pipe");
+    await user.click(screen.getByRole("button", { name: "voiceAssistant.answer" }));
+
+    expect(voiceApi.answerClarification).toHaveBeenCalledWith("cmd-1", "clar-9", "Replaced the cracked pipe");
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "How was it solved?" })).toBeNull());
+    expect(screen.queryByRole("button", { name: "voiceAssistant.chooseAnotherTask" })).toBeNull();
+  });
+
+  it("offers 'choose another task' only on an action aimed at a task", async () => {
+    const user = userEvent.setup();
+    voiceApi.createCommand.mockResolvedValue(
+      command({
+        actionDrafts: [
+          draft({ id: "d-task", clientActionId: "a1" }),
+          draft({
+            id: "d-issue",
+            clientActionId: "a2",
+            sequence: 1,
+            actionType: "UPDATE_ISSUE_STATUS",
+            targetEntityType: "ISSUE",
+            targetEntityId: "issue-1",
+            extractedPayload: { status: "IN_PROGRESS" },
+          } as Partial<VoiceCommand["actionDrafts"][number]>),
+        ],
+      }),
+    );
+    render(<VoiceAssistantPanel projectId="project-1" />);
+
+    await speak(user);
+    await screen.findByRole("button", { name: "voiceAssistant.confirmAndApply" });
+
+    expect(screen.getAllByRole("button", { name: "voiceAssistant.chooseAnotherTask" })).toHaveLength(1);
+  });
+
+  // Defect 4: the browser's live preview is a single-locale guess. Once the
+  // recording ends it must not stand in for the server transcript.
+  it("hides the browser's live preview once recording has stopped", async () => {
+    const user = userEvent.setup();
+    const mutable = capture as unknown as { previewTranscript: string };
+    mutable.previewTranscript = "garbled preview text";
+    let resolve: (value: VoiceCommand) => void = () => undefined;
+    voiceApi.createCommand.mockReturnValue(new Promise<VoiceCommand>((done) => { resolve = done; }));
+    try {
+      render(<VoiceAssistantPanel projectId="project-1" />);
+      await speak(user);
+      expect(screen.queryByText("garbled preview text")).toBeNull();
+      resolve(command({ rawTranscript: "خلصت TSK-001 تمديدات الكهرباء" }));
+      await screen.findByText("خلصت TSK-001 تمديدات الكهرباء");
+      expect(screen.queryByText("garbled preview text")).toBeNull();
+    } finally {
+      mutable.previewTranscript = "";
+    }
+  });
 });

@@ -26,6 +26,8 @@ from app.models.milestone import Milestone
 from app.models.audit_log import AuditLog
 from app.models.attachment import Attachment
 from app.models.user import User
+from app.models.rbac import Discipline
+from app.core.role_templates import LEGACY_DISCIPLINE_ALIASES
 from app.schemas.task import (
     TaskOut,
     TaskCreate,
@@ -55,7 +57,7 @@ from app.services import work_scope
 from app.core.schedule_dates import inclusive_duration_days
 from app.services.audit_service import record_audit
 from app.services.private_storage import private_storage
-from app.services.authorization import has_permission, require
+from app.services.authorization import has_permission, projects_with_permission, require
 from app.services.task_assignment import assignee_refusal
 from app.services.consultant_approval_service import (
     authorized_consultant_ids,
@@ -65,6 +67,9 @@ from app.services.consultant_approval_service import (
 from app.services.file_storage import delete_upload
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
+
+#: Reading tasks — the Tasks page's guard, enforced on the read endpoints too.
+VIEW = "task.view"
 
 
 def _notify(db: Session, user_id, title: str, message: str, task: Task, notification_type: NotificationType) -> None:
@@ -132,6 +137,9 @@ def _get_task_or_403(task_id: uuid.UUID, db: Session, current_user: User) -> Tas
         raise HTTPException(status_code=404, detail="Task not found")
     if not user_has_project_access(db, current_user, task.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this task")
+    # `task.view` is what the Tasks page is guarded by; checked here too, so a
+    # revocation in Access Control closes the API and not only the page.
+    require(db, current_user, VIEW, task.project_id)
     # Was: branch on which side of the old triangle the Engineer was on, and
     # refuse outright if they were neither. `can_see_task` asks the question
     # that mattered — is this your work, or work you review — and answers it
@@ -146,10 +154,28 @@ def _get_task_or_403(task_id: uuid.UUID, db: Session, current_user: User) -> Tas
 
 
 def _is_project_manager(db: Session, user: User, project_id: uuid.UUID) -> bool:
-    project = db.get(Project, project_id)
-    # `project_manager_id` is validated by `can_run_project` wherever it is
-    # written, so the id alone identifies the person accountable here.
-    return bool(project and project.project_manager_id == user.id)
+    """Whether this person manages this project's tasks: `task.edit` there.
+
+    Was `project.project_manager_id == user.id` — the one assigned manager,
+    whatever Access Control said. Granting `task.create` or `task.edit` to
+    anybody else therefore showed the button and failed with "Only the
+    assigned Project Manager…" (QA 2026-10-23, Rana). The assigned manager
+    holds `task.edit` through the Project Manager role, so the default is
+    unchanged; `has_permission` still demands project access.
+    """
+    return has_permission(db, user, "task.edit", project_id)
+
+
+def _require_task_work(db: Session, task: Task, user: User, refusal: str) -> None:
+    """The assignee's side of a task: assigned to it, and `task.update_progress`.
+
+    Assignment alone used to be enough, so revoking `task.update_progress`
+    (checked when somebody is assigned) left them able to start, update and
+    complete the work through the API.
+    """
+    if not _is_task_engineer(task, user):
+        raise HTTPException(status_code=403, detail=refusal)
+    require(db, user, "task.update_progress", task.project_id)
 
 
 def _is_consultant(db: Session, user: User, project_id: uuid.UUID) -> bool:
@@ -161,7 +187,14 @@ def _can_consult_task(db: Session, user: User, task: Task) -> bool:
 
 
 def _can_review_task(db: Session, user: User, task: Task) -> bool:
-    return _is_project_manager(db, user, task.project_id) or _can_consult_task(db, user, task)
+    """`task.review`, as the manager of the project's tasks or as its named reviewer.
+
+    The manager half was the assigned-manager id, which `task.review` being
+    revoked could not touch.
+    """
+    if _is_project_manager(db, user, task.project_id) and has_permission(db, user, "task.review", task.project_id):
+        return True
+    return _can_consult_task(db, user, task)
 
 
 def _validate_milestone_id(db: Session, project_id: uuid.UUID, milestone_id: uuid.UUID | None) -> uuid.UUID | None:
@@ -177,6 +210,42 @@ def _validate_milestone_id(db: Session, project_id: uuid.UUID, milestone_id: uui
 
 def _normalized_discipline(value: str | None) -> str | None:
     return normalize_discipline(value)
+
+
+def _visible_discipline_codes(db: Session, user: User) -> set[str]:
+    """Active discipline codes this person's office can use on a task.
+
+    The same catalogue the office manages under Roles & disciplines and the
+    task form offers (`GET /organization/disciplines`): the shared templates
+    plus any the office added itself.
+    """
+    rows = db.query(Discipline.code, Discipline.organization_id, Discipline.is_active).filter(
+        or_(Discipline.organization_id.is_(None), Discipline.organization_id == user.company_id)
+    ).all()
+    return {code for code, _org, active in rows if active}
+
+
+def _canonical_task_discipline(db: Session, user: User, value: str | None, *, current: str | None = None) -> str | None:
+    """The discipline code to store, or a 422 naming the field.
+
+    Accepts any active catalogue code (case and spacing normalised) and the
+    legacy spellings the backfill maps (``Architecture`` → ``architectural``).
+    A value equal to what the task already stores is always accepted, so a
+    task saved under a discipline the office has since retired can still be
+    edited without being forced onto another one.
+    """
+    if value is None or not value.strip():
+        return None
+    code = value.strip().lower().replace(" ", "_").replace("/", "_")
+    if current is not None and code == (current or "").strip().lower():
+        return current
+    code = LEGACY_DISCIPLINE_ALIASES.get(code, code)
+    if code not in _visible_discipline_codes(db, user):
+        raise HTTPException(status_code=422, detail={
+            "field": "discipline",
+            "message": f"'{value}' is not an active discipline. Choose one from the list, or ask an administrator to add it under Roles & disciplines.",
+        })
+    return code
 
 
 def _validate_task_assignees(
@@ -202,18 +271,29 @@ def _validate_task_assignees(
             raise HTTPException(status_code=400, detail=refusal)
         # A specialist is matched to their discipline. Domain logic, not
         # authorization: it applies to whoever practises a discipline (an
-        # engineering profile), not to a role name.
-        if assignee.engineer_profile:
-            profile_discipline = _normalized_discipline(
-                assignee.engineer_profile.discipline.value if assignee.engineer_profile else None
-            )
-            if effective_discipline and profile_discipline != effective_discipline:
+        # engineering profile), not to a role name. The disciplines a person
+        # practises are their catalogue disciplines plus the legacy profile
+        # value; either one matching is enough. Comparison goes through the
+        # same normalisation as before, so a civil engineer still covers a
+        # structural task exactly as they did.
+        if assignee.engineer_profile and effective_discipline:
+            practised = {
+                _normalized_discipline(code)
+                for code in [item.code for item in (assignee.disciplines or [])]
+                + [assignee.engineer_profile.discipline.value if assignee.engineer_profile.discipline else None]
+                if code
+            }
+            if effective_discipline not in practised:
+                label = ", ".join(sorted(practised)) or "non-specialized"
                 raise HTTPException(
                     status_code=400,
-                    detail=(
-                        f"{assignee.full_name} is a {profile_discipline or 'non-specialized'} Engineer "
-                        f"and cannot be assigned to a {effective_discipline} task"
-                    ),
+                    detail={
+                        "field": "assignee_ids",
+                        "message": (
+                            f"{assignee.full_name} practises {label} and cannot be assigned to a {effective_discipline} task. "
+                            "Choose a matching engineer, or add the discipline to their profile under People & access."
+                        ),
+                    },
                 )
     return [by_id[assignee_id][1] for assignee_id in assignee_ids]
 
@@ -365,6 +445,37 @@ def _emit_task_completed(db: Session, task: Task, actor: User, *, route: str, re
     )
 
 
+def _apply_task_filters(
+    query,
+    *,
+    assignee_id: Optional[uuid.UUID] = None,
+    status: Optional[TaskStatus] = None,
+    discipline: Optional[str] = None,
+    priority: Optional[TaskPriority] = None,
+    search: Optional[str] = None,
+    is_critical_path: Optional[bool] = None,
+):
+    """The task list filters, shared by the portfolio and the project lists."""
+    if assignee_id:
+        query = query.filter(Task.assignees.any(User.id == assignee_id))
+    if status:
+        query = query.filter(Task.status == status)
+    if discipline:
+        query = query.filter(Task.discipline == discipline)
+    if priority:
+        query = query.filter(Task.priority == priority)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            Task.name.ilike(term)
+            | Task.task_code.ilike(term)
+            | Task.description.ilike(term)
+        )
+    if is_critical_path is not None:
+        query = query.filter(Task.is_critical_path == is_critical_path)
+    return query
+
+
 @router.get("", response_model=List[TaskOut])
 def list_tasks(
     project_id: Optional[uuid.UUID] = None,
@@ -378,9 +489,13 @@ def list_tasks(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Task)
-    accessible_project_ids = _accessible_project_ids(db, current_user)
-    if accessible_project_ids is not None:
-        query = query.filter(Task.project_id.in_(accessible_project_ids))
+    if project_id:
+        if not user_has_project_access(db, current_user, project_id):
+            raise HTTPException(status_code=403, detail="You do not have access to this project")
+        require(db, current_user, VIEW, project_id)
+    query = query.filter(Task.project_id.in_(projects_with_permission(
+        db, current_user, VIEW, _accessible_project_ids(db, current_user),
+    )))
     if not work_scope.sees_all_tasks(db, current_user, project_id) and not project_id:
         # Narrowing needs a project: "the work I hold" is a per-project answer,
         # and resolving it across a portfolio would be a query per project.
@@ -396,26 +511,11 @@ def list_tasks(
     # `work_scope.narrow_to_disciplines`, which reads the configurable
     # many-to-many assignment and is applied by the callers that need it.
     if project_id:
-        if not user_has_project_access(db, current_user, project_id):
-            raise HTTPException(status_code=403, detail="You do not have access to this project")
         query = query.filter(Task.project_id == project_id)
-    if assignee_id:
-        query = query.filter(Task.assignees.any(User.id == assignee_id))
-    if status:
-        query = query.filter(Task.status == status)
-    if discipline:
-        query = query.filter(Task.discipline == discipline)
-    if priority:
-        query = query.filter(Task.priority == priority)
-    if search:
-        term = f"%{search.strip()}%"
-        query = query.filter(
-            Task.name.ilike(term)
-            | Task.task_code.ilike(term)
-            | Task.description.ilike(term)
-        )
-    if is_critical_path is not None:
-        query = query.filter(Task.is_critical_path == is_critical_path)
+    query = _apply_task_filters(
+        query, assignee_id=assignee_id, status=status, discipline=discipline,
+        priority=priority, search=search, is_critical_path=is_critical_path,
+    )
     return query.order_by(Task.sort_order, Task.created_at).all()
 
 
@@ -435,7 +535,12 @@ def get_my_tasks(
     if project_id:
         if not user_has_project_access(db, current_user, project_id):
             raise HTTPException(status_code=403, detail="You do not have access to this project")
+        require(db, current_user, VIEW, project_id)
         query = query.filter(Task.project_id == project_id)
+    else:
+        query = query.filter(Task.project_id.in_(projects_with_permission(
+            db, current_user, VIEW, _accessible_project_ids(db, current_user),
+        )))
     if status:
         query = query.filter(Task.status == status)
     return query.all()
@@ -444,13 +549,27 @@ def get_my_tasks(
 @router.get("/project/{project_id}", response_model=List[TaskOut])
 def get_tasks_by_project(
     project_id: uuid.UUID,
+    assignee_id: Optional[uuid.UUID] = None,
+    status: Optional[TaskStatus] = None,
+    discipline: Optional[str] = None,
+    priority: Optional[TaskPriority] = None,
+    search: Optional[str] = None,
+    is_critical_path: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # The project Tasks page sends its filters here. This endpoint used to take
+    # none of them, so FastAPI dropped the query string and every task came
+    # back whatever was selected ("Under review" still listed To Do work).
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    require(db, current_user, VIEW, project_id)
     query = work_scope.narrow_to_own_work(
         db.query(Task).filter(Task.project_id == project_id), db, current_user, project_id,
+    )
+    query = _apply_task_filters(
+        query, assignee_id=assignee_id, status=status, discipline=discipline,
+        priority=priority, search=search, is_critical_path=is_critical_path,
     )
     return query.order_by(Task.task_code).all()
 
@@ -463,6 +582,7 @@ def get_task_analytics(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    require(db, current_user, VIEW, project_id)
     # Analytics over the work you can see. Narrowing rather than refusing: a
     # reviewer asking for project metrics should get metrics about the work
     # they review, not a 403 pointing them at a different screen.
@@ -509,16 +629,15 @@ def create_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not _is_project_manager(db, current_user, task_data.project_id):
-        raise HTTPException(status_code=403, detail="Only the assigned Project Manager can create project tasks")
-    # The ownership rule above is unchanged; the permission is an additional,
-    # administrator-configurable gate. Combining them keeps the default access
-    # identical while making the capability revocable.
+    # `task.create` on this project — which `require` resolves with project
+    # access — is the whole rule. It used to sit behind "is the assigned
+    # Project Manager", so a grant to anybody else could never take effect.
     require(db, current_user, "task.create", task_data.project_id)
     if task_data.status not in {TaskStatus.BACKLOG, TaskStatus.TODO}:
         raise HTTPException(status_code=400, detail="New tasks must start in Backlog or To Do")
+    discipline = _canonical_task_discipline(db, current_user, task_data.discipline)
     assignees = _validate_task_assignees(
-        db, task_data.project_id, task_data.assignee_ids, task_data.discipline
+        db, task_data.project_id, task_data.assignee_ids, discipline
     )
     milestone_id = _validate_milestone_id(db, task_data.project_id, task_data.milestone_id)
 
@@ -530,7 +649,7 @@ def create_task(
         task_code=task_code,
         name=task_data.name,
         description=task_data.description,
-        discipline=task_data.discipline,
+        discipline=discipline,
         status=task_data.status,
         priority=task_data.priority,
         assignees=assignees,
@@ -583,11 +702,19 @@ def update_task(
 ):
     task = _get_task_or_403(task_id, db, current_user)
     is_pm = _is_project_manager(db, current_user, task.project_id)
-    is_assignee = _is_task_engineer(task, current_user)
+    # The execution-only rules are for the people doing the work. A Project
+    # Manager who is also on a task's assignee list (common on handover and
+    # coordination tasks) keeps the PM's rights; treating them as an assignee
+    # refused every schedule edit they made with a 403.
+    is_assignee = _is_task_engineer(task, current_user) and not is_pm
     if not is_pm and not is_assignee:
         raise HTTPException(status_code=403, detail="Only the assigned PM or task engineer can update this task")
+    if is_assignee:
+        require(db, current_user, "task.update_progress", task.project_id)
     if is_assignee and (task_data.model_fields_set - {"status", "progress_percentage"}):
         raise HTTPException(status_code=403, detail="Engineers can update execution status and progress only")
+    if "discipline" in task_data.model_fields_set:
+        task_data.discipline = _canonical_task_discipline(db, current_user, task_data.discipline, current=task.discipline)
 
     if task_data.status in {TaskStatus.DONE, TaskStatus.UNDER_REVIEW} and task_data.status != task.status:
         raise HTTPException(status_code=400, detail="Use the review workflow to submit or complete tasks")
@@ -762,8 +889,6 @@ def delete_task(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
-    if not _is_project_manager(db, current_user, task.project_id):
-        raise HTTPException(status_code=403, detail="Only the assigned Project Manager can delete tasks")
     require(db, current_user, "task.edit", task.project_id)
     record_audit(db, actor_id=current_user.id, action="deleted", entity_type="task", entity_id=task.id, project_id=task.project_id)
 
@@ -822,6 +947,8 @@ def update_task_progress(
     is_assignee = _is_task_engineer(task, current_user)
     if not is_pm and not is_assignee:
         raise HTTPException(status_code=403, detail="Only the assigned PM or task engineer can update progress")
+    if not is_pm:
+        require(db, current_user, "task.update_progress", task.project_id)
 
     progress = float(data.progress_percentage)
     if task.status in {TaskStatus.UNDER_REVIEW, TaskStatus.DONE}:
@@ -882,8 +1009,7 @@ def start_task(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
-    if not _is_task_engineer(task, current_user):
-        raise HTTPException(status_code=403, detail="Only an assigned Main Contractor Engineer can start this task")
+    _require_task_work(db, task, current_user, "Only an assigned Main Contractor Engineer can start this task")
     if task.status != TaskStatus.TODO:
         raise HTTPException(status_code=400, detail="Only a To Do task can be started")
     _ensure_dependencies_complete(db, task)
@@ -920,8 +1046,7 @@ def start_rework(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
-    if not _is_task_engineer(task, current_user):
-        raise HTTPException(status_code=403, detail="Only an assigned Main Contractor Engineer can start rework")
+    _require_task_work(db, task, current_user, "Only an assigned Main Contractor Engineer can start rework")
     if task.status != TaskStatus.REWORK_REQUIRED:
         raise HTTPException(status_code=400, detail="Only a Rework Required task can enter corrective work")
     task.status = TaskStatus.IN_PROGRESS
@@ -945,8 +1070,7 @@ def add_work_update(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
-    if not _is_task_engineer(task, current_user):
-        raise HTTPException(status_code=403, detail="Only an assigned Main Contractor Engineer can add work updates")
+    _require_task_work(db, task, current_user, "Only an assigned Main Contractor Engineer can add work updates")
     if task.status != TaskStatus.IN_PROGRESS:
         raise HTTPException(status_code=400, detail="Work updates can only be added while the task is In Progress")
     previous_progress = float(task.progress_percentage or 0)
@@ -1013,8 +1137,7 @@ def report_task_blocker(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
-    if not _is_task_engineer(task, current_user):
-        raise HTTPException(status_code=403, detail="Only an assigned Main Contractor Engineer can report a blocker")
+    _require_task_work(db, task, current_user, "Only an assigned Main Contractor Engineer can report a blocker")
     if task.status in {TaskStatus.UNDER_REVIEW, TaskStatus.DONE, TaskStatus.CANCELLED}:
         raise HTTPException(status_code=400, detail="A blocker cannot be added to this task state")
     category = data.category.strip().lower().replace(" ", "_")
@@ -1083,8 +1206,7 @@ def resume_after_blocker(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
-    if not _is_task_engineer(task, current_user):
-        raise HTTPException(status_code=403, detail="Only an assigned Main Contractor Engineer can resume this task")
+    _require_task_work(db, task, current_user, "Only an assigned Main Contractor Engineer can resume this task")
     if task.status != TaskStatus.BLOCKED:
         raise HTTPException(status_code=400, detail="Only a Blocked task can be resumed")
     unresolved = db.query(Issue).filter(
@@ -1116,6 +1238,8 @@ def submit_task_for_review(
     is_assignee = _is_task_engineer(task, current_user)
     if not is_pm and not is_assignee:
         raise HTTPException(status_code=403, detail="Only the assigned PM or task engineer can submit work for review")
+    if not is_pm:
+        require(db, current_user, "task.update_progress", task.project_id)
     if task.status not in {TaskStatus.IN_PROGRESS, TaskStatus.REWORK_REQUIRED}:
         raise HTTPException(status_code=400, detail="Only work in progress or rework can be submitted for review")
     if not task.review_required:
@@ -1226,8 +1350,7 @@ def complete_execution_without_review(
     """Complete internal contractor work without fabricating a Consultant decision."""
     _get_task_or_403(task_id, db, current_user)
     task = db.query(Task).filter(Task.id == task_id).with_for_update().first()
-    if not _is_task_engineer(task, current_user):
-        raise HTTPException(status_code=403, detail="Only an assigned Main Contractor Engineer can complete execution")
+    _require_task_work(db, task, current_user, "Only an assigned Main Contractor Engineer can complete execution")
     if task.review_required:
         raise HTTPException(status_code=400, detail="This task requires Consultant review before completion")
     if task.status != TaskStatus.IN_PROGRESS:
@@ -1453,8 +1576,7 @@ def respond_to_task_clarification(
 ):
     _get_task_or_403(task_id, db, current_user)
     task = db.query(Task).filter(Task.id == task_id).with_for_update().first()
-    if not _is_task_engineer(task, current_user):
-        raise HTTPException(status_code=403, detail="Only an assigned Main Contractor Engineer can respond")
+    _require_task_work(db, task, current_user, "Only an assigned Main Contractor Engineer can respond")
     if task.status != TaskStatus.UNDER_REVIEW:
         raise HTTPException(status_code=400, detail="This task is not under review")
     review = _active_review_query(db, task.id).with_for_update().first()
@@ -1496,8 +1618,8 @@ def create_task_dependency(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
-    if not _is_project_manager(db, current_user, task.project_id):
-        raise HTTPException(status_code=403, detail="Only the assigned Project Manager can manage dependencies")
+    # Dependencies drive the schedule cascade: `schedule.edit`, like milestones.
+    require(db, current_user, "schedule.edit", task.project_id)
     predecessor = db.query(Task).filter(Task.id == dep_data.depends_on_task_id).first()
     if not predecessor:
         raise HTTPException(status_code=404, detail="Predecessor task does not exist")
@@ -1530,8 +1652,8 @@ def delete_task_dependency(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
-    if not _is_project_manager(db, current_user, task.project_id):
-        raise HTTPException(status_code=403, detail="Only the assigned Project Manager can manage dependencies")
+    # Dependencies drive the schedule cascade: `schedule.edit`, like milestones.
+    require(db, current_user, "schedule.edit", task.project_id)
     dependency = db.query(TaskDependency).filter(
         TaskDependency.id == dependency_id, TaskDependency.task_id == task.id
     ).first()
@@ -1583,6 +1705,9 @@ def add_task_comment(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_task_or_403(task_id, db, current_user)
+    # "Post on a task discussion" — checked here since 2026-10-23; before, only
+    # the voice and AI paths asked for it.
+    require(db, current_user, "task.comment", task.project_id)
     comment = TaskComment(task_id=task.id, author_id=current_user.id, content=data.content.strip())
     db.add(comment)
     db.flush()

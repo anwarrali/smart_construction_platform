@@ -136,7 +136,7 @@ export const TaskCandidatePicker = ({
         disabled={disabled}
       />
       {searching ? <p className="text-xs opacity-70">{t("voiceAssistant.searching")}</p> : null}
-      {searchError ? <p className="text-xs text-red-600">{searchError}</p> : null}
+      {searchError ? <p className="text-xs text-state-overdue">{searchError}</p> : null}
     </div>
   );
 };

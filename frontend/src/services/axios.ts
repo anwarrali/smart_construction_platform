@@ -122,6 +122,14 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // A 403 means the permission snapshot the interface is drawing from may
+    // be out of date (an administrator changed it since sign-in). Ask the
+    // permission store to re-read it; an event, because the store imports
+    // this client.
+    if (error.response?.status === 403 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("permissions:stale"));
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const tokens = getTokens();

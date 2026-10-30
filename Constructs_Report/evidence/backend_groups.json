@@ -1,0 +1,58 @@
+{
+ "Authentication and security": [
+  298,
+  298,
+  0,
+  0,
+  18
+ ],
+ "RBAC and authorization": [
+  437,
+  437,
+  0,
+  0,
+  19
+ ],
+ "IFC / BIM": [
+  179,
+  178,
+  0,
+  1,
+  14
+ ],
+ "Ingestion, RAG and knowledge": [
+  832,
+  831,
+  1,
+  0,
+  16
+ ],
+ "Voice, AI tools and agents": [
+  675,
+  675,
+  0,
+  0,
+  25
+ ],
+ "Projects, tasks, scheduling and field": [
+  222,
+  222,
+  0,
+  0,
+  17
+ ],
+ "Messaging, notifications, realtime, jobs": [
+  155,
+  155,
+  0,
+  0,
+  8
+ ],
+ "Other": [
+  0,
+  0,
+  0,
+  0,
+  0
+ ]
+}

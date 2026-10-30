@@ -1,9 +1,11 @@
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Tabs } from "../../../components/ui/Tabs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import toast from "react-hot-toast";
-import { Forward, ExternalLink } from "lucide-react";
+import { Forward, ExternalLink, Plus } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Badge } from "../../../components/ui/Badge";
@@ -48,6 +50,10 @@ export const MessagesPage = () => {
   const [search, setSearch] = useState("");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
+  /* Why messaging is unavailable on this project, when the server refused it.
+     The refusal used to be swallowed into empty recipient lists, leaving a
+     Send button that could never enable and no reason why (QA 2026-10-22). */
+  const [accessIssue, setAccessIssue] = useState("");
   const [busy, setBusy] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [recipientMode, setRecipientMode] = useState<"individual" | "multiple" | "group">("individual");
@@ -66,8 +72,12 @@ export const MessagesPage = () => {
   useEffect(() => {
     if (workspace.projectId) return setSelectedProjectId(workspace.projectId);
     api.projects.list({ limit: 100 }).then((response) => {
-      setProjects(response.data || []);
-      setSelectedProjectId((current) => current || response.data?.[0]?.id || "");
+      // Messages are project work: only projects this person can open the
+      // work of. The administrator's list also holds projects they only
+      // administer, where every messaging call is refused.
+      const workable = (response.data || []).filter((project) => project.canOpenWork !== false);
+      setProjects(workable);
+      setSelectedProjectId((current) => current || workable[0]?.id || "");
     }).catch(() => setProjects([]));
   }, [workspace.projectId]);
 
@@ -91,11 +101,14 @@ export const MessagesPage = () => {
           ? current : response.items[0]?.id || "",
       );
     } catch (err: any) {
-      if (!quiet) toast.error(errorMessage(err, "Unable to load conversations."));
+      if (err?.response?.status === 403) {
+        setItems([]);
+        setAccessIssue(t("messagesPage.not_on_project_team"));
+      } else if (!quiet) toast.error(errorMessage(err, "Unable to load conversations."));
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [projectId, search, tab]);
+  }, [projectId, search, tab, t]);
 
   const loadDetail = useCallback(async (quiet = false) => {
     if (!selectedId) return setDetail(null);
@@ -110,8 +123,17 @@ export const MessagesPage = () => {
 
   useEffect(() => {
     if (!projectId) return;
-    api.messages.recipientOptions(projectId).then(setOptions).catch(() => setOptions({ users: [], groups: [] }));
-  }, [projectId]);
+    api.messages.recipientOptions(projectId).then((value) => {
+      setOptions(value);
+      setAccessIssue("");
+    }).catch((err: unknown) => {
+      setOptions({ users: [], groups: [] });
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      setAccessIssue(status === 403
+        ? t("messagesPage.not_on_project_team")
+        : errorMessage(err, t("messagesPage.recipients_unavailable")));
+    });
+  }, [projectId, t]);
   useEffect(() => { loadList(); }, [loadList]);
   useEffect(() => { loadDetail(); }, [loadDetail]);
   // Consumed once: after selecting the requested conversation the parameter is
@@ -224,18 +246,31 @@ export const MessagesPage = () => {
     () => options.users.filter((item) => recipientIds.includes(item.id)),
     [options.users, recipientIds],
   );
+  /* The one reason Send is unavailable, said beside the button rather than
+     left for the person to guess. Empty when the conversation can be sent. */
+  const toGroup = recipientMode === "group" || announcement;
+  const sendBlocker = accessIssue
+    || (!firstMessage.trim() ? t("messagesPage.blocker_message") : "")
+    || (toGroup && !groupCode ? t("messagesPage.blocker_group") : "")
+    || (!toGroup && recipientIds.length === 0 ? t("messagesPage.blocker_recipient") : "");
 
   return <div className="page-container space-y-4">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-2xl font-bold">{t("messagesPage.project_communication")}</h1><p className="text-sm text-muted-foreground">{t("messagesPage.direct_team_announcement_and_contextual")}</p></div>
-      <Button onClick={() => setComposeOpen(true)}>{t("messagesPage.new_conversation")}</Button>
-    </div>
+    <PageHeader
+      context={workspace.project?.name}
+      title={t("messagesPage.project_communication")}
+      description={t("messagesPage.direct_team_announcement_and_contextual")}
+      actions={hasCapability("message.send") && !accessIssue && <Button leftIcon={<Plus size={15} />} onClick={() => setComposeOpen(true)}>{t("messagesPage.new_conversation")}</Button>}
+    />
+    {accessIssue && <p role="alert" className="rounded-lg border border-state-review/40 bg-wash-review px-4 py-3 text-sm text-state-review">{accessIssue}</p>}
+    {!workspace.projectId && projects.length === 0 && !accessIssue && (
+      <p role="status" className="rounded-lg border px-4 py-3 text-sm text-muted-foreground">{t("messagesPage.no_projects_to_message")}</p>
+    )}
     {!workspace.projectId && <Card><Select label={t("messagesPage.project")} value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} options={projects.map((project) => ({ value: project.id, label: project.name }))} /></Card>}
     <Card className="flex flex-wrap items-center gap-2 p-3">
-      {tabs.map((item) => <Button key={item.value} size="sm" variant={tab === item.value ? "primary" : "ghost"} onClick={() => setTab(item.value)}>{item.label}</Button>)}
-      <div className="ml-auto min-w-56"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("messagesPage.search_messages_or_people")} /></div>
+      <Tabs items={tabs} value={tab} onChange={setTab} label={t("messagesPage.project_communication")} className="border-b-0" />
+      <div className="ms-auto min-w-56"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("messagesPage.search_messages_or_people")} /></div>
     </Card>
-    <div className="grid min-h-[610px] overflow-hidden rounded-xl border bg-card lg:grid-cols-[340px_1fr]">
+    <div className="grid min-h-[610px] overflow-hidden border bg-card lg:grid-cols-[340px_1fr]">
       <aside className="border-b lg:border-b-0 lg:border-r">
         <div className="max-h-[610px] overflow-y-auto">
           {items.map((conversation) => <button key={conversation.id} type="button" onClick={() => setSelectedId(conversation.id)}
@@ -319,14 +354,23 @@ export const MessagesPage = () => {
 
     <Modal isOpen={composeOpen} onClose={() => setComposeOpen(false)} title={t("messagesPage.new_project_conversation")} size="lg">
       <div className="space-y-4">
-        {hasCapability("message.broadcast") && <label className="flex items-center gap-2 rounded border p-3 text-sm font-medium"><input type="checkbox" checked={announcement} onChange={(event) => setAnnouncement(event.target.checked)} /> Project/team announcement</label>}
+        {hasCapability("message.broadcast") && <label className="flex items-center gap-2 rounded border p-3 text-sm font-medium"><input type="checkbox" checked={announcement} onChange={(event) => {
+          // An announcement goes to a group, and the group list then shows
+          // "All Project Members" first. The value used to stay empty while
+          // the list displayed that option, so Send never enabled — for the
+          // project manager as much as anyone (QA 2026-10-22).
+          setAnnouncement(event.target.checked);
+          setGroupCode(event.target.checked ? "ALL_PROJECT_MEMBERS" : "");
+        }} /> {t("messagesPage.project_announcement")}</label>}
         {!announcement && <Select label={t("messagesPage.send_to")} value={recipientMode} onChange={(event) => { setRecipientMode(event.target.value as typeof recipientMode); setRecipientIds([]); setGroupCode(""); }} options={[
           { value: "individual", label: "Individual" },
           { value: "multiple", label: "Multiple People" },
           ...(options.groups.length ? [{ value: "group", label: "Team / Group" }] : []),
         ]} />}
         {(recipientMode === "group" || announcement) ? <Select label={t("messagesPage.recipient_group")} value={groupCode} onChange={(event) => setGroupCode(event.target.value)} options={[
-          ...(announcement ? [{ value: "ALL_PROJECT_MEMBERS", label: "All Project Members" }] : []),
+          // A real empty choice, so what the list shows is what will be sent.
+          ...(announcement ? [] : [{ value: "", label: t("messagesPage.choose_group") }]),
+          ...(announcement ? [{ value: "ALL_PROJECT_MEMBERS", label: t("messagesPage.all_project_members") }] : []),
           ...options.groups.map((group) => ({ value: group.code, label: `${group.label} (${group.recipientCount})` })),
         ]} /> : <div>
           <p className="mb-2 text-sm font-medium">{t("messagesPage.project_recipients")}</p>
@@ -344,7 +388,8 @@ export const MessagesPage = () => {
         </div>}
         <Input label={t("messagesPage.title_optional")} value={title} onChange={(event) => setTitle(event.target.value)} />
         <label className="block text-sm font-medium">{t("messagesPage.message")}<textarea className="input mt-1 min-h-28 w-full" value={firstMessage} onChange={(event) => setFirstMessage(event.target.value)} maxLength={4000} /></label>
-        <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setComposeOpen(false)}>{t("messagesPage.cancel")}</Button><Button disabled={busy || !firstMessage.trim() || (!(recipientMode === "group" || announcement) && recipientIds.length === 0) || ((recipientMode === "group" || announcement) && !groupCode)} onClick={create}>{t("messagesPage.send")}</Button></div>
+        {sendBlocker && !busy && <p role="status" className="text-end text-xs text-muted-foreground">{sendBlocker}</p>}
+        <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setComposeOpen(false)}>{t("messagesPage.cancel")}</Button><Button disabled={busy || Boolean(sendBlocker)} onClick={create}>{t("messagesPage.send")}</Button></div>
       </div>
     </Modal>
 

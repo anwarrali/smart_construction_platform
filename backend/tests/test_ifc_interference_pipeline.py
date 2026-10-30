@@ -319,3 +319,10 @@ def test_metadata_quality_findings_are_still_aggregated_per_rule(db, processed):
     assert len(quality) == 1
     assert quality[0]["affectedElementCount"] == 4
     assert quality[0]["confidence"] == pytest.approx(1.0)
+
+
+def test_no_viewer_mesh_is_stored_now_that_the_3d_viewer_is_gone(processed):
+    # Tessellation still runs — the bounds above and the interference below
+    # depend on it — but its mesh had one reader, the removed website viewer,
+    # so it is no longer written to storage.
+    assert processed["version"].geometry_storage_key is None

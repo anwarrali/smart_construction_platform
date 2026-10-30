@@ -113,10 +113,10 @@ export const AdminDashboard = () => {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-5">
+      <div className="page-header">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("adminDash.administrator_dashboard")}</h1>
+          <h1 className="page-title">{t("adminDash.administrator_dashboard")}</h1>
           <p className="text-muted-foreground mt-1">
             {t("adminDash.company_users_project_registry_access")}
           </p>
@@ -145,20 +145,20 @@ export const AdminDashboard = () => {
           { label: t("adminDash.totalProjects"), value: summary.totalProjects, icon: Briefcase },
           { label: t("adminDash.activeProjects"), value: summary.activeProjects, icon: CheckCircle2 },
         ].map(({ label, value, icon: Icon }, index) => (
-          <div key={index} className="bg-card border rounded-lg p-5 shadow-sm">
+          <div key={index} className="bg-card border rounded-lg p-5">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">{label}</span>
               <span className="rounded-md bg-primary/10 p-2 text-primary">
                 <Icon size={17} />
               </span>
             </div>
-            <p className="mt-3 text-3xl font-bold">{value}</p>
+            <p className="mt-3 metric-value">{value}</p>
           </div>
         ))}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        <section className="bg-card border rounded-lg shadow-sm xl:col-span-2">
+        <section className="bg-card border rounded-lg xl:col-span-2">
           <div className="flex items-center justify-between border-b px-5 py-4">
             <div className="flex items-center gap-2">
               <Clock size={18} className="text-primary" />
@@ -192,7 +192,7 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section className="bg-card border rounded-lg p-5 shadow-sm">
+        <section className="bg-card border rounded-lg p-5">
           <div className="flex items-center gap-2">
             <Users size={18} className="text-primary" />
             <h2 className="text-base font-semibold">{t("adminDash.user_role_distribution")}</h2>
@@ -204,8 +204,8 @@ export const AdminDashboard = () => {
                   <span className="font-medium">{role}</span>
                   <span className="text-muted-foreground">{count}</span>
                 </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${percentage}%` }} />
+                <div className="h-2 bg-muted overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: `${percentage}%` }} />
                 </div>
               </div>
             ))}
@@ -217,7 +217,7 @@ export const AdminDashboard = () => {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        <section className="bg-card border rounded-lg shadow-sm xl:col-span-2">
+        <section className="bg-card border rounded-lg xl:col-span-2">
           <div className="flex items-center justify-between border-b px-5 py-4">
             <div className="flex items-center gap-2">
               <FolderKanban size={18} className="text-primary" />
@@ -250,7 +250,7 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section className="bg-card border rounded-lg p-5 shadow-sm">
+        <section className="bg-card border rounded-lg p-5">
           <div className="flex items-center gap-2">
             <Settings size={18} className="text-primary" />
             <h2 className="text-base font-semibold">{t("adminDash.system_administration")}</h2>

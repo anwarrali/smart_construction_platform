@@ -1,0 +1,307 @@
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> b2ac9f00788a, baseline
+INFO  [alembic.runtime.migration] Running upgrade b2ac9f00788a -> e3fd29975a61, add_enterprise_auth_fields
+INFO  [alembic.runtime.migration] Running upgrade e3fd29975a61 -> f4a8c2d91e03, Enterprise auth: companies, password reset tokens, engineer role.
+INFO  [alembic.runtime.migration] Running upgrade f4a8c2d91e03 -> 21c42705f208, preserve legacy revision without duplicating enterprise tables
+INFO  [alembic.runtime.migration] Running upgrade 21c42705f208 -> 8bb2a0d86e6d, add consultant role
+INFO  [alembic.runtime.migration] Running upgrade 8bb2a0d86e6d -> 9c31f7292a10, task review workflow
+INFO  [alembic.runtime.migration] Running upgrade 9c31f7292a10 -> c4d7a2b19f11, persist task comments and review history
+INFO  [alembic.runtime.migration] Running upgrade c4d7a2b19f11 -> d5e8c3a20f22, fix enum labels added with incompatible case
+INFO  [alembic.runtime.migration] Running upgrade d5e8c3a20f22 -> e6f9d4b31a33, normalize legacy engineer roles
+INFO  [alembic.runtime.migration] Running upgrade e6f9d4b31a33 -> f7a0e5c42b44, add audit timestamp defaults
+INFO  [alembic.runtime.migration] Running upgrade f7a0e5c42b44 -> g8b1f6d53c55, complete site report workflow
+INFO  [alembic.runtime.migration] Running upgrade g8b1f6d53c55 -> h9c2a7e64d66, add design change impact fields
+INFO  [alembic.runtime.migration] Running upgrade h9c2a7e64d66 -> i10d3b8f75e77, add audit logs
+INFO  [alembic.runtime.migration] Running upgrade i10d3b8f75e77 -> j11e4c9a86f88, complete issue workflow fields
+INFO  [alembic.runtime.migration] Running upgrade j11e4c9a86f88 -> k12f5d0b97a99, persist revoked tokens
+INFO  [alembic.runtime.migration] Running upgrade k12f5d0b97a99 -> l13a6e1ca8baa, project assignments and contextual attachments
+INFO  [alembic.runtime.migration] Running upgrade l13a6e1ca8baa -> m14b7f2da9c01, classify contractor and external consultant engineers
+INFO  [alembic.runtime.migration] Running upgrade m14b7f2da9c01 -> n15c8a3eb7d20, finalize supported roles and project team assignments
+INFO  [alembic.runtime.migration] Running upgrade n15c8a3eb7d20 -> o16d9b4fc8e31, Enforce inclusive calendar-day task durations.
+INFO  [alembic.runtime.migration] Running upgrade o16d9b4fc8e31 -> p17e0c5ad9f42, Add persistent project-scoped task codes.
+INFO  [alembic.runtime.migration] Running upgrade p17e0c5ad9f42 -> q18f1d6bea53, Replace the single task assignee with many-to-many task assignments.
+INFO  [alembic.runtime.migration] Running upgrade q18f1d6bea53 -> r19a2e7c94b64, Add normalized milestones, task milestone links, and project messages.
+INFO  [alembic.runtime.migration] Running upgrade r19a2e7c94b64 -> s20b3f8d05c75, consultant engineer review gates and traceable submissions
+INFO  [alembic.runtime.migration] Running upgrade s20b3f8d05c75 -> t21c4a9e6d80, configurable project Consultant approval workflow
+INFO  [alembic.runtime.migration] Running upgrade t21c4a9e6d80 -> u22d5b0f7e91, workers and field evidence submissions
+INFO  [alembic.runtime.migration] Running upgrade u22d5b0f7e91 -> v23e6c1a8f02, smart evidence photo archive and normalized categories
+INFO  [alembic.runtime.migration] Running upgrade v23e6c1a8f02 -> w24f7d2b9a13, normalized project conversations and per-user read state
+INFO  [alembic.runtime.migration] Running upgrade w24f7d2b9a13 -> x25a8e3c0b24, durable AI voice analyses and confirmation provenance
+INFO  [alembic.runtime.migration] Running upgrade x25a8e3c0b24 -> y26b9f4d1c35, complete voice command workflow
+INFO  [alembic.runtime.migration] Running upgrade y26b9f4d1c35 -> z27c0a5e2d46, add deterministic voice action risk and evidence metadata
+INFO  [alembic.runtime.migration] Running upgrade z27c0a5e2d46 -> a28d1b6f3e57, add task voice evidence policy
+INFO  [alembic.runtime.migration] Running upgrade a28d1b6f3e57 -> b29e2c7d4f60, add project-scoped IFC intelligence and versioning
+INFO  [alembic.runtime.migration] Running upgrade b29e2c7d4f60 -> c30f4a6b8e71, Add IFC version type and processing duration.
+INFO  [alembic.runtime.migration] Running upgrade c30f4a6b8e71 -> d31a7c9e4f82, IFC geometry artifacts and persistent AI insights.
+INFO  [alembic.runtime.migration] Running upgrade d31a7c9e4f82 -> e32a1b4c5d67, AI action versions, domain events, and provider metrics.
+INFO  [alembic.runtime.migration] Running upgrade e32a1b4c5d67 -> aa28d1e6f3a7, accountable collaboration owner requests and site visits
+INFO  [alembic.runtime.migration] Running upgrade aa28d1e6f3a7 -> ab29f7e4b810, Per-user project view state for a real "since your last visit" window
+INFO  [alembic.runtime.migration] Running upgrade ab29f7e4b810 -> ac30a8f5c921, Administrator-configurable permissions and consultant engineer scopes.
+INFO  [alembic.runtime.migration] Running upgrade ac30a8f5c921 -> ad31b9c6d032, Structured parameters so AI insights can be rendered in any language.
+INFO  [alembic.runtime.migration] Running upgrade ad31b9c6d032 -> ae32c1d7e043, A stable message key for AI insights.
+INFO  [alembic.runtime.migration] Running upgrade ae32c1d7e043 -> cff92f4479c8, Backfill message_key/message_params_json on legacy ai_insights rows.
+INFO  [alembic.runtime.migration] Running upgrade cff92f4479c8 -> cb5b61953ad8, Index the project_id columns three hot query paths actually filter on.
+INFO  [alembic.runtime.migration] Running upgrade cb5b61953ad8 -> d32b6f5a1c93, add rejection reason to site reports
+INFO  [alembic.runtime.migration] Running upgrade d32b6f5a1c93 -> e43c7a6b2d04, message forwarding chain
+INFO  [alembic.runtime.migration] Running upgrade e43c7a6b2d04 -> f54d8b7c3e15, message entity sharing (forward/consult on project entities)
+INFO  [alembic.runtime.migration] Running upgrade f54d8b7c3e15 -> a65e9c8d4b27, smart notifications: priority, deduplication key, localizable message, hot-path indexes
+INFO  [alembic.runtime.migration] Running upgrade a65e9c8d4b27 -> b76f1a3c9e58, step-up authentication: OTP challenges, step-up grants, rate limit counters
+INFO  [alembic.runtime.migration] Running upgrade b76f1a3c9e58 -> c87g2b4d0f69, Give voice action drafts a deterministic order.
+INFO  [alembic.runtime.migration] Running upgrade c87g2b4d0f69 -> d88f3a1b6c72, push notifications: per-device FCM registration tokens
+INFO  [alembic.runtime.migration] Running upgrade d88f3a1b6c72 -> e91c4d7a3f26, RAG MVP: document_chunks table and document indexing state
+INFO  [alembic.runtime.migration] Running upgrade e91c4d7a3f26 -> f92d5e8b4a37, Coordination findings carry confidence and location
+INFO  [alembic.runtime.migration] Running upgrade f92d5e8b4a37 -> a03e6f9c5b48, File intelligence: detected format, suggested type, and three document kinds
+INFO  [alembic.runtime.migration] Running upgrade a03e6f9c5b48 -> b14f7a2c9e63, Agent run records
+INFO  [alembic.runtime.migration] Running upgrade b14f7a2c9e63 -> c15a8d2e7f10, RBAC v2 expand: configurable roles, disciplines and external project parties
+INFO  [alembic.runtime.migration] Running upgrade c15a8d2e7f10 -> d26b9f4a1e08, Rename the discipline-scope permission and seed the new work-scope codes
+INFO  [alembic.runtime.migration] Running upgrade d26b9f4a1e08 -> e48c1b6d3f27, Record which legacy enum value a configurable role provisions accounts with
+INFO  [alembic.runtime.migration] Running upgrade e48c1b6d3f27 -> f59d2c8e4a13, Seed the module-view permissions onto the roles that already reach those pages
+INFO  [alembic.runtime.migration] Running upgrade f59d2c8e4a13 -> aa41c7d2e908, Unified file ingestion: ingested_files and ingestion_jobs
+INFO  [alembic.runtime.migration] Running upgrade aa41c7d2e908 -> b52e9a1c4d70, RAG on ingested files: indexing lifecycle, and a second chunk source
+INFO  [alembic.runtime.migration] Running upgrade b52e9a1c4d70 -> c63fa2b5e819, Move embeddings from JSONB to pgvector, with an HNSW cosine index
+INFO  [alembic.runtime.migration] Running upgrade c63fa2b5e819 -> d74ab3c6f92a, Project re-index jobs, and a timestamp that makes a stale run detectable
+INFO  [alembic.runtime.migration] Running upgrade d74ab3c6f92a -> e71d5a3c9b42, Long-lived, project-scoped credentials for MCP clients
+INFO  [alembic.runtime.migration] Running upgrade e71d5a3c9b42 -> f81c3a5d9e64, Give documents a private-storage key
+INFO  [alembic.runtime.migration] Running upgrade f81c3a5d9e64 -> a92d4e1f70b3, Grant the new `project.delete` permission to the roles that already had it
+INFO  [alembic.runtime.migration] Running upgrade a92d4e1f70b3 -> b73f5c8a2e91, Give archived roles a column that says so
+INFO  [alembic.runtime.migration] Running upgrade b73f5c8a2e91 -> c84d6e2f1a37, Grant `message.broadcast` to the roles that could already broadcast
+INFO  [alembic.runtime.migration] Running upgrade c84d6e2f1a37 -> e1a9c3d5f720, Remove the retired role model: the configurable roles are the only source
+INFO  [alembic.runtime.migration] Running upgrade e1a9c3d5f720 -> f2b7d4e9a061, Durable background job queue
+INFO  [alembic.runtime.migration] Running upgrade f2b7d4e9a061 -> g4d1e7a2b958, Add the shared QA/QC discipline
+INFO  [alembic.runtime.migration] Running upgrade g4d1e7a2b958 -> h5e2f8b3c069, Grant the new `agents.view` permission to the Office Administrator role
+INFO  [alembic.runtime.migration] Running upgrade h5e2f8b3c069 -> i6f3a9c4d170, Split working inside every project from seeing every project (QA-06B)
+[a92d4e1f70b3] granted project.delete to 0 role(s)
+[b73f5c8a2e91] marked 0 role(s) archived
+[c84d6e2f1a37] granted message.broadcast to 0 role(s)
+[h5e2f8b3c069] granted agents.view to 0 role(s)
+[i6f3a9c4d170] granted platform.work_in_all_projects to 0 role(s), carried 0 override(s)
+Initial administrator bootstrap skipped: no bootstrap variables are configured.
+Seeded disciplines and role templates on a fresh database (migration=i6f3a9c4d170).
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 15%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 28%]
+........................................................................ [ 30%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+.......................s................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+...........F............................................................ [ 74%]
+........................................................................ [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 97%]
+..............................................................           [100%]
+=================================== FAILURES ===================================
+__________ test_the_background_job_indexes_and_closes_its_own_session __________
+
+db = <sqlalchemy.orm.session.Session object at 0x7e13e6a5be90>
+target = _Target(model=<class 'app.models.ingestion.IngestedFile'>, id=UUID('9b4ac3b1-9e7c-4a5e-a082-f1075ee1f948'), project_id...=ChunkSource(document_id=None, ingested_file_id=UUID('9b4ac3b1-9e7c-4a5e-a082-f1075ee1f948')), tracks_page_count=False)
+read_pages = <function index_ingested_file.<locals>.read_pages at 0x7e13e6a27c40>
+
+    def _run(
+        db: Session,
+        target: _Target,
+        read_pages,
+        *,
+        embedding_service: EmbeddingService | None,
+        store: VectorStore | None,
+        force: bool,
+    ) -> IndexResult:
+        """The indexing state machine, shared by both sources.
+    
+        `read_pages` is the only thing that varies, and it is called *after* the
+        claim so that a slow extraction cannot be started twice concurrently.
+        """
+        embedding_service = embedding_service or EmbeddingService()
+        store = store or get_vector_store()
+        project_id = target.project_id
+    
+        _claim(db, target, force=force)
+    
+        try:
+            pages = read_pages()
+            chunks = chunk_pages(pages)
+            if not chunks:
+                raise DocumentTextError("No indexable text could be extracted from this file")
+        except DocumentTextError as error:
+            _fail(db, target, str(error))
+            raise IndexingFailed(str(error)) from error
+    
+        started = time.monotonic()
+        try:
+>           embedded = embedding_service.embed([chunk.content for chunk in chunks])
+
+app/services/rag/ingestion.py:362: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/rag/embeddings.py:78: in embed
+    client = self._configured_client()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.rag.embeddings.EmbeddingService object at 0x7e13e6a32810>
+
+    def _configured_client(self):
+        if self._client is not None:
+            return self._client
+        # Imported here so this module can be imported — and unit-tested with
+        # a stub — in an environment with no `openai` package installed.
+        from app.ai.construction_analysis_service import OpenAI
+    
+        if not settings.OPENAI_API_KEY:
+>           raise EmbeddingError("OPENAI_API_KEY is not configured on this server")
+E           app.services.rag.embeddings.EmbeddingError: OPENAI_API_KEY is not configured on this server
+
+app/services/rag/embeddings.py:60: EmbeddingError
+
+The above exception was the direct cause of the following exception:
+
+db = <sqlalchemy.orm.session.Session object at 0x7e13e6d48750>
+world = {'manager': <User id=4581848a-c942-4eff-adc9-f16ebbb47c86 email=ragpm-3a9efa2da1@example.com org_role_id=a70a658e-8c96...73-4ec7-86d6-3148b821aa42 email=ragowner-3a9efa2da1@example.com org_role_id=a7ae2a97-b1c5-4d63-bb7e-d650435c122e>, ...}
+
+    def test_the_background_job_indexes_and_closes_its_own_session(db, world):
+        file = pdf_file(db, world, ["Retention is five per cent."])
+        db.commit()
+>       ingestion.index_ingested_file_job(file.id)
+
+tests/test_rag_ingested_files.py:815: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/rag/ingestion.py:502: in index_ingested_file_job
+    index_ingested_file(db, file, force=force)
+app/services/rag/ingestion.py:325: in index_ingested_file
+    return _run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.orm.session.Session object at 0x7e13e6a5be90>
+target = _Target(model=<class 'app.models.ingestion.IngestedFile'>, id=UUID('9b4ac3b1-9e7c-4a5e-a082-f1075ee1f948'), project_id...=ChunkSource(document_id=None, ingested_file_id=UUID('9b4ac3b1-9e7c-4a5e-a082-f1075ee1f948')), tracks_page_count=False)
+read_pages = <function index_ingested_file.<locals>.read_pages at 0x7e13e6a27c40>
+
+    def _run(
+        db: Session,
+        target: _Target,
+        read_pages,
+        *,
+        embedding_service: EmbeddingService | None,
+        store: VectorStore | None,
+        force: bool,
+    ) -> IndexResult:
+        """The indexing state machine, shared by both sources.
+    
+        `read_pages` is the only thing that varies, and it is called *after* the
+        claim so that a slow extraction cannot be started twice concurrently.
+        """
+        embedding_service = embedding_service or EmbeddingService()
+        store = store or get_vector_store()
+        project_id = target.project_id
+    
+        _claim(db, target, force=force)
+    
+        try:
+            pages = read_pages()
+            chunks = chunk_pages(pages)
+            if not chunks:
+                raise DocumentTextError("No indexable text could be extracted from this file")
+        except DocumentTextError as error:
+            _fail(db, target, str(error))
+            raise IndexingFailed(str(error)) from error
+    
+        started = time.monotonic()
+        try:
+            embedded = embedding_service.embed([chunk.content for chunk in chunks])
+        except EmbeddingError as error:
+            latency = int((time.monotonic() - started) * 1000)
+            _fail(db, target, str(error))
+            # Logged after the failure is committed, so the audit trail survives
+            # even though the ingestion transaction was rolled back.
+            _record_provider_call(
+                db, project_id=project_id, reason="rag.embed",
+                model=embedding_service.model, latency_ms=latency,
+                success=False, error_code="embedding_error",
+                metadata={"sourceId": str(target.id), "source": target.source.kind,
+                          "chunks": len(chunks)},
+            )
+            db.commit()
+>           raise IndexingFailed(str(error)) from error
+E           app.services.rag.ingestion.IndexingFailed: OPENAI_API_KEY is not configured on this server
+
+app/services/rag/ingestion.py:376: IndexingFailed
+=============================== warnings summary ===============================
+../usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:268
+../usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:268
+../usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:268
+../usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:268
+  /usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:268: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+../usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+../usr/local/lib/python3.11/site-packages/pydantic/_internal/_fields.py:149
+  /usr/local/lib/python3.11/site-packages/pydantic/_internal/_fields.py:149: UserWarning: Field "model_revision_id" has conflict with protected namespace "model_".
+  
+  You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+    warnings.warn(
+
+../usr/local/lib/python3.11/site-packages/httpx/_client.py:690: 1 warning
+tests/test_ai_voice.py: 3 warnings
+tests/test_file_download_authorization.py: 18 warnings
+tests/test_ifc_authorization.py: 83 warnings
+tests/test_ifc_downloads_and_limits.py: 11 warnings
+tests/test_ifc_findings_pagination.py: 15 warnings
+tests/test_ifc_upload_reliability.py: 7 warnings
+tests/test_mcp.py: 17 warnings
+tests/test_mcp_hardening.py: 21 warnings
+tests/test_notification_api.py: 16 warnings
+tests/test_permission_capabilities.py: 45 warnings
+tests/test_qa_pass_2026_10_17.py: 16 warnings
+tests/test_qa_pass_2026_10_22.py: 7 warnings
+tests/test_rag_api.py: 23 warnings
+tests/test_rbac_customization.py: 27 warnings
+tests/test_request_context.py: 3 warnings
+tests/test_step_up_security.py: 2 warnings
+tests/test_task_update_reliability.py: 36 warnings
+  /usr/local/lib/python3.11/site-packages/httpx/_client.py:690: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/test_bootstrap_admin.py::test_fresh_bootstrap_hash_authenticates_and_wrong_password_is_rejected
+  /usr/local/lib/python3.11/site-packages/passlib/handlers/argon2.py:716: DeprecationWarning: Accessing argon2.__version__ is deprecated and will be removed in a future release. Use importlib.metadata directly to query for argon2-cffi's packaging metadata.
+    _argon2_cffi.__version__, max_version)
+
+tests/test_company_scoping_consistency.py: 5 warnings
+tests/test_permission_capabilities.py: 2 warnings
+tests/test_platform_view_all_projects.py: 2 warnings
+tests/test_qa_pass_2026_10_22.py: 3 warnings
+  /app/app/api/projects.py:180: SAWarning: Coercing Subquery object into a select() for use in IN(); please pass a select() construct explicitly
+    | Project.id.in_(member_project_ids)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+------------------ generated xml file: /out/backend_junit.xml ------------------
+=========================== short test summary info ============================
+FAILED tests/test_rag_ingested_files.py::test_the_background_job_indexes_and_closes_its_own_session
+1 failed, 2796 passed, 1 skipped, 370 warnings in 896.28s (0:14:56)
+exit 1

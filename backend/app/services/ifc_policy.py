@@ -77,7 +77,8 @@ class IFCError:
 ERRORS = {
     "IFC_FILE_CORRUPTED": IFCError("IFC file could not be read", "The file may be incomplete or exported in an unsupported format.", True, "Export the model again or retry"),
     "IFC_PARSER_UNAVAILABLE": IFCError("IFC processing is unavailable", "The server IFC parser is not installed correctly.", True, "Contact support"),
-    "IFC_ENTITY_LIMIT_EXCEEDED": IFCError("Model is too large", "This model exceeds the configured safe entity limit.", False, "Upload a discipline or storey model"),
+    "IFC_ENTITY_LIMIT_EXCEEDED": IFCError("Model has too many building elements", "This model contains more building elements than the configured limit allows.", True, "Upload a discipline or storey model, or retry after an administrator reviews IFC_MAX_ENTITY_COUNT"),
+    "IFC_MODEL_TOO_LARGE_FOR_HOST": IFCError("Model needs more memory than this server allows", "Processing this model would exceed the memory budget for one IFC parse. The file is stored unchanged.", True, "Upload a discipline or storey model, or retry after an administrator raises IFC_PARSE_MEMORY_MB on a larger host"),
     "IFC_PARSE_TIMEOUT": IFCError("IFC processing timed out", "The model did not finish parsing within the configured safety window.", True, "Retry or upload a smaller discipline model"),
     "IFC_PARSER_OUT_OF_MEMORY": IFCError("Model needs more memory than this server has", "Processing was stopped by the operating system before it could finish.", True, "Upload a discipline or storey model, or ask an administrator for a larger processing host"),
     "IFC_PROCESSING_FAILED": IFCError("IFC processing did not complete", "Extraction stopped before the model could be stored. The uploaded file is unchanged.", True, "Retry processing, then contact support with the support log ID"),
@@ -85,6 +86,11 @@ ERRORS = {
     "IFC_DUPLICATE": IFCError("This IFC is already uploaded", "The exact same file already exists in this project.", False, "Open the existing version"),
     "IFC_COMPARISON_GROUP_MISMATCH": IFCError("Versions cannot be compared", "Choose two versions from the same model group.", False, "Select compatible versions"),
 }
+
+
+def is_retryable(code: str | None) -> bool:
+    """Whether processing this failure again could succeed. Unknown codes are retryable."""
+    return True if not code else ERRORS.get(code, IFCError("", "", True, "")).retryable
 
 
 def friendly_ifc_error(code: str, support_log_id: str | None = None) -> dict:

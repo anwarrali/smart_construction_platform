@@ -59,6 +59,12 @@ def execute_confirmed_actions(
     }
     seen: set[int] = set()
     results: list[ActionExecutionResult] = []
+    # Targets on which an earlier step in this same confirmation did not apply.
+    # Steps spoken together about one record depend on each other — "start TSK-001
+    # and set it to 30%" — and applying the later one after the earlier was
+    # refused left a task at 30% that nobody had started (seen live: START_TASK
+    # rejected for the manager, UPDATE_TASK_PROGRESS then committed).
+    failed_targets: set[str] = set()
     for request in requested:
         if request.action_index in seen:
             raise HTTPException(status_code=422, detail="Each suggested action may be confirmed once per request")
@@ -81,6 +87,16 @@ def execute_confirmed_actions(
         if request.target_id is not None:
             source["targetId"] = str(request.target_id)
         source["payload"] = payload
+        target_key = str(source.get("targetId") or "")
+        if target_key and target_key in failed_targets:
+            results.append(ActionExecutionResult(
+                action_index=request.action_index,
+                type=SuggestedActionType(source["type"]),
+                success=False,
+                status="SKIPPED",
+                message="Not applied: an earlier step on the same record in this request was not applied",
+            ))
+            continue
         try:
             action = SuggestedAction.model_validate(source)
             result = _execute_one(
@@ -105,6 +121,8 @@ def execute_confirmed_actions(
                 status="INVALID",
                 message=str(exc),
             )
+        if not result.success and target_key:
+            failed_targets.add(target_key)
         results.append(result)
 
     analysis = db.get(VoiceAnalysis, analysis.id)

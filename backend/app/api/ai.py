@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -55,6 +56,8 @@ from app.services import voice_metrics
 from app.services.voice_metrics import VoiceLatency
 from app.services.voice_action_policy import user_facing_error
 
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["AI Voice Foundation"])
 
 
@@ -394,6 +397,18 @@ async def _process_analysis(
             analysis.error_code = "VOICE_TIMEOUT"
         else:
             analysis.error_code = "VOICE_PROCESSING_FAILED"
+        # The support ID the user sees must lead somewhere. Six failures on
+        # 2026-10-17 were recorded only as "AIProviderError" — unreachable
+        # provider, rejected audio and "no speech" all look the same that way.
+        # Exception class, the cause's class and the provider's own message:
+        # never the audio, the transcript or a credential.
+        cause = exc.__cause__
+        logger.warning(
+            "voice processing failed support_id=%s analysis=%s project=%s code=%s error=%s: %s cause=%s",
+            support_log_id, analysis.id, analysis.project_id, analysis.error_code,
+            type(exc).__name__, str(exc)[:300],
+            f"{type(cause).__name__}: {str(cause)[:300]}" if cause else None,
+        )
         friendly = user_facing_error(analysis.error_code)
         analysis.error_detail = friendly["description"]
         analysis.provider_metadata = {

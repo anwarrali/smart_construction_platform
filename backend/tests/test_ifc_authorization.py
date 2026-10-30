@@ -613,7 +613,6 @@ def test_an_outsider_holding_every_ifc_permission_is_refused_another_project(cli
     "/versions/{version}/elements",
     "/versions/{version}/overview",
     "/versions/{version}/geometry/status",
-    "/versions/{version}/geometry/mapping",
     "/versions/{version}/project-data",
     "/versions/{version}/storeys",
     "/versions/{version}/spaces",
@@ -915,24 +914,16 @@ def test_download_needs_its_own_permission_not_merely_view(client, db, world):
     ).status_code == 403
 
 
-def test_the_generated_viewer_asset_follows_the_same_project_scoping(client, world):
-    """`geometry/asset` serves a file too, and is scoped the same way.
-
-    The 409 is the right refusal for the caller's own project — no geometry has
-    been generated — and the 404 is the point: another project's revision is
-    not found at all, so the two answers never converge into a probe.
-    """
-    own = client.get(
-        ifc_url(world["project_b"].id, f"/versions/{world['b']['version'].id}/geometry/asset"),
-        headers=_auth(client, world["outsider"]),
+@pytest.mark.parametrize("route", ["geometry/asset", "geometry/mapping"])
+def test_the_removed_3d_viewer_endpoints_are_gone(client, world, route):
+    """The website's 3D viewer was removed (QA pass 2026-10-17), and with it the
+    two endpoints that delivered its mesh and element mapping. Nothing should
+    answer on them — not even for the version's own project."""
+    response = client.get(
+        ifc_url(world["project_a"].id, f"/versions/{world['a']['version'].id}/{route}"),
+        headers=_auth(client, world["manager"]),
     )
-    assert own.status_code == 409
-
-    theirs = client.get(
-        ifc_url(world["project_b"].id, f"/versions/{world['a']['version'].id}/geometry/asset"),
-        headers=_auth(client, world["outsider"]),
-    )
-    assert theirs.status_code == 404
+    assert response.status_code in {404, 405}
 
 
 # --- feature flag -----------------------------------------------------------

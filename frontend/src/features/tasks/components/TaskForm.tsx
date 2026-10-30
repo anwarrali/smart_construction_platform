@@ -12,6 +12,8 @@ import { projectsService } from "../../projects/services/projects.service";
 import { tasksService } from "../services/tasks.service";
 import api from "../../../services/api";
 import type { Milestone } from "../../../types/milestone";
+import { X } from "lucide-react";
+import { useDisciplineOptions } from "../../../hooks/useDisciplineOptions";
 
 interface TaskFormProps {
   isOpen: boolean;
@@ -91,6 +93,9 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
   const [reviewDueDate, setReviewDueDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  // One catalogue for create and edit; a task saved under a retired
+  // discipline keeps showing it.
+  const { options: disciplineOptions } = useDisciplineOptions(task?.discipline);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -186,23 +191,36 @@ export const TaskForm = ({ isOpen, onClose, onSubmit, task, projectId }: TaskFor
 
   return <Modal isOpen={isOpen} onClose={onClose} title={task ? `Edit ${task.taskCode}` : "Create Task"} size="xl">
     <form onSubmit={handleSubmit} className="space-y-5">
-      {error && <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
-      {!activeProjectId && <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Open a project workspace to create a task. The project is taken automatically from that context.</div>}
+      {error && <div className="rounded-md bg-wash-overdue px-4 py-3 text-sm text-state-overdue">{error}</div>}
+      {!activeProjectId && <div className="rounded-md border border-state-review/30 bg-wash-review px-4 py-3 text-sm text-state-review">Open a project workspace to create a task. The project is taken automatically from that context.</div>}
       <div className="grid gap-4 md:grid-cols-2">
         <Input label={t("taskForm.task_name")} value={name} onChange={(event) => setName(event.target.value)} required />
         <Input label={t("taskForm.description")} value={description} onChange={(event) => setDescription(event.target.value)} />
         <Select label={t("taskForm.status")} options={task ? EDIT_STATUSES : CREATE_STATUSES} value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)} />
         <Select label={t("taskForm.priority")} options={PRIORITIES} value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)} />
-        <Select label={t("taskForm.discipline")} value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={[
-          { value: "civil", label: "Civil" }, { value: "architectural", label: "Architectural" },
-          { value: "electrical", label: "Electrical" }, { value: "mechanical", label: "Mechanical" },
-        ]} />
+        <Select label={t("taskForm.discipline")} value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={disciplineOptions} />
         <Select label={t("taskForm.milestone")} value={milestoneId} onChange={(event) => setMilestoneId(event.target.value)} options={[{ value: "", label: "No milestone" }, ...milestones.map((milestone) => ({ value: milestone.id, label: `${milestone.milestoneCode} — ${milestone.name}` }))]} />
       </div>
 
       <div className="rounded-lg border p-4">
-        <div className="flex items-center justify-between gap-3"><h3 className="font-medium">{t("taskForm.assigned_team_members")}</h3><span className="rounded-full bg-muted px-2 py-1 text-xs font-medium">{assigneeIds.length ? `${assigneeIds.length} selected` : "Unassigned"}</span></div>
-        <p className="mb-3 text-xs text-muted-foreground">Select one or multiple active project members. Leave every option unchecked to keep the task unassigned.</p>
+        <div className="flex items-center justify-between gap-3"><h3 className="font-medium">{t("taskForm.assigned_team_members")}</h3><span className="bg-muted px-2 py-1 text-xs font-medium">{assigneeIds.length ? `${assigneeIds.length} selected` : "Unassigned"}</span></div>
+        <p className="mb-3 text-xs text-muted-foreground">{t("taskForm.assignee_hint")}</p>
+        {/* Everyone currently selected, in one place — the checklist below is
+            filtered by the search box and scrolls, so ticks alone were easy to
+            miss. Someone who is no longer assignable (left the project, lost
+            the permission) stays visible and removable instead of silently
+            riding along in the save and failing it. */}
+        {assigneeIds.length > 0 && <ul className="mb-3 flex flex-wrap gap-1.5" aria-label={t("taskForm.assigned_team_members")}>
+          {assigneeIds.map((userId) => {
+            const member = members.find((item) => item.userId === userId);
+            const stillEligible = assignableIds.length === 0 || assignableIds.includes(userId);
+            return <li key={userId} className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-xs ${stillEligible ? "bg-well" : "border-state-overdue/40 bg-wash-overdue text-state-overdue"}`}>
+              <span>{member?.user.fullName || t("taskForm.unknown_member")}</span>
+              {!stillEligible && <span className="font-semibold">· {t("taskForm.no_longer_assignable")}</span>}
+              <button type="button" className="inline-flex cursor-pointer border-none bg-transparent p-0 text-current" aria-label={t("taskForm.remove_assignee", { name: member?.user.fullName || "" })} onClick={() => toggleAssignee(userId)}><X size={12} aria-hidden /></button>
+            </li>;
+          })}
+        </ul>}
         <Input label={t("taskForm.search_assignees")} value={assigneeSearch} onChange={(event) => setAssigneeSearch(event.target.value)} placeholder={t("taskForm.name_role_discipline_company")} />
         <div className="mt-3 max-h-52 space-y-2 overflow-y-auto rounded border p-2">
           {eligibleMembers.map((member) => <label key={member.userId} className="flex cursor-pointer items-start gap-3 rounded p-2 hover:bg-muted/50">

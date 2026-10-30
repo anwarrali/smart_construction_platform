@@ -187,16 +187,16 @@ export const ProfilePage = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold">{t("profilePage.profile_settings")}</h1>
+          <h1 className="page-title">{t("profilePage.profile_settings")}</h1>
           <p className="text-muted-foreground">{t("profilePage.manage_your_account_contact_details")}</p>
         </div>
         <Button variant="outline" onClick={logout}>{t("profilePage.sign_out")}</Button>
       </div>
 
       {profile.mustChangePassword && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="rounded-md border border-state-review/30 bg-wash-review px-4 py-3 text-sm text-state-review">
           {t("profilePage.you_are_using_a_temporary_password")}
         </div>
       )}
@@ -206,7 +206,7 @@ export const ProfilePage = () => {
           <Card>
             <div className="flex flex-col items-center text-center">
               <div
-                className="w-24 h-24 rounded-full flex items-center justify-center text-white text-2xl font-bold overflow-hidden"
+                className="w-24 h-24 flex items-center justify-center text-white text-2xl font-bold overflow-hidden"
                 style={{ backgroundColor: getAvatarColor(profile.fullName) }}
               >
                 {profile.avatarUrl ? (

@@ -12,6 +12,8 @@ import multiprocessing
 import os
 import queue
 import struct
+import tempfile
+import time
 from array import array
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,10 +27,6 @@ from app.models.ifc import IFCElement, IFCModelVersion, IFCSpatialNode
 from app.services.private_storage import private_storage
 
 MAGIC = b"BIMGEO1\x00"
-
-
-def geometry_storage_key(version_id) -> str:
-    return f"ifc_geometry/{version_id}.bimgeom"
 
 
 #: Cap on per-element boxes carried back from the worker. Bounds travel through
@@ -158,21 +156,49 @@ def _geometry_worker(result_queue, args: tuple) -> None:
         result_queue.put({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
 
 
+#: How often the parent checks for a result and for a dead worker.
+GEOMETRY_POLL_SECONDS = 0.5
+#: After the worker exits, how long a result may still be in flight on the queue.
+GEOMETRY_EXIT_GRACE_SECONDS = 2.0
+
+
 def _build_with_timeout(args: tuple, timeout_seconds: int) -> dict:
+    """Run the tessellator in a child and collect its result, within a deadline.
+
+    The result is read from the queue *while* the child runs, never after
+    joining it. A child cannot exit until the data it put on a queue has been
+    taken out — the queue's feeder thread blocks on a full pipe — so the old
+    `join(timeout)`-then-read order deadlocked whenever the result outgrew the
+    pipe buffer (~64 KB). Per-element bounds put a 1,636-element model well
+    past that, and every such model "timed out" after the full 900 seconds
+    while the actual tessellation took seconds. See "Joining processes that use
+    queues" in the `multiprocessing` documentation.
+    """
     context = multiprocessing.get_context("spawn")
     result_queue = context.Queue(maxsize=1)
     process = context.Process(target=_geometry_worker, args=(result_queue, args), daemon=False)
     process.start()
-    process.join(timeout_seconds)
-    if process.is_alive():
-        process.terminate()
-        process.join(5)
-        raise TimeoutError(f"IfcOpenShell geometry conversion exceeded {timeout_seconds} seconds")
+    deadline = time.monotonic() + timeout_seconds
     try:
-        result = result_queue.get_nowait()
-    except queue.Empty as exc:
-        raise RuntimeError(f"Geometry worker exited without a result (exit code {process.exitcode})") from exc
+        while True:
+            remaining = deadline - time.monotonic()
+            try:
+                result = result_queue.get(timeout=max(0.1, min(GEOMETRY_POLL_SECONDS, remaining)))
+                break
+            except queue.Empty:
+                if not process.is_alive():
+                    try:
+                        result = result_queue.get(timeout=GEOMETRY_EXIT_GRACE_SECONDS)
+                        break
+                    except queue.Empty:
+                        raise RuntimeError(f"Geometry worker exited without a result (exit code {process.exitcode})") from None
+                if remaining <= 0:
+                    raise TimeoutError(f"IfcOpenShell geometry conversion exceeded {timeout_seconds} seconds") from None
     finally:
+        process.join(5)
+        if process.is_alive():
+            process.terminate()
+            process.join(5)
         result_queue.close()
     if not result.get("ok"):
         raise RuntimeError(result.get("error") or "Geometry worker failed")
@@ -238,7 +264,6 @@ def generate_geometry(db: Session, version_id) -> dict:
     version.geometry_error = None
     db.commit()
     started = perf_counter()
-    target: Path | None = None
     try:
         selectable_step_ids = {
             int(value) for (value,) in db.query(IFCElement.metadata_json["stepId"].astext)
@@ -248,8 +273,15 @@ def generate_geometry(db: Session, version_id) -> dict:
             int(value) for (value,) in db.query(IFCSpatialNode.metadata_json["stepId"].astext)
             .filter(IFCSpatialNode.version_id == version.id, IFCSpatialNode.node_type.in_(["BUILDING", "STOREY", "SPACE"])).all() if value
         )
-        key = geometry_storage_key(version.id)
-        with private_storage.writable_local_path(key) as target, private_storage.local_path(version.storage_key) as source:
+        # The website's 3D viewer was removed, and with it the only reader of
+        # the mesh file. Tessellation still runs because it is what measures
+        # each element's real extent — interference detection and the IFC
+        # knowledge context use those bounds — but the mesh is written to a
+        # scratch directory and discarded instead of being stored. Existing
+        # stored meshes and `geometry_storage_key` values are left untouched.
+        with tempfile.TemporaryDirectory(prefix="ifc-geometry-") as scratch, \
+                private_storage.local_path(version.storage_key) as source:
+            target = Path(scratch) / "mesh.bimgeom"
             args = (
                 source, target, selectable_step_ids,
                 {"workers": settings.IFC_GEOMETRY_WORKERS, "max_vertices": settings.IFC_GEOMETRY_MAX_VERTICES,
@@ -260,7 +292,6 @@ def generate_geometry(db: Session, version_id) -> dict:
         header["boundsStored"] = _store_element_bounds(db, version, bounds)
         duration_ms = int((perf_counter() - started) * 1000)
         header["durationMs"] = duration_ms
-        version.geometry_storage_key = key
         version.geometry_stats_json = header
         version.geometry_generated_at = datetime.now(timezone.utc)
         version.geometry_status = "GEOMETRY_PARTIAL" if header["partial"] else "GEOMETRY_READY"
@@ -268,8 +299,6 @@ def generate_geometry(db: Session, version_id) -> dict:
         db.commit()
         return {"status": version.geometry_status, **header}
     except Exception as exc:
-        if target:
-            target.with_suffix(target.suffix + ".tmp").unlink(missing_ok=True)
         version = db.get(IFCModelVersion, version_id)
         version.geometry_status = "GEOMETRY_FAILED"
         version.geometry_error = str(exc)[:4000]

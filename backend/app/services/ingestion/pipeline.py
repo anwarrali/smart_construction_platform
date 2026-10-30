@@ -365,11 +365,21 @@ def _queue_indexing(db: Session, file: IngestedFile) -> None:
 
 
 def process_file(file_id: uuid.UUID) -> None:
-    """The background entry point: its own session, committed or rolled back.
+    """The job runner's entry point (`ingestion.process_file`): its own session.
 
-    A background job cannot borrow the request's session — the request has
-    ended and the session with it. Opening and closing one here is what the IFC
-    jobs already do (`api/ifc._process_job`), for the same reason.
+    Two kinds of failure, kept apart on purpose:
+
+      * **The file is bad** — corrupt, unreadable, refused by a processor.
+        `run` records that as a FAILED file and returns normally: it is data,
+        and retrying cannot change it.
+      * **The run broke** — the database went away, a commit failed, a defect
+        in the pipeline. Nothing from the run survives the rollback, so the
+        failure is recorded on the file in a fresh transaction (FAILED,
+        PROCESSING_FAILED) and then **re-raised**: the job runner records the
+        job as failed and retries it with backoff, up to JOB_MAX_ATTEMPTS. A
+        retry finds the file FAILED, which `run` re-queues. This used to be
+        logged and swallowed, which left the file QUEUED with no error and the
+        job reading SUCCEEDED — nothing retried it and nobody could see why.
     """
     db = SessionLocal()
     try:
@@ -378,9 +388,40 @@ def process_file(file_id: uuid.UUID) -> None:
             return
         run(db, file)
         db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception("[Ingestion] processing run failed for %s", file_id)
+        _record_run_failure(file_id, exc)
+        raise
+    finally:
+        db.close()
+
+
+def _record_run_failure(file_id: uuid.UUID, exc: Exception) -> None:
+    """Mark the file and its job FAILED after a run that broke, in a new session.
+
+    The detail is internal — the API publishes only the error code — and names
+    the exception type and message, never file content. If even this cannot be
+    written (the database is the thing that failed), the job runner still has
+    the error on the job row, and the retry will try again.
+    """
+    db = SessionLocal()
+    try:
+        file = db.get(IngestedFile, file_id)
+        if file is None or not state.can_transition(file.status, state.FAILED):
+            return
+        job = (
+            db.query(IngestionJob)
+            .filter(IngestionJob.file_id == file.id, IngestionJob.job_type == "PROCESS")
+            .order_by(IngestionJob.created_at.desc())
+            .first()
+        )
+        outcome = ProcessorOutcome.failed(PROCESSING_FAILED, detail=f"{type(exc).__name__}: {exc}")
+        _settle(db, file, job, outcome, perf_counter())
+        db.commit()
     except Exception:
         db.rollback()
-        logger.exception("[Ingestion] background processing failed for %s", file_id)
+        logger.exception("[Ingestion] could not record the failed run for %s", file_id)
     finally:
         db.close()
 

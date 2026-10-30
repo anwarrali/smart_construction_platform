@@ -5,16 +5,18 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Plus } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { Modal, ModalActions } from "../../../components/ui/Modal";
 import { Select } from "../../../components/ui/Select";
 import { Table } from "../../../components/ui/Table";
 import type { Column } from "../../../components/ui/Table/Table";
 import { projectsService } from "../services/projects.service";
+import { DeleteProjectDialog } from "../components/DeleteProjectDialog";
 import { usersService } from "../../users/services/users.service";
 import api from "../../../services/api";
-import { projectWorkspaceBase } from "../../../utils/projectRoutes";
+import { projectEntryPath } from "../../../utils/projectRoutes";
 import { formatDate } from "../../../utils/date";
 import { useRole } from "../../../hooks/useRole";
 import { useVocabulary } from "../../../utils/vocabulary";
@@ -86,6 +88,7 @@ export const ProjectsPage = () => {
   const [selectedMembers, setSelectedMembers] = useState<ProjectMember[]>([]);
   const [form, setForm] = useState<ProjectFormState>(emptyProjectForm);
   const [isSaving, setIsSaving] = useState(false);
+  const [deleting, setDeleting] = useState<Project | null>(null);
   const canCreate = hasCapability("platform.create_project");
   /** Project setup: owner, manager, dates, budget. */
   const canEditSetup = hasCapability("project.edit");
@@ -175,8 +178,13 @@ export const ProjectsPage = () => {
       const members = await projectsService.getMembers(project.id);
       setSelectedMembers(members);
     } catch (err: any) {
+      // Never fall back to another copy of the team: a refusal here is the
+      // server saying this person may not see it. Showing the list embedded in
+      // the project anyway is how a "not authorized" toast appeared beside
+      // the full team (QA 2026-10-22).
       toast.error(errorMessage(err, t("projectsPage.loadMembersFailed")));
-      setSelectedMembers(project.members || []);
+      setSelectedMembers([]);
+      setIsMembersOpen(false);
     }
   };
 
@@ -282,18 +290,25 @@ export const ProjectsPage = () => {
       header: "",
       render: (project) => (
         <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => openMembers(project)}>
+          {/* The team list is `project.manage_members`, as on the server. */}
+          {canStaff && <Button variant="outline" size="sm" onClick={() => openMembers(project)}>
             {t("projectsPage.view_members")}
-          </Button>
+          </Button>}
           {canStaff && <Button variant="outline" size="sm" onClick={() => navigate(`/admin/projects/${project.id}/team`)}>
             {t("projectsPage.manage_team")}
           </Button>}
-          <Button size="sm" onClick={() => navigate(projectWorkspaceBase(project.id))}>
+          <Button size="sm" onClick={() => navigate(projectEntryPath(project, hasCapability))}>
             {t("projectsPage.open")}
           </Button>
           {canEditSetup && (
             <Button variant="ghost" size="sm" onClick={() => openEdit(project)}>
               {t("projectsPage.edit")}
+            </Button>
+          )}
+          {/* Per project, from the server: `project.delete` may be granted for one project only. */}
+          {project.canDelete && (
+            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleting(project)}>
+              {t("projectsPage.delete.action")}
             </Button>
           )}
         </div>
@@ -305,25 +320,26 @@ export const ProjectsPage = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t("projectsPage.projects")}</h1>
-          <p className="text-muted-foreground">{
-            seesPortfolio
-              ? t("projectsPage.subtitleDefault")
-              : canStaff
-                ? t("projectsPage.subtitlePm")
-                : t("projectsPage.subtitleEngineer")
-          }</p>
-        </div>
-        {canCreate && (
-          <Button onClick={openCreate}>+ {t("projectsPage.addProject")}</Button>
+      <PageHeader
+        title={t("projectsPage.projects")}
+        description={
+          seesPortfolio
+            ? t("projectsPage.subtitleDefault")
+            : canStaff
+              ? t("projectsPage.subtitlePm")
+              : t("projectsPage.subtitleEngineer")
+        }
+        actions={canCreate && (
+          <Button leftIcon={<Plus size={15} />} onClick={openCreate}>{t("projectsPage.addProject")}</Button>
         )}
-      </div>
+      />
 
-      <Card>
-        <div className="grid gap-3 mb-4 md:grid-cols-[1fr_220px]">
+      <div className="space-y-0">
+        {/* Filters sit on a toolbar ruled onto the register below, not in a
+            second card around it. */}
+        <div className="toolbar grid border-b-0 md:grid-cols-[1fr_220px] [&_.form-group]:mb-0">
           <Input
+            aria-label={t("projectsPage.search_projects")}
             placeholder={t("projectsPage.search_projects")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -335,6 +351,7 @@ export const ProjectsPage = () => {
             ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label={t("projectsPage.allStatuses")}
           />
         </div>
 
@@ -345,7 +362,7 @@ export const ProjectsPage = () => {
           isLoading={isLoading}
           emptyMessage={t("projectsPage.no_projects_found")}
         />
-      </Card>
+      </div>
 
       <Modal
         isOpen={isFormOpen}
@@ -433,6 +450,16 @@ export const ProjectsPage = () => {
           </ModalActions>
         </form>
       </Modal>
+
+      <DeleteProjectDialog
+        key={deleting?.id ?? "none"}
+        project={deleting}
+        onClose={() => setDeleting(null)}
+        onDeleted={(projectId) => {
+          setDeleting(null);
+          setProjects((rows) => rows.filter((row) => row.id !== projectId));
+        }}
+      />
 
       <Modal
         isOpen={isMembersOpen}

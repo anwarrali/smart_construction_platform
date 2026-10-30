@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useVocabulary } from "../../../utils/vocabulary";
 import { errorMessage } from "../../../utils/errorMessage";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { formatDateTime, formatTime } from "../../../utils/dates";
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, ExternalLink, MessageSquareWarning, Plus, RefreshCw, Sparkles, Users } from "lucide-react";
@@ -10,6 +10,8 @@ import toast from "react-hot-toast";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Tabs } from "../../../components/ui/Tabs";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../hooks/useAuth";
@@ -68,7 +70,7 @@ const RequestTimeline = ({ request }: { request: OwnerRequest }) => {
         return (
           <li key={stage} className="flex gap-3 pb-4 last:pb-0">
             <div className="flex flex-col items-center">
-              <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${done ? "bg-primary" : "bg-border"}`} />
+              <span className={`mt-1 h-2.5 w-2.5 shrink-0 ${done ? "bg-primary" : "bg-border"}`} />
               <span className="mt-1 w-px flex-1 bg-border last:hidden" />
             </div>
             <div className="-mt-0.5">
@@ -80,7 +82,7 @@ const RequestTimeline = ({ request }: { request: OwnerRequest }) => {
         );
       })}
       {request.status === "REJECTED" && (
-        <li className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-state-overdue" /><p className="-mt-0.5 text-sm font-medium">{t("ownerRequest.status.REJECTED")}</p></li>
+        <li className="flex gap-3"><span className="mt-1 h-2.5 w-2.5 shrink-0 bg-state-overdue" /><p className="-mt-0.5 text-sm font-medium">{t("ownerRequest.status.REJECTED")}</p></li>
       )}
     </ol>
   );
@@ -93,7 +95,17 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
   const { user } = useAuth();
   const { hasCapability } = useRole();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>(initialTab);
+  // Each tab has its own address, so the sidebar, the browser history and a
+  // shared link all agree on which view is open. The routes render this same
+  // page with a different `initialTab`; follow it when it changes — adjusted
+  // during render, so the new tab never paints a frame of the old one.
+  const [routedTab, setRoutedTab] = useState<Tab>(initialTab);
+  if (routedTab !== initialTab) {
+    setRoutedTab(initialTab);
+    setTab(initialTab);
+  }
   const [projects, setProjects] = useState<Project[]>(workspace.assignedProjects);
   const [projectId, setProjectId] = useState(workspace.projectId || "");
   const [requests, setRequests] = useState<OwnerRequest[]>([]);
@@ -282,21 +294,42 @@ export const CollaborationPage = ({ initialTab = "actions" }: { initialTab?: Tab
     `“${item.title}” · ${dateTime(item.scheduledStart)} – ${formatTime(item.scheduledEnd)}`
     + (item.projectName ? ` · ${item.projectName}` : "");
 
-  return <div className="page-container space-y-6">
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div><p className="text-sm font-semibold text-primary">{t("collaboration.accountableCollaboration")}</p><h1 className="text-3xl font-bold">{t("collaboration.actionCenter")}</h1><p className="mt-1 max-w-3xl text-muted-foreground">{t("collaboration.intro")}</p></div>
-      <div className="flex flex-wrap items-end gap-2">
-        {!workspace.projectId && <Select label={t("project.project")} value={projectId} onChange={(e) => setProjectId(e.target.value)} options={[{ value: "", label: t("nav.assignedProjects") }, ...projects.map((p) => ({ value: p.id, label: p.name }))]} />}
-        <Button variant="outline" onClick={load}><RefreshCw size={16} /> {t("common.refresh")}</Button>
-      </div>
-    </div>
-    <div className="flex flex-wrap gap-2">{(["actions", "requests", "schedule", "activity"] as Tab[]).map((value) => <Button key={value} variant={tab === value ? "primary" : "outline"} onClick={() => { setTab(value); clearFocus(); }}>{t("collaboration.tabs." + value, { defaultValue: humanize(value) })}</Button>)}</div>
+  // Where each tab lives. Activity has no portfolio address and stays local.
+  const tabRoute = (value: Tab): string | null => {
+    if (workspace.projectId) {
+      const module = { actions: "collaboration", requests: "requests", schedule: "site-visits", activity: "activity" }[value];
+      return projectModulePath(workspace.projectId, module);
+    }
+    return { actions: "/my-actions", requests: "/requests", schedule: "/schedule", activity: null }[value];
+  };
+
+  return <div className="page-container space-y-5">
+    <PageHeader
+      context={workspace.project?.name || t("collaboration.accountableCollaboration")}
+      title={t("collaboration.actionCenter")}
+      description={t("collaboration.intro")}
+      actions={<>
+        {!workspace.projectId && <div className="min-w-52 [&_.form-group]:mb-0"><Select aria-label={t("project.project")} value={projectId} onChange={(e) => setProjectId(e.target.value)} options={[{ value: "", label: t("nav.assignedProjects") }, ...projects.map((p) => ({ value: p.id, label: p.name }))]} /></div>}
+        <Button variant="secondary" leftIcon={<RefreshCw size={15} />} onClick={load}>{t("common.refresh")}</Button>
+      </>}
+    />
+    <Tabs
+      label={t("collaboration.actionCenter")}
+      value={tab}
+      onChange={(value) => {
+        setTab(value);
+        clearFocus();
+        const to = tabRoute(value);
+        if (to) navigate(to);
+      }}
+      items={(["actions", "requests", "schedule", "activity"] as Tab[]).map((value) => ({ value, label: t("collaboration.tabs." + value, { defaultValue: humanize(value) }) }))}
+    />
 
     {loading ? <Card className="p-8 text-center text-muted-foreground">{t("common.loading")}</Card> : null}
 
     {!loading && tab === "actions" && <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {Object.entries(actions?.counts || {}).map(([key, value]) => <Card key={key} className="p-4"><p className="text-xs text-muted-foreground">{t("collaboration.counts." + key, { defaultValue: humanize(key) })}</p><p className="mt-2 text-3xl font-bold">{value}</p></Card>)}
+      <div className="metric-row sm:grid-cols-2 xl:grid-cols-5">
+        {Object.entries(actions?.counts || {}).map(([key, value]) => <div key={key} className="metric"><p className="metric-label">{t("collaboration.counts." + key, { defaultValue: humanize(key) })}</p><p className="metric-value">{value}</p></div>)}
       </div>
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="p-5"><div className="flex items-center gap-2"><MessageSquareWarning size={18} /><h2 className="font-semibold">{t("collaboration.needsMyResponse")}</h2></div><div className="mt-4 space-y-3">{actions?.ownerRequests.map((item) => <div key={item.id} className="rounded-lg border p-3"><div className="flex items-start justify-between gap-3"><div><Link to={projectEntityPath(item.projectId, "OWNER_REQUEST", item.id, hasCapability)} className="font-medium hover:text-primary hover:underline">{item.title}</Link><p className="text-xs text-muted-foreground">{item.discipline ? humanize(item.discipline) : t("ownerRequest.category." + item.category, { defaultValue: humanize(item.category) })} · {t("task.priority." + item.priority.toLowerCase(), { defaultValue: humanize(item.priority) })}</p></div><Badge variant={statusTone(item.status) as any}>{t("ownerRequest.status." + item.status, { defaultValue: humanize(item.status) })}</Badge></div>{item.assignedToId === user?.id && !item.acknowledgedAt && <Button className="mt-3" size="sm" variant="outline" disabled={busy === item.id} onClick={() => patchRequest(item, { status: item.status === "ASSIGNED" ? "UNDER_REVIEW" : undefined }, t("collaboration.acknowledge"))}>{t("collaboration.acknowledgeAction")}</Button>}</div>)}{!actions?.ownerRequests.length && <div className="empty-state"><p className="empty-state-title">{t("empty.noActionsNeeded")}</p><p className="text-sm text-muted-foreground">{t("empty.noActionsNeededHint")}</p></div>}</div></Card>

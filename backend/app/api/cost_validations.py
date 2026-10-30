@@ -22,7 +22,7 @@ def list_cost_validations(
     current_user: User = Depends(get_current_user)
 ):
     query = db.query(CostValidation)
-    # "Sees every project" is `platform.view_all_projects`, which
+    # "Works in every project" is `platform.work_in_all_projects` (QA-06B), which
     # `accessible_project_ids` already answers by returning None. Reading the
     # role instead meant two things went wrong: an administrator whose
     # permission had been explicitly revoked still bypassed the filter, and a

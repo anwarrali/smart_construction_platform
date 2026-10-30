@@ -8,7 +8,9 @@ import { Card } from "../../../components/ui/Card";
 import { errorMessage } from "../../../utils/errorMessage";
 import { useRole } from "../../../hooks/useRole";
 import { IngestionStatusBadge } from "./IngestionStatusBadge";
+import { IndexStatusBadge } from "./IndexStatusBadge";
 import {
+  awaitsIndexing,
   isInFlight,
   type IngestedFile,
   type IngestionUploadConstraints,
@@ -26,8 +28,9 @@ import {
  *
  * Two behaviours worth naming:
  *
- * **It polls only while something is moving.** A list where every file has
- * settled stops refreshing, so an idle Files tab costs nothing.
+ * **It polls only while something is moving** — a file still processing, or a
+ * file with text whose indexing is under way or about to start. A list where
+ * every file has settled stops refreshing, so an idle Files tab costs nothing.
  *
  * **Retry is offered only where it can help.** The server says whether a
  * failure is retryable; a scanned PDF and an unparsed DWG are finished, and
@@ -64,12 +67,15 @@ export const ProjectFilesPanel = ({ projectId }: ProjectFilesPanelProps) => {
   const [constraints, setConstraints] =
     useState<IngestionUploadConstraints | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  /** When the list was last fetched; the clock the indexing grace window reads. */
+  const [fetchedAt, setFetchedAt] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const fetchFiles = useCallback(async () => {
     try {
       const page = await api.ingestion.list(projectId, { limit: 100 });
       setFiles(page.items);
+      setFetchedAt(Date.now());
     } catch (error) {
       toast.error(errorMessage(error, t("ingestion.loadFailed")));
       setFiles([]);
@@ -98,7 +104,9 @@ export const ProjectFilesPanel = ({ projectId }: ProjectFilesPanelProps) => {
     };
   }, [fetchFiles, projectId]);
 
-  const hasWorkInFlight = (files ?? []).some((file) => isInFlight(file.status));
+  const hasWorkInFlight = (files ?? []).some(
+    (file) => isInFlight(file.status) || awaitsIndexing(file, fetchedAt),
+  );
 
   useEffect(() => {
     if (!hasWorkInFlight) return;
@@ -203,6 +211,7 @@ export const ProjectFilesPanel = ({ projectId }: ProjectFilesPanelProps) => {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <IngestionStatusBadge status={file.status} error={file.error} />
+                <IndexStatusBadge status={file.indexStatus} error={file.indexError} />
                 {canUpload && file.error?.retryable && (
                   <Button
                     variant="outline"

@@ -20,7 +20,9 @@ from app.services.file_storage import delete_upload
 from app.services.private_storage import private_storage
 from app.models.enums import VoiceProcessingStatus
 from app.models.enums import NotificationType
-from app.services.authorization import has_permission, require, manageable_project
+from app.services.authorization import (
+    has_permission, manageable_project, projects_with_permission, require,
+)
 from app.models.project import Project
 from app.models.project import ProjectMember
 from app.models.notification import Notification
@@ -32,6 +34,10 @@ from app.services.notification_service import (
 )
 
 router = APIRouter(tags=["Site Reports"])
+
+#: Reading reports. Checked on every read endpoint, not only by the route
+#: guard, so revoking it in Access Control closes the API as well as the page.
+VIEW = "site_report.view"
 
 @router.get("/site-reports", response_model=List[SiteReportOut])
 @router.get("/reports", response_model=List[SiteReportOut])
@@ -53,16 +59,19 @@ def list_site_reports(
     # office put on that project; discipline narrowing below still applies.
     if project_id and not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    if project_id:
+        require(db, current_user, VIEW, project_id)
     query = db.query(SiteReport)
-    # "Sees every project" is `platform.view_all_projects`, which
+    # "Works in every project" is `platform.work_in_all_projects` (QA-06B), which
     # `accessible_project_ids` already answers by returning None. Reading the
     # role instead meant two things went wrong: an administrator whose
     # permission had been explicitly revoked still bypassed the filter, and a
     # non-administrator who had been *granted* it got `None or []` — an empty
-    # list, so they saw nothing at all.
-    accessible_ids = accessible_project_ids(db, current_user)
-    if accessible_ids is not None:
-        query = query.filter(SiteReport.project_id.in_(accessible_ids))
+    # list, so they saw nothing at all. Narrowed again to the projects where the
+    # person may view reports.
+    query = query.filter(SiteReport.project_id.in_(projects_with_permission(
+        db, current_user, VIEW, accessible_project_ids(db, current_user),
+    )))
     # The client sees finished work, not drafts. A relationship on this
     # project, not an identity on the account.
     if rbac.is_client_participant(db, current_user, project_id):
@@ -104,6 +113,7 @@ def get_site_reports_by_project(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    require(db, current_user, VIEW, project_id)
     query = work_scope.narrow_to_disciplines(
         db.query(SiteReport).filter(SiteReport.project_id == project_id),
         SiteReport.task_id, db, current_user, project_id,
@@ -131,6 +141,7 @@ def get_site_report_by_id(
         raise HTTPException(status_code=404, detail="Site report not found")
     if not user_has_project_access(db, current_user, rep.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this report")
+    require(db, current_user, VIEW, rep.project_id)
     if rbac.is_client_participant(db, current_user, rep.project_id) and rep.review_status not in {"submitted", "approved"}:
         raise HTTPException(status_code=403, detail="Clients can view submitted or finalized site reports only")
     if rep.task_id and not work_scope.task_is_in_scope(

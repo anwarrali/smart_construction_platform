@@ -1,0 +1,79 @@
+@startuml
+!include _style.iuml
+hide circle
+entity projects {
+  * id : UUID <<PK>>
+  --
+  name, status, location
+  start_date, planned_end_date
+  budget_total, budget_spent
+  company_id, owner_id, project_manager_id
+}
+entity project_parties {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, kind
+  parent_party_id <<FK>>
+}
+entity project_members {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, user_id <<FK>>
+  project_role_id <<FK>>, party_id <<FK, null>>
+}
+entity milestones {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, name, planned_date
+}
+entity tasks {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, milestone_id <<FK>>
+  status, priority, progress_percentage
+  planned / actual dates, duration_days
+  review_required
+}
+entity task_dependencies {
+  * id : UUID <<PK>>
+  --
+  task_id <<FK>>, depends_on_task_id <<FK>>
+  dependency_type, lag_days
+}
+entity task_reviews {
+  * id : UUID <<PK>>
+  --
+  task_id <<FK>>, status
+  submitted_by_id, reviewed_by_id
+}
+entity issues {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, task_id <<FK>>
+  severity, status, category
+}
+entity site_reports {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, task_id <<FK>>
+  report_date, review_status
+}
+entity design_changes {
+  * id : UUID <<PK>>
+  --
+  project_id <<FK>>, task_id <<FK>>
+  status, cost and schedule impact
+}
+projects ||--o{ project_parties
+projects ||--o{ project_members
+project_parties |o--o{ project_members
+projects ||--o{ milestones
+projects ||--o{ tasks
+milestones |o--o{ tasks
+tasks ||--o{ task_dependencies
+tasks ||--o{ task_reviews
+projects ||--o{ issues
+tasks |o--o{ issues
+projects ||--o{ site_reports
+projects ||--o{ design_changes
+@enduml

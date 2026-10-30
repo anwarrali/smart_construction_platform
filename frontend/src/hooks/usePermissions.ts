@@ -23,6 +23,9 @@ export const usePermissions = () => {
   const loadedForUserId = usePermissionStore((state) => state.loadedForUserId);
   const fetchPermissions = usePermissionStore((state) => state.fetch);
   const clearPermissions = usePermissionStore((state) => state.clear);
+  const activeProjectId = usePermissionStore((state) => state.activeProjectId);
+  const project = usePermissionStore((state) => state.project);
+  const enterProject = usePermissionStore((state) => state.enterProject);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -34,7 +37,10 @@ export const usePermissions = () => {
     }
   }, [isAuthenticated, user, loadedForUserId, fetchPermissions, clearPermissions]);
 
-  const hasPermission = (code: string): boolean => permissions?.includes(code) ?? false;
+  /* Inside an open project, that project's answer once it has arrived;
+     the office-wide one otherwise (and while it loads). */
+  const scoped = project && project.id === activeProjectId && project.codes ? project.codes : permissions;
+  const hasPermission = (code: string): boolean => scoped?.includes(code) ?? false;
   const hasAnyPermission = (codes: string[]): boolean => codes.some(hasPermission);
   const hasAllPermissions = (codes: string[]): boolean => codes.every(hasPermission);
 
@@ -43,10 +49,17 @@ export const usePermissions = () => {
     isLoading,
     error,
     /** True once a real (possibly empty) permission list has been loaded for the current user. */
-    isReady: permissions !== null,
+    isReady: permissions !== null && (!activeProjectId || project?.id === activeProjectId),
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
-    refresh: () => (user ? fetchPermissions(user.id) : Promise.resolve()),
+    refresh: async () => {
+      if (!user) return;
+      await fetchPermissions(user.id);
+      if (activeProjectId) {
+        usePermissionStore.setState({ project: null });
+        await enterProject(activeProjectId);
+      }
+    },
   };
 };

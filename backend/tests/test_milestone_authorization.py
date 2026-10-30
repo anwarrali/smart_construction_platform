@@ -98,7 +98,9 @@ def world(db):
     )
     db.add_all([project, elsewhere])
     db.flush()
-    for person in ("manager", "engineer", "consultant", "contractor"):
+    # The administrator is on the team: since QA-06B, administering the
+    # platform no longer opens a project's work (see the test below).
+    for person in ("admin", "manager", "engineer", "consultant", "contractor"):
         db.add(ProjectMember(
             project_id=project.id, user_id=people[person].id, is_active=True,
         ))
@@ -179,6 +181,19 @@ def test_an_administrator_can_create_update_and_delete(world):
         milestone_id=world["milestone"].id, db=db, current_user=world["admin"],
     )
     assert "deleted" in result["message"].lower()
+
+
+def test_an_administrator_not_on_the_project_cannot_change_its_milestones(world):
+    """QA-06B: the schedule is project work, reached by being on the team."""
+    db = world["db"]
+    db.query(ProjectMember).filter(
+        ProjectMember.project_id == world["project"].id,
+        ProjectMember.user_id == world["admin"].id,
+    ).update({ProjectMember.is_active: False}, synchronize_session=False)
+    db.flush()
+    with pytest.raises(HTTPException) as error:
+        create_milestone(data=_create_payload(world), db=db, current_user=world["admin"])
+    assert error.value.status_code == 403
 
 
 def test_the_assigned_project_manager_can_create_update_and_delete(world):

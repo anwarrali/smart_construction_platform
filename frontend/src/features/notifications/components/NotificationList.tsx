@@ -1,3 +1,4 @@
+import { BellOff } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { useTranslation } from "react-i18next";
 import { Loader } from "../../../components/ui/Loader";
@@ -79,7 +80,7 @@ export const NotificationList = ({
 
       {notifications.length === 0 ? (
         <div className="empty-state py-8">
-          <div className="empty-state-icon">🔔</div>
+          <BellOff size={22} strokeWidth={1.5} className="empty-state-icon" aria-hidden />
           <p className="empty-state-title">{t("notificationList.no_notifications")}</p>
         </div>
       ) : (
@@ -109,12 +110,12 @@ export const NotificationList = ({
                         : notification.title}
                     </p>
                     {priorityBadge[notification.priority || ""] && (
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${priorityBadge[notification.priority!].className}`}>
+                      <span className={`shrink-0 px-2 py-0.5 text-[10px] font-semibold ${priorityBadge[notification.priority!].className}`}>
                         {t(priorityBadge[notification.priority!].labelKey)}
                       </span>
                     )}
                     {notification.category === "REMINDERS" && (
-                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      <span className="shrink-0 bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                         {t("notificationList.reminder")}
                       </span>
                     )}
@@ -135,7 +136,7 @@ export const NotificationList = ({
                   </p>
                 </div>
                 {!notification.isRead && (
-                  <span className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                  <span className="w-2 h-2 bg-primary mt-1.5 flex-shrink-0" />
                 )}
               </div>
             </button>

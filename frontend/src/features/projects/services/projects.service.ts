@@ -1,4 +1,8 @@
 import api from "../../../services/api";
+
+export type ProjectDeletionImpact = {
+  tasks: number; members: number; documents: number; issues: number; siteReports: number; models: number;
+};
 import type {
   CreateProjectRequest,
   UpdateProjectRequest,
@@ -24,6 +28,10 @@ export const projectsService = {
   },
   delete: async (id: string): Promise<void> => {
     return api.projects.delete(id);
+  },
+  /** What a deletion removes, for the confirmation dialog (`project.delete`). */
+  deletionImpact: async (id: string): Promise<ProjectDeletionImpact> => {
+    return api.projects.deletionImpact(id);
   },
   getSummary: async (): Promise<ProjectSummary> => {
     return api.projects.getSummary();

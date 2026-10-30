@@ -506,6 +506,58 @@ def index_ingested_file_job(file_id: uuid.UUID, *, force: bool = False) -> None:
         db.close()
 
 
+def index_document_job(document_id: uuid.UUID, *, force: bool = False) -> None:
+    """The job runner's entry point (`rag.index_document`) for a library document.
+
+    Same contract as `index_ingested_file_job`: a run another worker holds
+    (`IndexingInProgress`) returns normally; a run that started and failed has
+    already recorded FAILED on the document and is re-raised for the runner to
+    retry. Extraction, chunking, embedding and storage are `index_document`'s —
+    the synchronous endpoint's — exactly.
+    """
+    db = SessionLocal()
+    try:
+        document = db.get(Document, document_id)
+        if document is None:
+            return
+        index_document(db, document, force=force)
+    except IndexingInProgress as outcome:
+        logger.info("indexing document %s not started: %s", document_id, outcome)
+    finally:
+        db.close()
+
+
+def should_auto_index_document(document: Document) -> bool:
+    """Whether a library upload should be indexed in the background.
+
+    A library document is indexable only as a PDF, so this is the rule the
+    synchronous path enforces, answered from what the upload already recorded:
+
+      * automatic indexing is on (`RAG_ENABLED` and `RAG_AUTO_INDEX_ENABLED`);
+      * the bytes are a PDF — `detected_format` comes from the magic bytes at
+        upload, never from the client's filename or MIME type;
+      * it is within `RAG_MAX_FILE_MB`, the limit indexing would refuse anyway;
+      * it lives in private storage (every upload since the move does).
+
+    A PDF with no text layer still passes — that is only known by reading it —
+    and its run records FAILED with the reason, exactly as the manual path does.
+    """
+    size_limit = settings.RAG_MAX_FILE_MB * 1024 * 1024
+    return (
+        settings.RAG_ENABLED
+        and settings.RAG_AUTO_INDEX_ENABLED
+        and document.detected_format == "PDF"
+        and bool(document.storage_key)
+        and 0 < (document.file_size_bytes or 0) <= size_limit
+    )
+
+
+def submit_document_index(db: Session, document: Document, *, force: bool = False) -> None:
+    """Queue a library document's indexing in the caller's transaction; the caller commits."""
+    enqueue(db, "rag.index_document", {"document_id": document.id, "force": force},
+            dedupe_key=f"rag.document:{document.id}", project_id=document.project_id)
+
+
 #: Ingestion outcomes that leave text to index. PARTIAL is a success with
 #: something missing, not a failure — see `ingestion.state`.
 _SETTLED_WITH_CONTENT = frozenset({"READY", "PARTIAL"})

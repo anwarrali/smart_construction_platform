@@ -40,7 +40,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         <select
           ref={ref}
           id={selectId}
-          className={`input ${error ? "border-red-500 focus-visible:ring-red-500" : ""} ${className}`}
+          aria-invalid={error ? true : undefined}
+          className={`input ${error ? "border-destructive" : ""} ${className}`}
           {...props}
         >
           {placeholder && (
@@ -60,7 +61,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         </select>
         {error && <p className="form-error">{error}</p>}
         {helperText && !error && (
-          <p className="text-xs text-muted-foreground mt-1">{helperText}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{helperText}</p>
         )}
       </div>
     );

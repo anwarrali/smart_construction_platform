@@ -73,9 +73,44 @@ export interface IngestedFile {
 
   processingStartedAt?: string | null;
   processingCompletedAt?: string | null;
+
+  /**
+   * RAG indexing, separate from `status` (processing): a file can be READY and
+   * not yet indexed. Optional so an older server's response still parses.
+   */
+  indexStatus?: IndexStatus;
+  indexedAt?: string | null;
+  /** The server's readable reason for a failed index. */
+  indexError?: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+/** Whether a file's text is searchable. Mirrors `services/rag/ingestion.py`. */
+export type IndexStatus = "NOT_INDEXED" | "INDEXING" | "READY" | "FAILED";
+
+/**
+ * After a file with text settles, the server queues its indexing; the job is
+ * claimed a moment later. Polling keeps going for this long so the panel sees
+ * indexing start instead of stopping one poll too early.
+ */
+export const INDEX_PICKUP_GRACE_MS = 2 * 60 * 1000;
+
+/**
+ * Whether the list should keep refreshing for this file's indexing.
+ *
+ * True while it is INDEXING, and for a short window after a file with
+ * extracted text settles but before its index job has been picked up. Not for
+ * a file with no text (a drawing, an image, a model): nothing will index it.
+ * `now` is passed in, never read here, so a render stays pure.
+ */
+export const awaitsIndexing = (file: IngestedFile, now: number): boolean => {
+  if (file.indexStatus === "INDEXING") return true;
+  if (file.indexStatus && file.indexStatus !== "NOT_INDEXED") return false;
+  if (!["READY", "PARTIAL"].includes(file.status) || file.duplicateOfId) return false;
+  if (file.metadataJson?.extraction !== "TEXT" || !file.processingCompletedAt) return false;
+  return now - Date.parse(file.processingCompletedAt) < INDEX_PICKUP_GRACE_MS;
+};
 
 export interface IngestedFilePage {
   items: IngestedFile[];

@@ -3,6 +3,21 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   darkMode: "class",
   theme: {
+    /* Square geometry is the product's default, so the whole radius scale is
+       set to zero here rather than overridden page by page: every existing
+       `rounded-lg`, `rounded-xl` and `rounded-md` inherits it. `full` is kept
+       for the few shapes that are round by nature — a spinner, a radio dot. */
+    borderRadius: {
+      none: "0px",
+      sm: "0px",
+      DEFAULT: "0px",
+      md: "0px",
+      lg: "0px",
+      xl: "0px",
+      "2xl": "0px",
+      "3xl": "0px",
+      full: "9999px",
+    },
     extend: {
       colors: {
         border: "hsl(var(--border))",
@@ -69,6 +84,15 @@ export default {
           blocked: "hsl(var(--state-blocked))",
           idle: "hsl(var(--state-idle))",
         },
+        /* Chart series, ordered for adjacent contrast. */
+        series: {
+          1: "hsl(var(--series-1))",
+          2: "hsl(var(--series-2))",
+          3: "hsl(var(--series-3))",
+          4: "hsl(var(--series-4))",
+          5: "hsl(var(--series-5))",
+          6: "hsl(var(--series-6))",
+        },
         wash: {
           verified: "hsl(var(--state-verified-wash))",
           progress: "hsl(var(--state-progress-wash))",
@@ -79,13 +103,15 @@ export default {
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
         chip: "var(--radius-chip)",
         control: "var(--radius-control)",
         panel: "var(--radius-panel)",
         sheet: "var(--radius-sheet)",
+      },
+      spacing: {
+        rail: "var(--rail-width)",
+        "rail-collapsed": "var(--rail-width-collapsed)",
+        bar: "var(--bar-height)",
       },
       boxShadow: {
         sheet: "var(--shadow-sheet)",

@@ -41,7 +41,7 @@ export const UserTable = ({
       render: (user) => (
         <div className="flex items-center gap-3">
           <div
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-medium"
+            className="w-9 h-9 flex items-center justify-center text-white text-sm font-medium"
             style={{ backgroundColor: getAvatarColor(user.fullName) }}
           >
             {getInitials(user.fullName)}

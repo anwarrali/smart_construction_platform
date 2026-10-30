@@ -1,0 +1,39 @@
+@startuml
+!include _style.iuml
+start
+:PM creates and assigns task
+(dates, priority, review_required);
+:Assignee notified;
+if (Start: status TODO, no open blocker,
+predecessors Done?) then (no)
+  :Start refused with reason;
+  stop
+else (yes)
+  :Status = IN_PROGRESS;
+endif
+repeat
+  :Update progress / work update;
+  if (Blocker?) then (yes)
+    :Raise blocker (BLOCKED),
+resolve and resume (IN_PROGRESS);
+  endif
+repeat while (Work complete?) is (no) not (yes)
+if (review_required?) then (no)
+  :Complete execution
+Status = DONE;
+else (yes)
+  :Submit for review
+Status = UNDER_REVIEW;
+  :Reviewer reviews (optional
+clarification round);
+  if (Decision) then (approve)
+    :Status = DONE,
+audit log + notification;
+  else (reject)
+    :Status = REWORK_REQUIRED;
+    :Assignee starts rework
+(IN_PROGRESS) and resubmits;
+  endif
+endif
+stop
+@enduml

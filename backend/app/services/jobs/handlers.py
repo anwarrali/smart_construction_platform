@@ -116,6 +116,13 @@ def run_rag_file_index(payload: dict, attempt: int) -> None:
     index_ingested_file_job(_uuid(payload, "file_id"), force=bool(payload.get("force")) or attempt > 1)
 
 
+def run_rag_document_index(payload: dict, attempt: int) -> None:
+    from app.services.rag.ingestion import index_document_job
+
+    # As for a file: a retry finds the row INDEXING from the attempt that died.
+    index_document_job(_uuid(payload, "document_id"), force=bool(payload.get("force")) or attempt > 1)
+
+
 def run_rag_project_reindex(payload: dict, attempt: int) -> None:
     from app.services.rag.maintenance import run_project_reindex
 
@@ -155,6 +162,7 @@ KINDS: dict[str, JobKind] = {
         JobKind("ifc.generate_geometry", run_ifc_geometry),
         JobKind("ingestion.process_file", run_ingestion),
         JobKind("rag.index_file", run_rag_file_index),
+        JobKind("rag.index_document", run_rag_document_index),
         JobKind("rag.project_reindex", run_rag_project_reindex),
         JobKind("agents.handle_event", run_agent_event),
     )

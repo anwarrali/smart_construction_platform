@@ -1,0 +1,21 @@
+@startuml
+!include _style.iuml
+hide empty description
+[*] --> UPLOADED
+UPLOADED --> VALIDATING
+VALIDATING --> CLASSIFIED
+CLASSIFIED --> QUEUED
+QUEUED --> PROCESSING
+QUEUED --> READY : synchronous run
+QUEUED --> PARTIAL : synchronous run
+PROCESSING --> READY
+PROCESSING --> PARTIAL : completed with\nreduced capability
+PROCESSING --> FAILED
+UPLOADED --> FAILED
+VALIDATING --> FAILED
+CLASSIFIED --> FAILED
+QUEUED --> FAILED
+READY --> QUEUED : reprocess
+PARTIAL --> QUEUED : reprocess
+FAILED --> QUEUED : retry
+@enduml

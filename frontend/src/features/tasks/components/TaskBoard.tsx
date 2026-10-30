@@ -88,7 +88,7 @@ export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps
 
   return (
     <div className="relative">
-      <div className="sticky top-0 z-10 mb-3 space-y-2 rounded-lg border bg-card/95 px-3 py-2 shadow-sm backdrop-blur">
+      <div className="sticky top-0 z-10 mb-3 space-y-2 rounded-lg border bg-card/95 px-3 py-2 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <MoveHorizontal size={15} />
@@ -106,7 +106,7 @@ export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps
         {overflowing && (
           <div
             ref={trackRef}
-            className="relative h-2 cursor-pointer rounded-full bg-muted"
+            className="relative h-2 cursor-pointer bg-muted"
             role="scrollbar"
             aria-controls="task-board-columns"
             aria-orientation="horizontal"
@@ -128,7 +128,7 @@ export const TaskBoard = ({ tasks, isLoading, onEdit, onDelete }: TaskBoardProps
             }}
           >
             <div
-              className="absolute top-0 h-2 rounded-full bg-primary/60 transition-[left] duration-75"
+              className="absolute top-0 h-2 bg-primary/60 transition-[left] duration-75"
               style={{ width: `${thumbWidth}%`, left: `${thumbLeft}%` }}
             />
           </div>

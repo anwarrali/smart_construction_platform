@@ -69,6 +69,8 @@ def world(db):
 
     people = {
         "admin": user("CostAdmin", "org_admin"),
+        # Office leadership: works in every project (`platform.work_in_all_projects`).
+        "director": user("CostDirector", "office_director"),
         "manager": user("CostPm", "project_manager"),
         "owner": user("CostOwner", "client_representative"),
         "engineer": user("CostEngineer", "engineer"),
@@ -116,8 +118,24 @@ def test_a_project_member_can_read_a_claim_on_their_project(db, world):
     assert result.id == world["claim"].id
 
 
-def test_an_administrator_can_read_any_claim(db, world):
+def test_an_administrator_not_on_the_project_cannot_read_its_claims(db, world):
+    """QA-06B: administering the platform is not taking part in a project.
+    A cost claim is project work; the administrator reaches it by being on the
+    team, like anyone else."""
+    with pytest.raises(HTTPException) as error:
+        get_cost_validation_by_id(world["claim"].id, db=db, current_user=world["admin"])
+    assert error.value.status_code == 403
+
+
+def test_an_administrator_on_the_project_can_read_its_claims(db, world):
+    db.add(ProjectMember(project_id=world["project"].id, user_id=world["admin"].id, is_active=True))
+    db.flush()
     result = get_cost_validation_by_id(world["claim"].id, db=db, current_user=world["admin"])
+    assert result.id == world["claim"].id
+
+
+def test_office_leadership_can_read_any_claim(db, world):
+    result = get_cost_validation_by_id(world["claim"].id, db=db, current_user=world["director"])
     assert result.id == world["claim"].id
 
 

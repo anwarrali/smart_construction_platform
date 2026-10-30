@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, CalendarDays } from "lucide-react";
 import { formatDate, getDaysRemaining } from "../../../utils/date";
 import type { Project } from "../../../types/project";
 import { useRole } from "../../../hooks/useRole";
-import { projectModulePath } from "../../../utils/projectRoutes";
+import { projectEntryPath } from "../../../utils/projectRoutes";
 
 interface ProjectCardProps {
   project: Project;
@@ -44,8 +44,8 @@ export const ProjectCard = ({ project }: ProjectCardProps) => {
   return (
     <button
       type="button"
-      onClick={() => navigate(projectModulePath(project.id, "dashboard", hasCapability))}
-      className="group panel relative w-full overflow-hidden p-0 text-start transition-[box-shadow,transform] duration-200 hover:-translate-y-px hover:shadow-lift"
+      onClick={() => navigate(projectEntryPath(project, hasCapability))}
+      className="group panel relative w-full overflow-hidden p-0 text-start transition-[box-shadow,transform] duration-200 hover:-translate-y-px"
     >
       {/* Status carried by a rule on the leading edge. */}
       <span aria-hidden className={`absolute inset-y-0 start-0 w-[3px] ${state.rule}`} />

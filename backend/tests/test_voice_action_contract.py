@@ -111,8 +111,11 @@ class PromptContractTests(TestCase):
         # fixed three misclassifications found in acceptance testing: a filed
         # site report had no topic to go to, a hedged belief was read as an
         # asserted fact, and one example pinned "حدّث المهمة" to progress even
-        # when the sentence named a date.
-        self.assertEqual(PROMPT_VERSION, "construction_voice_assistant_v9")
+        # when the sentence named a date, and v10 told the model that mixed
+        # Arabic-English speech is normal and that the normalized transcript and
+        # every reference field keep English terms and identifiers untranslated
+        # (the website's QA showed "الـ IFC file" rewritten as "ملف IFC").
+        self.assertEqual(PROMPT_VERSION, "construction_voice_assistant_v10")
 
     def test_rendering_is_stable(self):
         # An unstable prompt would defeat provider-side prompt caching.

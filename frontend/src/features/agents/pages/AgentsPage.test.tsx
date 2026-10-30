@@ -338,8 +338,10 @@ describe("navigation wiring", () => {
     );
   });
 
-  it("keeps somebody without task.view off the agents module", async () => {
+  // QA pass 2026-10-17: the page is granted explicitly, not by task.view.
+  it("keeps somebody without agents.view off the agents module", async () => {
     const { canOpenProjectModule } = await import("../../../utils/projectRoutes");
-    expect(canOpenProjectModule("agents", (code) => code !== "task.view")).toBe(false);
+    expect(canOpenProjectModule("agents", (code) => code !== "agents.view")).toBe(false);
+    expect(canOpenProjectModule("agents", (code) => code === "agents.view")).toBe(true);
   });
 });

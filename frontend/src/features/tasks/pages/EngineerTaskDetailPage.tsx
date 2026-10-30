@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
@@ -80,7 +80,11 @@ export const EngineerTaskDetailPage = () => {
     try {
       const taskData: Task = await api.tasks.getById(taskId);
       if (taskData.projectId !== workspace.projectId) throw new Error("Task is outside the active project");
-      const [commentData, reviewData, activityData, blockerData, issueData, documentData, milestoneData, fieldData, categoryData] = await Promise.all([
+      // Only the task itself is essential. The side panels are fetched
+      // independently, so one of them failing (seen live: a refresh right
+      // after a committed progress save) no longer wipes the task off the
+      // screen and reads as if the save had failed.
+      const settled = await Promise.allSettled([
         api.tasks.comments(taskId),
         api.tasks.reviews(taskId),
         api.tasks.activity(taskId),
@@ -91,6 +95,15 @@ export const EngineerTaskDetailPage = () => {
         api.fieldSubmissions.byTask(taskId),
         api.photoArchive.categories(workspace.projectId),
       ]);
+      const value = <T, F>(outcome: PromiseSettledResult<T>, fallback: F): T | F =>
+        outcome.status === "fulfilled" ? outcome.value : fallback;
+      const [commentData, reviewData, activityData, blockerData, issueData, documentData, milestoneData, fieldData, categoryData] = [
+        value(settled[0], []), value(settled[1], []), value(settled[2], []), value(settled[3], []), value(settled[4], []),
+        value(settled[5], []), value(settled[6], []), value(settled[7], []), value(settled[8], []),
+      ] as const;
+      if (settled.some((outcome) => outcome.status === "rejected")) {
+        console.warn("[Task] some task details could not be refreshed", settled.filter((outcome) => outcome.status === "rejected"));
+      }
       setTask(taskData);
       setProgress(taskData.progressPercentage);
       setComments(commentData);
@@ -112,20 +125,30 @@ export const EngineerTaskDetailPage = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  // `busy` disables the buttons only after a re-render; a quick second click
+  // lands before that (the engineer's three identical saves in 21 seconds).
+  const inFlight = useRef(false);
   const run = async (action: () => Promise<unknown>, success: string) => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
     setBusy(true);
     setError("");
     try {
-      await action();
-      await load();
+      try {
+        await action();
+      } catch (err: any) {
+        const message = errorMessage(err, "Action failed. Please try again.");
+        setError(message);
+        toast.error(message);
+        return false;
+      }
+      // The server accepted the change: say so now, from its answer, before
+      // refreshing — a refresh problem must never be reported as a failed save.
       toast.success(success);
+      await load();
       return true;
-    } catch (err: any) {
-      const message = errorMessage(err, "Action failed. Please try again.");
-      setError(message);
-      toast.error(message);
-      return false;
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
@@ -156,7 +179,7 @@ export const EngineerTaskDetailPage = () => {
 
   return <div className="page-container space-y-6">
     <Button variant="ghost" onClick={() => navigate(workspace.path("tasks"))}>← Back to My Tasks</Button>
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-sm font-semibold text-primary">{task.taskCode}</p><h1 className="text-2xl font-bold">{task.name}</h1><p className="mt-1 max-w-3xl text-muted-foreground">{task.description || "No description provided."}</p></div><div className="flex flex-col items-end gap-2"><div className="flex gap-2"><Badge variant={task.status === "blocked" || task.status === "rework_required" ? "danger" : task.status === "done" ? "success" : "info"}>{task.status.replaceAll("_", " ")}</Badge>{task.isCriticalPath && <Badge variant="danger">{t("engineerTask.critical_path")}</Badge>}</div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-sm font-semibold text-primary">{task.taskCode}</p><h1 className="page-title">{task.name}</h1><p className="mt-1 max-w-3xl text-muted-foreground">{task.description || "No description provided."}</p></div><div className="flex flex-col items-end gap-2"><div className="flex gap-2"><Badge variant={task.status === "blocked" || task.status === "rework_required" ? "danger" : task.status === "done" ? "success" : "info"}>{task.status.replaceAll("_", " ")}</Badge>{task.isCriticalPath && <Badge variant="danger">{t("engineerTask.critical_path")}</Badge>}</div>
       {/* Consultation only — sharing never reassigns this task. */}
       <CommunicationActions entityType="TASK" entityId={task.id} projectId={task.projectId} intents={["opinion"]} /></div></div>
     {error && <Card className="border-destructive/30 p-3 text-sm text-destructive">{error}</Card>}
@@ -167,7 +190,7 @@ export const EngineerTaskDetailPage = () => {
     <div className="grid gap-6 xl:grid-cols-3">
       <Card className="space-y-5 xl:col-span-2">
         <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4"><div><p className="text-muted-foreground">{t("engineerTask.project")}</p><p className="font-medium">{workspace.project?.name}</p></div><div><p className="text-muted-foreground">{t("engineerTask.discipline")}</p><p className="font-medium capitalize">{task.discipline || "General"}</p></div><div><p className="text-muted-foreground">{t("engineerTask.priority")}</p><p className="font-medium capitalize">{task.priority}</p></div><div><p className="text-muted-foreground">{t("engineerTask.progress")}</p><p className="font-medium">{task.progressPercentage}%</p></div><div><p className="text-muted-foreground">{t("engineerTask.planned_start")}</p><p>{task.plannedStartDate || "—"}</p></div><div><p className="text-muted-foreground">{t("engineerTask.due_date")}</p><p>{task.plannedEndDate || "—"}</p></div><div><p className="text-muted-foreground">{t("engineerTask.duration")}</p><p>{task.durationDays ? `${task.durationDays} days` : "—"}</p></div><div><p className="text-muted-foreground">{t("engineerTask.milestone")}</p><p>{milestoneName || "—"}</p></div></div>
-        <div className="border-t pt-4"><p className="mb-3 text-sm font-medium">{t("engineerTask.assigned_execution_team")}</p><div className="flex flex-wrap gap-3">{task.assignees.map((assignee) => <div key={assignee.id} className="flex items-center gap-2 rounded-full border py-1 pl-1 pr-3"><div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white" style={{ backgroundColor: getAvatarColor(assignee.fullName) }}>{getInitials(assignee.fullName)}</div><span><span className="block text-sm font-medium">{assignee.fullName}</span><span className="block text-xs text-muted-foreground">{formatAssigneeRole(assignee)}</span></span></div>)}</div></div>
+        <div className="border-t pt-4"><p className="mb-3 text-sm font-medium">{t("engineerTask.assigned_execution_team")}</p><div className="flex flex-wrap gap-3">{task.assignees.map((assignee) => <div key={assignee.id} className="flex items-center gap-2 border py-1 pl-1 pr-3"><div className="flex h-8 w-8 items-center justify-center text-xs font-semibold text-white" style={{ backgroundColor: getAvatarColor(assignee.fullName) }}>{getInitials(assignee.fullName)}</div><span><span className="block text-sm font-medium">{assignee.fullName}</span><span className="block text-xs text-muted-foreground">{formatAssigneeRole(assignee)}</span></span></div>)}</div></div>
         <div className="border-t pt-4"><p className="text-sm font-medium">{t("engineerTask.dependencies")}</p><div className="mt-2 space-y-2">{task.dependencies.map((dependency) => <div key={dependency.id} className="rounded border p-2 text-sm"><span className="font-medium">{dependency.dependsOnTaskCode || "Predecessor"}</span>{dependency.dependsOnTaskName ? ` — ${dependency.dependsOnTaskName}` : ""}<span className="text-muted-foreground"> · {dependency.dependencyType.replaceAll("_", " ")}{dependency.dependsOnTaskStatus ? ` · ${dependency.dependsOnTaskStatus.replaceAll("_", " ")}` : ""}</span></div>)}{!task.dependencies.length && <p className="text-sm text-muted-foreground">{t("engineerTask.no_predecessor_dependencies")}</p>}</div></div>
 
         {task.status === "todo" && <Button disabled={busy} onClick={() => run(() => api.tasks.start(task.id), "Task started.")}>{t("engineerTask.start_task")}</Button>}
@@ -205,7 +228,7 @@ export const EngineerTaskDetailPage = () => {
                   const active = photo.categories.some((item) => item.id === category.id);
                   return <button key={category.id} type="button" disabled={busy}
                     onClick={() => togglePhotoCategory(photo.id, photo.categories.map((item) => item.id), category.id)}
-                    className={`rounded-full border px-2 py-1 text-[10px] ${active ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground"}`}>
+                    className={` border px-2 py-1 text-[10px] ${active ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground"}`}>
                     {category.name}
                   </button>;
                 })}

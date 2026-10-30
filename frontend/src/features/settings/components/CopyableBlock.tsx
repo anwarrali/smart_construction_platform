@@ -82,7 +82,7 @@ export const CopyableBlock = ({
           className="absolute end-2 top-2 rounded-md border bg-background p-1.5 text-muted-foreground transition hover:text-foreground"
         >
           {copied ? (
-            <Check size={14} className="text-green-600" />
+            <Check size={14} className="text-state-verified" />
           ) : (
             <Copy size={14} />
           )}

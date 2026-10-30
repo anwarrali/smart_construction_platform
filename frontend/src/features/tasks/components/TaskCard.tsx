@@ -99,11 +99,11 @@ export const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
         <div className="flex min-w-0 items-center gap-3 border-t pt-2" title={assignees.map((assignee) => assignee.fullName).join(", ") || "Unassigned"}>
           {primaryAssignee ? <>
             <div className="flex shrink-0 -space-x-2">
-              {assignees.slice(0, 2).map((assignee) => <div key={assignee.id} className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-card text-[10px] font-semibold text-white" style={{ backgroundColor: getAvatarColor(assignee.fullName) }}>
+              {assignees.slice(0, 2).map((assignee) => <div key={assignee.id} className="relative flex h-7 w-7 items-center justify-center overflow-hidden border-2 border-card text-[10px] font-semibold text-white" style={{ backgroundColor: getAvatarColor(assignee.fullName) }}>
                 {assignee.avatarUrl ? <img src={assignee.avatarUrl} alt="" className="h-full w-full object-cover" /> : getInitials(assignee.fullName)}
               </div>)}
             </div>
-            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-foreground">{primaryAssignee.fullName}{assignees.length > 1 && <span className="ml-1 text-primary">+{assignees.length - 1}</span>}</p><p className="truncate text-[11px] text-muted-foreground">{formatAssigneeRole(primaryAssignee)}</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-foreground">{assignees.slice(0, 2).map((assignee) => assignee.fullName).join(", ")}{assignees.length > 2 && <span className="ms-1 text-primary">+{assignees.length - 2}</span>}</p><p className="truncate text-[11px] text-muted-foreground">{formatAssigneeRole(primaryAssignee)}</p></div>
           </> : <span className="text-xs text-muted-foreground">{t("taskCard.unassigned")}</span>}
         </div>
         {(onEdit || onDelete) && <div className="flex justify-end gap-2 border-t pt-2">

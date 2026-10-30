@@ -1,6 +1,9 @@
+import { useDisciplineOptions } from "../../../hooks/useDisciplineOptions";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../../components/ui/Button";
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Plus, GitPullRequestArrow } from "lucide-react";
 import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
 import { Loader } from "../../../components/ui/Loader";
@@ -21,6 +24,7 @@ import { useVocabulary } from "../../../utils/vocabulary";
 export const DesignChangesPage = () => {
   const { t } = useTranslation();
   const vocabulary = useVocabulary();
+  const { options: disciplineOptions } = useDisciplineOptions();
   const workspace = useProjectWorkspace();
   const activeProjectId = workspace.projectId;
   const [changes, setChanges] = useState<DesignChange[]>([]);
@@ -89,19 +93,18 @@ export const DesignChangesPage = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Design Changes{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-          <p className="text-muted-foreground">{t("designChanges.engineering_change_requests")}</p>
-        </div>
-        {canPropose && <Button onClick={() => setFormOpen(true)}>+ Propose Change</Button>}
-      </div>
-      {focusedChangeId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("designChanges.showing_the_design_change_opened_from")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("designChanges.show_all_changes")}</Button></div>}
+      <PageHeader
+        context={workspace.project?.name}
+        title={t("nav.designChanges")}
+        description={t("designChanges.engineering_change_requests")}
+        actions={canPropose && <Button leftIcon={<Plus size={15} />} onClick={() => setFormOpen(true)}>{t("designChanges.propose_design_change")}</Button>}
+      />
+      {focusedChangeId && <div className="flex items-center justify-between border bg-card px-3 py-2 text-sm"><span>{t("designChanges.showing_the_design_change_opened_from")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("designChanges.show_all_changes")}</Button></div>}
 
       <Card className="grid gap-3 p-4 md:grid-cols-6">
         {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || t("project.selectedProject")}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:t("project.allProjects")},...projects.map(project=>({value:project.id,label:project.name}))]}/>}
         <Select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} options={[{value:"",label:t("designChanges.all_statuses")},...['proposed','under_review','approved','rejected','implemented'].map(value=>({value,label:vocabulary.designChangeStatus(value)}))]}/>
-        <Select value={filterDiscipline} onChange={e=>setFilterDiscipline(e.target.value)} options={[{value:"",label:t("designChanges.all_disciplines")},...['civil','architectural','electrical','mechanical'].map(value=>({value,label:vocabulary.discipline(value)}))]}/>
+        <Select value={filterDiscipline} onChange={e=>setFilterDiscipline(e.target.value)} options={[{value:"",label:t("designChanges.all_disciplines")},...disciplineOptions]}/>
         <Input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
         <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyAttachments} onChange={e=>setOnlyAttachments(e.target.checked)}/> {t("designChanges.has_attachments")}</label>
@@ -110,7 +113,7 @@ export const DesignChangesPage = () => {
       {visibleChanges.length === 0 ? (
         <Card>
           <div className="empty-state">
-            <div className="empty-state-icon">📐</div>
+            <GitPullRequestArrow size={22} strokeWidth={1.5} className="empty-state-icon" aria-hidden />
             <p className="empty-state-title">{t("designChanges.no_design_changes")}</p>
           </div>
         </Card>

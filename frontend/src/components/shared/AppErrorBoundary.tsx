@@ -43,9 +43,9 @@ class AppErrorBoundaryBase extends Component<Props, State> {
     const { t } = this.props;
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
-        <Card className="max-w-md border-red-200">
+        <Card className="max-w-md border-state-overdue/30">
           <div className="py-8 text-center">
-            <AlertTriangle className="mx-auto mb-3 text-red-500" />
+            <AlertTriangle className="mx-auto mb-3 text-state-overdue" />
             <h1 className="font-semibold">{t("errors.generic")}</h1>
             <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
               {t("errors.appCrashedHint")}

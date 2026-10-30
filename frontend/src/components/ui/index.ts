@@ -6,3 +6,7 @@ export { Table } from "./Table";
 export { Card } from "./Card";
 export { Badge } from "./Badge";
 export { Loader } from "./Loader";
+export { PageHeader } from "./PageHeader";
+export { Tabs } from "./Tabs";
+export type { TabItem } from "./Tabs";
+export { EmptyState } from "./EmptyState";

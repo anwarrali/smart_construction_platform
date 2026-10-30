@@ -1,0 +1,46 @@
+@startuml
+!include _style.iuml
+left to right direction
+package "API layer (app.api)" {
+  component "auth, step_up,\norganization, permissions" as A1
+  component "projects, tasks,\nscheduling, milestones" as A2
+  component "documents, ingestion,\nrag, knowledge" as A3
+  component "ifc" as A4
+  component "voice, ai, agents" as A5
+  component "messages, notifications,\nevents (SSE)" as A6
+}
+package "Service layer (app.services)" {
+  component "cpm_service,\ntask_progress" as S2
+  component "ingestion pipeline,\nrag services" as S3
+  component "ifc processing,\ngeometry, interference" as S4
+  component "voice services,\nai_tools, agents" as S5
+  component "notification, push,\nrealtime" as S6
+}
+package "Cross-cutting services" {
+  component "authorization\n(effective_permissions)" as AZ
+  component "jobs\n(queue, runner, handlers)" as JB
+  component "audit and\ndomain events" as AU
+}
+database "PostgreSQL + pgvector" as DB
+A2 --> S2
+A3 --> S3
+A4 --> S4
+A5 --> S5
+A6 --> S6
+S3 --> JB
+S4 --> JB
+S2 --> AU
+S5 --> AU
+S2 --> DB
+S3 --> DB
+S4 --> DB
+S6 --> DB
+JB --> DB
+A1 --> AZ
+note as AZNOTE
+  Every API module and the voice, AI tool,
+  agent and RAG paths call authorization
+  before touching protected data
+  (edges omitted for readability).
+end note
+@enduml

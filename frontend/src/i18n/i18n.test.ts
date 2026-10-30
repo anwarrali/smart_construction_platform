@@ -96,12 +96,35 @@ describe("translation catalogues", () => {
       (value.match(/\{\{\s*\w+\s*\}\}/g) || []).map((item) => item.replace(/\s/g, "")).sort();
     // Compared per base key: a plural form legitimately exists in one
     // language and not the other, but the placeholders inside must agree.
+    //
+    // One exception, and only one: Arabic says zero, one and two through the
+    // noun itself ("مرحلة واحدة", "مرحلتان"), so those three forms may leave
+    // out `{{count}}` — i18next still receives the count to choose the form,
+    // and printing it would read "1 مرحلة واحدة". Every other placeholder in
+    // them must still match, and `_few/_many/_other` must carry `{{count}}`.
+    const NUMBER_IN_THE_WORD = /_(zero|one|two)$/;
     const mismatched = Object.keys(english).filter((key) => {
-      const counterpart = arabic[key] ?? arabic[`${base(key)}_other`] ?? arabic[base(key)];
-      if (counterpart === undefined) return false;
-      return placeholders(english[key]).join() !== placeholders(counterpart).join();
+      const counterpartKey = [key, `${base(key)}_other`, base(key)].find((candidate) => arabic[candidate] !== undefined);
+      if (counterpartKey === undefined) return false;
+      const expected = placeholders(english[key]);
+      const actual = placeholders(arabic[counterpartKey]);
+      const countOptional = NUMBER_IN_THE_WORD.test(counterpartKey) && !actual.includes("{{count}}");
+      const relevant = (items: string[]) => (countOptional ? items.filter((item) => item !== "{{count}}") : items);
+      return relevant(expected).join() !== relevant(actual).join();
     });
     expect(mismatched, `placeholder mismatch: ${mismatched.join(", ")}`).toEqual([]);
+  });
+
+  it("prints the count in every Arabic plural form that cannot say it in the word", () => {
+    // The other half of the exception above: from three upwards the number is
+    // not in the noun, so a form that dropped `{{count}}` would hide it.
+    const counted = new Set(
+      Object.keys(english).filter((key) => english[key].includes("{{count}}")).map(base),
+    );
+    const missing = Object.keys(arabic).filter(
+      (key) => /_(few|many|other)$/.test(key) && counted.has(base(key)) && !arabic[key].includes("{{count}}"),
+    );
+    expect(missing, `Arabic plural without {{count}}: ${missing.join(", ")}`).toEqual([]);
   });
 
   it("covers the surfaces the brief calls out", () => {

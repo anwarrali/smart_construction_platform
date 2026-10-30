@@ -120,9 +120,9 @@ export const ProjectPartiesPage = () => {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="page-header">
         <div>
-          <h1 className="text-xl font-semibold">{t("projectParties.title")}</h1>
+          <h1 className="page-title">{t("projectParties.title")}</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             {t("projectParties.subtitle")}
           </p>

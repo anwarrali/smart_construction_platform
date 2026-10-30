@@ -1,3 +1,6 @@
+import { useDisciplineOptions } from "../../../hooks/useDisciplineOptions";
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Plus, HardHat } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
@@ -48,6 +51,7 @@ interface SiteReport {
 export const SiteReportsPage = () => {
   const { t } = useTranslation();
   const vocabulary = useVocabulary();
+  const { options: disciplineOptions } = useDisciplineOptions();
   const { id } = useParams<{ id: string }>();
   const workspace = useProjectWorkspace();
   const activeProjectId = workspace.projectId || id;
@@ -209,18 +213,18 @@ export const SiteReportsPage = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-        <h1 className="text-2xl font-bold">{t("siteReports.site_reports")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-        <p className="text-muted-foreground">{t("siteReports.daily_site_progress_reports")}</p>
-        </div>{canSubmit && <Button onClick={() => setFormOpen(true)}>+ {t("siteReports.site_reports_singular")}</Button>}
-      </div>
-      {focusedReportId && <div className="flex items-center justify-between rounded-lg border bg-card p-3 text-sm"><span>{t("siteReports.showing_the_site_report_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("siteReports.show_all_reports")}</Button></div>}
+      <PageHeader
+        context={workspace.project?.name}
+        title={t("siteReports.site_reports")}
+        description={t("siteReports.daily_site_progress_reports")}
+        actions={canSubmit && <Button leftIcon={<Plus size={15} />} onClick={() => setFormOpen(true)}>{t("siteReports.site_reports_singular")}</Button>}
+      />
+      {focusedReportId && <div className="flex items-center justify-between border bg-card px-3 py-2 text-sm"><span>{t("siteReports.showing_the_site_report_opened_from_your")}</span><Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>{t("siteReports.show_all_reports")}</Button></div>}
 
       <Card className="grid gap-3 p-4 md:grid-cols-6">
         {activeProjectId ? <div className="flex items-center text-sm font-medium">{workspace.project?.name || t("project.selectedProject")}</div> : <Select value={filterProject} onChange={e=>setFilterProject(e.target.value)} options={[{value:"",label:t("project.allProjects")},...projects.map(project=>({value:project.id,label:project.name}))]}/>}
         <Select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} options={[{value:"",label:t("siteReports.all_statuses")},...['draft','submitted','approved','rejected'].map(value=>({value,label:vocabulary.reviewStatus(value)}))]}/>
-        <Select value={filterDiscipline} onChange={e=>setFilterDiscipline(e.target.value)} options={[{value:"",label:t("siteReports.all_disciplines")},...['civil','architectural','electrical','mechanical'].map(value=>({value,label:vocabulary.discipline(value)}))]}/>
+        <Select value={filterDiscipline} onChange={e=>setFilterDiscipline(e.target.value)} options={[{value:"",label:t("siteReports.all_disciplines")},...disciplineOptions]}/>
         <Input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
         <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyAttachments} onChange={e=>setOnlyAttachments(e.target.checked)}/> {t("siteReports.has_attachments")}</label>
@@ -229,7 +233,7 @@ export const SiteReportsPage = () => {
       {visibleReports.length === 0 ? (
         <Card>
           <div className="empty-state">
-            <div className="empty-state-icon">🏗️</div>
+            <HardHat size={22} strokeWidth={1.5} className="empty-state-icon" aria-hidden />
             <p className="empty-state-title">{t("siteReports.no_site_reports")}</p>
           </div>
         </Card>

@@ -1,3 +1,4 @@
+import { PageHeader } from "../../../components/ui/PageHeader";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatDateTime } from "../../../utils/dates";
 import { useTranslation } from "react-i18next";
@@ -121,12 +122,10 @@ export const VoiceReportsPage = () => {
   if (!workspace.projectId) return <Card>{t("voiceReports.select_a_project_to_review_voice_reports")}</Card>;
 
   return <div className="page-container space-y-5">
-    <div>
-      <h1 className="text-2xl font-bold">{t("voiceReports.voice_assistant_review_inbox")}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {t("voiceReports.review_field_reports_evidence_and")}
-      </p>
-    </div>
+    <PageHeader
+      title={t("voiceReports.voice_assistant_review_inbox")}
+      description={t("voiceReports.review_field_reports_evidence_and")}
+    />
     <Card>
       <div className="grid gap-3 md:grid-cols-3">
         <Input label={t("voiceReports.person_task_or_code")} value={query}

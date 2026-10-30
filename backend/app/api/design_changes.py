@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, time, timezone
 
 from app.db.database import get_db
-from app.services.authorization import require
+from app.services.authorization import projects_with_permission, require
 from app.models.user import User
 from app.models.design_change import DesignChange, DesignChangeAffectedDiscipline
 from app.schemas.design_change import DesignChangeOut, DesignChangeCreate
@@ -22,6 +22,9 @@ from app.models.enums import NotificationType
 from app.services.audit_service import record_audit
 
 router = APIRouter(prefix="/design-changes", tags=["Design Changes"])
+
+#: Reading design changes — enforced here, not only by the route guard.
+VIEW = "design_change.view"
 
 
 def _important_for_owner(query):
@@ -43,16 +46,19 @@ def list_design_changes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    if project_id:
+        require(db, current_user, VIEW, project_id)
     query = db.query(DesignChange)
-    # "Sees every project" is `platform.view_all_projects`, which
+    # "Works in every project" is `platform.work_in_all_projects` (QA-06B), which
     # `accessible_project_ids` already answers by returning None. Reading the
     # role instead meant two things went wrong: an administrator whose
     # permission had been explicitly revoked still bypassed the filter, and a
     # non-administrator who had been *granted* it got `None or []` — an empty
-    # list, so they saw nothing at all.
-    accessible_ids = accessible_project_ids(db, current_user)
-    if accessible_ids is not None:
-        query = query.filter(DesignChange.project_id.in_(accessible_ids))
+    # list, so they saw nothing at all. Narrowed again to the projects where the
+    # person may view design changes.
+    query = query.filter(DesignChange.project_id.in_(projects_with_permission(
+        db, current_user, VIEW, accessible_project_ids(db, current_user),
+    )))
     # The client sees the changes that matter to them. Asked as "is this
     # person on this project as the client" rather than "is their account
     # an Owner", so an office with two client contacts, or a client on one
@@ -107,6 +113,7 @@ def get_design_changes_by_project(
 ):
     if not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    require(db, current_user, VIEW, project_id)
     query = db.query(DesignChange).filter(DesignChange.project_id == project_id)
     if rbac.is_client_participant(db, current_user, project_id):
         query = _important_for_owner(query)
@@ -123,6 +130,7 @@ def get_design_change_by_id(
         raise HTTPException(status_code=404, detail="Design change not found")
     if not user_has_project_access(db, current_user, change.project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this design change")
+    require(db, current_user, VIEW, change.project_id)
     if rbac.is_client_participant(db, current_user, change.project_id) and not _important_for_owner(
         db.query(DesignChange).filter(DesignChange.id == change.id)
     ).first():

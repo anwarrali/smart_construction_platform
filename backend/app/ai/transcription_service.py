@@ -109,5 +109,5 @@ class TranscriptionService:
         return OpenAI(
             api_key=settings.OPENAI_API_KEY,
             timeout=settings.OPENAI_TIMEOUT_SECONDS,
-            max_retries=2,
+            max_retries=1,  # bounded: see app/api/ai.py voice failure notes
         )

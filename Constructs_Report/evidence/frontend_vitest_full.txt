@@ -1,0 +1,970 @@
+
+ RUN  v3.2.7 C:/projects_final/ConstructionPlatformSoftwareProject/frontend
+
+stderr | src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > does not re-register its keydown listener on every keystroke (only once per open)
+react-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 'NO_I18NEXT_INSTANCE' }
+
+ ✓ src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > does not re-register its keydown listener on every keystroke (only once per open) 2748ms
+ ✓ src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > keeps every character of a continuous multi-character string in the same field, without losing focus 1031ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > showing which revision is which > marks the active revision and offers only the other designation 1788ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > showing which revision is which > marks the baseline revision independently of the active one 177ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > showing which revision is which > can show a revision that is both, with neither action left to offer 196ms
+ × src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > routes every character to the field the user is actually typing in when moving between fields sequentially 5281ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > showing which revision is which > marks neither on a revision holding no designation 153ms
+ × src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > keeps focus stable while typing Arabic (RTL) text 152ms
+   → Unable to find a label with the text of: field-0
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div />
+</body>
+ × src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > keeps typing correctly across the churn caused by re-opening the modal repeatedly 49ms
+   → Unable to find a label with the text of: field-0
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div />
+</body>
+ × src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > still closes on Escape and calls the latest onClose 11ms
+   → Unable to find a label with the text of: field-0
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div />
+</body>
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > setting the active revision > calls the activate route and reports which designation moved 2992ms
+ × src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > returns focus to the trigger element only once, when the modal actually closes — not on every keystroke 136ms
+   → Unable to find an accessible element with the role "button" and name "Add Project"
+
+There are no accessible roles. But there might be some inaccessible roles. If you wish to access them, then set the `hidden` option to `true`. Learn more about this here: https://testing-library.com/docs/dom-testing-library/api-queries#byrole
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div />
+</body>
+stderr | src/features/ifc/components/IFCRevisionActions.test.tsx > setting the active revision > reports a refusal and moves nothing
+[IFC Intelligence] set active failed Error: Only processed IFC versions can be activated
+    at C:\projects_final\ConstructionPlatformSoftwareProject\frontend\src\features\ifc\components\IFCRevisionActions.test.tsx:148:46
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > setting the active revision > reports a refusal and moves nothing 799ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > setting the baseline revision > calls the baseline route and reports which designation moved 309ms
+stderr | src/features/ifc/components/IFCRevisionActions.test.tsx > setting the baseline revision > reports a refusal and moves nothing
+[IFC Intelligence] set baseline failed Error: Only processed IFC versions can be baselines
+    at C:\projects_final\ConstructionPlatformSoftwareProject\frontend\src\features\ifc\components\IFCRevisionActions.test.tsx:173:46
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > setting the baseline revision > reports a refusal and moves nothing 272ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > downloading the original IFC > fetches the file through the authenticated client and saves it 104ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > downloading the original IFC > prefers the name the server put on the response 84ms
+ ✓ src/components/shared/Sidebar/Sidebar.test.tsx > Sidebar > offers only the destinations the person's permissions allow 4134ms
+stderr | src/features/ifc/components/IFCRevisionActions.test.tsx > downloading the original IFC > reports a failure instead of saving an empty file
+[IFC Intelligence] IFC download failed Error: Stored IFC file is unavailable
+    at C:\projects_final\ConstructionPlatformSoftwareProject\frontend\src\features\ifc\components\IFCRevisionActions.test.tsx:207:46
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+ ✓ src/features/ifc/components/FindingsPagination.test.tsx > scoping the query to the server > asks for one revision instead of the whole project 1434ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings review actions > offers every review decision to somebody who holds the permissions 4058ms
+ ✓ src/components/shared/Sidebar/Sidebar.test.tsx > Sidebar > marks the current destination, including on a tab route it owns 129ms
+ ✓ src/components/shared/Sidebar/Sidebar.test.tsx > Sidebar > keeps every entry named when the rail is narrowed to icons 87ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis completed > confirms the rule ran and says what it measured 1492ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > downloading the original IFC > reports a failure instead of saving an empty file 143ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > permissions > offers no designation control without ifc.manage_version 75ms
+ ✓ src/features/ifc/components/FindingsPagination.test.tsx > scoping the query to the server > sends a severity filter rather than applying it to the page in hand 2993ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings review actions > sends an acknowledgement through the review route with the status the server accepts 499ms
+ ✓ src/components/shared/Sidebar/Sidebar.test.tsx > Sidebar > shows no administration to someone without it 137ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > permissions > still shows which revision is active to somebody who cannot change it 70ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis completed > only then presents an empty list as a clean result 474ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > permissions > offers no download without ifc.download 102ms
+ ✓ src/features/ifc/components/FindingsPagination.test.tsx > scoping the query to the server > sends no filter value when the selection is cleared 307ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings review actions > uses the server's own shortcut route for ignore 235ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > permissions > gates download separately from revision management 163ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis completed > says so when the result was capped rather than complete 840ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings review actions > uses the server's own shortcut route for a false positive 234ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis completed > does not warn about truncation on an ordinary complete run 440ms
+ ✓ src/features/ifc/components/FindingsPagination.test.tsx > moving between pages > hides the pager when everything fits on one page 675ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings review actions > creates an issue through the create-issue route and names it in the confirmation 163ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > states plainly that the rule could not run 208ms
+ ✓ src/features/ifc/components/FindingsPagination.test.tsx > moving between pages > offers the pager once the result outgrows a page 222ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings state after a decision > moves the card to the reviewed status without re-fetching the list 165ms
+ ✓ src/features/ifc/components/IFCRevisionActions.test.tsx > one action at a time > closes every control while a call is open 910ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > never lets an empty list read as a clean model 176ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings state after a decision > withdraws the review controls once the finding is no longer pending 180ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > explains that the metadata-quality checks are unaffected 163ms
+ ✓ src/features/ifc/components/FindingsPagination.test.tsx > moving between pages > requests the next page and then allows going back 718ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings state after a decision > records the status the server actually stored rather than the one requested 173ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > gives UNKNOWN_LENGTH_UNIT its own explanation 182ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings state after a decision > shows a finding the server already reviewed without offering to review it again 83ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > gives NO_ELEMENT_GEOMETRY_AVAILABLE its own explanation 132ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > gives NO_STRUCTURAL_AND_SERVICE_PAIR_AVAILABLE its own explanation 41ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > gives DISABLED_OR_MISSING_VERSION its own explanation 24ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > still reports a reason code it does not recognise 29ms
+stderr | src/features/ifc/components/FindingsTab.test.tsx > findings action failures > reports a rejected action and leaves the finding as it was
+[IFC Intelligence:Findings] review action failed Error: Request failed
+    at C:\projects_final\ConstructionPlatformSoftwareProject\frontend\src\features\ifc\components\FindingsTab.test.tsx:205:44
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > warns even when the reason itself was not recorded 41ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis skipped > keeps listing the findings that were produced 75ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis not recorded > distinguishes a revision with no analysis from one that was skipped 50ms
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis not recorded > is reached when the summary is absent altogether 67ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings action failures > reports a rejected action and leaves the finding as it was 264ms
+stderr | src/features/ifc/components/FindingsTab.test.tsx > findings action failures > keeps the other findings usable when one action fails
+[IFC Intelligence:Findings] review action failed Error: Request failed
+    at C:\projects_final\ConstructionPlatformSoftwareProject\frontend\src\features\ifc\components\FindingsTab.test.tsx:224:44
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///C:/projects_final/ConstructionPlatformSoftwareProject/frontend/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+ ✓ src/features/ifc/components/FindingsAnalysisState.test.tsx > analysis not recorded > withholds the clean-result wording just as a skip does 45ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings action failures > keeps the other findings usable when one action fails 412ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings action failures > does not send the same decision twice while the first call is still open 751ms
+ ✓ src/features/ifc/components/FindingsPagination.test.tsx > moving between pages > stops at the last page 3921ms
+ × src/features/projects/components/DeleteProjectDialog.test.tsx > DeleteProjectDialog > shows the impact and needs the name before it will delete 5522ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × src/features/tasks/pages/TasksPage.test.tsx > managed task board filtering > sends the selected status and shows exactly the tasks returned 5660ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > a finding's elements, without the removed 3D viewer > offers no 3D action at all 2261ms
+ × src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > shows a short candidate list instead of asking for an exact task name 5711ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × src/features/tasks/pages/TaskDetailPage.test.tsx > managed task detail — progress > offers Start, not a progress box, on work that has not started 6020ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × src/features/messages/pages/MessagesPage.test.tsx > messages — sending > enables Send for an announcement as soon as there is a message 6094ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > lists what the project has ingested, with its category and status 3367ms
+ × src/features/admin/pages/AccessControlPage.test.tsx > per-person permission editor > explains each answer and names the office copy that governs 6263ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/features/tasks/pages/TasksPage.test.tsx > managed task board filtering > says access is denied instead of drawing an empty board when the server refuses 1130ms
+ ✓ src/features/tasks/pages/TaskDetailPage.test.tsx > managed task detail — progress > sends one save however many times the button is clicked 4190ms
+ × src/features/messages/pages/MessagesPage.test.tsx > messages — sending > says why Send is unavailable instead of only disabling it 5569ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > marks a file that came out of a design package 825ms
+ × src/features/ifc/components/FindingsPagination.test.tsx > moving between pages > returns to the first page when a filter changes 7033ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/features/projects/components/DeleteProjectDialog.test.tsx > DeleteProjectDialog > sends nothing when cancelled 3319ms
+ × src/features/admin/pages/AccessControlPage.test.tsx > per-person permission editor > shows the server's answer after a grant 5284ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > a finding's elements, without the removed 3D viewer > still explains a finding that names no element 1302ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > will not confirm while a task is still ambiguous 4353ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > marks a file whose bytes the project already had 458ms
+ ✓ src/features/tasks/pages/TasksPage.test.tsx > managed task board filtering > offers a retry, not an empty board, when loading fails for another reason 2769ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > a finding's elements, without the removed 3D viewer > treats blank element ids as no element 1222ms
+ ✓ src/features/messages/pages/MessagesPage.test.tsx > messages — sending > explains a refused project and offers no compose button 635ms
+ × src/features/projects/components/DeleteProjectDialog.test.tsx > DeleteProjectDialog > reports success only after the server deleted it 4341ms
+   → expected "spy" to be called with arguments: [ 'p1' ]
+
+Number of calls: 0
+
+
+Ignored nodes: comments, script, style
+<html
+  dir="ltr"
+  lang="en"
+>
+  <head />
+  <body
+    style="overflow: hidden; padding-right: 1024px;"
+  >
+    <div />
+    <div
+      class="dialog-overlay"
+    >
+      <div
+        aria-labelledby="_r_4_"
+        aria-modal="true"
+        class="dialog-content max-w-md"
+        role="dialog"
+        tabindex="-1"
+      >
+        <div
+          class="dialog-header"
+        >
+          <h2
+            class="min-w-0 pe-3 text-[15px] font-semibold"
+            id="_r_4_"
+          >
+            projectsPage.delete.title
+          </h2>
+          <button
+            aria-label="modal.close"
+            class="btn btn-ghost btn-icon -me-2 ms-auto h-8 w-8 shrink-0"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-x"
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6 6 18"
+              />
+              <path
+                d="m6 6 12 12"
+              />
+            </svg>
+          </button>
+        </div>
+        <div
+          class="dialog-body"
+        >
+          <div
+            class="space-y-4 text-sm"
+          >
+            <p
+              class="text-destructive"
+            >
+              projectsPage.delete.warning
+            </p>
+            <ul
+              class="grid grid-cols-2 gap-1"
+              data-testid="deletion-impact"
+            >
+              <li>
+                projectsPage.delete.impact.tasks
+              </li>
+              <li>
+                projectsPage.delete.impact.members
+              </li>
+              <li>
+                projectsPage.delete.impact.documents
+              </li>
+              <li>
+                projectsPage.delete.impact.issues
+              </li>
+              <li>
+                projectsPage.delete.impact.siteReports
+              </li>
+              <li>
+                projectsPage.delete.impact.models
+              </li>
+            </ul>
+            <div
+              class="form-group"
+            >
+              <label
+                class="form-label"
+                for="projectspage.delete.typename"
+              >
+                projectsPage.delete.typeName
+              </label>
+              <div
+                class="relative"
+              >
+                <input
+                  autocomplete="off"
+                  class="input   "
+                  id="projectspage.delete.typename"
+                  value=" ATower A"
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="modal-actions "
+          >
+            <button
+              class="btn-outline   "
+            >
+              common.cancel
+            </button>
+            <button
+              class="btn-destructive   "
+              disabled=""
+            >
+              projectsPage.delete.confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+ ✓ src/features/admin/pages/AccessControlPage.test.tsx > per-person permission editor > keeps the previous state and reports the error when a save fails 2580ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > resolves the ambiguity through the engineer's own choice 2209ms
+ ✓ src/features/tasks/pages/TaskDetailPage.test.tsx > managed task detail — progress > reports a committed save as saved even if the refresh afterwards fails 1404ms
+ × src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > offers a retry for a failure that can actually be retried 5753ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings permissions > offers no review decision at all without ifc.review_finding 674ms
+ ✓ src/features/projects/components/DeleteProjectDialog.test.tsx > DeleteProjectDialog > keeps the project and says so when the server refuses 835ms
+ ✓ src/features/tasks/pages/TasksPage.test.tsx > managed task board filtering > ignores a slower response for a filter that is no longer selected 2100ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > applies nothing until the engineer confirms 757ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > does not offer a retry for a limitation that will never change 464ms
+ ✓ src/features/admin/pages/AccessControlPage.test.tsx > per-person permission editor > explains a denial by a person-specific override 1009ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings permissions > still lets a read-only member open the affected elements 1034ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > withholds upload from somebody the server would refuse 169ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > mutates nothing when the engineer cancels 741ms
+ ✓ src/features/projects/components/DeleteProjectDialog.test.tsx > DeleteProjectDialog > does not offer deletion when the impact cannot be loaded 631ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > uploads a chosen file and refreshes the list 768ms
+ ✓ src/features/ifc/components/FindingsTab.test.tsx > findings permissions > withholds only the issue button when the caller cannot raise issues 2239ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > reports success only when the backend confirms every action 731ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > refuses an oversized file before spending the upload 331ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > does not claim success when the backend rejected the action 718ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > reports a failed upload rather than pretending it worked 515ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > keeps the recording and offers a retry when the network fails 472ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > keeps refreshing while a file is still being processed 137ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > stops refreshing once everything has settled 96ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > shows whether a file's text is searchable beside its processing status 87ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > tells the engineer when nothing was recorded 334ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > shows no index badge for a file that is not indexed 94ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > keeps refreshing while a file is being indexed 109ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > treats a FAILED command as a failure and keeps the recording to retry 486ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > keeps refreshing just after a text file settles, until indexing shows 120ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > does not keep refreshing for a settled file with no text 90ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > still works when the constraints call fails 88ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > answers an issue's text question without involving a task 1030ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > says so when the project has no files yet 57ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > offers 'choose another task' only on an action aimed at a task 329ms
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > hides the browser's live preview once recording has stopped 289ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > portfolio navigation > gives an administrator the administration group and one dashboard 5ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > portfolio navigation > offers a contractor no administration at all 2ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > portfolio navigation > offers portfolio work pages only to somebody who works in a project 3ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > portfolio navigation > sends an external client's dashboard to the owner overview 1ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > portfolio navigation > keeps an internal person without client access on the work dashboard 0ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > project navigation > shows a contractor its work but not review, schedule or team management 1ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > project navigation > lists Milestones under Work, next to Tasks, for whoever may read the schedule 1ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > project navigation > drops a group entirely when none of its entries are allowed 0ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > project navigation > offers Agents only to someone granted agents.view 1ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > project navigation > lists every destination once — tab routes are not separate entries 1ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > isItemActive > lights Coordination on each of its tab routes 1ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > isItemActive > lights an entry on its record pages 0ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > isItemActive > does not light the overview everywhere beneath it 0ms
+ ✓ src/components/shared/Sidebar/navigation.test.ts > isItemActive > matches portfolio tab routes by full path 0ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > the agent catalogue > shows all five agents, not only the runnable ones 2332ms
+ ✓ src/utils/noRetiredRoles.test.ts > retired role model > is not read anywhere in the interface 3655ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > the agent catalogue > disables the run button for an agent this caller may not run 1231ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > the agent catalogue > names the permission a blocked agent would need 423ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > the agent catalogue > states the tools an agent is allowed to call 312ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > running an agent > runs one agent and reports the findings the server returned 774ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > running an agent > surfaces a failed run instead of reporting success 393ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > running an agent > reports skipped agents as skips, separately from failures 372ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > running an agent > does not offer a pass when there is nothing this caller may run 209ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > the run history > shows what a run called, including the tools it was refused 270ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > the run history > distinguishes an automatic run from a requested one 359ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > the run history > says so plainly when nothing has run yet 183ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > automatic analysis > reports the server's state rather than assuming it 171ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > automatic analysis > says it is on when the server says so 112ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > automatic analysis > still renders the agents when the subscription call fails 215ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > opens exactly one connection for the session 46ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > authenticates with a ticket rather than the access token 11ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > reports connected only once the server acknowledges 35ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > delivers events to subscribers 32ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > emits a reconnected event on every connect so subscribers resynchronise 39ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > reconnects with a freshly minted ticket after an error 41ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > closes the failed socket rather than leaking it 17ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > reports offline honestly instead of retrying a dead network 11ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > stops cleanly on sign-out 16ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > survives a ticket request failure and retries 12ms
+ ✓ src/services/realtime/eventStream.test.ts > event stream > ignores an unparseable frame without dropping the connection 15ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > failure to load > offers a retry rather than an empty page 395ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > navigation wiring > resolves the agents module rather than silently falling back 566ms
+ ✓ src/features/agents/pages/AgentsPage.test.tsx > navigation wiring > keeps somebody without agents.view off the agents module 5ms
+ ✓ src/i18n/coverage.test.ts > translation coverage > defines every translation key the source actually asks for 1222ms
+ ✓ src/i18n/coverage.test.ts > translation coverage > keeps translation keys free of stray whitespace 247ms
+ ✓ src/i18n/coverage.test.ts > translation coverage > leaves no page rendering a hardcoded English sentence 85ms
+ ✓ src/utils/projectRoutes.test.ts > portfolioProjectsPath > is one address, because there is one workspace 24ms
+ ✓ src/utils/projectRoutes.test.ts > projectWorkspaceBase > puts every project under the shared prefix 1ms
+ ✓ src/utils/projectRoutes.test.ts > projectWorkspaceBase > encodes ids so a malformed id cannot escape the segment 0ms
+ ✓ src/utils/projectRoutes.test.ts > projectLandingModule > is the overview for anyone who works in the project 10ms
+ ✓ src/utils/projectRoutes.test.ts > projectLandingModule > is the team page for someone who only administers the project 1ms
+ ✓ src/utils/projectRoutes.test.ts > projectLandingModule > is the overview while nothing is known 8ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntryPath > opens a project whose work you can open on its overview 1ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntryPath > opens a project you only administer on its team, whatever your office-wide permissions 9ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntryPath > sends somebody who can open nothing of it back to the list 1ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntryPath > treats an older payload without the flag as workable 1ms
+ ✓ src/utils/projectRoutes.test.ts > projectModulePath > builds module links without asking who is looking 1ms
+ ✓ src/utils/projectRoutes.test.ts > projectModulePath > defaults to the project dashboard 0ms
+ ✓ src/utils/projectRoutes.test.ts > projectModulePath > tolerates a leading slash instead of producing a double slash 0ms
+ ✓ src/utils/projectRoutes.test.ts > projectModulePath > degrades to the dashboard rather than linking into a guard the reader fails 9ms
+ ✓ src/utils/projectRoutes.test.ts > projectModulePath > sends somebody who sees only their own work to it, not to the overview 1ms
+ ✓ src/utils/projectRoutes.test.ts > projectModulePath > links optimistically while permissions are still loading 0ms
+ ✓ src/utils/projectRoutes.test.ts > canOpenProjectModule > asks the permission each route is actually guarded by 1ms
+ ✓ src/utils/projectRoutes.test.ts > canOpenProjectModule > refuses a module the workspace does not register at all 16ms
+ ✓ src/utils/projectRoutes.test.ts > canOpenProjectModule > evaluates only the module root so deep segments stay allowed 0ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntityPath > addresses tasks by path segment 1ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntityPath > uses the query parameter names the destination pages actually read 12ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntityPath > accepts lower-case audit-log entity types 0ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntityPath > keeps an unmapped entity inside its project instead of leaving the workspace 0ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntityPath > falls back to activity when the reader cannot open the entity's module 0ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntityPath > encodes entity ids 0ms
+ ✓ src/utils/projectRoutes.test.ts > projectEntityPath > returns the module itself when no entity id is available 0ms
+ ✓ src/utils/projectRoutes.test.ts > replaceProjectInPath > swaps the project while staying on the same module 13ms
+ ✓ src/utils/projectRoutes.test.ts > replaceProjectInPath > rewrites a retired prefix onto the shared one instead of duplicating the id 1ms
+ ✓ src/utils/projectRoutes.test.ts > replaceProjectInPath > preserves deep entity segments when switching project 0ms
+ ✓ src/utils/projectRoutes.test.ts > sharedWorkspaceUrl > rewrites each retired prefix onto the shared workspace 1ms
+ ✓ src/utils/projectRoutes.test.ts > sharedWorkspaceUrl > preserves deep segments, query strings and hashes 1ms
+ ✓ src/utils/projectRoutes.test.ts > sharedWorkspaceUrl > moves the two module words that meant different pages per prefix 11ms
+ ✓ src/utils/projectRoutes.test.ts > sharedWorkspaceUrl > sends a bare retired portfolio prefix to the shared portfolio 0ms
+ ✓ src/utils/projectRoutes.test.ts > sharedWorkspaceUrl > returns null for a path that was never one of the retired prefixes 0ms
+ ✓ src/utils/projectRoutes.test.ts > portfolioMilestonesPath > opens a project's milestones, never the site-visit calendar 24ms
+ ✓ src/utils/projectRoutes.test.ts > portfolioMilestonesPath > falls back to the project overview without schedule.view 0ms
+ ✓ src/utils/projectRoutes.test.ts > portfolioMilestonesPath > goes to the project list when the manager has no project yet 0ms
+ ✓ src/hooks/useDisciplineOptions.test.tsx > useDisciplineOptions > offers every active catalogue discipline in catalogue order 411ms
+ ✓ src/features/ifc/components/IFCActionTabs.i18n.test.ts > IFCActionTabs localization > passes every description/message/label prop through t() rather than a literal 47ms
+ ✓ src/features/ifc/components/IFCActionTabs.i18n.test.ts > IFCActionTabs localization > passes every setError/toast argument through t() rather than a literal sentence 1ms
+ ✓ src/features/ifc/components/IFCActionTabs.i18n.test.ts > IFCActionTabs localization > defines every ifcActions.* key this component asks for in the English catalogue 17ms
+ ✓ src/features/ifc/components/IFCActionTabs.i18n.test.ts > IFCActionTabs localization > keeps IFC-standard/dynamic values out of the catalogue lookup path 1ms
+ ✓ src/features/ifc/components/IFCActionTabs.i18n.test.ts > IFCActionTabs localization > does not reintroduce the specific hardcoded sentences this file used to render 1ms
+ ✓ src/hooks/useDisciplineOptions.test.tsx > useDisciplineOptions > keeps a task's saved discipline selectable after it leaves the catalogue 132ms
+ ✓ src/features/dashboard/consultant/pages/ConsultantDashboard.test.tsx > supervision dashboard loading > settles on the choose-a-project state when no project is open 605ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > lists a token by name, prefix, project and access 1041ms
+ ✓ src/hooks/useDisciplineOptions.test.tsx > useDisciplineOptions > still offers the four long-standing disciplines if the catalogue cannot be read 108ms
+ ✓ src/features/dashboard/consultant/pages/ConsultantDashboard.test.tsx > supervision dashboard loading > settles on an error with a retry when the request fails 977ms
+ ✓ src/features/dashboard/consultant/pages/ConsultantDashboard.test.tsx > supervision dashboard loading > asks for the open project's data 69ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > distinguishes a token that may propose from one that may only read 163ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > never renders a secret in the listing, because there is not one to render 170ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > explains a switched-off surface instead of failing 102ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > reports a real failure as a failure 115ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > asks before revoking, and names the client and its project 1390ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > offers no revoke on a token that is already gone 100ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > asks the server for inactive tokens rather than filtering them here 154ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > shows the secret once, inside a configuration a client can use as it stands 756ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > asks for the propose scope only when it was ticked 1058ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > names a module longer than the fallback 737ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > names a module shorter than the fallback 52ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > names a module exactly the fallback's length 60ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > still names the dashboard on the dashboard 45ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > falls back to the dashboard at the workspace root 34ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > is not still holding the last secret when the dialog reopens 1141ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > shows the record id on a deep link 40ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > survives a retired role-prefixed URL 32ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > renders an unmapped module by its own name rather than a wrong one 41ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > leaves the lifetime to the server when the field is empty 486ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > names the portfolio page outside a project workspace 32ms
+ ✓ src/components/shared/Breadcrumbs/Breadcrumbs.test.tsx > Breadcrumbs > renders nothing for a portfolio page it does not know 15ms
+ ✓ src/i18n/i18n.test.ts > language configuration > declares the direction each language reads in 9ms
+ ✓ src/i18n/i18n.test.ts > language configuration > falls back to left-to-right for an unknown language 4ms
+ ✓ src/i18n/i18n.test.ts > language configuration > offers exactly the two supported languages 5ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > has a non-trivial number of strings 6ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > translates every English key into Arabic 1ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > has no Arabic key without an English counterpart 4ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > gives Arabic every plural form its grammar requires 3ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > leaves no Arabic value empty 5ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > actually translates rather than copying the English string 5ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > keeps interpolation placeholders identical in both languages 21ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > prints the count in every Arabic plural form that cannot say it in the word 6ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > covers the surfaces the brief calls out 3ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > localizes every AI insight message-key family the backend actually writes 7ms
+ ✓ src/i18n/i18n.test.ts > translation catalogues > uses construction terminology in Arabic rather than literal translation 2ms
+ ✓ src/features/settings/pages/McpClientsPage.test.tsx > McpClientsPage > names the owner only for an administrator looking at other people's 138ms
+ ✓ src/utils/errorMessage.test.ts > errorMessage > passes a plain string detail through 19ms
+ ✓ src/utils/errorMessage.test.ts > errorMessage > flattens a FastAPI validation array into a sentence naming each field 8ms
+ ✓ src/utils/errorMessage.test.ts > errorMessage > marks an authorization refusal as one, so it is not read as bad input 22ms
+ ✓ src/utils/errorMessage.test.ts > errorMessage > quotes the support ID of a server-side failure, and only of one 7ms
+ ✓ src/utils/errorMessage.test.ts > errorMessage > reads the message out of a structured detail object 3ms
+ ✓ src/utils/errorMessage.test.ts > errorMessage > always returns a string, whatever the shape 4ms
+ ✓ src/utils/errorMessage.test.ts > errorMessage > falls back when the request never reached the server 1ms
+ ✓ src/utils/errorMessage.test.ts > errorMessage > never returns an empty string for a blank detail 0ms
+ ✓ src/app/store/permission.store.test.ts > project-scoped permissions > answers with the open project's permissions once they arrive 191ms
+ ✓ src/app/store/permission.store.test.ts > project-scoped permissions > is not ready until the open project's answer has arrived 34ms
+ ✓ src/app/store/permission.store.test.ts > project-scoped permissions > falls back to the office-wide answer if the project's cannot be loaded 25ms
+ ✓ src/features/ingestion/components/IndexStatusBadge.test.tsx > IndexStatusBadge > names each reported state through a translation key 289ms
+ ✓ src/features/ingestion/components/IndexStatusBadge.test.tsx > IndexStatusBadge > renders nothing for a file that is not indexed, or an older server 24ms
+ ✓ src/features/ingestion/components/IndexStatusBadge.test.tsx > IndexStatusBadge > marks a failure as one and carries the server's reason 37ms
+ ✓ src/features/ingestion/components/IngestionStatusBadge.test.tsx > IngestionStatusBadge > names every lifecycle state through a translation key 400ms
+ ✓ src/features/ingestion/components/IngestionStatusBadge.test.tsx > IngestionStatusBadge > does not render a raw enum name 33ms
+ ✓ src/features/ingestion/components/IngestionStatusBadge.test.tsx > IngestionStatusBadge > distinguishes a finished-but-incomplete file from a failed one 29ms
+ ✓ src/features/ingestion/components/IngestionStatusBadge.test.tsx > IngestionStatusBadge > treats a ready file as a success and a working one as neutral progress 11ms
+ ✓ src/features/ingestion/components/IngestionStatusBadge.test.tsx > IngestionStatusBadge > carries the reason and the suggested action as a tooltip 6ms
+ ✓ src/features/ingestion/components/IngestionStatusBadge.test.tsx > IngestionStatusBadge > has no tooltip when there is nothing to explain 10ms
+ ✓ src/components/shared/StepUpDialog.test.tsx > StepUpDialog development code > fills in and announces an echoed development code 732ms
+ ✓ src/app/store/permission.store.test.ts > revalidation after a permission change > drops a revoked permission when the server answers 403 57ms
+ ✓ src/app/store/permission.store.test.ts > revalidation after a permission change > shows a new grant when the tab regains focus, and keeps the old answer while it loads 22ms
+ ✓ src/app/store/permission.store.test.ts > revalidation after a permission change > keeps the previous answer if the re-read fails 19ms
+ ✓ src/app/store/permission.store.test.ts > revalidation after a permission change > does nothing before anybody has signed in 1ms
+ ✓ src/features/ingestion/components/IndexStatusBadge.test.tsx > IndexStatusBadge > marks a searchable file as a success, with no tooltip 26ms
+ ✓ src/features/ingestion/components/IndexStatusBadge.test.tsx > awaitsIndexing > waits while indexing runs 1ms
+ ✓ src/features/ingestion/components/IndexStatusBadge.test.tsx > awaitsIndexing > waits briefly for a text file that just settled 1ms
+ ✓ src/features/ingestion/components/IndexStatusBadge.test.tsx > awaitsIndexing > stops once the pickup window has passed 0ms
+ ✓ src/features/ingestion/components/IndexStatusBadge.test.tsx > awaitsIndexing > never waits for a file nothing will index 3ms
+ ✓ src/features/ingestion/components/IngestionStatusBadge.test.tsx > IngestionStatusBadge > falls back rather than crashing on a status it does not know 8ms
+ ✓ src/components/shared/StepUpDialog.test.tsx > StepUpDialog development code > leaves the code empty and shows no development note without an echo 102ms
+ ✓ src/features/dashboard/DashboardSelectorPage.test.tsx > dashboard selector > keeps an engineer who may create projects on their own work 234ms
+ ✓ src/features/dashboard/DashboardSelectorPage.test.tsx > dashboard selector > gives the portfolio dashboard to somebody who staffs projects 34ms
+ ✓ src/features/dashboard/DashboardSelectorPage.test.tsx > dashboard selector > gives it to a creator who also sees project-wide work 38ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > accepts an ordinary IFC file 8ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > accepts an IFC file whose extension is upper case 1ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > refuses a file that is not an IFC 2ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > refuses a renamed file that merely contains .ifc in its name 1ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > refuses an empty file 1ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > refuses a file over the server's limit and reports both numbers 3ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > accepts a file exactly on the limit 1ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > does not invent a size limit when the server's rules could not be loaded 1ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > honours a server that accepts more than one extension 1ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > pre-upload IFC validation > names a message that actually exists in the catalogue 1ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > processing failure headings > explains IFC_FILE_CORRUPTED in both languages 1ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > processing failure headings > explains IFC_PARSER_UNAVAILABLE in both languages 0ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > processing failure headings > explains IFC_ENTITY_LIMIT_EXCEEDED in both languages 0ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > processing failure headings > explains IFC_PARSE_TIMEOUT in both languages 0ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > processing failure headings > explains IFC_PARSER_OUT_OF_MEMORY in both languages 0ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > processing failure headings > explains IFC_PROCESSING_FAILED in both languages 0ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > processing failure headings > explains IFC_GEOMETRY_FAILED in both languages 0ms
+ ✓ src/features/ifc/components/IFCUpload.test.ts > processing failure headings > gives a timeout and an out-of-memory failure different advice 1ms
+ ✓ src/app/router/PermissionGuard.test.tsx > PermissionGuard inside a project > sends a registry-only administrator to the project's team page 199ms
+ ✓ src/app/router/PermissionGuard.test.tsx > PermissionGuard inside a project > recognises the bare project address, not only /projects/:id/… 25ms
+ ✓ src/app/router/PermissionGuard.test.tsx > PermissionGuard inside a project > does not render the page until the project's own permissions have arrived 178ms
+ ✓ src/app/router/PermissionGuard.test.tsx > PermissionGuard inside a project > does not render a project page on a fresh load before any permissions have arrived 25ms
+ ✓ src/app/router/PermissionGuard.test.tsx > PermissionGuard inside a project > lets a team member through once the project's answer is in 13ms
+ ✓ src/app/router/PermissionGuard.test.tsx > PermissionGuard inside a project > still sends a refusal outside a project to the dashboard 19ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 16 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > routes every character to the field the user is actually typing in when moving between fields sequentially
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/components/ui/Modal/Modal.focus.test.tsx:198:3
+    196|   });
+    197| 
+    198|   it("routes every character to the field the user is actually typing …
+       |   ^
+    199|     const user = userEvent.setup();
+    200|     render(<ChurningParentForm fieldCount={3} />);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/16]⎯
+
+ FAIL  src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > keeps focus stable while typing Arabic (RTL) text
+TestingLibraryElementError: Unable to find a label with the text of: field-0
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div />
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getAllByLabelText node_modules/@testing-library/dom/dist/queries/label-text.js:111:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ getByLabelText node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/ui/Modal/Modal.focus.test.tsx:225:26
+    223|     render(<ChurningParentForm />);
+    224| 
+    225|     const field = screen.getByLabelText("field-0");
+       |                          ^
+    226|     await act(async () => {
+    227|       await user.click(field);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/16]⎯
+
+ FAIL  src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > keeps typing correctly across the churn caused by re-opening the modal repeatedly
+TestingLibraryElementError: Unable to find a label with the text of: field-0
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div />
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getAllByLabelText node_modules/@testing-library/dom/dist/queries/label-text.js:111:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ getByLabelText node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/ui/Modal/Modal.focus.test.tsx:239:26
+    237|     render(<ChurningParentForm />);
+    238| 
+    239|     const field = screen.getByLabelText("field-0");
+       |                          ^
+    240|     await act(async () => {
+    241|       await user.click(field);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/16]⎯
+
+ FAIL  src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > still closes on Escape and calls the latest onClose
+TestingLibraryElementError: Unable to find a label with the text of: field-0
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div />
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getAllByLabelText node_modules/@testing-library/dom/dist/queries/label-text.js:111:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ getByLabelText node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/ui/Modal/Modal.focus.test.tsx:275:26
+    273|     render(<ChurningParentForm onCloseSpy={() => { closeCount += 1; }}…
+    274| 
+    275|     const field = screen.getByLabelText("field-0");
+       |                          ^
+    276|     await act(async () => {
+    277|       await user.click(field);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/16]⎯
+
+ FAIL  src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > returns focus to the trigger element only once, when the modal actually closes — not on every keystroke
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Add Project"
+
+There are no accessible roles. But there might be some inaccessible roles. If you wish to access them, then set the `hidden` option to `true`. Learn more about this here: https://testing-library.com/docs/dom-testing-library/api-queries#byrole
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div />
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ getByRole node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/ui/Modal/Modal.focus.test.tsx:305:28
+    303| 
+    304|     render(<HarnessWithRealTrigger />);
+    305|     const trigger = screen.getByRole("button", { name: "Add Project" }…
+       |                            ^
+    306|     await act(async () => {
+    307|       await user.click(trigger);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/16]⎯
+
+ FAIL  src/features/admin/pages/AccessControlPage.test.tsx > per-person permission editor > explains each answer and names the office copy that governs
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/admin/pages/AccessControlPage.test.tsx:90:3
+     88|   afterEach(cleanup);
+     89| 
+     90|   it("explains each answer and names the office copy that governs", as…
+       |   ^
+     91|     await openPerson();
+     92|     expect(screen.getByTestId("governing-role").textContent).toBe("acc…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/16]⎯
+
+ FAIL  src/features/admin/pages/AccessControlPage.test.tsx > per-person permission editor > shows the server's answer after a grant
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/admin/pages/AccessControlPage.test.tsx:99:3
+     97|   });
+     98| 
+     99|   it("shows the server's answer after a grant", async () => {
+       |   ^
+    100|     accessControlService.setUserPermission.mockResolvedValue(summary({
+    101|       effectivePermissions: ["issue.create", "platform.create_project"…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/16]⎯
+
+ FAIL  src/features/ingestion/components/ProjectFilesPanel.test.tsx > ProjectFilesPanel > offers a retry for a failure that can actually be retried
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/ingestion/components/ProjectFilesPanel.test.tsx:118:3
+    116|   });
+    117| 
+    118|   it("offers a retry for a failure that can actually be retried", asyn…
+       |   ^
+    119|     ingestionApi.list.mockResolvedValue(
+    120|       page([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/16]⎯
+
+ FAIL  src/features/messages/pages/MessagesPage.test.tsx > messages — sending > enables Send for an announcement as soon as there is a message
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/messages/pages/MessagesPage.test.tsx:55:3
+     53|   afterEach(() => { cleanup(); Object.values(messages).forEach((mock) …
+     54| 
+     55|   it("enables Send for an announcement as soon as there is a message",…
+       |   ^
+     56|     const user = userEvent.setup();
+     57|     render(<MessagesPage />);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/16]⎯
+
+ FAIL  src/features/messages/pages/MessagesPage.test.tsx > messages — sending > says why Send is unavailable instead of only disabling it
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/messages/pages/MessagesPage.test.tsx:69:3
+     67|   });
+     68| 
+     69|   it("says why Send is unavailable instead of only disabling it", asyn…
+       |   ^
+     70|     const user = userEvent.setup();
+     71|     render(<MessagesPage />);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/16]⎯
+
+ FAIL  src/features/projects/components/DeleteProjectDialog.test.tsx > DeleteProjectDialog > shows the impact and needs the name before it will delete
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/projects/components/DeleteProjectDialog.test.tsx:42:3
+     40|   afterEach(cleanup);
+     41| 
+     42|   it("shows the impact and needs the name before it will delete", asyn…
+       |   ^
+     43|     render(<DeleteProjectDialog project={project} onClose={vi.fn()} on…
+     44|     expect((await screen.findByTestId("deletion-impact")).children).to…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/16]⎯
+
+ FAIL  src/features/projects/components/DeleteProjectDialog.test.tsx > DeleteProjectDialog > reports success only after the server deleted it
+AssertionError: expected "spy" to be called with arguments: [ 'p1' ]
+
+Number of calls: 0
+
+
+Ignored nodes: comments, script, style
+<html
+  dir="ltr"
+  lang="en"
+>
+  <head />
+  <body
+    style="overflow: hidden; padding-right: 1024px;"
+  >
+    <div />
+    <div
+      class="dialog-overlay"
+    >
+      <div
+        aria-labelledby="_r_4_"
+        aria-modal="true"
+        class="dialog-content max-w-md"
+        role="dialog"
+        tabindex="-1"
+      >
+        <div
+          class="dialog-header"
+        >
+          <h2
+            class="min-w-0 pe-3 text-[15px] font-semibold"
+            id="_r_4_"
+          >
+            projectsPage.delete.title
+          </h2>
+          <button
+            aria-label="modal.close"
+            class="btn btn-ghost btn-icon -me-2 ms-auto h-8 w-8 shrink-0"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-x"
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M18 6 6 18"
+              />
+              <path
+                d="m6 6 12 12"
+              />
+            </svg>
+          </button>
+        </div>
+        <div
+          class="dialog-body"
+        >
+          <div
+            class="space-y-4 text-sm"
+          >
+            <p
+              class="text-destructive"
+            >
+              projectsPage.delete.warning
+            </p>
+            <ul
+              class="grid grid-cols-2 gap-1"
+              data-testid="deletion-impact"
+            >
+              <li>
+                projectsPage.delete.impact.tasks
+              </li>
+              <li>
+                projectsPage.delete.impact.members
+              </li>
+              <li>
+                projectsPage.delete.impact.documents
+              </li>
+              <li>
+                projectsPage.delete.impact.issues
+              </li>
+              <li>
+                projectsPage.delete.impact.siteReports
+              </li>
+              <li>
+                projectsPage.delete.impact.models
+              </li>
+            </ul>
+            <div
+              class="form-group"
+            >
+              <label
+                class="form-label"
+                for="projectspage.delete.typename"
+              >
+                projectsPage.delete.typeName
+              </label>
+              <div
+                class="relative"
+              >
+                <input
+                  autocomplete="off"
+                  class="input   "
+                  id="projectspage.delete.typename"
+                  value=" ATower A"
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="modal-actions "
+          >
+            <button
+              class="btn-outline   "
+            >
+              common.cancel
+            </button>
+            <button
+              class="btn-destructive   "
+              disabled=""
+            >
+              projectsPage.delete.confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+ ❯ src/features/projects/components/DeleteProjectDialog.test.tsx:68:43
+     66|     await userEvent.type(screen.getByRole("textbox"), "Tower A");
+     67|     await userEvent.click(confirmButton());
+     68|     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("p1"));
+       |                                           ^
+     69|     expect(projectsService.delete).toHaveBeenCalledWith("p1");
+     70|     expect(toast.success).toHaveBeenCalled();
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/16]⎯
+
+ FAIL  src/features/ifc/components/FindingsPagination.test.tsx > moving between pages > returns to the first page when a filter changes
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/ifc/components/FindingsPagination.test.tsx:161:3
+    159|   });
+    160| 
+    161|   it("returns to the first page when a filter changes", async () => {
+       |   ^
+    162|     // Staying on page three of the previous result would land on an e…
+    163|     ifcApi.findings.mockResolvedValue(pageOf(3, 120));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/16]⎯
+
+ FAIL  src/features/tasks/pages/TaskDetailPage.test.tsx > managed task detail — progress > offers Start, not a progress box, on work that has not started
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/tasks/pages/TaskDetailPage.test.tsx:73:3
+     71|   afterEach(cleanup);
+     72| 
+     73|   it("offers Start, not a progress box, on work that has not started",…
+       |   ^
+     74|     const user = userEvent.setup();
+     75|     tasksApi.getById.mockResolvedValueOnce(task("todo", 0)).mockResolv…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/16]⎯
+
+ FAIL  src/features/tasks/pages/TasksPage.test.tsx > managed task board filtering > sends the selected status and shows exactly the tasks returned
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/tasks/pages/TasksPage.test.tsx:65:3
+     63|   afterEach(cleanup);
+     64| 
+     65|   it("sends the selected status and shows exactly the tasks returned",…
+       |   ^
+     66|     const user = userEvent.setup();
+     67|     render(<TasksPage />);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/16]⎯
+
+ FAIL  src/features/voice/components/VoiceAssistantPanel.test.tsx > voice assistant panel > shows a short candidate list instead of asking for an exact task name
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/features/voice/components/VoiceAssistantPanel.test.tsx:147:3
+    145|   afterEach(cleanup);
+    146| 
+    147|   it("shows a short candidate list instead of asking for an exact task…
+       |   ^
+    148|     const user = userEvent.setup();
+    149|     voiceApi.createCommand.mockResolvedValue(ambiguous());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/16]⎯
+
+
+ Test Files  9 failed | 24 passed (33)
+      Tests  16 failed | 294 passed (310)
+   Start at  13:14:58
+   Duration  197.75s (transform 328.31s, setup 0ms, collect 1138.06s, tests 184.64s, environment 569.15s, prepare 216.40s)
+
+exit 1

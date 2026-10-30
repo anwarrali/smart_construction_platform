@@ -1,0 +1,43 @@
+@startuml
+!include _style.iuml
+left to right direction
+actor "Project Manager" as PM
+actor "Engineer" as ENG
+actor "Site Engineer" as SE
+actor "Reviewer\n(Technical Director /\nConsultant)" as REV
+actor "Client\nRepresentative" as CL
+actor "Contractor" as CON
+rectangle "Project execution and collaboration" {
+  usecase "Create / edit project" as UC1
+  usecase "Manage members\nand parties" as UC2
+  usecase "Create and assign tasks" as UC3
+  usecase "Define task\ndependencies" as UC4
+  usecase "View Gantt and\ncritical path" as UC5
+  usecase "Start task and\nupdate progress" as UC6
+  usecase "Submit task for review" as UC7
+  usecase "Approve / reject /\nask clarification" as UC8
+  usecase "Submit site report /\nfield evidence" as UC9
+  usecase "Raise and resolve issues" as UC10
+  usecase "Propose / approve\ndesign change" as UC11
+  usecase "Send messages and\nreceive notifications" as UC12
+  usecase "Raise owner request" as UC13
+}
+PM --> UC1
+PM --> UC2
+PM --> UC3
+PM --> UC4
+PM --> UC5
+ENG --> UC6
+ENG --> UC7
+ENG --> UC10
+SE --> UC9
+SE --> UC6
+REV --> UC8
+REV --> UC11
+CL --> UC13
+CL --> UC12
+CON --> UC6
+CON --> UC9
+UC7 ..> UC6 : <<include>>
+UC3 ..> UC12 : <<include>>
+@enduml

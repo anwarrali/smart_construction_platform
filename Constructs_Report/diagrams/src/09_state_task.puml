@@ -1,0 +1,19 @@
+@startuml
+!include _style.iuml
+hide empty description
+[*] --> BACKLOG
+[*] --> TODO
+BACKLOG --> TODO : planned
+TODO --> IN_PROGRESS : start\n[no open blocker,\ndependencies Done]
+IN_PROGRESS --> BLOCKED : raise blocker
+BLOCKED --> IN_PROGRESS : resume after blocker
+IN_PROGRESS --> UNDER_REVIEW : submit review\n[review_required]
+IN_PROGRESS --> DONE : complete execution\n[not review_required]
+UNDER_REVIEW --> DONE : approve
+UNDER_REVIEW --> REWORK_REQUIRED : reject
+REWORK_REQUIRED --> IN_PROGRESS : start rework
+REWORK_REQUIRED --> UNDER_REVIEW : resubmit
+DONE --> [*]
+CANCELLED --> [*]
+note "Any open state may be set to CANCELLED\nby an authorized task edit." as N1
+@enduml

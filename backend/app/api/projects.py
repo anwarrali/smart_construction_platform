@@ -36,8 +36,10 @@ from app.schemas.project import (
 )
 from app.schemas.user import UserCreateResponse, UserOut
 from app.core.deps import (
+    accessible_project_ids,
     get_current_user,
     get_project_or_403,
+    user_can_see_project_record,
     user_has_project_access,
 )
 from app.services import rbac
@@ -236,9 +238,10 @@ def list_projects(
     ).group_by(Issue.project_id).all()) if projects else {}
     for project in projects:
         project.open_issue_count = issue_counts.get(project.id, 0)
+    workable = accessible_project_ids(db, current_user)
 
     return ProjectsListResponse(
-        data=projects,
+        data=[_project_out(db, current_user, project, workable) for project in projects],
         total=total,
         page=page,
         limit=limit,
@@ -293,7 +296,27 @@ def get_project_by_id(
     if not has_permission(db, current_user, "cost_validation.review", project.id):
         project.budget_total = None
         project.budget_spent = None
-    return project
+    return _project_out(db, current_user, project, accessible_project_ids(db, current_user))
+
+
+def _project_out(db: Session, user: User, project: Project, workable: list[uuid.UUID] | None) -> ProjectOut:
+    """The project as this caller may see it.
+
+    Built as a response model, never by editing the ORM object: emptying
+    `project.members` on the instance is a relationship change a later flush
+    would act on.
+
+    The embedded team follows `GET /projects/{id}/members` — whoever staffs the
+    project. It used to go to anyone who could open the project, so an
+    engineer refused the team list by that endpoint still read every
+    assignment, discipline and party here (QA 2026-10-22).
+    """
+    out = ProjectOut.model_validate(project)
+    if not has_permission(db, user, "project.manage_members", project.id):
+        out.members = []
+    out.can_open_work = workable is None or project.id in workable
+    out.can_delete = has_permission(db, user, "project.delete", project.id)
+    return out
 
 
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
@@ -437,10 +460,49 @@ def delete_project(
     # permission already in the catalogue says so. It defaults to the
     # administrator alone, which is the same set `is_admin` admitted.
     project = manageable_project(db, current_user, project_id, "project.delete")
+    impact = _deletion_impact(db, project.id)
 
+    # Written before the delete and outlives it: `audit_logs.project_id` is
+    # SET NULL, so the row stays with the project id in its details. Until
+    # 2026-10-23 a project deletion left no record at all.
+    record_audit(
+        db, actor_id=current_user.id, action="project_deleted", entity_type="project",
+        entity_id=project.id, project_id=None,
+        details={"projectId": str(project.id), "name": project.name, "impact": impact},
+    )
     db.delete(project)
     db.commit()
     return {"message": "Project deleted successfully"}
+
+
+def _deletion_impact(db: Session, project_id: uuid.UUID) -> dict[str, int]:
+    """What deleting this project removes with it, for the confirmation dialog."""
+    from app.models.document import Document
+    from app.models.ifc import IFCModelVersion
+    from app.models.issue import Issue
+    from app.models.site_report import SiteReport
+    from app.models.task import Task
+
+    def count(model) -> int:
+        return db.query(model).filter(model.project_id == project_id).count()
+
+    return {
+        "tasks": count(Task), "members": db.query(ProjectMember).filter(
+            ProjectMember.project_id == project_id, ProjectMember.is_active.is_(True)).count(),
+        "documents": count(Document), "issues": count(Issue),
+        "siteReports": count(SiteReport), "models": count(IFCModelVersion),
+    }
+
+
+@router.get("/{project_id}/deletion-impact")
+def project_deletion_impact(
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The counts the delete dialog shows. Same gate as the delete itself."""
+    project = manageable_project(db, current_user, project_id, "project.delete")
+    return {"projectId": project.id, "name": project.name, **_deletion_impact(db, project.id)}
 
 
 @router.get("/{project_id}/approval-workflow", response_model=ProjectApprovalConfigOut)
@@ -449,7 +511,8 @@ def get_project_approval_workflow(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not user_has_project_access(db, current_user, project_id):
+    # A project setting — part of the record the registry view reaches (QA-06B).
+    if not user_can_see_project_record(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     project = db.get(Project, project_id)
     if not project:
@@ -553,7 +616,9 @@ def get_project_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not user_has_project_access(db, current_user, project_id):
+    # Staffing is registry work: the administrator reaches it without being on
+    # the team (QA-06B).
+    if not user_can_see_project_record(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     # The full team list belongs to whoever staffs the project. Everybody else
     # reaches the people they work with through the project's own screens.
@@ -650,7 +715,9 @@ def get_eligible_members(
     rule = rules.get(purpose)
     if rule is None:
         raise HTTPException(status_code=400, detail="purpose must be task_assignee or reviewer")
-    if not user_has_project_access(db, current_user, project_id):
+    # Member ids only — already visible on the team page, which configures the
+    # review workflow with them — so the record level suffices (QA-06B).
+    if not user_can_see_project_record(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
     members = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id, ProjectMember.is_active == True,
@@ -669,6 +736,12 @@ def add_project_member(
     current_user: User = Depends(get_current_user),
 ):
     project = manageable_project(db, current_user, project_id, "project.manage_members")
+    if data.party_id is not None:
+        # Bringing somebody in for an outside party is the external invitation
+        # the catalogue names. It was registered and checked nowhere until
+        # 2026-10-23; its default holders are exactly `project.manage_members`'s,
+        # so this changes nothing until an office separates the two.
+        require(db, current_user, "project.invite_external", project_id)
 
     user = db.query(User).filter(User.id == data.user_id).first()
     if not user:

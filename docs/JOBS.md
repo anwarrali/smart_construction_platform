@@ -8,6 +8,7 @@ Heavy work runs off the request path on a durable queue in PostgreSQL:
 | `ifc.generate_geometry` | tessellation, then the interference pass | "generate geometry" |
 | `ingestion.process_file` | the file ingestion pipeline | upload, reprocess |
 | `rag.index_file` | embedding one ingested file | ingestion settling a file with text (`RAG_AUTO_INDEX_ENABLED`), "index" |
+| `rag.index_document` | embedding one Documents-library PDF | a library upload that is a PDF (`RAG_AUTO_INDEX_ENABLED`) |
 | `rag.project_reindex` | a project-wide re-index run | "re-index", the RAG reaper |
 | `agents.handle_event` | automatic agent analysis of a domain event | `process_event`, when `AGENT_AUTO_ANALYSIS_ENABLED` |
 
@@ -35,10 +36,15 @@ reaper:  RUNNING with a heartbeat older than JOB_STALE_SECONDS → QUEUED (or FA
 - **Recovery before retry.** A worker that died mid-job left its domain row
   looking in progress (an IFC version reading `PARSING`). On attempt 2+, a
   handler first resets that state, then lets the domain code start over.
-- **The domain row stays the authority.** A parse that fails records FAILED on
-  the IFC version and returns normally; the job reads SUCCEEDED, meaning the
-  work ran. The job table answers "was this handed to a worker, and did it
-  finish", not "did it succeed".
+- **The domain row stays the authority, and two kinds of failure are kept
+  apart.** A *bad input* — a corrupt model, an unreadable file — is recorded
+  FAILED on the domain row and the handler returns normally: the job reads
+  SUCCEEDED, meaning the work ran, and it is not retried, because retrying
+  cannot change it. A *broken run* — the database went away, the embedding
+  provider timed out, a commit failed — is recorded FAILED on the domain row
+  too, then raised, so the job is retried with backoff and ends FAILED if it
+  never succeeds. Ingestion (`PROCESSING_FAILED`) and both RAG kinds follow
+  this; a failed index never deletes the file or the document.
 
 ## The ceiling
 

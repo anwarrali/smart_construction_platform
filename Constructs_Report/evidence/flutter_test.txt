@@ -1,0 +1,153 @@
+Command exited with code 128: git fetch --tags
+Standard error: fatal: unable to access 'https://github.com/flutter/flutter.git/': SSL peer certificate or SSH remote key was not OK
+
+
+┌─────────────────────────────────────────────────────────┐
+│ WARNING: your installation of Flutter is 506 days old.  │
+│                                                         │
+│ To update to the latest version, run "flutter upgrade". │
+└─────────────────────────────────────────────────────────┘
+00:00 +0: loading C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart
+00:00 +0: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: brand tokens match the web the accent is Verdant Data, not the retired bronze
+00:00 +1: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: brand tokens match the web architectural navy is the brand ink
+00:00 +2: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: brand tokens match the web focus is verdant, the same signal the web uses
+00:00 +3: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: brand tokens match the web radii are the web scale, not the old consumer rounding
+00:00 +4: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: brand tokens match the web the semantic ramp has one hue per meaning
+00:00 +5: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: theme primary is navy and the nav surface is the dark edge
+00:01 +6: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: theme primary buttons clear the 48dp touch target
+00:01 +7: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: brand mark renders at the requested size
+00:01 +8: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: brand mark the wordmark splits Struct / IQ across ink and accent
+00:01 +9: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: brand mark the lockup stays left-to-right in Arabic
+00:01 +10: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: status badge maps backend values onto the shared ramp
+00:01 +11: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: status badge agrees with the web task table
+00:01 +12: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: status badge an unknown status is idle rather than an invented colour
+00:01 +13: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: status badge shows the translated status, not the raw value
+00:01 +14: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +15: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +16: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +17: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +18: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +19: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +20: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +21: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +22: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +23: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +24: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority critical and important are badged
+00:02 +25: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_coverage_test.dart: no hardcoded user-facing English no widget switches on the locale to pick its own words
+00:02 +26: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification priority normal and info are silent, so the loud ones stand out
+00:02 +27: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification model reads the smart-notification fields priority, category and requiresAction come from the API
+00:03 +28: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification model reads the smart-notification fields a reminder is recognised by its category
+00:03 +29: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: notification model reads the smart-notification fields rows predating these fields fall back to the server defaults
+00:03 +30: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: message model carries forwarding and sharing context a forward exposes the true original sender
+00:03 +31: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: message model carries forwarding and sharing context an entity share names what was shared
+00:03 +32: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: message model carries forwarding and sharing context an ordinary message is neither
+00:03 +33: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: Arabic / RTL a directional badge lays out from the right in Arabic
+00:03 +34: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: Arabic / RTL Arabic text renders in the shared components
+00:03 +35: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: branding is applied everywhere, not per screen no source file still carries the retired product name
+00:04 +36: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: priority styling renders rather than throwing a CRITICAL card paints without an exception
+00:04 +37: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: priority styling renders rather than throwing a IMPORTANT card paints without an exception
+00:04 +38: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/design_system_test.dart: priority styling renders rather than throwing a NORMAL card paints without an exception
+00:05 +39: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: locale resolution English loads
+00:06 +40: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: locale resolution Arabic loads
+00:07 +41: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: locale resolution Arabic gives the tree a right-to-left direction
+00:07 +42: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: locale resolution an unsupported device locale falls back to English
+00:07 +43: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: product terminology matches the web statuses use the web wording
+00:07 +44: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: product terminology matches the web priorities use the web wording
+00:07 +45: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: product terminology matches the web an unknown status is humanised, not blank
+00:07 +46: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: user-generated content is never translated a forwarded quote keeps the sender name verbatim
+00:07 +47: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: user-generated content is never translated notification parameters are interpolated as sent
+00:08 +48: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: notifications stay compatible with the Task 3 contract a notification with no messageKey shows the server text
+00:08 +49: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: notifications stay compatible with the Task 3 contract an unknown messageKey falls back rather than blanking
+00:09 +50: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: errors are translated, not passed through a known status code becomes a translated sentence
+00:09 +51: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: errors are translated, not passed through an unknown failure gets the generic translated sentence
+00:09 +52: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: errors are translated, not passed through sign-in failures have their own wording
+00:09 +53: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: dates and numbers follow the locale Arabic formats a percentage with the locale sign
+00:09 +54: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: dates and numbers follow the locale Arabic counts use the same digits as Arabic dates
+00:09 +55: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: dates and numbers follow the locale Arabic dates use Western digits, matching the web
+00:09 +56: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: dates and numbers follow the locale counts that read wrong at one are pluralised
+00:10 +57: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: dates and numbers follow the locale the two locales format the same date differently
+00:10 +58: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: values from the API resolve through the right vocabulary a severity is a priority word, not a status word
+00:10 +59: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: values from the API resolve through the right vocabulary a project status is translated, not humanised
+00:10 +60: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/localization_test.dart: representative screens render in both languages a status badge shows Arabic wording under RTL
+00:10 +61: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation every destination is labelled and reachable
+00:10 +62: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation every destination is labelled and reachable
+00:11 +63: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation every destination is labelled and reachable
+00:11 +64: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation every destination is labelled and reachable
+00:11 +65: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation the indicator travels with the selection
+00:12 +66: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation the indicator mirrors under RTL
+00:12 +67: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation nothing is marked selected on a non-destination screen
+00:12 +68: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation the centre action is offered when a role has voice
+00:12 +69: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation the bar yields to the keyboard instead of stacking on it
+00:12 +70: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: bottom navigation Arabic labels stay on one line inside a narrow bar
+00:12 +71: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: shell selection a nested route selects its parent destination
+00:12 +72: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/models_test.dart: task cannot start with incomplete dependency
+00:12 +73: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: shell selection a screen outside the destinations selects nothing
+00:12 +74: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: shell selection a screen outside the destinations selects nothing
+00:12 +75: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: shell selection a screen outside the destinations selects nothing
+00:12 +76: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: shell selection a screen outside the destinations selects nothing
+00:12 +77: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: shell selection a screen outside the destinations selects nothing
+00:12 +78: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/models_test.dart: notification preserves related navigation metadata
+00:12 +79: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: voice access anybody who can act through Voice is offered it
+00:12 +80: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/models_test.dart: conversation message preserves sender and conversation context
+00:12 +81: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: voice access somebody with nothing to do through Voice is not offered it
+00:12 +82: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/models_test.dart: conversation preserves per-user unread count and participants
+00:12 +83: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: voice access the answer is optimistic until the server has replied
+00:12 +84: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/models_test.dart: voice analysis keeps AI suggestions separate from confirmation results
+00:12 +85: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/models_test.dart: voice analysis keeps AI suggestions separate from confirmation results
+00:12 +86: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: communication actions a design change offers the same pair
+00:12 +87: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: communication actions a task is consulted on, never "forwarded"
+00:12 +88: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: communication actions reports and documents are shared
+00:12 +89: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: communication actions an unknown entity offers nothing rather than guessing
+00:12 +90: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: communication actions the consultation action is not called Forward
+00:13 +91: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: field components survive Arabic on a small screen an attention row holds a long Arabic label at 320dp
+00:13 +92: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: field components survive Arabic on a small screen an attention row survives a 1.5x text scale
+00:13 +93: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: field components survive Arabic on a small screen the progress card writes a localized percentage
+00:13 +94: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: activity vocabulary a known action becomes a sentence
+00:14 +95: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: activity vocabulary prose from the server resolves to the same entry
+00:14 +96: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: activity vocabulary an unknown action never leaks the identifier
+00:14 +97: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/mobile_experience_test.dart: activity vocabulary the fallback is translated, not English prose
+00:15 +98: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/projects_navigation_test.dart: empty project account can switch account without Android back exiting
+00:23 +99: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/push_notification_test.dart: routeForEntity a task notification opens that exact task
+00:23 +100: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/push_notification_test.dart: routeForEntity entity types are matched case-insensitively
+00:23 +101: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/push_notification_test.dart: routeForEntity entities with a list screen but no detail screen open the list
+00:23 +102: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/push_notification_test.dart: routeForEntity owner requests and site visits share the actions screen
+00:23 +103: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/push_notification_test.dart: routeForEntity an entity this app has no screen for resolves to nothing
+00:24 +104: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/push_notification_test.dart: routeForEntity a missing or empty id never produces a route
+00:27 +105: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: the reply follows the speaker a composed sentence is preferred over the templates
+00:27 +106: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: the reply follows the speaker an older backend without a composed sentence still answers
+00:27 +107: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: the reply follows the speaker the analysis carries the language it was answered in
+00:27 +108: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: review waits for a complete proposal a draft missing its task is not reviewable
+00:27 +109: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: review waits for a complete proposal a fully specified draft is reviewable
+00:27 +110: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: nothing a person says is met with an empty screen an answered clarification no longer hides the reply
+00:27 +111: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: nothing a person says is met with an empty screen a question still on screen keeps the reply out of the way
+00:27 +112: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: nothing a person says is met with an empty screen a command with no question, no proposal and no reply is caught
+00:27 +113: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: nothing a person says is met with an empty screen a failed command is not treated as an empty one
+00:27 +114: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: a question is asked once the spoken language decides which wording is shown
+00:27 +115: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_conversation_test.dart: a question is asked once a missing half falls back rather than showing nothing
+00:33 +116: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: action identity survives the confirm round trip each draft receives its own payload, addressed by id
+00:33 +117: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: action identity survives the confirm round trip a reordered draft list mid-flow cannot misroute a payload
+00:33 +118: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: action identity survives the confirm round trip every selected action is confirmed, none silently dropped
+00:33 +119: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: action identity survives the confirm round trip a high-risk selection is still declared after a reorder
+00:33 +120: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: action identity survives the confirm round trip an unknown draft id is refused before anything is mutated
+00:33 +121: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: outcome semantics Case A — two valid actions both succeed
+00:33 +122: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: outcome semantics Case B — first fails, second succeeds
+00:33 +123: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: outcome semantics Case C — first succeeds, second fails
+00:33 +124: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: outcome semantics Case D — both fail, exactly the production case
+00:33 +125: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: outcome semantics Case E — three actions, mixed
+00:33 +126: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: outcome semantics no results at all is "nothing", never success
+00:33 +127: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: outcome semantics success requires every action, not merely one
+00:33 +128: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: failure explanations are localized, never raw backend text a field rejection becomes an actionable sentence
+00:34 +129: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: failure explanations are localized, never raw backend text Arabic gets Arabic, not the English server message
+00:34 +130: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: failure explanations are localized, never raw backend text a successful action has no failure reason
+00:34 +131: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_execution_test.dart: failure explanations are localized, never raw backend text every outcome has a distinct localized title
+00:37 +132: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection WebM is recognised by its EBML header
+00:37 +133: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection MP4 is recognised by the ftyp box at offset four
+00:37 +134: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection WAV requires both the RIFF and WAVE markers
+00:37 +135: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection a RIFF container that is not WAVE is not claimed as WAV
+00:37 +136: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection MP3 is recognised from an ID3 tag
+00:37 +137: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection MP3 is recognised from a bare frame sync
+00:37 +138: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection every detected format is one the backend accepts
+00:37 +139: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection a truncated recording never reads past its own buffer
+00:37 +140: C:/projects_final/ConstructionPlatformSoftwareProject/mobile_app/test/voice_web_audio_test.dart: recorded audio format detection an unrecognised container falls back to WebM rather than guessing wildly
+00:37 +141: All tests passed!
+exit 0

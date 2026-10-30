@@ -1,9 +1,12 @@
+import { useDisciplineOptions } from "../../../hooks/useDisciplineOptions";
 import { useState, useEffect, useCallback, useRef } from "react";
 import i18n from "../../../i18n";
 import { useVocabulary } from "../../../utils/vocabulary";
 import { useTranslation } from "react-i18next";
 import { errorMessage } from "../../../utils/errorMessage";
 import { Button } from "../../../components/ui/Button";
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { Plus } from "lucide-react";
 import { Card } from "../../../components/ui/Card";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
@@ -28,6 +31,7 @@ import type {
 const EngineerTasksPage = () => {
   const { t } = useTranslation();
   const vocabulary = useVocabulary();
+  const { options: disciplineOptions } = useDisciplineOptions();
   const workspace = useProjectWorkspace();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -88,12 +92,12 @@ const EngineerTasksPage = () => {
   };
 
   return <div className="page-container space-y-6">
-    <div><h1 className="text-2xl font-bold">{t("tasksPage.my_tasks")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1><p className="text-muted-foreground">{t("tasksPage.only_work_assigned_to_you_in_the")}</p></div>
+    <PageHeader context={workspace.project?.name} title={t("tasksPage.my_tasks")} description={t("tasksPage.only_work_assigned_to_you_in_the")} />
     <Card className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
       <Input placeholder={t("tasksPage.search_title_id_or_description")} value={search} onChange={(event) => setSearch(event.target.value)} />
       <Select value={status} onChange={(event) => setStatus(event.target.value)} options={[{ value: "", label: t("tasksPage.all_statuses") }, ...["backlog", "todo", "in_progress", "under_review", "rework_required", "blocked", "done", "cancelled"].map((value) => ({ value, label: vocabulary.taskStatus(value) }))]} />
       <Select value={priority} onChange={(event) => setPriority(event.target.value)} options={[{ value: "", label: t("tasksPage.all_priorities") }, ...["low", "medium", "high", "critical"].map((value) => ({ value, label: vocabulary.priority(value) }))]} />
-      <Select value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={[{ value: "", label: t("tasksPage.all_disciplines") }, ...["civil", "architectural", "electrical", "mechanical"].map((value) => ({ value, label: vocabulary.discipline(value) }))]} />
+      <Select value={discipline} onChange={(event) => setDiscipline(event.target.value)} options={[{ value: "", label: t("tasksPage.all_disciplines") }, ...disciplineOptions]} />
       <Input label={t("tasksPage.due_date")} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={criticalOnly} onChange={(event) => setCriticalOnly(event.target.checked)} /> {t("tasksPage.critical_only")}</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} /> {t("tasksPage.overdue_only")}</label>
@@ -126,8 +130,14 @@ const ManagedTasksPage = () => {
   const activeProjectId = workspace.projectId;
   const canCreate = hasCapability("task.create");
   const isFirstRender = useRef(true);
+  /* Each fetch is numbered and only the latest may write the list. Switching
+     filters quickly sends several requests; without this a slower, older one
+     could land last and show results for a filter no longer selected. */
+  const latestRequest = useRef(0);
+  const [loadFailure, setLoadFailure] = useState<{ denied: boolean; message: string } | null>(null);
 
   const fetchTasks = useCallback(async () => {
+    const request = ++latestRequest.current;
     setIsLoading(true);
     const filters: TaskFilters = {
       search: debouncedSearch || undefined,
@@ -138,11 +148,20 @@ const ManagedTasksPage = () => {
       const response = activeProjectId
         ? await tasksService.getByProject(activeProjectId, filters)
         : await tasksService.list(filters);
+      if (request !== latestRequest.current) return;
+      setLoadFailure(null);
       setTasks(Array.isArray(response) ? response : response.data || response.items || []);
     } catch (err: any) {
+      if (request !== latestRequest.current) return;
+      /* A failed load is not an empty project. Clearing the list used to
+         draw every column as "no tasks" for somebody the server had refused
+         (QA 2026-10-22); the board now says which of the two happened. */
       setTasks([]);
-      toast.error(errorMessage(err, t("tasksPage.unable_to_load_tasks")));
-    } finally { setIsLoading(false); }
+      setLoadFailure({
+        denied: err?.response?.status === 403,
+        message: errorMessage(err, t("tasksPage.unable_to_load_tasks")),
+      });
+    } finally { if (request === latestRequest.current) setIsLoading(false); }
   }, [activeProjectId, debouncedSearch, statusFilter, priorityFilter, t]);
 
   // Task boards are shared: a status change made by one person needs to appear
@@ -198,17 +217,14 @@ const ManagedTasksPage = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t("nav.tasks")}{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
-          <p className="text-muted-foreground">
-            {t("tasksPage.manage_and_track_project_tasks")}
-          </p>
-        </div>
-        {canCreate && (
-          <Button onClick={() => { setEditingTask(null); setIsFormOpen(true); }}>+ {t("tasksPage.new_task")}</Button>
+      <PageHeader
+        context={workspace.project?.name}
+        title={t("nav.tasks")}
+        description={t("tasksPage.manage_and_track_project_tasks")}
+        actions={canCreate && (
+          <Button leftIcon={<Plus size={15} />} onClick={() => { setEditingTask(null); setIsFormOpen(true); }}>{t("tasksPage.new_task")}</Button>
         )}
-      </div>
+      />
 
       <Card>
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -241,7 +257,21 @@ const ManagedTasksPage = () => {
           />
         </div>
 
-        <TaskBoard tasks={tasks} isLoading={isLoading} onEdit={editsTasks ? (task) => { setEditingTask(task); setIsFormOpen(true); } : undefined} onDelete={editsTasks ? handleDelete : undefined} />
+        {loadFailure && !isLoading ? (
+          <div role="alert" className="rounded-lg border border-state-overdue/30 bg-wash-overdue p-6 text-center">
+            <p className="font-medium text-state-overdue">
+              {loadFailure.denied ? t("tasksPage.access_denied_title") : t("tasksPage.unable_to_load_tasks")}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {loadFailure.denied ? t("tasksPage.access_denied_hint") : loadFailure.message}
+            </p>
+            {!loadFailure.denied && (
+              <Button className="mt-4" variant="outline" onClick={() => fetchTasks()}>{t("common.retry")}</Button>
+            )}
+          </div>
+        ) : (
+          <TaskBoard tasks={tasks} isLoading={isLoading} onEdit={editsTasks ? (task) => { setEditingTask(task); setIsFormOpen(true); } : undefined} onDelete={editsTasks ? handleDelete : undefined} />
+        )}
       </Card>
 
       <TaskForm

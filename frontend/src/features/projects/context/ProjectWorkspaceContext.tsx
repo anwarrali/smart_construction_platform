@@ -3,6 +3,7 @@ import { errorMessage } from "../../../utils/errorMessage";
 import { useLocation } from "react-router-dom";
 import api from "../../../services/api";
 import { useRole } from "../../../hooks/useRole";
+import { usePermissionStore } from "../../../app/store/permission.store";
 import type { Project } from "../../../types/project";
 import { portfolioProjectsPath, projectModulePath } from "../../../utils/projectRoutes";
 
@@ -10,6 +11,15 @@ interface ProjectWorkspaceValue {
   projectId?: string;
   project: Project | null;
   assignedProjects: Project[];
+  /** True once the project list has answered (successfully or not). */
+  projectsLoaded: boolean;
+  /**
+   * Whether this person works in at least one project — false for an office
+   * administrator who only administers projects (QA 2026-10-22). Portfolio
+   * pages that gather project work are offered only when this is true. Assumed
+   * true until the list has answered, so nothing flickers away and back.
+   */
+  worksInAProject: boolean;
   isProjectWorkspace: boolean;
   isLoading: boolean;
   error: string;
@@ -51,8 +61,16 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
   }, [location.pathname]);
 
   const isProjectWorkspace = Boolean(projectId);
+  const enterProject = usePermissionStore((state) => state.enterProject);
+  const leaveProject = usePermissionStore((state) => state.leaveProject);
+  // What this person may do *in this project* (QA-06B): see permission.store.
+  useEffect(() => {
+    if (projectId) void enterProject(projectId);
+    else leaveProject();
+  }, [projectId, enterProject, leaveProject]);
   const [project, setProject] = useState<Project | null>(null);
   const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -67,6 +85,7 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
       if (cancelled) return;
       const projects = response.data || [];
       setAssignedProjects(projects);
+      setProjectsLoaded(true);
       setProject(activeProject);
       if (projectId && !projects.some((item) => item.id === projectId)) {
         /* One message, because there is one reason: this project is not one of
@@ -78,6 +97,7 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
       }
     }).catch((err: any) => {
       if (cancelled) return;
+      setProjectsLoaded(true);
       setProject(null);
       setError(errorMessage(err, "Unable to load the selected project workspace."));
     }).finally(() => { if (!cancelled) setIsLoading(false); });
@@ -88,6 +108,8 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
     projectId,
     project,
     assignedProjects,
+    projectsLoaded,
+    worksInAProject: !projectsLoaded || assignedProjects.some((item) => item.canOpenWork !== false),
     isProjectWorkspace,
     isLoading,
     error,
@@ -97,7 +119,7 @@ export const ProjectWorkspaceProvider = ({ children }: { children: React.ReactNo
         : portfolioProjectsPath()
     ),
     portfolioPath: portfolioProjectsPath(),
-  }), [projectId, project, assignedProjects, isProjectWorkspace, isLoading, error, hasCapability]);
+  }), [projectId, project, assignedProjects, projectsLoaded, isProjectWorkspace, isLoading, error, hasCapability]);
 
   return <ProjectWorkspaceContext.Provider value={value}>{children}</ProjectWorkspaceContext.Provider>;
 };

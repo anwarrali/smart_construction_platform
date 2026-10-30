@@ -242,6 +242,65 @@ describe("ProjectFilesPanel", () => {
     expect(ingestionApi.list).toHaveBeenCalledTimes(1);
   });
 
+  it("shows whether a file's text is searchable beside its processing status", async () => {
+    ingestionApi.list.mockResolvedValue(page([file({ indexStatus: "READY" })]));
+    render(<ProjectFilesPanel projectId={PROJECT} />);
+    expect(await screen.findByTestId("index-status")).toHaveTextContent("ingestion.index.ready");
+    expect(screen.getByTestId("ingestion-status")).toHaveTextContent("ingestion.status.ready");
+  });
+
+  it("shows no index badge for a file that is not indexed", async () => {
+    ingestionApi.list.mockResolvedValue(page([file({ indexStatus: "NOT_INDEXED" })]));
+    render(<ProjectFilesPanel projectId={PROJECT} />);
+    expect(await screen.findByText("specification.pdf")).toBeInTheDocument();
+    expect(screen.queryByTestId("index-status")).not.toBeInTheDocument();
+  });
+
+  it("keeps refreshing while a file is being indexed", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    ingestionApi.list.mockResolvedValue(page([file({ indexStatus: "INDEXING" })]));
+    render(<ProjectFilesPanel projectId={PROJECT} />);
+    await waitFor(() => expect(ingestionApi.list).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(4000);
+    await waitFor(() => expect(ingestionApi.list.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it("keeps refreshing just after a text file settles, until indexing shows", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const justSettled = file({
+      metadataJson: { extraction: "TEXT" },
+      processingCompletedAt: new Date().toISOString(),
+      indexStatus: "NOT_INDEXED",
+    });
+    ingestionApi.list
+      .mockResolvedValueOnce(page([justSettled]))
+      .mockResolvedValue(page([{ ...justSettled, indexStatus: "READY" }]));
+    render(<ProjectFilesPanel projectId={PROJECT} />);
+    await waitFor(() => expect(ingestionApi.list).toHaveBeenCalledTimes(1));
+
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(await screen.findByTestId("index-status")).toHaveTextContent("ingestion.index.ready");
+
+    // Indexed: nothing left to wait for, so the polling stops.
+    const calls = ingestionApi.list.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(ingestionApi.list).toHaveBeenCalledTimes(calls);
+  });
+
+  it("does not keep refreshing for a settled file with no text", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    ingestionApi.list.mockResolvedValue(page([file({
+      fileCategory: "DRAWING",
+      metadataJson: { extraction: "NONE" },
+      processingCompletedAt: new Date().toISOString(),
+      indexStatus: "NOT_INDEXED",
+    })]));
+    render(<ProjectFilesPanel projectId={PROJECT} />);
+    await waitFor(() => expect(ingestionApi.list).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(ingestionApi.list).toHaveBeenCalledTimes(1);
+  });
+
   it("still works when the constraints call fails", async () => {
     ingestionApi.constraints.mockRejectedValue(new Error("offline"));
     render(<ProjectFilesPanel projectId={PROJECT} />);

@@ -250,14 +250,14 @@ export const ProjectTeamPage = () => {
 
   return <div className="page-container space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-2xl font-bold">Project Team{workspace.project ? ` · ${workspace.project.name}` : ""}</h1>
+      <div>{workspace.project && <p className="page-kicker">{workspace.project.name}</p>}<h1 className="page-title">{t("nav.team")}</h1>
         <p className="text-muted-foreground">{t("projectTeam.manage_existing_engineers_and")}</p></div>
       <Button onClick={() => { resetAssignmentForm(); setAddOpen(true); }}>{t("projectTeam.add_team_member")}</Button>
     </div>
     <Card className="space-y-4">
       {workspace.projectId ? <p className="text-sm"><span className="text-muted-foreground">{t("projectTeam.active_project")}</span> {workspace.project?.name}</p>
         : <Select label={t("projectTeam.project")} value={projectId} onChange={(event) => setProjectId(event.target.value)} options={projects.map((project) => ({ value: project.id, label: project.name }))} />}
-      {error && <p className={`text-sm ${error.includes("added") || error.includes("transferred") || error.includes("preserved") || error.includes("saved") ? "text-green-600" : "text-red-600"}`}>{error}</p>}
+      {error && <p className={`text-sm ${error.includes("added") || error.includes("transferred") || error.includes("preserved") || error.includes("saved") ? "text-state-verified" : "text-state-overdue"}`}>{error}</p>}
     </Card>
     {canConfigureApproval && <Card className="space-y-5">
       <div>

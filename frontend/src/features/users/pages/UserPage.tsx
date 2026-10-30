@@ -163,9 +163,9 @@ export const UsersPage = () => {
 
   return (
     <div className="page-container space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold">{t("userPage.users")}</h1>
+          <h1 className="page-title">{t("userPage.users")}</h1>
           <p className="text-muted-foreground">{t("userPage.manage_company_accounts_roles")}</p>
         </div>
         <Button

@@ -1,0 +1,27 @@
+@startuml
+!include _style.iuml
+autonumber
+participant "API request" as API
+database "background_jobs\n(PostgreSQL)" as Q
+participant "Worker runner\n(app.worker)" as W
+participant "Job handler" as H
+participant "Reaper" as RP
+API -> Q : INSERT job (QUEUED, dedupe_key)\nin the causing transaction
+API -> Q : COMMIT
+loop every poll interval
+  W -> Q : advisory lock; count RUNNING < ceiling?
+  W -> Q : UPDATE ... FOR UPDATE SKIP LOCKED\nstatus=RUNNING, attempts+1
+end
+W -> H : run(payload)
+par
+  W -> Q : heartbeat every 15 s
+end
+alt success / bad input recorded on domain row
+  H --> W : ok
+  W -> Q : SUCCEEDED
+else broken run (exception)
+  H --> W : error
+  W -> Q : QUEUED again after 30s·2^n\nor FAILED at max attempts
+end
+RP -> Q : RUNNING with stale heartbeat\n-> QUEUED (or FAILED)
+@enduml

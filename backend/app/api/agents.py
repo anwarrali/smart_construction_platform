@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_current_user, user_has_project_access
+from app.services.authorization import has_permission
 from app.db.database import get_db
 from app.models.user import User
 from app.models.agent_run import AgentRun as AgentRunRecord
@@ -25,6 +26,16 @@ from app.services.agents.subscriptions import TriggerType, event_subscription_ma
 router = APIRouter(prefix="/projects/{project_id}/agents", tags=["Project Agents"])
 
 
+def _require_agents_page(db: Session, user: User, project_id: uuid.UUID) -> None:
+    """The Agents page is granted explicitly (`agents.view`), on top of access
+    to the project. Every route here checks it, so hiding the menu entry is not
+    what keeps the page closed."""
+    if not user_has_project_access(db, user, project_id):
+        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    if not has_permission(db, user, "agents.view", project_id):
+        raise HTTPException(status_code=403, detail="You do not have access to the Agents page")
+
+
 @router.get("")
 def list_agents(
     project_id: uuid.UUID,
@@ -32,8 +43,7 @@ def list_agents(
     current_user: User = Depends(get_current_user),
 ):
     """The agents this caller may run here, and the full catalogue for reference."""
-    if not user_has_project_access(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    _require_agents_page(db, current_user, project_id)
     return {
         "available": available_agents(db, user=current_user, project_id=project_id),
         "catalogue": agent_definitions(),
@@ -49,6 +59,7 @@ def run_one(
     current_user: User = Depends(get_current_user),
 ):
     """Run one agent. Findings are stored for review, never acted on."""
+    _require_agents_page(db, current_user, project_id)
     result = run_agent(db, user=current_user, project_id=project_id, name=agent_name, persist=persist)
     if not result.ok:
         raise HTTPException(
@@ -67,8 +78,7 @@ def run_every_agent(
     current_user: User = Depends(get_current_user),
 ):
     """Run every agent this caller may run."""
-    if not user_has_project_access(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    _require_agents_page(db, current_user, project_id)
     return {"runs": [item.as_json() for item in run_all(
         db, user=current_user, project_id=project_id, persist=persist,
     )]}
@@ -87,6 +97,7 @@ def orchestrate_agents(
     the response reports ran / skipped / failed separately so a skip is never
     mistaken for a failure.
     """
+    _require_agents_page(db, current_user, project_id)
     return orchestrate(
         db, user=current_user, project_id=project_id,
         trigger_type=TriggerType.MANUAL, persist=persist,
@@ -102,8 +113,7 @@ def list_agent_runs(
     current_user: User = Depends(get_current_user),
 ):
     """The run history: which agent ran, why, what it called, what it produced."""
-    if not user_has_project_access(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    _require_agents_page(db, current_user, project_id)
     query = db.query(AgentRunRecord).filter(AgentRunRecord.project_id == project_id)
     if agent_name:
         query = query.filter(AgentRunRecord.agent_name == agent_name)
@@ -138,8 +148,7 @@ def list_subscriptions(
     subscription map needs to be able to say whether it describes what happens
     or only what would happen.
     """
-    if not user_has_project_access(db, current_user, project_id):
-        raise HTTPException(status_code=403, detail="You do not have access to this project")
+    _require_agents_page(db, current_user, project_id)
     enabled = settings.AGENT_AUTO_ANALYSIS_ENABLED
     return {
         "subscriptions": event_subscription_map(),

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Inbox } from "lucide-react";
 
 export interface Column<T> {
   key: string;
@@ -30,9 +31,12 @@ export const Table = <T,>({
   if (isLoading) {
     return (
       <div className="table-container">
-        <div className="p-8 space-y-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="skeleton h-10 w-full" />
+        <div className="divide-rule" role="status" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex gap-4 px-3 py-2.5">
+              <div className="skeleton h-4 w-1/3" />
+              <div className="skeleton h-4 flex-1" />
+            </div>
           ))}
         </div>
       </div>
@@ -42,8 +46,8 @@ export const Table = <T,>({
   if (data.length === 0) {
     return (
       <div className="table-container">
-        <div className="empty-state">
-          <div className="empty-state-icon">📋</div>
+        <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+          <Inbox size={22} strokeWidth={1.5} className="empty-state-icon" aria-hidden />
           <p className="empty-state-title">{emptyMessage}</p>
         </div>
       </div>
@@ -53,13 +57,14 @@ export const Table = <T,>({
   return (
     <div className={`table-container ${className}`}>
       <div className="table-responsive">
-        <table className="w-full">
+        <table className="schedule-table">
           <thead>
-            <tr className="border-b bg-muted/50">
+            <tr>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 ${col.className || ""}`}
+                  scope="col"
+                  className={col.className || ""}
                 >
                   {col.header}
                 </th>
@@ -70,13 +75,13 @@ export const Table = <T,>({
             {data.map((item) => (
               <tr
                 key={keyExtractor(item)}
-                className={`border-b transition-colors hover:bg-muted/30 ${onRowClick ? "cursor-pointer" : ""}`}
+                className={onRowClick ? "cursor-pointer" : ""}
                 onClick={() => onRowClick?.(item)}
               >
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-4 py-3 text-sm ${col.className || ""}`}
+                    className={col.className || ""}
                   >
                     {col.render
                       ? col.render(item)

@@ -1,0 +1,39 @@
+
+ RUN  v3.2.7 C:/projects_final/ConstructionPlatformSoftwareProject/frontend
+
+ ✓ src/features/voice/components/VoiceAssistantPanel.test.tsx (13 tests) 1818ms
+   ✓ voice assistant panel > answers an issue's text question without involving a task  410ms
+ ✓ src/features/ifc/components/FindingsPagination.test.tsx (8 tests) 1358ms
+ ✓ src/features/admin/pages/AccessControlPage.test.tsx (4 tests) 3078ms
+   ✓ per-person permission editor > explains each answer and names the office copy that governs  1232ms
+   ✓ per-person permission editor > shows the server's answer after a grant  918ms
+   ✓ per-person permission editor > keeps the previous state and reports the error when a save fails  617ms
+ ✓ src/features/projects/components/DeleteProjectDialog.test.tsx (5 tests) 2252ms
+   ✓ DeleteProjectDialog > shows the impact and needs the name before it will delete  1136ms
+   ✓ DeleteProjectDialog > reports success only after the server deleted it  350ms
+   ✓ DeleteProjectDialog > keeps the project and says so when the server refuses  377ms
+ ✓ src/features/ingestion/components/ProjectFilesPanel.test.tsx (18 tests) 1277ms
+ ✓ src/features/messages/pages/MessagesPage.test.tsx (3 tests) 1720ms
+   ✓ messages — sending > enables Send for an announcement as soon as there is a message  1254ms
+   ✓ messages — sending > says why Send is unavailable instead of only disabling it  414ms
+ ✓ src/features/tasks/pages/TasksPage.test.tsx (4 tests) 866ms
+   ✓ managed task board filtering > sends the selected status and shows exactly the tasks returned  572ms
+ ✓ src/features/tasks/pages/TaskDetailPage.test.tsx (3 tests) 1081ms
+   ✓ managed task detail — progress > offers Start, not a progress box, on work that has not started  608ms
+stderr | src/components/ui/Modal/Modal.focus.test.tsx > Modal focus stability while a parent re-renders on every keystroke > does not re-register its keydown listener on every keystroke (only once per open)
+react-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 'NO_I18NEXT_INSTANCE' }
+
+ ✓ src/components/ui/Modal/Modal.focus.test.tsx (7 tests) 5702ms
+   ✓ Modal focus stability while a parent re-renders on every keystroke > does not re-register its keydown listener on every keystroke (only once per open)  1010ms
+   ✓ Modal focus stability while a parent re-renders on every keystroke > keeps every character of a continuous multi-character string in the same field, without losing focus  1028ms
+   ✓ Modal focus stability while a parent re-renders on every keystroke > routes every character to the field the user is actually typing in when moving between fields sequentially  2085ms
+   ✓ Modal focus stability while a parent re-renders on every keystroke > keeps focus stable while typing Arabic (RTL) text  357ms
+   ✓ Modal focus stability while a parent re-renders on every keystroke > keeps typing correctly across the churn caused by re-opening the modal repeatedly  575ms
+   ✓ Modal focus stability while a parent re-renders on every keystroke > returns focus to the trigger element only once, when the modal actually closes — not on every keystroke  464ms
+
+ Test Files  9 passed (9)
+      Tests  65 passed (65)
+   Start at  13:19:49
+   Duration  88.56s (transform 7.32s, setup 0ms, collect 30.59s, tests 19.15s, environment 24.08s, prepare 2.53s)
+
+exit 0

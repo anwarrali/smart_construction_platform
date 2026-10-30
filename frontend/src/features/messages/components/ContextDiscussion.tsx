@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { useAuth } from "../../../hooks/useAuth";
+import { useRole } from "../../../hooks/useRole";
 import { useRealtimeRefresh } from "../../../hooks/useRealtimeRefresh";
 import api from "../../../services/api";
 import type { ConversationDetail } from "../../../types/message";
@@ -15,6 +16,10 @@ interface Props { projectId: string; contextType: "TASK" | "ISSUE"; contextId: s
 export const ContextDiscussion = ({ projectId, contextType, contextId, title = "Discussion" }: Props) => {
   const { t } = useTranslation();
   const { user } = useAuth();
+  // Starting a discussion is `message.send` on the server; replying to one
+  // that exists is participation and needs nothing more.
+  const { hasCapability } = useRole();
+  const canStart = hasCapability("message.send");
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -58,6 +63,6 @@ export const ContextDiscussion = ({ projectId, contextType, contextId, title = "
       {!loading && !conversation?.messages.length && <p className="py-5 text-center text-sm text-muted-foreground">{t("contextDiscussion.no_discussion_yet")}</p>}
       {loading && <p className="py-5 text-center text-sm text-muted-foreground">{t("contextDiscussion.loading_discussion")}</p>}
     </div>
-    <div className="flex gap-2"><textarea className="input min-h-12 flex-1" value={content} onChange={(event) => setContent(event.target.value)} placeholder={`Discuss this ${contextType.toLowerCase()}…`} maxLength={4000} /><Button disabled={busy || !content.trim()} onClick={send}>{conversation ? "Send" : "Start Discussion"}</Button></div>
+    {!loading && !conversation && !canStart ? <p className="text-sm text-muted-foreground" data-testid="cannot-start">{t("contextDiscussion.cannot_start")}</p> : <div className="flex gap-2"><textarea className="input min-h-12 flex-1" value={content} onChange={(event) => setContent(event.target.value)} placeholder={`Discuss this ${contextType.toLowerCase()}…`} maxLength={4000} /><Button disabled={busy || !content.trim()} onClick={send}>{conversation ? "Send" : "Start Discussion"}</Button></div>}
   </Card>;
 };

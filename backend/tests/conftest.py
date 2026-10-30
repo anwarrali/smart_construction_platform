@@ -52,6 +52,22 @@ def _no_outbound_push():
     settings.PUSH_ENABLED = previous
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _step_up_as_in_production():
+    """Step-up behaves as it does in production unless a test says otherwise.
+
+    A developer's `backend/.env` may switch on `STEP_UP_PERMISSION_EDIT_BYPASS`
+    for local work, and `Settings` reads that file — so without this every
+    test asserting that a permission edit asks for a code would pass or fail
+    depending on whose machine ran it. Tests of the development bypass turn it
+    on themselves (`tests/test_rbac_customization.py`).
+    """
+    previous = settings.STEP_UP_PERMISSION_EDIT_BYPASS
+    settings.STEP_UP_PERMISSION_EDIT_BYPASS = False
+    yield
+    settings.STEP_UP_PERMISSION_EDIT_BYPASS = previous
+
+
 # --- isolated databases ------------------------------------------------------
 # Migrated once per session, on first use; see tests/isolated_databases.py.
 

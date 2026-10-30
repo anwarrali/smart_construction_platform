@@ -141,7 +141,7 @@ export const SearchBar = ({
       </div>
 
       {isOpen && results.length > 0 && (
-        <div className="absolute top-full mt-1 w-full rounded-md border bg-popover shadow-lg z-50">
+        <div className="absolute top-full mt-1 w-full rounded-md border bg-popover shadow-float z-50">
           <div className="p-1">
             {results.map((result, index) => (
               <button
@@ -170,7 +170,7 @@ export const SearchBar = ({
       )}
 
       {isOpen && query && !isLoading && results.length === 0 && (
-        <div className="absolute top-full mt-1 w-full rounded-md border bg-popover shadow-lg z-50 p-4 text-center text-sm text-muted-foreground">
+        <div className="absolute top-full mt-1 w-full rounded-md border bg-popover shadow-float z-50 p-4 text-center text-sm text-muted-foreground">
           No results found for "{query}"
         </div>
       )}

@@ -1,3 +1,4 @@
+import { PageHeader } from "../../../components/ui/PageHeader";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Card } from "../../../components/ui/Card";
@@ -42,10 +43,11 @@ export const NotificationsPage = () => {
 
   return (
     <div className="page-container max-w-4xl space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">{workspace.project ? t("notificationsPage.project_notifications") : t("notificationsPage.notification_center")}</h1>
-        <p className="text-sm text-muted-foreground">{workspace.project?.name || t("notificationsPage.subtitle")}</p>
-      </div>
+      <PageHeader
+        context={workspace.project?.name}
+        title={workspace.project ? t("notificationsPage.project_notifications") : t("notificationsPage.notification_center")}
+        description={workspace.project ? undefined : t("notificationsPage.subtitle")}
+      />
 
       <Card className="grid gap-3 p-4 md:grid-cols-[1fr_180px_210px]">
         <Input placeholder={t("notificationsPage.search_notifications")} value={search} onChange={(event) => setSearch(event.target.value)} />

@@ -9,10 +9,9 @@
  * failed call must not empty the list or invent a status the server refused,
  * and a button must never appear for somebody the endpoint would reject.
  *
- * "Show in 3D" is asserted at the seam it actually crosses: the tab hands
- * database element ids to the focus callback the workspace already owns. The
- * viewer itself is not rendered here — it is the workspace, not this tab, that
- * knows how to reach it, and that wiring is one line of prop plumbing.
+ * The website's 3D viewer was removed (QA pass 2026-10-17); a finding's
+ * elements are reached through "View affected elements", and no 3D action is
+ * offered anywhere on the card.
  */
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -83,7 +82,6 @@ const finding = (overrides: Partial<IFCFinding> = {}): IFCFinding => ({
 /** The paged envelope `GET /ifc/findings` returns. */
 const page = (items: IFCFinding[]) => ({ items, total: items.length, page: 1, pageSize: 50 });
 const onViewElements = vi.fn();
-const onFocus3D = vi.fn();
 
 const show = (props: { canReview?: boolean; canCreateIssue?: boolean } = {}) =>
   render(
@@ -93,7 +91,6 @@ const show = (props: { canReview?: boolean; canCreateIssue?: boolean } = {}) =>
       canReview={props.canReview ?? true}
       canCreateIssue={props.canCreateIssue ?? true}
       onViewElements={onViewElements}
-      onFocus3D={onFocus3D}
     />,
   );
 
@@ -255,36 +252,25 @@ describe("findings action failures", () => {
   });
 });
 
-describe("showing a finding in 3D", () => {
-  it("hands the workspace the finding's element ids so the existing viewer focus can select them", async () => {
+describe("a finding's elements, without the removed 3D viewer", () => {
+  it("offers no 3D action at all", async () => {
     show();
     await loaded();
-    await userEvent.click(button("ifcActions.show_in_3d"));
-    expect(onFocus3D).toHaveBeenCalledWith(["element-1", "element-2"]);
+    expect(maybeButton("ifcActions.show_in_3d")).toBeNull();
+    expect(button("ifcActions.view_affected_elements")).toBeInTheDocument();
   });
 
-  it("stays available after the finding has been reviewed", async () => {
-    // Deciding a finding is not a reason to stop being able to look at it.
-    show();
-    await loaded();
-    await userEvent.click(button("ifcActions.acknowledge_finding"));
-    await waitFor(() => expect(screen.getByText("ACKNOWLEDGED")).toBeInTheDocument());
-    expect(button("ifcActions.show_in_3d")).toBeInTheDocument();
-  });
-
-  it("explains itself instead of offering a dead button when the finding names no element", async () => {
+  it("still explains a finding that names no element", async () => {
     ifcApi.findings.mockResolvedValue(page([finding({ affectedElementIds: [], affectedElementCount: 0 })]));
     show();
     await loaded();
-    expect(maybeButton("ifcActions.show_in_3d")).toBeNull();
     expect(screen.getByText("ifcActions.finding_has_no_model_element")).toBeInTheDocument();
   });
 
-  it("ignores blank element ids rather than focusing on nothing", async () => {
+  it("treats blank element ids as no element", async () => {
     ifcApi.findings.mockResolvedValue(page([finding({ affectedElementIds: ["", ""], affectedElementCount: 2 })]));
     show();
     await loaded();
-    expect(maybeButton("ifcActions.show_in_3d")).toBeNull();
     expect(screen.getByText("ifcActions.finding_has_no_model_element")).toBeInTheDocument();
   });
 });
@@ -299,10 +285,9 @@ describe("findings permissions", () => {
     expect(maybeButton("ifcActions.create_issue_from_finding")).toBeNull();
   });
 
-  it("still lets a viewer read the finding and open it in 3D", async () => {
+  it("still lets a read-only member open the affected elements", async () => {
     show({ canReview: false, canCreateIssue: false });
     await loaded();
-    expect(button("ifcActions.show_in_3d")).toBeInTheDocument();
     expect(button("ifcActions.view_affected_elements")).toBeInTheDocument();
   });
 

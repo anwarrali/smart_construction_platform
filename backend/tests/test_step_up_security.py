@@ -417,3 +417,44 @@ def test_the_step_up_endpoints_never_return_the_code(db, people):
     ).order_by(OtpChallenge.created_at.desc()).first()
     # Nothing in the payload may reconstruct the code or its stored digest.
     assert stored.code_hash not in json.dumps(body)
+
+
+# --- permission editing: one verification per sitting (QA pass 2026-10-17) ----
+
+PERMISSIONS = "admin.change_permissions"
+
+
+def test_one_verification_covers_a_run_of_permission_changes(db, people):
+    """Editing a permission matrix is many small changes; each one used to
+    demand a fresh e-mailed code. Within the grant's validity it does not now."""
+    _, code = _fresh(db, people["admin"], purpose=PERMISSIONS)
+    verify_challenge(db, people["admin"], PERMISSIONS, code)
+    for _ in range(5):
+        require_step_up(db, people["admin"], PERMISSIONS)  # must not raise
+
+
+def test_the_permission_window_still_expires(db, people):
+    _, code = _fresh(db, people["admin"], purpose=PERMISSIONS)
+    grant = verify_challenge(db, people["admin"], PERMISSIONS, code)
+    later = grant.expires_at + timedelta(seconds=1)
+    with pytest.raises(HTTPException) as error:
+        require_step_up(db, people["admin"], PERMISSIONS, now=later)
+    assert error.value.detail["code"] == "STEP_UP_REQUIRED"
+
+
+def test_the_permission_window_authorizes_nothing_else(db, people):
+    _, code = _fresh(db, people["admin"], purpose=PERMISSIONS)
+    verify_challenge(db, people["admin"], PERMISSIONS, code)
+    require_step_up(db, people["admin"], PERMISSIONS)
+    for other in ("admin.delete_user", "admin.reset_user_password", "admin.change_user_role"):
+        with pytest.raises(HTTPException):
+            require_step_up(db, people["admin"], other)
+
+
+def test_destructive_purposes_stay_single_use(db, people):
+    for purpose in ("admin.delete_user", "admin.reset_user_password", "admin.deactivate_user"):
+        _, code = _fresh(db, people["admin"], purpose=purpose)
+        verify_challenge(db, people["admin"], purpose, code)
+        require_step_up(db, people["admin"], purpose)
+        with pytest.raises(HTTPException):
+            require_step_up(db, people["admin"], purpose)

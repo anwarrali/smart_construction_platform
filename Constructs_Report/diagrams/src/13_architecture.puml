@@ -1,0 +1,33 @@
+@startuml
+!include _style.iuml
+top to bottom direction
+package "Presentation tier" {
+  rectangle "React 19 web client\n(Vite, TypeScript, Tailwind,\nTanStack Query, Zustand, i18next)" as WEB
+  rectangle "Flutter mobile client\n(Android / iOS, Riverpod,\ngo_router, Dio)" as MOB
+}
+package "Application tier (FastAPI, Python 3.11)" {
+  rectangle "API layer — 37 router modules\n(/api/v1, REST + SSE)" as APIL
+  rectangle "Service layer\n(domain logic, policies, authorization,\nAI, RAG, IFC, ingestion, notifications)" as SVC
+  rectangle "Data access layer\n(SQLAlchemy 2.0 models, 80 tables)" as DAL
+  rectangle "Background worker\n(app.worker — job runner)" as WRK
+}
+package "Data tier" {
+  database "PostgreSQL 15\n+ pgvector" as PG
+  rectangle "File storage volumes\n(uploads, private_uploads)" as FS
+}
+package "External services" {
+  rectangle "OpenAI API" as OAI
+  rectangle "Firebase Cloud Messaging" as FCM
+  rectangle "SMTP" as SMTP
+}
+WEB --> APIL : HTTPS JSON,\nBearer JWT, SSE
+MOB --> APIL : HTTPS JSON,\nBearer JWT
+APIL --> SVC
+SVC --> DAL
+WRK --> SVC
+DAL --> PG
+SVC --> FS
+SVC --> OAI
+SVC --> FCM
+SVC --> SMTP
+@enduml

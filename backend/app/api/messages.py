@@ -35,7 +35,9 @@ from app.schemas.message import (
     ShareEntityCreate,
 )
 from app.schemas.user import UserOut
+from app.services import rbac
 from app.services.audit_service import record_audit
+from app.services.authorization import require
 from app.services.realtime import EventType, publish_event
 from app.services.notification_service import (
     CATEGORY_DIRECT, CATEGORY_WORKFLOW, PRIORITY_NORMAL, notify,
@@ -449,6 +451,13 @@ def _create_conversation(
         raise HTTPException(status_code=404, detail="Project not found")
     if not user_has_project_access(db, current_user, project.id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
+    # Starting a conversation — direct, group, context, share, forward or
+    # announcement; every path arrives here — is `message.send`, the code the
+    # web client already hides "New conversation" behind. Until 2026-10-23 only
+    # voice checked it, so revoking it hid the button and the API still sent.
+    # Answering inside a conversation one is already part of is participation,
+    # not this permission (`send_conversation_message`).
+    require(db, current_user, "message.send", project.id)
     context_type = data.context_type.upper() if data.context_type else None
     if context_type and (
         not data.context_id
@@ -476,6 +485,13 @@ def _create_conversation(
     ]
     if invalid:
         raise HTTPException(status_code=403, detail="One or more recipients are outside your authorized project contacts")
+    # Writing to the client is `message.send_client` ("Send client updates"),
+    # checked against who the recipients are on this project.
+    if any(
+        rbac.is_client_participant(db, db.get(User, recipient_id), project.id)
+        for recipient_id in recipient_ids
+    ):
+        require(db, current_user, "message.send_client", project.id)
 
     if force_announcement:
         conversation_type = ConversationType.PROJECT_CHANNEL
