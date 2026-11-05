@@ -18,6 +18,7 @@ from app.core.deps import get_current_user, user_has_project_access
 from app.models.enums import NotificationStatus, NotificationType
 from app.services import device_token_service, notification_service
 from app.services.authorization import has_permission
+from app.services.insight_access import notification_readable
 from app.services.realtime import EventType, publish_event
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -60,10 +61,10 @@ def list_notifications(
             Notification.message.ilike(term),
         ))
     query = query.order_by(Notification.created_at.desc())
-    total = query.count()
-
+    visible = [n for n in query.all() if notification_readable(db,current_user,n)]
+    total = len(visible)
     offset = (page - 1) * limit
-    notifications = query.offset(offset).limit(limit).all()
+    notifications = visible[offset:offset+limit]
 
     return {
         "items": notifications,
@@ -81,11 +82,12 @@ def get_unread_count(
 ):
     if project_id and not user_has_project_access(db, current_user, project_id):
         raise HTTPException(status_code=403, detail="You do not have access to this project")
-    return {
-        "count": notification_service.unread_count(
-            db, user_id=current_user.id, project_id=project_id
-        )
-    }
+    query = db.query(Notification).filter(Notification.user_id == current_user.id,
+                                           Notification.is_read == False)
+    if project_id:
+        query = query.filter(Notification.project_id == project_id)
+    return {"count": sum(notification_readable(db,current_user,n) for n in query.all())}
+
 
 
 # --- push device registration -----------------------------------------------
@@ -243,7 +245,7 @@ def get_notification(
         Notification.id == notification_id,
         Notification.user_id == current_user.id,
     ).first()
-    if not notification:
+    if not notification or not notification_readable(db,current_user,notification):
         raise HTTPException(status_code=404, detail="Notification not found")
     return notification
 

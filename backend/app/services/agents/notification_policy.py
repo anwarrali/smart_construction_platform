@@ -63,6 +63,8 @@ def decide_notification(*, certainty: str, confidence: float, severity: str) -> 
     confidence is low *by construction*, and pushing it would turn "I could not
     look" into an alert.
     """
+    from app.services.insight_contract import severity as normalized_severity
+    severity = normalized_severity(severity)
     if certainty == "UNCERTAIN":
         return NotificationDecision(
             notify=False, band="INFORMATIONAL",

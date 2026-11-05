@@ -47,7 +47,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select, update
@@ -79,6 +79,10 @@ STATUS_FAILED = "FAILED"
 
 class IndexingInProgress(Exception):
     """Another indexing run holds this document."""
+
+
+class IndexingSuperseded(IndexingInProgress):
+    """A forced recovery/new run owns this source now; do not alter its index."""
 
 
 class IndexingFailed(Exception):
@@ -127,6 +131,7 @@ class _Target:
     #: `ingested_files` does not, because the ingestion pipeline already
     #: records the page count in `metadata_json`.
     tracks_page_count: bool
+    claimed_at: datetime | None = None
 
     @classmethod
     def for_document(cls, document: Document) -> "_Target":
@@ -147,7 +152,7 @@ class _Target:
         return "document" if self.model is Document else "file"
 
 
-def _claim(db: Session, target: _Target, *, force: bool) -> None:
+def _claim(db: Session, target: _Target, *, force: bool) -> datetime:
     """Move the row to INDEXING, or refuse because a run is under way.
 
     The `rowcount` of this conditional UPDATE *is* the lock: two concurrent
@@ -163,6 +168,7 @@ def _claim(db: Session, target: _Target, *, force: bool) -> None:
     if not force:
         statement = statement.where(model.index_status != STATUS_INDEXING)
 
+    started_at = datetime.now(timezone.utc)
     result = db.execute(
         statement.values(
             index_status=STATUS_INDEXING,
@@ -171,7 +177,7 @@ def _claim(db: Session, target: _Target, *, force: bool) -> None:
             # Stamped here and nowhere else. This is the only moment a run
             # begins, and the reaper's entire question — "how long has this
             # been INDEXING?" — is unanswerable without it.
-            index_started_at=datetime.now(timezone.utc),
+            index_started_at=started_at,
         )
     )
     if not result.rowcount:
@@ -181,6 +187,16 @@ def _claim(db: Session, target: _Target, *, force: bool) -> None:
             "was interrupted, retry with force=true."
         )
     db.commit()
+    return started_at
+
+
+def _assert_source_owned(db: Session, target: _Target) -> None:
+    row = db.execute(select(target.model.id).where(
+        target.model.id == target.id, target.model.index_status == STATUS_INDEXING,
+        target.model.index_started_at == target.claimed_at,
+    ).with_for_update()).first()
+    if row is None:
+        raise IndexingSuperseded("A newer indexing attempt owns this source")
 
 
 def _fail(db: Session, target: _Target, reason: str) -> None:
@@ -194,6 +210,7 @@ def _fail(db: Session, target: _Target, reason: str) -> None:
     without `force`.
     """
     db.rollback()
+    _assert_source_owned(db, target)
     db.execute(delete_chunks_statement(target.source))
     values = {
         "index_status": STATUS_FAILED,
@@ -346,7 +363,7 @@ def _run(
     store = store or get_vector_store()
     project_id = target.project_id
 
-    _claim(db, target, force=force)
+    target = replace(target, claimed_at=_claim(db, target, force=force))
 
     try:
         pages = read_pages()
@@ -393,6 +410,7 @@ def _run(
             )
             for chunk, vector in zip(chunks, embedded.vectors)
         ]
+        _assert_source_owned(db, target)
         stored = store.add_chunks(
             db,
             source=target.source,
@@ -424,6 +442,9 @@ def _run(
         # together. A crash before it leaves the row in INDEXING with no
         # chunks — recoverable with force — rather than READY with none.
         db.commit()
+    except IndexingSuperseded:
+        db.rollback()
+        raise
     except Exception as error:  # pragma: no cover - defensive
         _fail(db, target, f"Indexed text could not be stored: {error}")
         raise IndexingFailed(str(error)) from error

@@ -463,8 +463,16 @@ def test_8b_a_client_cannot_reach_another_project(db, world):
 # --- 9 ----------------------------------------------------------------------
 
 class _Insight:
-    def __init__(self, affected):
+    def __init__(self, affected, project_id):
+        # Routing metadata with an explicit project and no restricted source.
+        self.id = uuid4()
+        self.project_id = project_id
         self.affected_json = affected
+        self.evidence_json = {"certainty": "UNCERTAIN"}
+        self.related_task_ids_json = []
+        self.related_issue_ids_json = []
+        self.related_evidence_ids_json = []
+        self.model_revision_id = None
 
 
 def test_9_agent_findings_never_reach_an_external_participant(db, world):
@@ -476,7 +484,7 @@ def test_9_agent_findings_never_reach_an_external_participant(db, world):
     for affected in ({}, {"disciplines": ["civil"]}, {"disciplines": ["STRUCTURAL"]},
                      {"disciplines": ["PLUMBING"]}):
         recipients = finding_routing.resolve(
-            db, project_id=world["project"].id, insight=_Insight(affected),
+            db, project_id=world["project"].id, insight=_Insight(affected, world["project"].id),
             principal=world["manager"],
         )
         assert recipients.user_ids & externals == set(), affected
@@ -487,7 +495,7 @@ def test_9b_every_recipient_could_actually_open_the_finding(db, world):
 
     recipients = finding_routing.resolve(
         db, project_id=world["project"].id,
-        insight=_Insight({"disciplines": ["civil"]}), principal=world["manager"],
+        insight=_Insight({"disciplines": ["civil"]}, world["project"].id), principal=world["manager"],
     )
     for user_id in recipients.user_ids:
         person = db.get(User, user_id)

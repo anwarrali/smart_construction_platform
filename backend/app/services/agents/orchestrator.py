@@ -124,7 +124,7 @@ def orchestrate(
         payload["reason"] = decision.reason
         _record(
             db, project_id, name, user, trigger_type, reason, event_id,
-            status="SUCCEEDED" if result.ok else "FAILED",
+            status=("PARTIAL" if result.completeness == "PARTIAL" else "SUCCEEDED") if result.ok else "FAILED",
             error_code=result.error_code, error=result.error,
             tool_calls=result.tool_calls,
             finding_codes=[item.code for item in result.findings],
@@ -161,9 +161,14 @@ def _record(
             highest_confidence=highest_confidence, duration_ms=duration_ms,
             started_at=now, completed_at=now,
         ))
-        db.commit()
+        if db.info.get("agent_event_transaction"):
+            db.flush()
+        else:
+            db.commit()
     except Exception:
         logger.exception("[Orchestrator] could not record the run of %s", agent_name)
+        if db.info.get("agent_event_transaction"):
+            raise  # The durable event must retry the whole publication.
         db.rollback()
 
 

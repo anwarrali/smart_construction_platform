@@ -286,6 +286,9 @@ async def submit_site_report(
         db.add(asset)
     record_audit(db, actor_id=current_user.id, action="created", entity_type="site_report",
                  entity_id=new_report.id, project_id=new_report.project_id)
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(db, project_id=new_report.project_id, event_type="SITE_REPORT_CREATED",
+                      entity_type="SITE_REPORT", entity_id=new_report.id, actor_user_id=current_user.id)
     db.commit()
     db.refresh(new_report)
     return new_report
@@ -341,6 +344,9 @@ def review_site_report(
                  action="site_report_verified" if data.approved else "site_report_rejected",
                  entity_type="site_report", entity_id=report.id, project_id=report.project_id,
                  details={"rejection_reason": reason} if not data.approved else None)
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(db, project_id=report.project_id, event_type="SITE_REPORT_REVIEWED",
+                      entity_type="SITE_REPORT", entity_id=report.id, actor_user_id=current_user.id)
     db.commit()
     db.refresh(report)
     return report
@@ -399,6 +405,9 @@ def update_site_report_draft(
     record_audit(db, actor_id=current_user.id,
                  action="submitted" if report.review_status == "submitted" else "draft_updated",
                  entity_type="site_report", entity_id=report.id, project_id=report.project_id)
+    from app.services.domain_event_dispatcher import emit_domain_event
+    emit_domain_event(db, project_id=report.project_id, event_type="SITE_REPORT_REVIEWED",
+                      entity_type="SITE_REPORT", entity_id=report.id, actor_user_id=current_user.id)
     db.commit()
     db.refresh(report)
     return report

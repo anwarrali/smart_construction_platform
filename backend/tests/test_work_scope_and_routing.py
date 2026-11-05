@@ -461,8 +461,16 @@ def test_reports_from_several_site_engineers_are_distinguishable(db, office):
 class _Insight:
     """The two fields routing reads. A real AIInsight has many more."""
 
-    def __init__(self, affected):
+    def __init__(self, affected, project_id):
+        # Routing metadata with an explicit project and no restricted source.
+        self.id = uuid4()
+        self.project_id = project_id
         self.affected_json = affected
+        self.evidence_json = {"certainty": "UNCERTAIN"}
+        self.related_task_ids_json = []
+        self.related_issue_ids_json = []
+        self.related_evidence_ids_json = []
+        self.model_revision_id = None
 
 
 def test_a_finding_reaches_the_people_whose_discipline_it_is_about(db, office):
@@ -470,7 +478,7 @@ def test_a_finding_reaches_the_people_whose_discipline_it_is_about(db, office):
 
     recipients = finding_routing.resolve(
         db, project_id=office["project"].id,
-        insight=_Insight({"disciplines": ["electrical"]}),
+        insight=_Insight({"disciplines": ["electrical"]}, office["project"].id),
         principal=office["manager"],
     )
     assert office["site_elec"].id in recipients.user_ids
@@ -484,7 +492,7 @@ def test_an_ifc_tagged_finding_is_matched_through_the_discipline_mapping(db, off
 
     recipients = finding_routing.resolve(
         db, project_id=office["project"].id,
-        insight=_Insight({"disciplines": ["PLUMBING"]}),
+        insight=_Insight({"disciplines": ["PLUMBING"]}, office["project"].id),
         principal=office["manager"],
     )
     assert office["reviewer"].id in recipients.user_ids
@@ -495,7 +503,7 @@ def test_a_finding_about_no_particular_discipline_reaches_site_and_project(db, o
     from app.services.agents import finding_routing
 
     recipients = finding_routing.resolve(
-        db, project_id=office["project"].id, insight=_Insight({}),
+        db, project_id=office["project"].id, insight=_Insight({}, office["project"].id),
         principal=office["manager"],
     )
     assert {office["site_civil"].id, office["site_elec"].id} <= recipients.user_ids
@@ -508,7 +516,7 @@ def test_an_external_participant_is_never_told_about_a_finding(db, office):
 
     for affected in ({}, {"disciplines": ["civil"]}, {"disciplines": ["PLUMBING"]}):
         recipients = finding_routing.resolve(
-            db, project_id=office["project"].id, insight=_Insight(affected),
+            db, project_id=office["project"].id, insight=_Insight(affected, office["project"].id),
             principal=office["manager"],
         )
         assert office["contractor_person"].id not in recipients.user_ids, affected
@@ -520,7 +528,7 @@ def test_routing_never_reaches_somebody_who_could_not_open_the_finding(db, offic
 
     for user_id in finding_routing.resolve(
         db, project_id=office["project"].id,
-        insight=_Insight({"disciplines": ["civil"]}), principal=office["manager"],
+        insight=_Insight({"disciplines": ["civil"]}, office["project"].id), principal=office["manager"],
     ).user_ids:
         person = db.get(User, user_id)
         assert has_permission(db, person, "ai.review_insight", office["project"].id)
@@ -532,7 +540,7 @@ def test_the_accountable_principal_is_included_even_when_nobody_matches(db, offi
 
     recipients = finding_routing.resolve(
         db, project_id=office["project"].id,
-        insight=_Insight({"disciplines": ["quantity_surveying"]}),
+        insight=_Insight({"disciplines": ["quantity_surveying"]}, office["project"].id),
         principal=office["manager"],
     )
     assert recipients.user_ids == {office["manager"].id}

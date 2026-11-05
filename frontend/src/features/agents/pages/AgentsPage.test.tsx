@@ -188,6 +188,24 @@ describe("the agent catalogue", () => {
 });
 
 describe("running an agent", () => {
+  it("labels partial evidence coverage without claiming a successful complete scan", async () => {
+    agentsApi.runOne.mockResolvedValue(runResult({ agent: FIVE[0].name, completeness: "PARTIAL", findingCount: 0 }));
+    await openPage();
+    const card = screen.getByTestId(`agent-${FIVE[0].name}`);
+    await userEvent.click(within(card).getByRole("button"));
+    expect(await within(card).findByText("Partial analysis — some evidence was not inspected.")).toBeInTheDocument();
+    expect(toastFn.success).not.toHaveBeenCalled();
+  });
+
+  it("does not toast success for a failed analysis returned by the API", async () => {
+    agentsApi.runOne.mockResolvedValue(runResult({ agent: FIVE[0].name, ok: false, error: "Document retrieval failed" }));
+    await openPage();
+    const card = screen.getByTestId(`agent-${FIVE[0].name}`);
+    await userEvent.click(within(card).getByRole("button"));
+    await waitFor(() => expect(toastFn.error).toHaveBeenCalledWith("Document retrieval failed"));
+    expect(toastFn.success).not.toHaveBeenCalled();
+  });
+
   it("runs one agent and reports the findings the server returned", async () => {
     agentsApi.runOne.mockResolvedValue(runResult({ agent: FIVE[0].name, findingCount: 3 }));
     await openPage();

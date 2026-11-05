@@ -118,6 +118,7 @@ class Settings(BaseSettings):
     JOB_HEARTBEAT_SECONDS: int = int(os.getenv("JOB_HEARTBEAT_SECONDS", "15"))
     JOB_STALE_SECONDS: int = int(os.getenv("JOB_STALE_SECONDS", "120"))
     JOB_MAX_ATTEMPTS: int = int(os.getenv("JOB_MAX_ATTEMPTS", "3"))
+    JOB_MAX_EXECUTION_SECONDS: int = 1800
     # Private artefact storage (IFC sources, geometry, voice audio). "local" is the
     # development default; an S3/R2 backend plugs in behind the same interface.
     PRIVATE_STORAGE_BACKEND: str = os.getenv("PRIVATE_STORAGE_BACKEND", "local")
@@ -396,6 +397,8 @@ class Settings(BaseSettings):
             raise ValueError("JOB_STALE_SECONDS must be at least three heartbeats")
         if not 1 <= self.JOB_MAX_ATTEMPTS <= 10:
             raise ValueError("JOB_MAX_ATTEMPTS must be between 1 and 10")
+        if self.JOB_MAX_EXECUTION_SECONDS < 1:
+            raise ValueError("JOB_MAX_EXECUTION_SECONDS must be positive")
         # Refuse to boot on a step-up configuration that would be insecure,
         # rather than silently accepting it: a one-digit code or a step-up
         # window measured in hours defeats the point of the whole feature.

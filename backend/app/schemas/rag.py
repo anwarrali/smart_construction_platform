@@ -142,6 +142,8 @@ class RagCitation(CamelModel):
 
 
 class RagQueryResponse(CamelModel):
+    outcome: str = "INSUFFICIENT_EVIDENCE"
+    verified: bool = False
     answer: str
     #: False when the retrieved passages did not support an answer. The client
     #: can present that differently from a real answer rather than having to

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "scope": "Synthetic engineering evidence acceptance; deterministic provider outputs, not live model or retrieval accuracy",
+  "review_status": "Developer-authored; independent construction-engineer adjudication pending",
+  "cases": [
+    {"id": "concrete-supported", "question": "What grade is required?", "evidence": "Concrete grade C30.", "provider_output": "Concrete grade C30 [1].", "expected_found": true},
+    {"id": "concrete-hallucinated-grade", "question": "What grade is required?", "evidence": "Concrete grade C30.", "provider_output": "Concrete grade C90 [1].", "expected_found": false},
+    {"id": "invented-source", "question": "What grade is required?", "evidence": "Concrete grade C30.", "provider_output": "Concrete grade C30 [999].", "expected_found": false},
+    {"id": "unsupported-approval", "question": "May this be issued for construction?", "evidence": "Concrete grade C30.", "provider_output": "Approved for construction [1].", "expected_found": false},
+    {"id": "negation-dropped", "question": "Is the design approved?", "evidence": "Not approved for construction.", "provider_output": "Approved for construction [1].", "expected_found": false},
+    {"id": "applicability-dropped", "question": "What concrete grade is required?", "evidence": "Concrete grade C30 only for nonstructural blinding.", "provider_output": "Concrete grade C30 [1].", "expected_found": false},
+    {"id": "conflicting-grade", "question": "What grade is required?", "evidence": "Concrete grade C30.\nConcrete grade C40.", "provider_output": "Concrete grade C30 [1].", "expected_found": false},
+    {"id": "unsupported-arithmetic", "question": "What is total concrete volume?", "evidence": "Slab volume 10 m3.\nColumn volume 5 m3.", "provider_output": "Total volume 15 m3 [1].", "expected_found": false},
+    {"id": "unsupported-unit", "question": "What cover is specified?", "evidence": "Concrete cover is 40 mm.", "provider_output": "Concrete cover is 40 cm [1].", "expected_found": false},
+    {"id": "invalid-structured-claim", "question": "What grade is required?", "evidence": "Concrete grade C30.", "provider_output": "{\"claims\": [{\"quote\": \"Concrete grade C90\", \"citations\": [1]}], \"verified\": true}", "expected_found": false},
+    {"id": "arabic-supported", "question": "ما مدة المعالجة؟", "evidence": "مدة معالجة الخرسانة سبعة أيام.", "provider_output": "مدة معالجة الخرسانة سبعة أيام [1].", "expected_found": true},
+    {"id": "no-evidence", "question": "What grade is required?", "evidence": null, "provider_output": "Concrete grade C90 [1].", "expected_found": false}
+  ],
+  "integration_scenarios": {
+    "permissions_and_cross_project": "test_restricted_document_is_not_exposed_through_derived_insight",
+    "delay_polarity": "test_negated_delay_is_not_a_fact",
+    "duplicate_findings": "test_finding_identity_survives_evidence_growth_and_order",
+    "agent_failure": "test_tool_failure_is_failed_analysis_not_no_documents",
+    "worker_recovery": "test_paused_worker_resumes_after_transfer_without_publishing",
+    "trailing_events": "test_durable_cooldown_defers_and_then_runs_trailing_event"
+  }
+}

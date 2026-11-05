@@ -61,12 +61,15 @@ pytest.importorskip("pypdf", reason="pypdf is required for the RAG pipeline")
 class _StubAnswerClient:
     """Echoes a fixed answer, so citation construction is what is under test."""
 
-    def __init__(self, text_out="The answer is here [1]."):
+    def __init__(self, text_out=None):
         self._text = text_out
         self.chat = self
         self.completions = self
 
     def create(self, **kwargs):
+        if self._text is None:
+            from tests.answer_stub import ExtractiveAnswerClient
+            return ExtractiveAnswerClient().create(**kwargs)
         message = type("M", (), {"content": self._text})()
         return type("R", (), {"choices": [type("C", (), {"message": message})()]})()
 

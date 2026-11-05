@@ -117,7 +117,8 @@ def test_the_known_gap_is_still_only_the_one():
     Without this, the exclusion above becomes a place to hide the next one.
     """
     assert UNEMITTED_BY_DESIGN <= set(IMPORTANT_EVENTS)
-    assert len(IMPORTANT_EVENTS) == 14
+    assert len(IMPORTANT_EVENTS) == 16
+    assert {"SITE_REPORT_CREATED", "SITE_REPORT_REVIEWED"} <= set(IMPORTANT_EVENTS)
 
 
 # --- behaviour --------------------------------------------------------------

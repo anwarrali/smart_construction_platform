@@ -187,8 +187,8 @@ def test_the_site_report_agent_finds_the_reported_delays(db, world):
     result = run(db, world, "site_report_agent", persist=False)
     assert "SITE_REPORTED_DELAYS" in codes(result)
     delay = next(f for f in result.findings if f.code == "SITE_REPORTED_DELAYS")
-    assert delay.certainty is Certainty.FACT
-    assert delay.confidence == 1.0
+    assert delay.certainty is Certainty.DETECTED
+    assert delay.confidence == 0.9
 
 
 def test_the_site_report_agent_notices_the_empty_report(db, world):
@@ -245,7 +245,7 @@ def test_the_document_agent_reports_uncertainty_when_there_are_no_documents(db, 
     result = run(db, world, "document_consistency_agent", persist=False)
     assert result.findings
     assert all(f.certainty is Certainty.UNCERTAIN for f in result.findings)
-    assert "DOCUMENTS_UNAVAILABLE" in codes(result)
+    assert "NO_DOCUMENTS" in codes(result)
 
 
 def test_missing_evidence_produces_uncertainty_rather_than_silence(db, world):
@@ -352,7 +352,7 @@ def test_a_stored_finding_keeps_its_certainty_and_its_claims(db, world):
         AIInsight.insight_type == "SITE_REPORTED_DELAYS",
     ).first()
     assert insight is not None
-    assert insight.evidence_json["certainty"] == "FACT"
+    assert insight.evidence_json["certainty"] == "DETECTED"
     assert insight.evidence_json["claims"]
     assert insight.evidence_json["agent"] == "site_report_agent"
 

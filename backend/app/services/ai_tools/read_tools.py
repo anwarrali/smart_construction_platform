@@ -154,6 +154,22 @@ def get_site_reports(db, actor: User, project_id, args) -> dict:
     ]}
 
 
+def list_documents(db, actor: User, project_id, args) -> dict:
+    readable = readable_document_ids(db, actor, project_id)
+    query = db.query(Document).filter(Document.project_id == project_id, Document.id.in_(readable))
+    total = query.count()
+    exists = db.query(Document.id).filter(Document.project_id == project_id).first() is not None
+    return {
+        "sourceState": "AVAILABLE" if total else ("NO_AUTHORIZED_DOCUMENTS" if exists else "NO_DOCUMENTS"),
+        "total": total,
+        "documents": [{"id": str(d.id), "title": d.title,
+                       "documentType": d.document_type.value if d.document_type else None,
+                       "suggestedDocumentType": d.suggested_document_type,
+                       "detectedFormat": d.detected_format, "indexStatus": d.index_status}
+                      for d in query.order_by(Document.id).offset(args.offset).limit(args.limit).all()],
+    }
+
+
 def search_documents(db, actor: User, project_id, args) -> dict:
     """Title/notes search inside the documents this caller may read."""
     readable = readable_document_ids(db, actor, project_id)
@@ -247,6 +263,8 @@ def query_project_knowledge(db, actor: User, project_id, args) -> dict:
         readable_ingested_file_ids=allowed_files, query=args.question,
     )
     answer = rag.AnswerService().answer(args.question, retrieved)
+    from app.services.insight_access import require_readable_chunks
+    require_readable_chunks(db,actor,project_id,retrieved)
     payload.update({
         "answer": answer.answer, "found": answer.found,
         "citations": [
@@ -403,8 +421,10 @@ def get_findings(db, actor: User, project_id, args) -> dict:
         ))
     if args.source_engine:
         query = query.filter(AIInsight.source_engine == args.source_engine)
-    findings = query.order_by(AIInsight.created_at.desc()).limit(args.limit).all()
-    return {"findings": [
+    from app.services.insight_access import can_read_insight
+    visible = [i for i in query.order_by(AIInsight.created_at.desc()).all() if can_read_insight(db,actor,i)]
+    findings = visible[:args.limit]
+    return {"total": len(visible), "findings": [
         {
             "id": str(item.id), "type": item.insight_type, "category": item.category,
             "severity": item.severity, "confidence": item.confidence,

@@ -23,6 +23,7 @@ import type { AgentRunRecord } from "../../../types/agent";
 const STATUS_VARIANT: Record<string, "success" | "danger" | "neutral"> = {
   SUCCEEDED: "success",
   FAILED: "danger",
+  PARTIAL: "neutral",
 };
 
 export const AgentRunHistory = ({

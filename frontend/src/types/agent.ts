@@ -70,6 +70,8 @@ export interface AgentToolCall {
 
 /** The result of one run, from `POST .../agents/{name}/run`. */
 export interface AgentRunResult {
+  completeness?: "COMPLETE" | "PARTIAL" | "FAILED";
+  coverageReasons?: string[];
   agent: string;
   ok: boolean;
   findingCount: number;

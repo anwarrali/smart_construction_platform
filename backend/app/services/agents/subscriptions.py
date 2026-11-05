@@ -111,6 +111,8 @@ def decide(
                 agent_name, False,
                 f"{agent_name} does not subscribe to {event_type}.", "NOT_SUBSCRIBED",
             )
+        if db.info.get("agent_event_replay"):
+            return RunDecision(agent_name, True, "Durable event processing after cooldown or replay")
         moment = now or datetime.now(timezone.utc)
         recent = (
             db.query(AgentRunRecord)

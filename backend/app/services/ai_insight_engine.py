@@ -81,7 +81,7 @@ def _store(db: Session, *, project_id, version_id, rule: str, category: str, sev
                          related_evidence_ids_json=[str(value) for value in evidence_ids or []],
                          potential_impact=potential_impact, source_engine="DETERMINISTIC_RULE_ENGINE_V1", status="NEW")
         db.add(item)
-    elif item.status in {"NEW", "UNDER_REVIEW"}:
+    elif item.status in {"NEW", "OPEN", "UNDER_REVIEW", "ACKNOWLEDGED"}:
         item.severity=severity;item.confidence=confidence;item.description=description;item.reason=reason
         item.recommended_action=recommended_action;item.evidence_json=evidence;item.affected_json=affected or {}
         item.message_params_json=params or {}

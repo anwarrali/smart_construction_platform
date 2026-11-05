@@ -92,6 +92,7 @@ def query_project_knowledge(
 
 
 def _response(routing, *, answer: str, found: bool, citations=None, **extra) -> KnowledgeQueryResponse:
+    extra.setdefault("outcome", "COMPUTED_RESULT" if found else "INSUFFICIENT_EVIDENCE")
     return KnowledgeQueryResponse(
         answer=answer, found=found, citations=citations or [],
         source=routing.source.value, route_reason=routing.reason,
@@ -143,7 +144,7 @@ def _answer_ifc(db, project_id, user, payload, routing) -> KnowledgeQueryRespons
     return _response(
         routing,
         answer=" ".join(fact.statement for fact in result.facts[:5]),
-        found=True,
+        found=True, outcome="MODEL_EVIDENCE",
         citations=[KnowledgeCitation(
             source_type=fact.source_type, source_id=fact.source_id,
             title=result.resolved_subject or "IFC model", snippet=fact.statement[:400],
@@ -185,10 +186,12 @@ def _answer_documents(db, project_id, user, payload, routing) -> KnowledgeQueryR
             query=payload.query, embedding_service=EmbeddingService(),
         )
         answer = AnswerService().answer(payload.query, retrieved)
+        from app.services.insight_access import require_readable_chunks
+        require_readable_chunks(db,user,project_id,retrieved)
     except (EmbeddingError, AnswerError) as error:
         raise HTTPException(status_code=503, detail=str(error))
     return _response(
-        routing, answer=answer.answer, found=answer.found,
+        routing, answer=answer.answer, found=answer.found, outcome=answer.outcome,
         citations=[KnowledgeCitation(
             source_type=citation.source_type,
             source_id=str(citation.document_id or citation.ingested_file_id),

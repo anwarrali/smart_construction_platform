@@ -809,7 +809,8 @@ def test_the_background_job_runs_on_the_shared_job_queue(monkeypatch):
                           {"dedupe_key": f"rag.index:{file.id}", "project_id": file.project_id})]
 
 
-def test_the_background_job_indexes_and_closes_its_own_session(db, world):
+def test_the_background_job_indexes_and_closes_its_own_session(db, world, monkeypatch):
+    monkeypatch.setattr(ingestion, "EmbeddingService", _embeddings)
     file = pdf_file(db, world, ["Retention is five per cent."])
     db.commit()
     ingestion.index_ingested_file_job(file.id)

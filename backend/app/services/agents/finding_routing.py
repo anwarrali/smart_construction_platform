@@ -99,6 +99,10 @@ def resolve(db: Session, *, project_id: uuid.UUID, insight, principal: User) -> 
     recipients = Recipients()
 
     def add(user_id: uuid.UUID, reason: str) -> None:
+        from app.services.insight_access import can_read_insight
+        person = db.get(User, user_id)
+        if person is None or not can_read_insight(db,person,insight):
+            return
         if user_id not in recipients.user_ids:
             recipients.user_ids.add(user_id)
             recipients.reasons[user_id] = reason

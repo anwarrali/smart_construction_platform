@@ -28,6 +28,9 @@ from app.services.collaboration_policy import choose_discipline_assignee
 from app.services.ifc_policy import can_ifc
 from app.services import rbac
 
+from app.services.insight_contract import severity as normalized_severity
+from app.services.insight_access import can_read_insight, require_readable_insight
+
 router = APIRouter(prefix="/projects/{project_id}/ai-intelligence", tags=["AI Intelligence"])
 
 
@@ -43,9 +46,11 @@ def _require(db: Session, user: User, project_id: uuid.UUID, permission: str = "
         require(db, user, "ai.view_insights", project_id)
 
 
-def _insight(db: Session, project_id, insight_id) -> AIInsight:
-    item=db.query(AIInsight).filter(AIInsight.id==insight_id,AIInsight.project_id==project_id).first()
+def _insight(db: Session, project_id, insight_id, *, lock=False, user=None) -> AIInsight:
+    q=db.query(AIInsight).filter(AIInsight.id==insight_id,AIInsight.project_id==project_id)
+    item=(q.with_for_update().populate_existing() if lock else q).first()
     if not item:raise HTTPException(status_code=404,detail="AI insight not found")
+    if user is not None:require_readable_insight(db,user,item)
     return item
 
 
@@ -124,11 +129,16 @@ def list_insights(project_id:uuid.UUID,status:str|None=None,severity:str|None=No
     # The two engines label an untouched finding "OPEN" and "NEW" respectively.
     # They mean the same thing to a reviewer, so the one filter option matches both.
     if status:q=q.filter(AIInsight.status.in_(["OPEN","NEW"] if status.upper() in {"OPEN","NEW"} else [status.upper()]))
-    if severity:q=q.filter(AIInsight.severity==severity.upper())
+    if severity:
+        from app.services.insight_contract import SEVERITY_ALIASES
+        canonical=normalized_severity(severity)
+        values={canonical}|{k for k,v in SEVERITY_ALIASES.items() if v==canonical}
+        q=q.filter(AIInsight.severity.in_(values))
     if category:q=q.filter(AIInsight.category==category.upper())
     if model_revision_id:q=q.filter(AIInsight.model_revision_id==model_revision_id)
     elif not include_superseded:q=_scope_to_current_revision(db,project_id,q)
-    return q.order_by(AIInsight.created_at.desc()).offset((page-1)*page_size).limit(page_size).all()
+    visible=[i for i in q.order_by(AIInsight.created_at.desc()).all() if can_read_insight(db,current_user,i)]
+    return visible[(page-1)*page_size:page*page_size]
 
 
 @router.get("/overview")
@@ -137,6 +147,7 @@ def intelligence_overview(project_id:uuid.UUID,db:Session=Depends(get_db),curren
     # The headline counts have to describe the same rows the review queue lists,
     # otherwise "3 open insights" sits above a list showing one.
     items=_scope_to_current_revision(db,project_id,db.query(AIInsight).filter(AIInsight.project_id==project_id)).all()
+    items=[i for i in items if can_read_insight(db,current_user,i)]
     version=_current_version(db,project_id)
     alignment=alignment_facts(db,project_id,version) if version else None
     open_items=[item for item in items if item.status in {"OPEN","NEW","ACKNOWLEDGED","UNDER_REVIEW","CONFIRMED"}]
@@ -148,7 +159,7 @@ def intelligence_overview(project_id:uuid.UUID,db:Session=Depends(get_db),curren
 
 @router.get("/insights/{insight_id}/sources")
 def insight_sources(project_id: uuid.UUID, insight_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _require(db, current_user, project_id); _insight(db, project_id, insight_id)
+    _require(db, current_user, project_id); _insight(db, project_id, insight_id, user=current_user)
     return db.query(AIInsightSource).filter(AIInsightSource.project_id == project_id,
         AIInsightSource.insight_id == insight_id).order_by(AIInsightSource.created_at).all()
 
@@ -165,7 +176,7 @@ def run_intelligence(project_id:uuid.UUID,version_id:uuid.UUID|None=None,db:Sess
 def review_insight(project_id:uuid.UUID,insight_id:uuid.UUID,payload:AIInsightReview,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
     _require(db,current_user,project_id,"REVIEW_FINDING")
     require(db,current_user,"ai.review_insight",project_id)
-    item=_insight(db,project_id,insight_id);status=payload.status.upper()
+    item=_insight(db,project_id,insight_id,lock=True,user=current_user);status=payload.status.upper()
     aliases={"UNDER_REVIEW":"ACKNOWLEDGED","CONFIRMED":"ACKNOWLEDGED","DISMISSED":"FALSE_POSITIVE"}
     status=aliases.get(status,status)
     if status not in {"OPEN","ACKNOWLEDGED","RESOLVED","FALSE_POSITIVE"}:raise HTTPException(status_code=400,detail="Unsupported review status")
@@ -176,6 +187,7 @@ def review_insight(project_id:uuid.UUID,insight_id:uuid.UUID,payload:AIInsightRe
     if item.status==status and item.review_note==payload.note:return item
     item.status=status;item.review_note=payload.note;item.reviewed_by_id=current_user.id;item.reviewed_at=datetime.now(timezone.utc)
     if status=="RESOLVED":item.resolved_at=datetime.now(timezone.utc)
+    else:item.resolved_at=None
     record_audit(db,actor_id=current_user.id,action="ai_insight_reviewed",entity_type="ai_insight",entity_id=item.id,project_id=project_id,details={"status":status,"note":payload.note});db.commit();db.refresh(item);return item
 
 
@@ -183,10 +195,10 @@ def review_insight(project_id:uuid.UUID,insight_id:uuid.UUID,payload:AIInsightRe
 def insight_to_issue(project_id:uuid.UUID,insight_id:uuid.UUID,db:Session=Depends(get_db),current_user:User=Depends(get_current_user)):
     _require(db,current_user,project_id,"REVIEW_FINDING")
     require(db,current_user,"ai.promote_insight",project_id)
-    item=_insight(db,project_id,insight_id)
+    item=_insight(db,project_id,insight_id,lock=True,user=current_user)
     if item.applied_entity_id:raise HTTPException(status_code=409,detail="This insight has already created a project work item")
-    severity=IssueSeverity.HIGH if item.severity in {"CRITICAL","WARNING"} else IssueSeverity.MEDIUM
-    issue=Issue(project_id=project_id,title=item.title,description=f"{item.description}\n\nEvidence: {item.evidence_json}\n\nAutomated analysis — engineering review required.\nInsight: {item.id}",category="AI_INTELLIGENCE",severity=severity,status=IssueStatus.OPEN,raised_by_id=current_user.id,affects_schedule=item.category=="REVISION")
+    severity=IssueSeverity(normalized_severity(item.severity).lower()) if normalized_severity(item.severity) != "INFO" else IssueSeverity.LOW
+    issue=Issue(project_id=project_id,title="Engineering finding requires review",description=f"Engineering review required. Technical evidence remains in the access-controlled insight: {item.id}",category="AI_INTELLIGENCE",severity=severity,status=IssueStatus.OPEN,raised_by_id=current_user.id,affects_schedule=item.category=="REVISION")
     db.add(issue);db.flush();item.applied_entity_type="ISSUE";item.applied_entity_id=issue.id;item.status="CONFIRMED";item.reviewed_by_id=current_user.id;item.reviewed_at=datetime.now(timezone.utc)
     for element_id in (item.affected_json or {}).get("elements",[])[:200]:
         try: eid=uuid.UUID(element_id)
@@ -201,11 +213,12 @@ def insight_to_task(project_id:uuid.UUID,insight_id:uuid.UUID,payload:AIInsightC
     _require(db,current_user,project_id,"REVIEW_SUGGESTION")
     # Creates a task: `task.create`, as the task endpoint asks (was the assigned-manager id).
     require(db,current_user,"task.create",project_id)
-    item=_insight(db,project_id,insight_id)
+    require(db,current_user,"ai.promote_insight",project_id)
+    item=_insight(db,project_id,insight_id,lock=True,user=current_user)
     if item.category!="SUGGESTED_TASK":raise HTTPException(status_code=400,detail="Only reviewed task suggestions can create tasks")
     if item.applied_entity_id:raise HTTPException(status_code=409,detail="This suggestion has already created a task")
-    evidence=item.evidence_json or {};title=(payload.title or item.title).strip();discipline=payload.discipline or evidence.get("discipline")
-    task=Task(project_id=project_id,task_code=_next_task_code(db,project_id),name=title,description=payload.description or item.description,discipline=discipline,priority=TaskPriority.MEDIUM,status=TaskStatus.BACKLOG,created_by_id=current_user.id,progress_percentage=0,review_required=True)
+    evidence=item.evidence_json or {};title=(payload.title or "Engineering finding requires review").strip();discipline=payload.discipline
+    task=Task(project_id=project_id,task_code=_next_task_code(db,project_id),name=title,description=payload.description or f"Review the access-controlled engineering insight: {item.id}",discipline=discipline,priority=TaskPriority.MEDIUM,status=TaskStatus.BACKLOG,created_by_id=current_user.id,progress_percentage=0,review_required=True)
     db.add(task);db.flush();item.applied_entity_type="TASK";item.applied_entity_id=task.id;item.status="CONFIRMED";item.reviewed_by_id=current_user.id;item.reviewed_at=datetime.now(timezone.utc)
     for element_id in (item.affected_json or {}).get("elements",[])[:500]:
         try:eid=uuid.UUID(element_id)

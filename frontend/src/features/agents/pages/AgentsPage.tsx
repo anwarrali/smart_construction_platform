@@ -112,12 +112,16 @@ export const AgentsPage = () => {
     try {
       const result = await api.agents.runOne(projectId, agentName);
       setLastResults((previous) => ({ ...previous, [agentName]: result }));
-      toast.success(
-        t("agents.runFinished", {
+      if (!result.ok) {
+        toast.error(result.error ?? t("agents.runFailed"));
+      } else if (result.completeness === "PARTIAL") {
+        toast(t("agents.partialAnalysis"), { icon: "⚠️" });
+      } else {
+        toast.success(t("agents.runFinished", {
           agent: agentTitles[agentName] ?? agentName,
           count: result.findingCount,
-        }),
-      );
+        }));
+      }
       setRuns(await api.agents.runs(projectId).catch(() => runs));
     } catch (error) {
       toast.error(errorMessage(error, t("agents.runFailed")));
@@ -134,14 +138,15 @@ export const AgentsPage = () => {
       const results: Record<string, AgentRunResult> = {};
       for (const run of report.ran) results[run.agent] = run;
       setLastResults((previous) => ({ ...previous, ...results }));
-      toast.success(
-        t("agents.passFinished", {
+      const summary = t("agents.passFinished", {
           ran: report.agentsRun,
           skipped: report.agentsSkipped,
           failed: report.agentsFailed,
           count: report.findingCount,
-        }),
-      );
+        });
+      if (report.agentsFailed) toast.error(summary);
+      else if (report.ran.some((run) => run.completeness === "PARTIAL")) toast(summary, { icon: "⚠️" });
+      else toast.success(summary);
       // Skips are a normal outcome, but a silent one would leave somebody
       // wondering why an agent they can see did not run.
       for (const skip of report.skipped) {

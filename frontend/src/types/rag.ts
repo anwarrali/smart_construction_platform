@@ -37,6 +37,8 @@ export interface RagCitation {
 }
 
 export interface RagQueryResponse {
+  outcome?: string;
+  verified?: boolean;
   answer: string;
   /** False when the indexed text did not support an answer. Rendered
    *  differently rather than pattern-matching the wording. */

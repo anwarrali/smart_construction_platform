@@ -35,6 +35,8 @@ class KnowledgeCitation(CamelModel):
 
 
 class KnowledgeQueryResponse(CamelModel):
+    outcome: str = "INSUFFICIENT_EVIDENCE"
+    verified: bool = False
     answer: str
     #: False when the routed source held no answer. Distinct from an error:
     #: the right place was consulted and had nothing.

@@ -41,6 +41,32 @@ def _mentions(text: str | None, terms) -> str | None:
     return next((term for term in terms if term in lowered), None)
 
 
+def reported_delay(text: str | None) -> str | None:
+    """Reported narrative impact, never a computed/verified schedule consequence.
+
+    Negation and future/conditional language are conservative exclusions. The
+    two narrative fields are evaluated separately by the caller.
+    """
+    for sentence in re.split(r"[.;\n،]", (text or "").casefold()):
+        if re.search(r"\b(no|not|without|never)\b|لا يوجد|لا تأخير|لا يوجد تأخير|بدون|لم يتأخر", sentence):
+            continue
+        if re.search(r"\b(if|may|might|could|potential|risk|expected|possible)\b|قد|احتمال|متوقع", sentence):
+            continue
+        for term in DELAY_TERMS:
+            pattern = r"\b" + re.escape(term) + r"\b" if term.isascii() else re.escape(term)
+            if re.search(pattern, sentence):
+                return term
+    return None
+
+
+def potential_delay(text: str | None) -> bool:
+    value = (text or "").casefold()
+    if re.search(r"\b(no|not|without|never)\b|لا يوجد|لا تأخير|بدون", value):
+        return False
+    return bool(_mentions(value, DELAY_TERMS) and re.search(
+        r"\b(if|may|might|could|potential|risk|expected|possible)\b|قد|احتمال|متوقع", value))
+
+
 def _uncertain(code: str, title: str, reason: str, action: str) -> AgentFinding:
     """The explicit "I could not tell" outcome.
 
@@ -100,18 +126,18 @@ def site_report_agent(context) -> list[AgentFinding]:
 
     # Delays named in the reports themselves.
     delayed = [
-        (report, _mentions(report.get("delays") or report.get("issuesSummary"), DELAY_TERMS))
+        (report, reported_delay(report.get("delays")) or reported_delay(report.get("issuesSummary")))
         for report in bodies
     ]
     delayed = [(report, term) for report, term in delayed if term]
     if delayed:
         findings.append(AgentFinding(
-            code="SITE_REPORTED_DELAYS", certainty=Certainty.FACT,
+            code="SITE_REPORTED_DELAYS", certainty=Certainty.DETECTED,
             severity="HIGH" if len(delayed) >= 3 else "MEDIUM",
-            confidence=1.0,
+            confidence=0.9,
             title=f"{len(delayed)} site report(s) record a delay",
-            description="These reports state a delay in their own words.",
-            reason="Read directly from the reports' delay and issue fields; nothing is inferred.",
+            description="These reports mention a delay; the schedule impact is not independently verified.",
+            reason="Narrative claims were detected, not a computed delay to project completion.",
             recommended_action="Review the reported delays against the schedule.",
             evidence=[
                 Evidence("SITE_REPORT", report["id"],
@@ -122,12 +148,28 @@ def site_report_agent(context) -> list[AgentFinding]:
             affected={"siteReports": [report["id"] for report, _ in delayed]},
         ))
 
+    possible = [report for report in bodies if potential_delay(report.get("delays"))
+                or potential_delay(report.get("issuesSummary"))]
+    if possible:
+        findings.append(AgentFinding(
+            code="SITE_POTENTIAL_DELAYS", identity_key="project",
+            certainty=Certainty.INFERRED, severity="MEDIUM", confidence=0.6,
+            title="Reports describe possible delay, not established schedule impact",
+            description="Conditional or future narrative impact requires verification.",
+            reason="Potential narrative impact is separate from confirmed task dates or computed consequences.",
+            recommended_action="Ask the engineer to establish whether work is actually delayed.",
+            evidence=[Evidence("SITE_REPORT", report["id"], "Potential delay report",
+                               {"impactKind": "HYPOTHETICAL", "delays": report.get("delays"),
+                                "issuesSummary": report.get("issuesSummary")}) for report in possible],
+            affected={"siteReports": [r["id"] for r in possible]},
+        ))
+
     # The same wording recurring across separate reports.
     recurring = _recurring_phrases([report.get("issuesSummary") for report in bodies])
     if recurring:
         phrase, count = recurring
         findings.append(AgentFinding(
-            code="SITE_RECURRING_ISSUE", certainty=Certainty.INFERRED,
+            code="SITE_RECURRING_ISSUE", identity_key=phrase, certainty=Certainty.INFERRED,
             severity="HIGH", confidence=0.65,
             title=f"The same issue wording appears in {count} reports",
             description=f"{count} separate reports mention {phrase!r}.",
@@ -155,7 +197,7 @@ def site_report_agent(context) -> list[AgentFinding]:
         gap = float(reported) - float(task["progressPercentage"])
         if gap >= 25:
             findings.append(AgentFinding(
-                code="SITE_PROGRESS_CONFLICT", certainty=Certainty.DETECTED,
+                code="SITE_PROGRESS_CONFLICT", identity_key=f"task:{task['id']}", certainty=Certainty.DETECTED,
                 severity="MEDIUM", confidence=0.85,
                 title=f"Reported progress exceeds the recorded task progress on {task['name']!r}",
                 description=(
@@ -198,10 +240,11 @@ def document_consistency_agent(context) -> list[AgentFinding]:
     are grouped by the kind the Phase 3 classifier detected, and only documents
     of the same kind, or a kind and its declared counterpart, are considered.
     """
-    documents = context.data("search_documents", {"query": " ", "limit": 100}).get("documents", [])
+    listing = context.data("list_documents", {"limit": 100})
+    documents = listing.get("documents", [])
     if not documents:
         return [_uncertain(
-            "DOCUMENTS_UNAVAILABLE", "No readable documents",
+            listing.get("sourceState", "DOCUMENTS_UNAVAILABLE"), "No readable documents",
             "No documents in this project are readable by this caller, so consistency "
             "cannot be assessed.",
             "Upload project documents, or check your document access.",
@@ -281,8 +324,8 @@ def document_consistency_agent(context) -> list[AgentFinding]:
         })
         if answer.get("found"):
             findings.append(AgentFinding(
-                code="DOCUMENT_REQUIREMENTS_RETRIEVED", certainty=Certainty.FACT,
-                severity="INFO", confidence=1.0,
+                code="DOCUMENT_REQUIREMENTS_RETRIEVED", certainty=Certainty.RECOMMENDATION,
+                severity="INFO", confidence=0.7,
                 title="Specification requirements were retrieved for review",
                 description=(answer.get("answer") or "")[:1000],
                 reason="Retrieved from indexed documents of governing kinds, with citations.",
@@ -386,7 +429,7 @@ def revision_impact_agent(context) -> list[AgentFinding]:
         ]
         if candidates:
             findings.append(AgentFinding(
-                code="REVISION_LINKED_TASK_AT_RISK", certainty=Certainty.INFERRED,
+                code="REVISION_LINKED_TASK_AT_RISK", identity_key=f"change:{change['id']}", certainty=Certainty.INFERRED,
                 severity="MEDIUM", confidence=0.7,
                 title=f"Open work is linked to design change {change['title']!r}",
                 description=f"{len(candidates)} open task(s) are linked to this change.",
@@ -486,7 +529,7 @@ def rfi_agent(context) -> list[AgentFinding]:
         if count >= 3:
             related = [c for c in changes if c.get("sourceDiscipline") == discipline]
             findings.append(AgentFinding(
-                code="RFI_RECURRING_AREA", certainty=Certainty.INFERRED,
+                code="RFI_RECURRING_AREA", identity_key=discipline, certainty=Certainty.INFERRED,
                 severity="MEDIUM", confidence=0.65,
                 title=f"{count} requests originate from {discipline}",
                 description=f"{discipline} has raised {count} requests on this project.",
