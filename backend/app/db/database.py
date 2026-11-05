@@ -21,6 +21,9 @@ SessionLocal = sessionmaker(
 class Base(DeclarativeBase):
     pass
 
+# Register transaction fencing even for nested domain services with new sessions.
+from app.services.jobs import ownership as _job_ownership  # noqa: E402,F401
+
 
 def get_db():
     db = SessionLocal()

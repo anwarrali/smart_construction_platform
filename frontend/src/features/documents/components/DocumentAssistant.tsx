@@ -252,6 +252,9 @@ export const DocumentAssistant = ({ document, isOpen, onClose }: DocumentAssista
               }`}
             >
               <p className="whitespace-pre-wrap">{result.answer}</p>
+              {result.found && result.verified === false && (
+                <p className="mt-2 text-xs">{t("documentAssistant.evidenceExcerpt")}</p>
+              )}
               {!result.found && (
                 <p className="mt-2 text-xs">
                   {t("documentAssistant.not_found_hint")}

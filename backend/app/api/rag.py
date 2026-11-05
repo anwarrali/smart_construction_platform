@@ -334,6 +334,8 @@ def query_documents(
             embedding_service=EmbeddingService(),
         )
         answer = AnswerService().answer(payload.query, retrieved)
+        from app.services.insight_access import require_readable_chunks
+        require_readable_chunks(db,current_user,payload.project_id,retrieved)
     except EmbeddingError as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error))
     except AnswerError as error:
@@ -342,6 +344,7 @@ def query_documents(
     return RagQueryResponse(
         answer=answer.answer,
         found=answer.found,
+        outcome=answer.outcome,
         citations=[
             RagCitation(
                 source_type=citation.source_type,

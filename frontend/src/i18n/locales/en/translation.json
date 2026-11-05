@@ -3023,7 +3023,8 @@
       "INDEXING": "Indexing",
       "READY": "Ready",
       "FAILED": "Failed"
-    }
+    },
+    "evidenceExcerpt": "Source excerpts; engineering approval has not been established."
   },
   "voiceAssistant": {
     "action": {
@@ -3296,7 +3297,8 @@
     "automaticOff": "Automatic analysis off",
     "status": {
       "SUCCEEDED": "Succeeded",
-      "FAILED": "Failed"
+      "FAILED": "Failed",
+      "PARTIAL": "Partial"
     },
     "trigger": {
       "MANUAL": "Requested",
@@ -3315,7 +3317,8 @@
       "revision_impact_agent": "When a model revision or design change appears, identifies what it may affect — always with the evidence that links the two.",
       "rfi_agent": "Tracks requests for information — which this platform records as design changes — for unanswered and overdue requests and recurring clarification areas.",
       "schedule_risk_agent": "Identifies schedule risk on top of existing scheduling data: overdue, stalled, blocked and undated work. It does not recompute the critical path."
-    }
+    },
+    "partialAnalysis": "Partial analysis — some evidence was not inspected."
   },
   "workScope": {
     "explanation": "This page gathers tasks, documents and messages from the projects you work on. You administer projects without being on their teams, so there is nothing to show here. Open a project to manage its team, or add yourself to a team to work in it.",

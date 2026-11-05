@@ -313,3 +313,15 @@ class IFCProcessingJob(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     failure_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     failure_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# Canonical values on new/updated insight records; legacy rows remain readable.
+from sqlalchemy import event as _insight_event
+from app.services.insight_contract import severity as _severity, status as _status
+
+
+@_insight_event.listens_for(AIInsight, "before_insert")
+@_insight_event.listens_for(AIInsight, "before_update")
+def _normalize_insight_contract(mapper, connection, target):
+    target.severity = _severity(target.severity)
+    target.status = _status(target.status)

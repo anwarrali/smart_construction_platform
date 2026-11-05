@@ -76,6 +76,9 @@ export const AgentCard = ({
 
       {lastResult && (
         <p className="mt-3 text-xs text-muted-foreground" role="status">
+          {lastResult.completeness === "PARTIAL" && (
+            <span className="block text-amber-700">{t("agents.partialAnalysis", { defaultValue: "Partial analysis — some evidence was not inspected." })}</span>
+          )}
           {lastResult.ok
             ? t("agents.lastRunFound", {
                 count: lastResult.findingCount,

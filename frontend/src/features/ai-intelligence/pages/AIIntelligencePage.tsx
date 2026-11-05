@@ -28,7 +28,7 @@ const REVIEW_STATES:{value:string;label:string}[]=[
   {value:"RESOLVED",label:"Resolved"},
   {value:"FALSE_POSITIVE",label:"Dismissed"},
 ];
-const SEVERITIES=["CRITICAL","HIGH","WARNING","ATTENTION","SUGGESTION","INFORMATION","INFO"];
+const SEVERITIES=["CRITICAL","HIGH","MEDIUM","LOW","WARNING","ATTENTION","SUGGESTION","INFORMATION","INFO"];
 
 /**
  * Render an AI insight in the reader's language.

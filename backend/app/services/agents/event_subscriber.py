@@ -102,6 +102,33 @@ def handle_event(db: Session, event: DomainEvent) -> dict:
             ),
         }
 
+    # A durable retry of the *same event* must bypass cooldown. A new event
+    # during cooldown is deferred, never acknowledged as completed work.
+    from app.models.agent_run import AgentRun as AgentRunRecord
+    from app.services.agents.subscriptions import EVENT_COOLDOWN
+    from app.services.jobs.deferred import RetryLater
+    from datetime import datetime, timezone
+    if db.info.get("agent_event_transaction"):
+        due = []
+        for name in subscribed:
+            prior_event = db.query(AgentRunRecord).filter(
+                AgentRunRecord.project_id == event.project_id,
+                AgentRunRecord.agent_name == name,
+                AgentRunRecord.trigger_event_id == event.id,
+            ).first()
+            recent = db.query(AgentRunRecord).filter(
+                AgentRunRecord.project_id == event.project_id,
+                AgentRunRecord.agent_name == name,
+                AgentRunRecord.status.in_(["SUCCEEDED", "PARTIAL"]),
+            ).order_by(AgentRunRecord.created_at.desc()).first()
+            if recent and not prior_event:
+                when = recent.created_at + EVENT_COOLDOWN
+                if when > datetime.now(timezone.utc):
+                    due.append(when)
+        if due:
+            raise RetryLater(max(due))
+        db.info["agent_event_replay"] = True
+
     report = orchestrate_for_event(
         db, user=principal, project_id=event.project_id,
         event_type=event.event_type, event_id=event.id,

@@ -24,16 +24,19 @@ from time import perf_counter
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.core.deps import user_has_project_access
 from app.models.enums import UserStatus
 from app.models.ifc import AIInsight
 from app.models.user import User
-from app.services.agents.context import AgentContext
+from app.services.agents.context import AgentContext, ToolReadFailure
 from app.services.agents.contracts import AgentFinding, Certainty
 from app.services.agents.registry import AGENTS, BY_NAME
 from app.services.ai_traceability_service import register_insight_source
 from app.services.authorization import has_permission
+
+from app.services.insight_contract import ACTIVE_STATUSES, severity as normalized_severity
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +57,14 @@ class AgentRun:
     error_code: str | None = None
     error: str | None = None
     duration_ms: int | None = None
+    completeness: str = "COMPLETE"
+    coverage_reasons: list[str] = field(default_factory=list)
 
     def as_json(self) -> dict:
         payload = {
             "agent": self.agent, "ok": self.ok,
+            "completeness": self.completeness if self.ok else "FAILED",
+            "coverageReasons": self.coverage_reasons,
             "findingCount": len(self.findings),
             "findings": [
                 {
@@ -91,6 +98,12 @@ def available_agents(db: Session, *, user: User, project_id) -> list[dict]:
     ]
 
 
+AGGREGATE_CONDITIONS = {"SCHEDULE_TASKS_OVERDUE", "SCHEDULE_TASKS_STALLED", "SCHEDULE_TASKS_BLOCKED",
+                 "SCHEDULE_TASKS_UNDATED", "SCHEDULE_NO_DATES", "SITE_REPORTED_DELAYS",
+                 "SITE_REPORTS_MISSING_CONTENT", "RFI_OVERDUE", "RFI_AWAITING_RESPONSE",
+                 "DOCUMENT_TYPE_DISAGREEMENT", "DOCUMENT_REQUIREMENTS_RETRIEVED",
+                 "SCHEDULE_SITE_DELAYS_NOT_REFLECTED"}
+
 def _fingerprint(agent: str, project_id, finding: AgentFinding) -> str:
     """Stable identity for a finding, so re-running does not duplicate it.
 
@@ -98,10 +111,15 @@ def _fingerprint(agent: str, project_id, finding: AgentFinding) -> str:
     rephrased description updates the existing row instead of creating a second
     one beside it.
     """
-    payload = json.dumps({
-        "agent": agent, "project": str(project_id), "code": finding.code,
-        "affected": finding.affected,
-    }, sort_keys=True)
+    def canonical(value):
+        if isinstance(value, dict):
+            return {k: canonical(v) for k, v in sorted(value.items())}
+        if isinstance(value, (list, tuple)):
+            return sorted((canonical(v) for v in value), key=lambda v: json.dumps(v, sort_keys=True))
+        return value
+    scope = finding.identity_key or ("project" if finding.code in AGGREGATE_CONDITIONS else canonical(finding.affected))
+    payload = json.dumps({"agent": agent, "project": str(project_id), "code": finding.code,
+                          "condition": scope}, sort_keys=True)
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
@@ -130,6 +148,9 @@ def run_agent(db: Session, *, user: User, project_id, name: str, persist: bool =
     started = perf_counter()
     try:
         findings = list(agent.analyzer(context))
+    except ToolReadFailure as exc:
+        return AgentRun(name, ok=False, tool_calls=context.calls, completeness="FAILED",
+                        error_code="DATA_RETRIEVAL_FAILED", error=str(exc))
     except Exception:
         logger.exception("[Agents] %s analysis failed", name)
         return AgentRun(name, ok=False, tool_calls=context.calls,
@@ -137,18 +158,35 @@ def run_agent(db: Session, *, user: User, project_id, name: str, persist: bool =
                         duration_ms=int((perf_counter() - started) * 1000))
 
     run = AgentRun(name, ok=True, findings=findings, tool_calls=context.calls)
+    for call in context.calls:
+        if not call["ok"] or call.get("coverage", {}).get("complete") is False:
+            run.coverage_reasons.append(f"{call['tool']}: refused, failed or truncated source coverage")
+    reports = next((c.get("coverage", {}).get("returned", 0) for c in context.calls
+                    if c["tool"] == "get_site_reports"), 0)
+    detailed = sum(c["tool"] == "get_site_report" and c["ok"] for c in context.calls)
+    if reports > detailed:
+        run.coverage_reasons.append("Only a subset of report bodies was inspected")
+    if run.coverage_reasons:
+        run.completeness = "PARTIAL"
     if persist:
         # Storing is a separate failure domain from analysing. An agent that
         # reasoned correctly and then hit a database problem must not take the
         # rest of the pass down with it, so this is caught here rather than
         # allowed to escape into the orchestrator.
+        savepoint = db.begin_nested() if db.info.get("agent_event_transaction") else None
         try:
             for finding in findings:
                 run.stored_insight_ids.append(str(_store(db, agent, project_id, finding).id))
-            db.commit()
+            if savepoint is not None:
+                savepoint.commit()
+            else:
+                db.commit()
         except Exception:
             logger.exception("[Agents] %s could not store its findings", name)
-            db.rollback()
+            if savepoint is not None:
+                savepoint.rollback()
+            else:
+                db.rollback()
             run.ok = False
             run.error_code = "PERSIST_FAILED"
             run.error = "The agent produced findings but they could not be stored"
@@ -160,7 +198,29 @@ def run_agent(db: Session, *, user: User, project_id, name: str, persist: bool =
 def _store(db: Session, agent, project_id, finding: AgentFinding) -> AIInsight:
     """Persist one finding as an `AIInsight`, with its sources registered."""
     fingerprint = _fingerprint(agent.name, project_id, finding)
-    insight = db.query(AIInsight).filter(AIInsight.fingerprint == fingerprint).first()
+    # Serialize discovery/update of the same condition, including the first insert.
+    lock_key = int(fingerprint[:15], 16)
+    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+    insight = db.query(AIInsight).filter(AIInsight.fingerprint == fingerprint).with_for_update().first()
+    if insight is None:
+        legacy = hashlib.sha256(json.dumps({"agent": agent.name, "project": str(project_id),
+            "code": finding.code, "affected": finding.affected}, sort_keys=True).encode()).hexdigest()
+        insight = db.query(AIInsight).filter(AIInsight.fingerprint == legacy).with_for_update().first()
+        if insight is None and finding.code in AGGREGATE_CONDITIONS:
+            # Adopt one pre-2A aggregate even if its affected set grew. Preserve
+            # decisions; mark only redundant *unreviewed* legacy rows outdated.
+            candidates = db.query(AIInsight).filter(
+                AIInsight.project_id == project_id, AIInsight.source_engine == agent.source_engine,
+                AIInsight.insight_type == finding.code,
+            ).order_by(AIInsight.created_at).with_for_update().all()
+            if candidates:
+                insight = next((i for i in candidates if i.applied_entity_id), candidates[0])
+                for duplicate in candidates:
+                    if duplicate.id != insight.id and duplicate.status in {"NEW", "OPEN"}:
+                        duplicate.status = "OUTDATED"
+                        duplicate.review_note = "Superseded by canonical condition identity; original evidence retained."
+        if insight is not None:
+            insight.fingerprint = fingerprint
     evidence_json = {
         **finding.as_evidence_json(),
         "agent": agent.name,
@@ -170,7 +230,7 @@ def _store(db: Session, agent, project_id, finding: AgentFinding) -> AIInsight:
         insight = AIInsight(
             project_id=project_id, fingerprint=fingerprint,
             insight_type=finding.code, category=AGENT_CATEGORY,
-            severity=finding.severity, confidence=finding.confidence,
+            severity=normalized_severity(finding.severity), confidence=finding.confidence,
             title=finding.title, description=finding.description,
             reason=finding.reason, recommended_action=finding.recommended_action,
             potential_impact=finding.potential_impact,
@@ -181,10 +241,11 @@ def _store(db: Session, agent, project_id, finding: AgentFinding) -> AIInsight:
         )
         db.add(insight)
         db.flush()
-    elif insight.status in {"NEW", "OPEN", "UNDER_REVIEW"}:
+    elif insight.status in ACTIVE_STATUSES:
         # A finding a person has already ruled on is left alone; one still in
         # the queue is refreshed, because the underlying data has moved on.
-        insight.severity = finding.severity
+        insight.severity = normalized_severity(finding.severity)
+        insight.title = finding.title
         insight.confidence = finding.confidence
         insight.description = finding.description
         insight.reason = finding.reason
@@ -195,6 +256,8 @@ def _store(db: Session, agent, project_id, finding: AgentFinding) -> AIInsight:
         insight.related_task_ids_json = list(finding.related_task_ids)
         insight.related_issue_ids_json = list(finding.related_issue_ids)
 
+    if insight.status not in ACTIVE_STATUSES:
+        return insight  # Terminal decisions persist until an explicit human reopen.
     for source in finding.evidence:
         try:
             register_insight_source(

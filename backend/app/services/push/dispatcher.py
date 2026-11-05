@@ -51,6 +51,12 @@ def queue_push(db: Session, user_id: uuid.UUID, message: PushMessage) -> None:
     """
     if not settings.PUSH_ENABLED:
         return
+    if message.data.get("entityType") == "AI_INSIGHT" and message.notification_id:
+        from app.services.jobs import enqueue
+        enqueue(db, "push.deliver_notification",
+                {"notification_id": message.notification_id, "user_id": user_id},
+                dedupe_key=f"push:{message.notification_id}:{user_id}")
+        return
     db.info.setdefault(_QUEUE_KEY, []).append((user_id, message))
 
 
@@ -60,6 +66,8 @@ def _drain(session: Session) -> list[tuple[uuid.UUID, PushMessage]]:
 
 @event.listens_for(SessionLocal, "after_commit")
 def _dispatch_after_commit(session: Session) -> None:
+    if session.in_nested_transaction():
+        return
     pending = _drain(session)
     if not pending:
         return
@@ -69,6 +77,8 @@ def _dispatch_after_commit(session: Session) -> None:
 
 @event.listens_for(SessionLocal, "after_rollback")
 def _discard_after_rollback(session: Session) -> None:
+    if session.in_nested_transaction():
+        return
     # The notifications these referred to no longer exist. Pushing them would
     # tell a user about something that did not happen.
     _drain(session)
@@ -120,9 +130,25 @@ def send_to_user(user_id: uuid.UUID, message: PushMessage) -> list[PushResult]:
     """
     db = SessionLocal()
     try:
+        if message.notification_id:
+            from app.models.notification import Notification
+            notification = db.get(Notification, message.notification_id)
+            if notification is None or notification.user_id != user_id:
+                return []
+        if message.data.get("entityType") == "AI_INSIGHT":
+            from app.models.ifc import AIInsight
+            from app.models.user import User
+            from app.services.insight_access import can_read_insight
+            insight = db.get(AIInsight, uuid.UUID(message.data["entityId"]))
+            person = db.get(User, user_id)
+            if not person or not insight or not can_read_insight(db,person,insight):
+                return []
         tokens = active_tokens_for_users(db, [user_id]).get(user_id, [])
         if not tokens:
             return []
+        from app.services.jobs.ownership import current_job, assert_owned
+        if current_job.get() is not None:
+            assert_owned(db, current_job.get())
         results = get_provider().send(tokens, message)
         apply_results(db, results)
         db.commit()

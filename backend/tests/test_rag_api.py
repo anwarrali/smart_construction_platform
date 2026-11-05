@@ -38,6 +38,7 @@ from app.models.task import Task
 from app.models.user import User, EngineerProfile
 from app.services.rag import ingestion
 from app.services.rag.answering import NOT_FOUND_MESSAGE, NOT_FOUND_TOKEN
+from tests.answer_stub import ExtractiveAnswerClient
 from tests.embedding_stub import STUB_MODEL, StubEmbeddingClient
 from tests.pdf_fixture import build_pdf
 from tests.office_roles import with_office_role
@@ -102,7 +103,7 @@ def stub_openai(monkeypatch):
     def answer_init(self, client=None, model=None):
         original_answer_init(
             self,
-            client=client or _stub_answer_client("Retention is five per cent [1]."),
+            client=client or ExtractiveAnswerClient(),
             model=model or "stub",
         )
 

@@ -26,6 +26,10 @@ from app.models.user import User
 from app.services.ai_tools import ToolResult, call_tool
 
 
+class ToolReadFailure(RuntimeError):
+    """An internal/tool failure is not an empty evidence set."""
+
+
 @dataclass
 class AgentContext:
     """A scoped, audited handle on the tool layer."""
@@ -55,9 +59,19 @@ class AgentContext:
                 self.db, user=self.user, project_id=self.project_id,
                 name=tool, arguments=arguments or {},
             )
+        coverage = {}
+        if result.ok and isinstance(result.data, dict):
+            lists = [v for v in result.data.values() if isinstance(v, list)]
+            if lists:
+                count = len(lists[0])
+                total = result.data.get("total")
+                coverage = {"returned": count, "total": total,
+                            "complete": total <= count if isinstance(total, int)
+                            else count < (arguments or {}).get("limit", count + 1)}
         self.calls.append({
             "tool": tool, "ok": result.ok,
             "errorCode": result.error_code, "arguments": arguments or {},
+            "coverage": coverage,
         })
         return result
 
@@ -69,6 +83,8 @@ class AgentContext:
         than into a wrong conclusion drawn from missing data.
         """
         result = self.call(tool, arguments)
+        if not result.ok and result.error_code in {"TOOL_FAILED", "INVALID_ARGUMENTS", "TOOL_NOT_GRANTED"}:
+            raise ToolReadFailure(f"{tool}: {result.error_code}")
         return result.data if result.ok else {}
 
     @property

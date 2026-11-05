@@ -26,7 +26,8 @@ SITE_REPORT_AGENT = AgentSpec(
                    "get_project_status"),
     permission_code="site_report.submit",
     source_engine="SITE_REPORT_AGENT_V1",
-    subscribes_to=("FIELD_SUBMISSION_CREATED", "FIELD_SUBMISSION_VERIFIED"),
+    subscribes_to=("FIELD_SUBMISSION_CREATED", "FIELD_SUBMISSION_VERIFIED",
+                   "SITE_REPORT_CREATED", "SITE_REPORT_REVIEWED"),
     analyzer=analyzers.site_report_agent,
 )
 
@@ -37,7 +38,7 @@ DOCUMENT_CONSISTENCY_AGENT = AgentSpec(
         "Establish which project documents are actually related, then check those "
         "for inconsistency, misfiling and content that cannot be verified."
     ),
-    allowed_tools=("search_documents", "get_document", "query_project_knowledge"),
+    allowed_tools=("list_documents", "search_documents", "get_document", "query_project_knowledge"),
     permission_code="task.view",
     source_engine="DOCUMENT_CONSISTENCY_AGENT_V1",
     subscribes_to=("DOCUMENT_UPLOADED",),

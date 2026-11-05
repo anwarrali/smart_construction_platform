@@ -112,6 +112,7 @@ class AgentFinding:
     related_task_ids: list[str] = field(default_factory=list)
     related_issue_ids: list[str] = field(default_factory=list)
     potential_impact: str | None = None
+    identity_key: str | None = None
 
     def __post_init__(self):
         ceiling = MAX_CONFIDENCE[self.certainty]

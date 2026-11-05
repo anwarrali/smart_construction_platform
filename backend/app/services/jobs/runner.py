@@ -18,31 +18,100 @@ import logging
 import threading
 import time
 import uuid
+import multiprocessing
 from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.db.database import SessionLocal
 from app.services.jobs import queue as job_queue
 from app.services.jobs.handlers import KINDS
+from app.services.jobs.ownership import LeaseLost, execution_lease
+from app.services.jobs.deferred import RetryLater
 
 logger = logging.getLogger("uvicorn.error").getChild("jobs")
 
 
-def execute(job: job_queue.ClaimedJob) -> str:
+def _child_handler(handler, job, connection):
+    try:
+        with execution_lease(job):
+            handler(job.payload, job.attempt)
+        connection.send(("ok", None))
+    except RetryLater as exc:
+        connection.send(("deferred", exc.when))
+    except LeaseLost:
+        connection.send(("lease_lost", None))
+    except Exception as exc:
+        logger.exception("Isolated handler failed")
+        connection.send(("error", f"{type(exc).__name__}: {exc}"[:2000]))
+    finally:
+        connection.close()
+
+
+def _run_isolated(handler, job):
+    """Spawn avoids inheriting SQLAlchemy connections/locks from worker threads.
+
+    The publication guard also enforces the DB deadline. This parent bounds CPU
+    execution and terminates a paused/stuck child after deadline or lease loss.
+    """
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(target=_child_handler, args=(handler, job, sender))
+    started = time.monotonic()
+    process.start()
+    sender.close()
+    try:
+        while not receiver.poll(0.2):
+            if not process.is_alive():
+                raise RuntimeError(f"Handler exited without outcome (exit {process.exitcode})")
+            if time.monotonic() - started >= settings.JOB_MAX_EXECUTION_SECONDS:
+                raise LeaseLost("Handler execution deadline reached")
+            with SessionLocal() as db:
+                job_queue.assert_owned(db, job, lock=False)
+        try:
+            status, detail = receiver.recv()
+        except EOFError as exc:
+            raise RuntimeError("Handler exited without outcome") from exc
+        if status == "deferred":
+            raise RetryLater(detail)
+        if status == "lease_lost":
+            raise LeaseLost("Handler lost its lease")
+        if status != "ok":
+            raise RuntimeError(detail)
+    finally:
+        if process.is_alive():
+            process.terminate()
+        process.join(timeout=5)
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=5)
+        receiver.close()
+
+
+def execute(job: job_queue.ClaimedJob, *, isolated: bool = False) -> str:
     """Run one claimed job and record its outcome. Returns the final status."""
     kind = KINDS.get(job.kind)
     if kind is None:
-        _record(job_queue.reject, job.id, f"Unknown job kind {job.kind!r} on this deployment.")
+        _record(job_queue.reject, job, f"Unknown job kind {job.kind!r} on this deployment.")
         logger.error("[Jobs] rejected %s: unknown kind %r", job.id, job.kind)
         return job_queue.STATUS_REJECTED
     started = time.perf_counter()
     try:
-        kind.run(job.payload, job.attempt)
+        if isolated and kind.isolated:
+            _run_isolated(kind.run, job)
+        else:
+            with execution_lease(job):
+                kind.run(job.payload, job.attempt)
+    except RetryLater as deferred:
+        return _record(job_queue.defer, job, deferred.when)
+    except LeaseLost:
+        logger.warning("[Jobs] lease lost for %s attempt %s", job.id, job.attempt)
+        return "LEASE_LOST"
     except Exception as exc:
         logger.exception("[Jobs] %s %s failed on attempt %s", job.kind, job.id, job.attempt)
-        status = _record(job_queue.fail, job.id, f"{type(exc).__name__}: {exc}")
+        status = _record(job_queue.fail, job, f"{type(exc).__name__}: {exc}")
         return status or job_queue.STATUS_FAILED
-    _record(job_queue.succeed, job.id)
+    if _record(job_queue.succeed, job) == "LEASE_LOST":
+        return "LEASE_LOST"
     logger.info("[Jobs] %s %s finished in %.1fs", job.kind, job.id, time.perf_counter() - started)
     return job_queue.STATUS_SUCCEEDED
 
@@ -51,6 +120,9 @@ def _record(operation, *args):
     db = SessionLocal()
     try:
         return operation(db, *args)
+    except LeaseLost:
+        db.rollback()
+        return "LEASE_LOST"
     finally:
         db.close()
 
@@ -83,7 +155,7 @@ class JobRunner:
         self.poll_seconds = poll_seconds if poll_seconds is not None else settings.JOB_POLL_INTERVAL_SECONDS
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
-        self._running: dict[uuid.UUID, str] = {}
+        self._running: dict[uuid.UUID, job_queue.ClaimedJob] = {}
         self._lock = threading.Lock()
         self.completed = 0
         self.started_at: datetime | None = None
@@ -124,7 +196,7 @@ class JobRunner:
 
     def running(self) -> dict[str, str]:
         with self._lock:
-            return {str(job_id): kind for job_id, kind in self._running.items()}
+            return {str(job_id): job.kind for job_id, job in self._running.items()}
 
     # --- threads ----------------------------------------------------------------
 
@@ -140,9 +212,9 @@ class JobRunner:
                 self._stop.wait(self.poll_seconds)
                 continue
             with self._lock:
-                self._running[job.id] = job.kind
+                self._running[job.id] = job
             try:
-                execute(job)
+                execute(job, isolated=True)
                 self.completed += 1
             finally:
                 with self._lock:
@@ -165,7 +237,7 @@ class JobRunner:
             db = SessionLocal()
             try:
                 with self._lock:
-                    held = list(self._running)
+                    held = list(self._running.values())
                 job_queue.heartbeat(db, held)
                 if since_reap >= reap_every:
                     since_reap = 0

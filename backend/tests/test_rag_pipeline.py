@@ -531,15 +531,16 @@ def test_citations_can_only_reference_retrieved_chunks():
     liar = _StubAnswerClient("Retention is 5% as stated on page 99 [7].")
     result = AnswerService(client=liar, model="stub").answer("retention?", chunks)
 
-    assert [citation.page for citation in result.citations] == [14]
-    assert all(citation.document_id == document_id for citation in result.citations)
+    assert result.found is False
+    assert result.outcome == "UNSUPPORTED"
+    assert result.citations == []
 
 
 def test_the_snippet_comes_from_the_chunk_it_cites():
     document_id = uuid.uuid4()
     content = "Retention shall be five per cent of the value of work executed."
     chunks = [_retrieved(document_id, content=content)]
-    result = AnswerService(client=_StubAnswerClient("Five per cent [1]."), model="stub").answer(
+    result = AnswerService(client=_StubAnswerClient("Retention shall be five per cent of the value of work executed [1]."), model="stub").answer(
         "retention?", chunks
     )
     assert result.citations[0].snippet in content or content.startswith(

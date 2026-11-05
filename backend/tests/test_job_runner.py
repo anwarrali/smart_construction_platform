@@ -282,8 +282,8 @@ def test_work_abandoned_by_a_dead_worker_is_handed_back(db, queue):
 def test_a_live_heartbeat_keeps_a_job(db, queue):
     job_id = job_queue.enqueue(db, "test.noop")
     db.commit()
-    _claim(queue)
-    job_queue.heartbeat(db, [job_id])
+    claimed = _claim(queue)
+    job_queue.heartbeat(db, [claimed])
     assert job_queue.reap(db, queue=queue, stale_after=60) == 0
     assert _job(db, job_id).status == "RUNNING"
 

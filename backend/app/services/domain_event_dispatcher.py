@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.core.config import settings
 
@@ -23,7 +24,7 @@ IMPORTANT_EVENTS = {
     "ISSUE_CREATED", "DESIGN_CHANGE_CREATED", "FIELD_SUBMISSION_CREATED",
     "FIELD_SUBMISSION_VERIFIED", "CONSULTANT_REVIEW_COMPLETED", "IFC_UPLOADED",
     "IFC_REVISION_CREATED", "DOCUMENT_UPLOADED", "PROJECT_STRUCTURE_CHANGED",
-    "AI_ACTION_REVERTED",
+    "AI_ACTION_REVERTED", "SITE_REPORT_CREATED", "SITE_REPORT_REVIEWED",
 }
 
 
@@ -42,6 +43,8 @@ def emit_domain_event(
     if event_type not in IMPORTANT_EVENTS:
         raise ValueError(f"Unsupported domain event: {event_type}")
     key = idempotency_key or f"{event_type}:{entity_id}:{uuid4().hex}"
+    lock = int(hashlib.sha256(f"{project_id}:{key}".encode()).hexdigest()[:15], 16)
+    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock})
     existing = db.query(DomainEvent).filter(
         DomainEvent.project_id == project_id,
         DomainEvent.idempotency_key == key,
@@ -70,26 +73,30 @@ def process_event(db: Session, event: DomainEvent) -> None:
         return
     event.processing_attempts += 1
     try:
-        if event.event_type in {"TASK_CREATED", "TASK_UPDATED", "TASK_PROGRESS_CHANGED", "TASK_COMPLETED", "AI_ACTION_REVERTED"}:
-            _validate_task_event(db, event)
-        elif event.event_type == "FIELD_SUBMISSION_CREATED":
-            _validate_field_claim(db, event)
-        event.status = "PROCESSED_RULES_ONLY"
-        event.processed_at = datetime.now(timezone.utc)
-        event.error = None
-        # Proactive agent analysis, off unless an operator enabled it. Queued,
-        # not run: it used to run here, inside the transaction of whatever the
-        # user was doing, so a slow pass held their write open. As a job it
-        # commits with the event, runs on a worker, and its failure can never
-        # touch the event — the rules above are the event's own validation.
-        if settings.AGENT_AUTO_ANALYSIS_ENABLED:
-            enqueue(db, "agents.handle_event", {"event_id": event.id},
-                    dedupe_key=f"agents:{event.id}", project_id=event.project_id)
+        with db.begin_nested():
+            if event.event_type in {"TASK_CREATED", "TASK_UPDATED", "TASK_PROGRESS_CHANGED", "TASK_COMPLETED", "AI_ACTION_REVERTED"}:
+                _validate_task_event(db, event)
+            elif event.event_type == "FIELD_SUBMISSION_CREATED":
+                _validate_field_claim(db, event)
+            event.status = "PROCESSED_RULES_ONLY"
+            event.processed_at = datetime.now(timezone.utc)
+            event.error = None
+            # Proactive agent analysis, off unless an operator enabled it. Queued,
+            # not run: it used to run here, inside the transaction of whatever the
+            # user was doing, so a slow pass held their write open. As a job it
+            # commits with the event, runs on a worker, and its failure can never
+            # touch the event — the rules above are the event's own validation.
+            if settings.AGENT_AUTO_ANALYSIS_ENABLED:
+                enqueue(db, "agents.handle_event", {"event_id": event.id},
+                        dedupe_key=f"agents:{event.id}", project_id=event.project_id)
     except Exception as exc:
         event.status = "RETRY" if event.processing_attempts < 3 else "FAILED"
         event.error = f"{type(exc).__name__}: event validation failed"
         if event.processing_attempts >= 3:
             event.processed_at = datetime.now(timezone.utc)
+        if event.status == "RETRY" and not db.info.get("domain_event_retry"):
+            enqueue(db, "events.process", {"event_id": event.id},
+                    dedupe_key=f"rules:{event.id}", project_id=event.project_id)
 
 
 def _validate_task_event(db: Session, event: DomainEvent) -> None:
@@ -177,10 +184,28 @@ def _finding(
     model_revision_id: UUID | None = None,
 ) -> AIInsight:
     fingerprint = hashlib.sha256(
-        json.dumps({"event": str(event.id), "code": code}, sort_keys=True).encode()
+        json.dumps({"project": str(event.project_id), "code": code,
+                    "subjects": sorted(str(i) for i in task_ids) or [f"{event.entity_type}:{event.entity_id}"]},
+                   sort_keys=True).encode()
     ).hexdigest()
+    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": int(fingerprint[:15], 16)})
     existing = db.query(AIInsight).filter(AIInsight.fingerprint == fingerprint).first()
+    if existing is None:
+        existing = db.query(AIInsight).filter(
+            AIInsight.project_id == event.project_id, AIInsight.source_engine == "DOMAIN_EVENT_RULES_V1",
+            AIInsight.insight_type == code,
+            AIInsight.related_task_ids_json == [str(i) for i in task_ids],
+        ).order_by(AIInsight.created_at).with_for_update().first()
+        if existing is not None:
+            existing.fingerprint = fingerprint
     if existing:
+        from app.services.insight_contract import ACTIVE_STATUSES
+        if existing.status in ACTIVE_STATUSES:
+            ids = set((existing.evidence_json or {}).get("eventIds", []))
+            ids.add(str(event.id))
+            existing.evidence_json = {**evidence, "eventId": str(event.id),
+                                     "eventType": event.event_type, "eventIds": sorted(ids)}
+            existing.severity = severity
         return existing
     item = AIInsight(
         project_id=event.project_id,
@@ -194,7 +219,8 @@ def _finding(
         description=description,
         reason="A deterministic event validation rule produced this finding.",
         recommended_action="Review the evidence and correct the project or model state; no automatic mutation was applied.",
-        evidence_json={**evidence, "eventId": str(event.id), "eventType": event.event_type},
+        evidence_json={**evidence, "eventId": str(event.id), "eventType": event.event_type,
+                       "eventIds": [str(event.id)]},
         affected_json={"tasks": [str(value) for value in task_ids]},
         related_task_ids_json=[str(value) for value in task_ids],
         source_engine="DOMAIN_EVENT_RULES_V1",

@@ -43,6 +43,7 @@ _IFC_IN_PROGRESS = frozenset({
 class JobKind:
     name: str
     run: Callable[[dict, int], None]
+    isolated: bool = False
 
 
 def _uuid(payload: dict, key: str) -> uuid.UUID:
@@ -147,7 +148,10 @@ def run_agent_event(payload: dict, attempt: int) -> None:
         event = db.get(DomainEvent, _uuid(payload, "event_id"))
         if event is None:
             return
-        handle_event(db, event)
+        db.info["agent_event_transaction"] = True
+        outcome = handle_event(db, event)
+        if outcome.get("agentsFailed"):
+            raise RuntimeError("One or more agents failed; analysis remains pending")
         db.commit()
     except Exception:
         db.rollback()
@@ -156,14 +160,46 @@ def run_agent_event(payload: dict, attempt: int) -> None:
         db.close()
 
 
+def run_push_notification(payload: dict, attempt: int) -> None:
+    from app.models.notification import Notification
+    from app.services.notification_service import build_push_message
+    from app.services.push.dispatcher import send_to_user
+    from app.services.push.base import DeliveryStatus
+    with SessionLocal() as db:
+        row = db.get(Notification, _uuid(payload, "notification_id"))
+        if row is None or row.user_id != _uuid(payload, "user_id"):
+            return
+        message = build_push_message(row)
+    results = send_to_user(_uuid(payload, "user_id"), message)
+    if any(r.status == DeliveryStatus.TRANSIENT_FAILURE for r in results):
+        raise RuntimeError("Transient push delivery failure")
+
+
+def run_domain_event(payload: dict, attempt: int) -> None:
+    from app.models.ai_governance import DomainEvent
+    from app.services.domain_event_dispatcher import process_event
+    with SessionLocal() as db:
+        db.info["domain_event_retry"] = True
+        event = db.get(DomainEvent, _uuid(payload, "event_id"))
+        if event is None:
+            return
+        process_event(db,event)
+        failed = event.status in {"RETRY", "FAILED"}
+        db.commit()
+        if failed:
+            raise RuntimeError("Domain event rule processing did not complete")
+
+
 KINDS: dict[str, JobKind] = {
     kind.name: kind for kind in (
-        JobKind("ifc.process_version", run_ifc_processing),
-        JobKind("ifc.generate_geometry", run_ifc_geometry),
-        JobKind("ingestion.process_file", run_ingestion),
-        JobKind("rag.index_file", run_rag_file_index),
-        JobKind("rag.index_document", run_rag_document_index),
-        JobKind("rag.project_reindex", run_rag_project_reindex),
-        JobKind("agents.handle_event", run_agent_event),
+        JobKind("ifc.process_version", run_ifc_processing, True),
+        JobKind("ifc.generate_geometry", run_ifc_geometry, True),
+        JobKind("ingestion.process_file", run_ingestion, True),
+        JobKind("rag.index_file", run_rag_file_index, True),
+        JobKind("rag.index_document", run_rag_document_index, True),
+        JobKind("rag.project_reindex", run_rag_project_reindex, True),
+        JobKind("agents.handle_event", run_agent_event, True),
+        JobKind("events.process", run_domain_event, True),
+        JobKind("push.deliver_notification", run_push_notification, True),
     )
 }

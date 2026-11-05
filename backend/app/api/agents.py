@@ -118,6 +118,10 @@ def list_agent_runs(
     if agent_name:
         query = query.filter(AgentRunRecord.agent_name == agent_name)
     runs = query.order_by(AgentRunRecord.created_at.desc()).limit(min(limit, 200)).all()
+    from app.services.insight_access import can_read_insight
+    from app.models.ifc import AIInsight
+    runs = [r for r in runs if all((i := db.get(AIInsight, key)) is not None and can_read_insight(db,current_user,i)
+                                  for key in r.insight_ids_json)]
     return {"runs": [
         {
             "id": str(run.id), "agent": run.agent_name, "status": run.status,

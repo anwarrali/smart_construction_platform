@@ -30,6 +30,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.services.jobs.ownership import LeaseLost, assert_owned
 from app.models.background_job import (
     ACTIVE_DEDUPE_INDEX,
     STATUS_FAILED,
@@ -53,6 +54,7 @@ class ClaimedJob:
     kind: str
     payload: dict = field(default_factory=dict)
     attempt: int = 1
+    worker: str = ""
 
 
 def worker_identity() -> str:
@@ -149,57 +151,59 @@ def claim(db: Session, *, worker: str, capacity: int, queue: str | None = None) 
         raise
     if row is None:
         return None
-    return ClaimedJob(id=row.id, kind=row.kind, payload=dict(row.payload or {}), attempt=row.attempts)
+    return ClaimedJob(id=row.id, kind=row.kind, payload=dict(row.payload or {}), attempt=row.attempts, worker=worker)
 
 
-def heartbeat(db: Session, job_ids: list[uuid.UUID]) -> None:
-    if not job_ids:
-        return
-    db.execute(
-        text("UPDATE background_jobs SET heartbeat_at = now() WHERE id = ANY(:ids) AND status = 'RUNNING'"),
-        {"ids": job_ids},
-    )
+def heartbeat(db: Session, jobs: list[ClaimedJob]) -> None:
+    for job in jobs:
+        if not isinstance(job, ClaimedJob):
+            raise LeaseLost("Heartbeat requires the claimed generation and owner")
+        db.execute(text(
+            "UPDATE background_jobs SET heartbeat_at=clock_timestamp() "
+            "WHERE id=:id AND status='RUNNING' AND attempts=:attempt AND locked_by=:worker "
+            "AND heartbeat_at > clock_timestamp()-make_interval(secs => :stale) "
+            "AND started_at > clock_timestamp()-make_interval(secs => :maximum)"
+        ), {"id": job.id, "attempt": job.attempt, "worker": job.worker,
+            "stale": settings.JOB_STALE_SECONDS, "maximum": settings.JOB_MAX_EXECUTION_SECONDS})
     db.commit()
 
 
-def succeed(db: Session, job_id: uuid.UUID) -> None:
-    db.execute(
-        text(
-            "UPDATE background_jobs SET status = :status, finished_at = now(), locked_by = NULL, "
-            "last_error = NULL, updated_at = now() WHERE id = :id"
-        ),
-        {"status": STATUS_SUCCEEDED, "id": job_id},
-    )
+def succeed(db: Session, job: ClaimedJob) -> None:
+    assert_owned(db, job)
+    db.execute(text(
+        "UPDATE background_jobs SET status='SUCCEEDED', finished_at=clock_timestamp(), "
+        "locked_by=NULL, last_error=NULL, updated_at=now() WHERE id=:id"
+    ), {"id": job.id})
     db.commit()
 
 
-def reject(db: Session, job_id: uuid.UUID, reason: str) -> None:
-    """Not runnable here at all — an unknown kind. Retrying cannot help."""
-    db.execute(
-        text(
-            "UPDATE background_jobs SET status = :status, finished_at = now(), locked_by = NULL, "
-            "last_error = :reason, updated_at = now() WHERE id = :id"
-        ),
-        {"status": STATUS_REJECTED, "reason": reason[:2000], "id": job_id},
-    )
+def reject(db: Session, job: ClaimedJob, reason: str) -> None:
+    assert_owned(db, job)
+    db.execute(text(
+        "UPDATE background_jobs SET status='REJECTED', finished_at=clock_timestamp(), "
+        "locked_by=NULL, last_error=:reason, updated_at=now() WHERE id=:id"
+    ), {"id": job.id, "reason": reason[:2000]})
     db.commit()
 
 
-def fail(db: Session, job_id: uuid.UUID, error: str) -> str:
-    """Record a failed attempt: back to the queue with a delay, or FAILED for good.
-
-    Returns the status the job ended in.
-    """
-    row = db.execute(
-        text("SELECT attempts, max_attempts FROM background_jobs WHERE id = :id FOR UPDATE"),
-        {"id": job_id},
-    ).first()
-    if row is None:
-        db.rollback()
-        return STATUS_FAILED
-    status = _requeue_or_fail(db, job_id, row.attempts, row.max_attempts, error)
+def fail(db: Session, job: ClaimedJob, error: str) -> str:
+    assert_owned(db, job)
+    row = db.execute(text("SELECT max_attempts FROM background_jobs WHERE id=:id"),
+                     {"id": job.id}).first()
+    status = _requeue_or_fail(db, job.id, job.attempt, row.max_attempts, error)
     db.commit()
     return status
+
+
+def defer(db: Session, job: ClaimedJob, when) -> str:
+    assert_owned(db, job)
+    # Attempts remain monotonic fencing generations. A deferral is not a
+    # handler failure, so extend the ceiling rather than reusing a generation.
+    db.execute(text("UPDATE background_jobs SET status='QUEUED', locked_by=NULL, "
+                    "run_after=:when, max_attempts=max_attempts+1 WHERE id=:id"),
+               {"id": job.id, "when": when})
+    db.commit()
+    return STATUS_QUEUED
 
 
 def reap(db: Session, *, queue: str | None = None, stale_after: int | None = None) -> int:
@@ -209,10 +213,10 @@ def reap(db: Session, *, queue: str | None = None, stale_after: int | None = Non
     rows = db.execute(
         text(
             "SELECT id, attempts, max_attempts, locked_by FROM background_jobs "
-            "WHERE queue = :queue AND status = 'RUNNING' AND heartbeat_at < :cutoff "
+            "WHERE queue = :queue AND status = 'RUNNING' AND (heartbeat_at < :cutoff OR started_at < clock_timestamp()-make_interval(secs => :maximum)) "
             "FOR UPDATE SKIP LOCKED"
         ),
-        {"queue": queue, "cutoff": cutoff},
+        {"queue": queue, "cutoff": cutoff, "maximum": settings.JOB_MAX_EXECUTION_SECONDS},
     ).all()
     for row in rows:
         _requeue_or_fail(

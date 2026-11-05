@@ -14,6 +14,12 @@ from app.services.ai_tools import read_tools, write_tools
 from app.services.ai_tools.contracts import ToolKind, ToolSpec
 
 TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        "list_documents", ToolKind.READ,
+        "List authorized document metadata with total and pagination; no search text required.",
+        args.ListDocumentsArguments, None, handler=read_tools.list_documents,
+        authorization_note="Uses the same source-level policy as document search and downloads.",
+    ),
     # -- reads ---------------------------------------------------------------
     ToolSpec(
         "get_project", ToolKind.READ,
